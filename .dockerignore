@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+node_modules
+vendor
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+bootstrap/cache/*
+database/database.sqlite
+Dockerfile
+docker-compose*.yml
+npm-debug.log
+yarn-error.log
