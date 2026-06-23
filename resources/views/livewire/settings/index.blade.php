@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Branch;
+use App\Models\Company;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Storage;
 use Livewire\WithFileUploads;
@@ -74,6 +75,17 @@ $save = function () {
     unset($validated['logo_upload']);
 
     $this->setting->update($validated);
+
+    $company = Company::query()->first() ?: new Company();
+    $company->fill([
+        'company_name' => $this->setting->company_name,
+        'logo' => $this->setting->company_logo,
+        'phone' => $this->setting->company_phone,
+        'email' => $this->setting->company_email,
+        'address' => $this->setting->company_address,
+        'currency' => $this->setting->currency,
+    ])->save();
+
     $this->company_logo = $this->setting->company_logo;
     $this->logo_upload = null;
     $this->dispatch('buildmart-theme-color-updated', color: $this->theme_color);
@@ -96,6 +108,7 @@ $removeLogo = function () {
     }
 
     $this->setting->update(['company_logo' => null]);
+    Company::query()->first()?->update(['logo' => null]);
     $this->company_logo = '';
     $this->logo_upload = null;
     $this->dispatch('hardex-brand-updated', name: $this->company_name, initials: $this->brandInitials($this->company_name), logoUrl: '');

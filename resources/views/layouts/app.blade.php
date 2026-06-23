@@ -134,8 +134,8 @@
                 $companySettings = null;
             }
 
-            $companyName = $company?->company_name ?: ($companySettings?->company_name ?: config('app.name', 'Hardex POS'));
-            $companyLogo = $company?->logo ?: $companySettings?->company_logo;
+            $companyName = $companySettings?->company_name ?: ($company?->company_name ?: config('app.name', 'Hardex POS'));
+            $companyLogo = $companySettings?->company_logo ?: $company?->logo;
             $companyInitials = collect(preg_split('/\s+/', trim($companyName)))
                 ->filter()
                 ->map(fn ($word) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($word, 0, 1)))

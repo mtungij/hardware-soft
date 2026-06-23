@@ -10,18 +10,15 @@ use Livewire\Volt\Volt;
 
 Route::get('pwa/manifest.json', function () {
     $isCustomerPortal = request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST);
-    $companyName = \App\Models\Company::current()?->company_name;
-
-    if (! $companyName) {
-        try {
-            $companyName = \Illuminate\Support\Facades\Schema::hasTable('settings')
-                ? \App\Models\Setting::query()->value('company_name')
-                : null;
-        } catch (\Throwable) {
-            $companyName = null;
-        }
+    try {
+        $companyName = \Illuminate\Support\Facades\Schema::hasTable('settings')
+            ? \App\Models\Setting::query()->value('company_name')
+            : null;
+    } catch (\Throwable) {
+        $companyName = null;
     }
 
+    $companyName = $companyName ?: \App\Models\Company::current()?->company_name;
     $name = $companyName ?: config('app.name', 'Hardex');
     $shortName = \Illuminate\Support\Str::of($name)->squish()->limit(12, '')->value();
     $description = $isCustomerPortal
