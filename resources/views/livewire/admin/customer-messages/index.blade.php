@@ -122,7 +122,7 @@ $deleteMessage = function () {
     $this->dispatch('close-modal', 'delete-customer-message');
 };
 
-$messages = computed(fn () => CustomerMessage::with(['customer', 'sender'])
+$customerMessages = computed(fn () => CustomerMessage::with(['customer', 'sender'])
     ->when($this->search, fn ($query) => $query->where(fn ($q) => $q
         ->where('subject', 'like', '%'.$this->search.'%')
         ->orWhere('message', 'like', '%'.$this->search.'%')
@@ -144,7 +144,7 @@ $templates = computed(fn () => MessageTemplate::where('is_active', true)->orderB
             <input wire:model.live.debounce.300ms="search" class="erp-input max-w-md" placeholder="Search customer or message">
         </div>
         <x-table :headers="['Date', 'Customer', 'Subject', 'Priority', 'Status', 'Read', 'Actions']">
-            @forelse ($this->messages as $row)
+            @forelse ($this->customerMessages as $row)
                 <tr>
                     <td class="px-4 py-3">{{ $row->created_at?->format('M d, Y H:i') }}</td>
                     <td class="px-4 py-3 font-semibold">{{ $row->customer?->name }}</td>
@@ -168,7 +168,7 @@ $templates = computed(fn () => MessageTemplate::where('is_active', true)->orderB
                 <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">No messages found.</td></tr>
             @endforelse
         </x-table>
-        <div class="mt-4">{{ $this->messages->links() }}</div>
+        <div class="mt-4">{{ $this->customerMessages->links() }}</div>
     </x-card>
 
     <x-modal name="customer-message-form" maxWidth="2xl" :closeOnBackdrop="false">
