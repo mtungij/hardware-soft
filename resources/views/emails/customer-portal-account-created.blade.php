@@ -13,6 +13,8 @@ Karibu kwenye huduma ya {{ $companyName }} Customer Portal. Kupitia portal hii u
 **Link ya Customer Portal:** {{ $portalUrl }}
 
 **Email utakayotumia:** {{ $account->email }}
+
+**Password ya kuingia:** {{ $temporaryPassword }}
 </x-mail::panel>
 
 <x-mail::button :url="$portalUrl">
@@ -22,12 +24,12 @@ Fungua Customer Portal
 Namna ya kuanza:
 
 1. Fungua link ya Customer Portal hapo juu.
-2. Kama bado hujawahi kuingia, bonyeza **Create Account** au **Fungua Akaunti**.
-3. Tumia email hii: **{{ $account->email }}**.
-4. Weka namba yako ya simu na tengeneza password yako.
-5. Baada ya kufungua akaunti, rudi kwenye ukurasa wa login na uingie kwa email na password uliyoweka.
+2. Weka email hii: **{{ $account->email }}**.
+3. Weka password hii: **{{ $temporaryPassword }}**.
+4. Bonyeza **Login / Ingia**.
+5. Baada ya kuingia, unaweza kuona madeni, malipo, risiti, amana, na statement yako.
 
-Kama tayari umefungua akaunti, ingia moja kwa moja kupitia link ya Customer Portal.
+Tafadhali hifadhi taarifa hizi kwa usalama. Kama umeshindwa kuingia, wasiliana na huduma kwa wateja.
 
 Asante,<br>
 {{ $companyName }}
