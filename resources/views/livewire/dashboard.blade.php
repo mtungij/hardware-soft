@@ -375,7 +375,7 @@ $recentTransactions = computed(function (): Collection {
 
 ?>
 
-<div wire:poll.30s class="max-w-full min-w-0 overflow-x-hidden space-y-6">
+<div class="max-w-full min-w-0 overflow-x-hidden space-y-6">
     @php
         $currency = 'TZS';
         $formatMoney = fn ($value) => $currency.' '.number_format((float) $value, 2);
@@ -400,7 +400,7 @@ $recentTransactions = computed(function (): Collection {
 
     <x-page-header
         title="Hardex POS"
-        description="Live business dashboard for sales, inventory, cash flow, and operational alerts."
+        description="Business dashboard for sales, inventory, cash flow, and operational alerts."
         :breadcrumbs="['Dashboard' => null]"
     >
         <div class="flex flex-wrap gap-2">
