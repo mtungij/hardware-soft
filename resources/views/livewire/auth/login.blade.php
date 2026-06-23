@@ -161,7 +161,7 @@ $login = function () {
 
                     @unless ($this->systemInitialized())
                         <a href="{{ route('setup') }}" wire:navigate class="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-navy-900 transition hover:border-build-orange dark:border-slate-700 dark:text-white">
-                            System Setup
+                            Create Account
                         </a>
                     @endunless
 
