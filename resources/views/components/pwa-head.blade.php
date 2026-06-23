@@ -1,4 +1,9 @@
-<link rel="manifest" href="{{ asset('manifest.json') }}">
+@php
+    $isCustomerPortal = request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST);
+    $pwaName = $isCustomerPortal ? 'Hardex Customer' : 'Hardex Staff';
+@endphp
+
+<link rel="manifest" href="{{ route('pwa.manifest') }}">
 <link rel="icon" type="image/png" sizes="72x72" href="{{ asset('icons/icon-72x72.png') }}">
 <link rel="icon" type="image/png" sizes="96x96" href="{{ asset('icons/icon-96x96.png') }}">
 <link rel="icon" type="image/png" sizes="128x128" href="{{ asset('icons/icon-128x128.png') }}">
@@ -14,8 +19,8 @@
 <meta name="description" content="{{ __('messages.welcome_message') }}">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Hardex Customer">
+<meta name="apple-mobile-web-app-title" content="{{ $pwaName }}">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="application-name" content="Hardex Customer">
+<meta name="application-name" content="{{ $pwaName }}">
 <meta name="msapplication-TileColor" content="#f97316">
 <meta name="msapplication-TileImage" content="{{ asset('icons/icon-144x144.png') }}">

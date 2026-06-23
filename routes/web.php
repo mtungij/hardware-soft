@@ -8,6 +8,35 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
 
+Route::get('pwa/manifest.json', function () {
+    $isCustomerPortal = request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST);
+    $name = $isCustomerPortal ? 'Hardex Customer' : 'Hardex Staff';
+    $description = $isCustomerPortal
+        ? 'Customer portal for checking debts, deposits, receipts, payments, and account statements.'
+        : 'Staff workspace for inventory, sales, accounting, reporting, and administration.';
+    $startUrl = $isCustomerPortal ? route('customer.login') : route('login');
+
+    return response()->json([
+        'name' => $name,
+        'short_name' => $isCustomerPortal ? 'Customer' : 'Staff',
+        'description' => $description,
+        'theme_color' => '#f97316',
+        'background_color' => '#ffffff',
+        'display' => 'standalone',
+        'orientation' => 'portrait',
+        'start_url' => $startUrl,
+        'scope' => url('/'),
+        'id' => url($isCustomerPortal ? '/customer' : '/staff'),
+        'categories' => ['business', 'productivity', 'finance'],
+        'icons' => collect([72, 96, 128, 144, 152, 192, 384, 512])->map(fn (int $size) => [
+            'src' => asset("icons/icon-{$size}x{$size}.png"),
+            'sizes' => "{$size}x{$size}",
+            'type' => 'image/png',
+            'purpose' => 'any maskable',
+        ])->values(),
+    ]);
+})->name('pwa.manifest');
+
 Route::post('theme-preference', function (Request $request) {
     $data = $request->validate([
         'theme' => ['required', 'in:dark,light'],

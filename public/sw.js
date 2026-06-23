@@ -4,7 +4,7 @@ const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
 const APP_SHELL = [
     '/offline',
-    '/manifest.json',
+    '/pwa/manifest.json',
     '/images/hardex.png',
     '/icons/icon-72x72.png',
     '/icons/icon-96x96.png',
@@ -33,7 +33,7 @@ const isCacheableAsset = (url) => (
     url.pathname.startsWith('/build/')
     || url.pathname.startsWith('/icons/')
     || url.pathname.startsWith('/images/')
-    || url.pathname === '/manifest.json'
+    || url.pathname === '/pwa/manifest.json'
     || url.pathname === '/offline'
 );
 
