@@ -161,8 +161,8 @@ $complete = function () {
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         app(\Database\Seeders\RolePermissionSeeder::class)->run();
-        $role = Role::query()->firstOrCreate(['name' => 'Super Admin']);
-        $role->syncPermissions(Permission::all());
+        $role = Role::query()->firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
+        $role->syncPermissions(Permission::where('guard_name', 'web')->get());
 
         $user = User::query()->create([
             'branch_id' => $branch->id,

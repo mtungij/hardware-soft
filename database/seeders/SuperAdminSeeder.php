@@ -17,8 +17,8 @@ class SuperAdminSeeder extends Seeder
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $branch = Branch::query()->where('code', 'MAIN')->first();
-        $role = Role::query()->firstOrCreate(['name' => 'Super Admin']);
-        $role->syncPermissions(Permission::all());
+        $role = Role::query()->firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
+        $role->syncPermissions(Permission::where('guard_name', 'web')->get());
 
         $user = User::query()->updateOrCreate(
             ['email' => 'admin@buildmart.test'],

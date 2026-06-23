@@ -35,7 +35,7 @@ $save = function () {
 
     $role = Role::query()->updateOrCreate(
         ['id' => $this->role_id],
-        ['name' => $validated['name']]
+        ['name' => $validated['name'], 'guard_name' => 'web']
     );
 
     $role->syncPermissions($validated['permissions']);

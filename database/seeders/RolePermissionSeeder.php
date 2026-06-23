@@ -9,6 +9,8 @@ use Spatie\Permission\PermissionRegistrar;
 
 class RolePermissionSeeder extends Seeder
 {
+    private string $guard = 'web';
+
     public function run(): void
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -42,12 +44,12 @@ class RolePermissionSeeder extends Seeder
 
         foreach ($groups as $group) {
             foreach ($actions as $action) {
-                Permission::query()->firstOrCreate(['name' => "{$action} {$group}"]);
+                Permission::query()->firstOrCreate(['name' => "{$action} {$group}", 'guard_name' => $this->guard]);
             }
         }
 
         foreach (['receive purchases', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'receive sale payments', 'print receipt', 'receive customer payments', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'view customer notifications', 'pay suppliers', 'manage cashbook', 'export reports', 'view stock valuation', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings'] as $permissionName) {
-            Permission::query()->firstOrCreate(['name' => $permissionName]);
+            Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
         $roles = [
@@ -60,12 +62,12 @@ class RolePermissionSeeder extends Seeder
         ];
 
         foreach ($roles as $roleName) {
-            Role::query()->firstOrCreate(['name' => $roleName]);
+            Role::query()->firstOrCreate(['name' => $roleName, 'guard_name' => $this->guard]);
         }
 
-        Role::findByName('Super Admin')->syncPermissions(Permission::all());
-        Role::findByName('Admin')->syncPermissions(Permission::all());
-        Role::findByName('Manager')->syncPermissions(Permission::all());
+        Role::findByName('Super Admin', $this->guard)->syncPermissions(Permission::where('guard_name', $this->guard)->get());
+        Role::findByName('Admin', $this->guard)->syncPermissions(Permission::where('guard_name', $this->guard)->get());
+        Role::findByName('Manager', $this->guard)->syncPermissions(Permission::where('guard_name', $this->guard)->get());
         $inventoryViewPermissions = [
             'view categories',
             'view units',
@@ -89,7 +91,7 @@ class RolePermissionSeeder extends Seeder
             'send purchase emails',
         ];
 
-        Role::findByName('Cashier')->syncPermissions([
+        Role::findByName('Cashier', $this->guard)->syncPermissions([
             'view dashboard',
             ...$inventoryViewPermissions,
             'view store stock',
@@ -105,9 +107,9 @@ class RolePermissionSeeder extends Seeder
             'receive customer payments',
             'view cashbook',
         ]);
-        Role::findByName('Store Keeper')->syncPermissions(['view dashboard', ...$storeKeeperPermissions, 'view sales', 'sell from store']);
-        Role::findByName('Store Keeper')->givePermissionTo('view stock valuation');
-        Role::findByName('Accountant')->syncPermissions([
+        Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', ...$storeKeeperPermissions, 'view sales', 'sell from store']);
+        Role::findByName('Store Keeper', $this->guard)->givePermissionTo('view stock valuation');
+        Role::findByName('Accountant', $this->guard)->syncPermissions([
             'view dashboard',
             'export dashboard',
             ...$inventoryViewPermissions,
