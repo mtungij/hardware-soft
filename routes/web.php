@@ -30,7 +30,7 @@ Route::get('pwa/manifest.json', function () {
         'name' => $name,
         'short_name' => $shortName ?: 'Hardex',
         'description' => $description,
-        'theme_color' => '#f97316',
+        'theme_color' => '#06b6d4',
         'background_color' => '#ffffff',
         'display' => 'standalone',
         'orientation' => 'portrait',
@@ -68,6 +68,31 @@ Route::post('theme-preference', function (Request $request) {
         'theme' => \App\Support\ThemePreference::store($data['theme']),
     ]);
 })->name('theme.preference');
+
+Route::post('staff/language/{locale}', function (Request $request, string $locale) {
+    abort_unless(in_array($locale, ['en', 'sw'], true), 404);
+
+    $request->session()->put('staff_locale', $locale);
+
+    if (auth()->check()) {
+        try {
+            if (\Illuminate\Support\Facades\Schema::hasTable('user_preferences')) {
+                \App\Models\UserPreference::query()->updateOrCreate(
+                    [
+                        'guard' => 'web',
+                        'user_id' => auth()->id(),
+                        'key' => 'locale',
+                    ],
+                    ['value' => $locale]
+                );
+            }
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    return back();
+})->name('staff.language');
 
 Route::get('/', function () {
     if (request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST)) {

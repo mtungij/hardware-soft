@@ -25,12 +25,12 @@ export default {
                     950: '#06162a',
                 },
                 build: {
-                    orange: '#f97316',
+                    orange: '#06b6d4',
                     amber: '#f59e0b',
                 },
             },
             fontFamily: {
-                sans: ['Inter', ...defaultTheme.fontFamily.sans],
+                sans: ['Poppins', ...defaultTheme.fontFamily.sans],
             },
             boxShadow: {
                 soft: '0 18px 50px -28px rgba(15, 23, 42, .55)',

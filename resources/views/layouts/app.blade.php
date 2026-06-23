@@ -9,19 +9,7 @@
         <title>{{ config('app.name', 'Hardex POS') }}</title>
 
         @php
-            $themeColor = '#f97316';
-
-            try {
-                if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
-                    $savedThemeColor = \App\Models\Setting::query()->value('theme_color');
-
-                    if (is_string($savedThemeColor) && preg_match('/^#[0-9A-Fa-f]{6}$/', $savedThemeColor)) {
-                        $themeColor = $savedThemeColor;
-                    }
-                }
-            } catch (\Throwable) {
-                $themeColor = '#f97316';
-            }
+            $themeColor = '#06b6d4';
         @endphp
 
         <style>
@@ -32,7 +20,7 @@
         <x-theme-script />
 
         <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap" rel="stylesheet" />
+        <link href="https://fonts.bunny.net/css?family=poppins:300,400,500,600,700&display=swap" rel="stylesheet" />
         <x-pwa-head />
 
         @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -141,6 +129,7 @@
                 ->map(fn ($word) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($word, 0, 1)))
                 ->take(2)
                 ->join('') ?: 'HP';
+            $currentStaffLocale = session('staff_locale', app()->getLocale());
         @endphp
 
         <div
@@ -165,8 +154,8 @@
             <div class="fixed inset-0 z-40 bg-slate-950/50 lg:hidden" x-cloak x-show="sidebarOpen" x-transition.opacity @click="sidebarOpen = false"></div>
 
             <aside class="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white shadow-xl shadow-slate-900/5 transition-all duration-300 dark:border-slate-800 dark:bg-slate-900 lg:translate-x-0" :class="{ '-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen, 'lg:w-20': collapsed, 'lg:w-72': !collapsed }" @mouseenter="collapsed = false">
-                <div class="flex h-16 items-center gap-3 border-b border-slate-200 px-4 dark:border-slate-800">
-                    <div class="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-build-orange text-lg font-black text-white shadow-lg shadow-orange-500/30">
+                <div class="flex h-14 items-center gap-2 border-b border-slate-200 px-3 dark:border-slate-800">
+                    <div class="grid h-10 w-10 place-items-center overflow-hidden rounded-xl bg-build-orange text-base font-bold text-white shadow-lg shadow-orange-500/30">
                         <img data-brand-logo src="{{ $companyLogo ? asset('storage/'.$companyLogo) : '' }}" class="{{ $companyLogo ? 'block' : 'hidden' }} h-full w-full object-contain bg-white p-1.5" alt="{{ $companyName }} logo">
                         <span data-brand-initials class="{{ $companyLogo ? 'hidden' : 'block' }}">{{ $companyInitials }}</span>
                     </div>
@@ -174,23 +163,23 @@
                         <p data-brand-name class="max-w-44 truncate text-sm font-black uppercase tracking-wide text-navy-900 dark:text-white">{{ $companyName }}</p>
                         <p class="text-xs font-medium text-slate-500 dark:text-slate-400">Business workspace</p>
                     </div>
-                    <button type="button" class="ml-auto hidden h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-build-orange hover:text-build-orange dark:border-slate-700 dark:text-slate-300 lg:grid" @click="collapsed = !collapsed" aria-label="Toggle sidebar">
+                    <button type="button" class="ml-auto hidden h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-build-orange hover:text-build-orange dark:border-slate-700 dark:text-slate-300 lg:grid" @click="collapsed = !collapsed" aria-label="Toggle sidebar">
                         <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': collapsed }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M15 18l-6-6 6-6" />
                         </svg>
                     </button>
                 </div>
 
-                <nav class="flex-1 overflow-y-auto px-3 py-4">
+                <nav class="flex-1 overflow-y-auto px-2 py-3">
                     @foreach ($navigationGroups as $group)
                         @php
                             $visibleItems = collect($group['items'])->filter(fn ($item) => blank($item['roles']) || $user?->hasAnyRole($item['roles']));
                         @endphp
                         @if ($visibleItems->isNotEmpty())
-                            <div class="mb-3" x-data="{ open: true }">
-                                <button type="button" class="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-black uppercase text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white" @click="open = !open" :aria-expanded="open">
-                                    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500 transition group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10">
-                                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <div class="mb-2" x-data="{ open: true }">
+                                <button type="button" class="group flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold uppercase text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white" @click="open = !open" :aria-expanded="open">
+                                    <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10">
+                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                             @foreach ($navIcons[$group['icon']] ?? $navIcons['dashboard'] as $path)
                                                 <path d="{{ $path }}" />
                                             @endforeach
@@ -210,12 +199,12 @@
                                             $isActive = request()->routeIs($item['route']) || ($activePattern && request()->routeIs($activePattern));
                                             $iconName = $item['icon'] ?? $group['icon'];
                                         @endphp
-                                        <a href="{{ route($item['route']) }}" wire:navigate @click="sidebarOpen = false" class="group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-extrabold transition focus:outline-none focus:ring-4 focus:ring-orange-500/20 {{ $isActive ? 'bg-orange-50 text-build-orange shadow-sm dark:bg-orange-500/15 dark:text-orange-300' : 'text-slate-700 hover:bg-slate-100 hover:text-navy-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white' }}">
+                                        <a href="{{ route($item['route']) }}" wire:navigate @click="sidebarOpen = false" class="group relative flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-orange-500/20 {{ $isActive ? 'bg-orange-50 text-build-orange shadow-sm dark:bg-orange-500/15 dark:text-orange-300' : 'text-slate-700 hover:bg-slate-100 hover:text-navy-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white' }}">
                                             @if ($isActive)
                                                 <span class="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-build-orange"></span>
                                             @endif
-                                            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl transition {{ $isActive ? 'bg-build-orange text-white shadow-lg shadow-orange-500/25' : 'bg-slate-100 text-slate-500 group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10' }}">
-                                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition {{ $isActive ? 'bg-build-orange text-white shadow-lg shadow-orange-500/25' : 'bg-slate-100 text-slate-500 group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10' }}">
+                                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                                     @foreach ($navIcons[$iconName] ?? $navIcons['dashboard'] as $path)
                                                         <path d="{{ $path }}" />
                                                     @endforeach
@@ -230,8 +219,8 @@
                     @endforeach
                 </nav>
 
-                <div class="border-t border-slate-200 p-4 dark:border-slate-800">
-                    <div class="rounded-xl bg-navy-900 p-4 text-white dark:bg-white/5" x-show="!collapsed" x-transition.opacity>
+                <div class="border-t border-slate-200 p-3 dark:border-slate-800">
+                    <div class="rounded-xl bg-slate-950 p-3 text-white dark:bg-white/5" x-show="!collapsed" x-transition.opacity>
                         <p class="text-sm font-bold">{{ $user?->branch?->name ?? 'Main Branch' }}</p>
                         <p class="mt-1 text-xs text-slate-300">{{ $user?->roles->pluck('name')->join(', ') ?: 'No role assigned' }}</p>
                     </div>
@@ -252,8 +241,21 @@
                             </div>
                         </div>
 
-                        <x-pwa-install-button class="hidden rounded-xl bg-build-orange px-3 py-2 text-sm font-black text-white shadow-lg shadow-orange-500/25" />
-                        <button class="hidden rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold transition hover:border-build-orange dark:border-slate-700 sm:inline-flex" @click="toggleTheme()" x-text="darkMode ? 'Light' : 'Dark'" aria-label="Toggle theme"></button>
+                        <x-pwa-install-button class="hidden rounded-lg bg-build-orange px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/25" />
+                        <div class="hs-dropdown relative inline-flex">
+                            <button type="button" class="hs-dropdown-toggle hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200 sm:inline-flex">
+                                {{ $currentStaffLocale === 'sw' ? '🇹🇿 Kiswahili' : '🇬🇧 English' }}
+                            </button>
+                            <div class="hs-dropdown-menu z-50 mt-2 hidden min-w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
+                                @foreach (['en' => '🇬🇧 English', 'sw' => '🇹🇿 Kiswahili'] as $locale => $label)
+                                    <form method="POST" action="{{ route('staff.language', $locale) }}">
+                                        @csrf
+                                        <button type="submit" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium {{ $currentStaffLocale === $locale ? 'bg-orange-50 text-build-orange dark:bg-orange-500/15' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5' }}" onclick="localStorage.setItem('hardex_staff_locale', '{{ $locale }}')">{{ $label }}</button>
+                                    </form>
+                                @endforeach
+                            </div>
+                        </div>
+                        <button class="hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold transition hover:border-build-orange dark:border-slate-700 sm:inline-flex" @click="toggleTheme()" x-text="darkMode ? 'Light' : 'Dark'" aria-label="Toggle theme"></button>
                         <button class="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-xs font-bold dark:border-slate-700" aria-label="Notifications">
                             <span>Bell</span>
                             <span class="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-build-orange ring-2 ring-white dark:ring-navy-950"></span>

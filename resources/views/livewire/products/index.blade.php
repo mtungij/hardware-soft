@@ -20,6 +20,7 @@ state([
     'branchFilter' => '',
     'categoryFilter' => '',
     'editing_product_id' => null,
+    'deleting_product_id' => null,
     'branch_id' => '',
     'category_id' => '',
     'unit_id' => '',
@@ -148,6 +149,23 @@ $deleteProduct = function (int $productId) {
     session()->flash('success', 'Product deleted.');
 };
 
+$confirmDeleteProduct = function (int $productId) {
+    abort_unless($this->canManage(), 403);
+
+    $this->deleting_product_id = $productId;
+    $this->dispatch('open-modal', 'delete-product');
+};
+
+$deleteConfirmedProduct = function () {
+    abort_unless($this->canManage(), 403);
+
+    Product::findOrFail($this->deleting_product_id)->delete();
+    $this->deleting_product_id = null;
+
+    session()->flash('success', 'Product deleted.');
+    $this->dispatch('close-modal', 'delete-product');
+};
+
 ?>
 
 <div>
@@ -220,10 +238,15 @@ $deleteProduct = function (int $productId) {
                     <td class="px-4 py-3"><span class="{{ $product->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($product->status) }}</span></td>
                     <td class="px-4 py-3">
                         @if ($this->canManage())
-                            <div class="flex flex-wrap gap-2">
-                                <button type="button" wire:click="openEditProduct({{ $product->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold dark:border-slate-700">Edit</button>
-                                <button wire:click="toggleStatus({{ $product->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ $product->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
-                                <button wire:click="deleteProduct({{ $product->id }})" wire:confirm="Delete this product?" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white">Delete</button>
+                            <div class="hs-dropdown relative inline-flex">
+                                <button type="button" class="hs-dropdown-toggle rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+                                    Actions
+                                </button>
+                                <div class="hs-dropdown-menu z-40 mt-2 hidden min-w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
+                                    <button type="button" wire:click="openEditProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">Edit</button>
+                                    <button type="button" wire:click="toggleStatus({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">{{ $product->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
+                                    <button type="button" wire:click="confirmDeleteProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">Delete</button>
+                                </div>
                             </div>
                         @else
                             <span class="text-xs text-slate-500">View only</span>
@@ -303,5 +326,23 @@ $deleteProduct = function (int $productId) {
                 </button>
             </div>
         </form>
+    </x-modal>
+
+    <x-modal name="delete-product" maxWidth="md" :closeOnBackdrop="false">
+        @php($deletingProduct = $deleting_product_id ? Product::find($deleting_product_id) : null)
+        <div class="p-5">
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Confirm Delete</h2>
+            <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                Are you sure you want to delete {{ $deletingProduct?->name ? '"'.$deletingProduct->name.'"' : 'this record' }}?
+            </p>
+
+            <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <button type="button" x-on:click="$dispatch('close-modal', 'delete-product')" class="erp-btn-secondary" wire:loading.attr="disabled">Cancel</button>
+                <button type="button" wire:click="deleteConfirmedProduct" wire:loading.attr="disabled" wire:target="deleteConfirmedProduct" class="inline-flex items-center justify-center rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-600 disabled:pointer-events-none disabled:opacity-50">
+                    <span wire:loading.remove wire:target="deleteConfirmedProduct">Delete</span>
+                    <span wire:loading wire:target="deleteConfirmedProduct">Deleting...</span>
+                </button>
+            </div>
+        </div>
     </x-modal>
 </div>

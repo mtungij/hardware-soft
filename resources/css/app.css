@@ -4,7 +4,7 @@
 
 @layer base {
     :root {
-        --build-theme: #f97316;
+        --build-theme: #06b6d4;
     }
 
     [x-cloak] {
