@@ -9,6 +9,7 @@ export default {
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
         './storage/framework/views/*.php',
         './resources/views/**/*.blade.php',
+        './node_modules/preline/dist/*.js',
     ],
 
     theme: {
@@ -29,7 +30,7 @@ export default {
                 },
             },
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', ...defaultTheme.fontFamily.sans],
             },
             boxShadow: {
                 soft: '0 18px 50px -28px rgba(15, 23, 42, .55)',
@@ -37,5 +38,7 @@ export default {
         },
     },
 
-    plugins: [forms],
+    plugins: [
+        forms,
+    ],
 };

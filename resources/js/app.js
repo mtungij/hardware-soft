@@ -1,4 +1,5 @@
 import Chart from 'chart.js/auto';
+import 'preline';
 
 window.Chart = Chart;
 
@@ -72,3 +73,10 @@ window.buildMartChart = (canvas, config) => {
 };
 
 import './pwa-install';
+
+const initializePreline = () => {
+    window.HSStaticMethods?.autoInit();
+};
+
+document.addEventListener('DOMContentLoaded', initializePreline);
+document.addEventListener('livewire:navigated', initializePreline);
