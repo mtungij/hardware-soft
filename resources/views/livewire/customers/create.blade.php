@@ -111,7 +111,7 @@ $save = function () {
             ? Mail::mailer($mailer)->to($account->email)->send($message)
             : Mail::to($account->email)->send($message);
 
-        session()->flash('success', 'Customer and customer portal account created successfully. Login details were emailed to '.$account->email.'.');
+        session()->flash('success', 'Customer created successfully. A Swahili welcome email with customer portal instructions was sent to '.$account->email.'.');
     } catch (\Throwable $exception) {
         report($exception);
 

@@ -3,26 +3,32 @@
 @endphp
 
 <x-mail::message>
-# Customer Portal Account Created
+# Karibu {{ $companyName }}
 
-Hello {{ $account->name }},
+Habari {{ $account->name }},
 
-Your {{ $companyName }} customer portal account has been created. You can now log in to check your debts, deposits, receipts, payments, and account statements.
+Karibu kwenye huduma ya {{ $companyName }} Customer Portal. Kupitia portal hii unaweza kuona taarifa zako za madeni, malipo, risiti, amana, na statement ya akaunti yako.
 
 <x-mail::panel>
-**Login URL:** {{ $portalUrl }}
+**Link ya Customer Portal:** {{ $portalUrl }}
 
-**Email:** {{ $account->email }}
-
-**Temporary Password:** {{ $temporaryPassword }}
+**Email utakayotumia:** {{ $account->email }}
 </x-mail::panel>
 
 <x-mail::button :url="$portalUrl">
-Open Customer Portal
+Fungua Customer Portal
 </x-mail::button>
 
-Please log in and change your password after your first access.
+Namna ya kuanza:
 
-Thanks,<br>
+1. Fungua link ya Customer Portal hapo juu.
+2. Kama bado hujawahi kuingia, bonyeza **Create Account** au **Fungua Akaunti**.
+3. Tumia email hii: **{{ $account->email }}**.
+4. Weka namba yako ya simu na tengeneza password yako.
+5. Baada ya kufungua akaunti, rudi kwenye ukurasa wa login na uingie kwa email na password uliyoweka.
+
+Kama tayari umefungua akaunti, ingia moja kwa moja kupitia link ya Customer Portal.
+
+Asante,<br>
 {{ $companyName }}
 </x-mail::message>

@@ -33,7 +33,7 @@ class CustomerPortalAccountCreatedMail extends Mailable
             from: $this->settings?->mail_from_email
                 ? new \Illuminate\Mail\Mailables\Address($this->settings->mail_from_email, $this->settings->mail_from_name ?: $companyName)
                 : null,
-            subject: "{$companyName} Customer Portal Account",
+            subject: "Karibu {$companyName} Customer Portal",
         );
     }
 
@@ -46,6 +46,7 @@ class CustomerPortalAccountCreatedMail extends Mailable
                 'account' => $this->account,
                 'temporaryPassword' => $this->temporaryPassword,
                 'portalUrl' => $this->portalUrl,
+                'registerUrl' => rtrim(dirname($this->portalUrl), '/').'/register',
                 'company' => $this->company,
                 'settings' => $this->settings,
             ],
