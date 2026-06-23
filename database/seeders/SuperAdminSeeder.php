@@ -6,12 +6,19 @@ use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class SuperAdminSeeder extends Seeder
 {
     public function run(): void
     {
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
         $branch = Branch::query()->where('code', 'MAIN')->first();
+        $role = Role::query()->firstOrCreate(['name' => 'Super Admin']);
+        $role->syncPermissions(Permission::all());
 
         $user = User::query()->updateOrCreate(
             ['email' => 'admin@buildmart.test'],
@@ -20,11 +27,12 @@ class SuperAdminSeeder extends Seeder
                 'name' => 'Super Admin',
                 'phone' => '+255 700 000 001',
                 'status' => 'active',
+                'is_system_owner' => true,
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
             ]
         );
 
-        $user->assignRole('Super Admin');
+        $user->syncRoles([$role]);
     }
 }

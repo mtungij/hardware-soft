@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Hardex Staff and Customer Shared Database Setup</title>
+    <style>
+        body {
+            font-family: DejaVu Sans, sans-serif;
+            color: #111827;
+            font-size: 11pt;
+            line-height: 1.5;
+        }
+        h1 {
+            color: #0f172a;
+            font-size: 22pt;
+            margin-bottom: 6px;
+        }
+        h2 {
+            color: #1f2937;
+            font-size: 15pt;
+            margin-top: 24px;
+            border-bottom: 1px solid #e5e7eb;
+            padding-bottom: 4px;
+        }
+        h3 {
+            color: #374151;
+            font-size: 12pt;
+            margin-top: 18px;
+        }
+        p {
+            margin: 8px 0;
+        }
+        code {
+            font-family: DejaVu Sans Mono, monospace;
+            background: #f3f4f6;
+            padding: 1px 4px;
+            border-radius: 3px;
+        }
+        pre {
+            font-family: DejaVu Sans Mono, monospace;
+            font-size: 8.5pt;
+            line-height: 1.35;
+            color: #f8fafc;
+            background: #111827;
+            padding: 10px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+        }
+        .note {
+            background: #fff7ed;
+            border-left: 4px solid #f97316;
+            padding: 10px 12px;
+            margin: 12px 0;
+        }
+        .ok {
+            background: #ecfdf5;
+            border-left: 4px solid #10b981;
+            padding: 10px 12px;
+            margin: 12px 0;
+        }
+        ul, ol {
+            margin-top: 6px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hardex Staff and Customer Shared Database Setup</h1>
+    <p><strong>Purpose:</strong> make <code>staff.buildcore.site</code> and <code>customer.buildcore.site</code> use one shared MySQL database so customer registration, staff approval, and customer login all work from the same records.</p>
+
+    <h2>Problem We Fixed</h2>
+    <p>The server had two Docker containers:</p>
+    <pre>hardex-staff
+hardex-customer</pre>
+    <p>Each container had its own MySQL database:</p>
+    <pre>hardex-staff    -> hardex_staff_db
+hardex-customer -> hardex_customer_db</pre>
+    <p>Because of that, a customer created or registered in one site could not be seen by the other site. Staff could not approve accounts created in the customer portal, and customers created in staff could not login in the customer portal.</p>
+
+    <h2>Correct Architecture</h2>
+    <p>Both Laravel apps should connect to one shared database:</p>
+    <pre>hardex-staff      -> Laravel app
+hardex-customer   -> Laravel app
+hardex-mysql      -> shared MySQL database</pre>
+    <p>Both apps now use:</p>
+    <pre>DB_HOST=hardex-mysql
+DB_DATABASE=hardex_db
+DB_USERNAME=hardex_user</pre>
+
+    <h2>Commands Used</h2>
+
+    <h3>1. Backup Staff Database</h3>
+    <pre>docker exec hardex-staff sh -lc 'MYSQL_PWD="StrongPassword123@" mysqldump --no-tablespaces -h127.0.0.1 -uhardex_user hardex_staff_db' &gt; /root/hardex_staff_db_backup.sql</pre>
+    <p>Check the backup file:</p>
+    <pre>ls -lh /root/hardex_staff_db_backup.sql</pre>
+
+    <h3>2. Shared MySQL Container</h3>
+    <p>The shared MySQL container was already running:</p>
+    <pre>docker ps -a | grep hardex-mysql</pre>
+    <p>Expected result:</p>
+    <pre>hardex-mysql   mysql:8.4   Up</pre>
+
+    <h3>3. Import Staff Backup Into Shared Database</h3>
+    <pre>cat /root/hardex_staff_db_backup.sql | docker exec -i hardex-mysql mysql -uhardex_user -p"StrongPassword123@" hardex_db</pre>
+
+    <h3>4. Update Staff .env</h3>
+    <pre>docker exec hardex-staff sh -lc 'cd /var/www/html/hardex-staff &amp;&amp; sed -i "s/^ *DB_HOST=.*/DB_HOST=hardex-mysql/; s/^ *DB_PORT=.*/DB_PORT=3306/; s/^ *DB_DATABASE=.*/DB_DATABASE=hardex_db/; s/^ *DB_USERNAME=.*/DB_USERNAME=hardex_user/; s/^ *DB_PASSWORD=.*/DB_PASSWORD=StrongPassword123@/" .env'</pre>
+
+    <h3>5. Update Customer .env</h3>
+    <pre>docker exec hardex-customer sh -lc 'cd /var/www/html/hardex-customer &amp;&amp; sed -i "s/^ *DB_HOST=.*/DB_HOST=hardex-mysql/; s/^ *DB_PORT=.*/DB_PORT=3306/; s/^ *DB_DATABASE=.*/DB_DATABASE=hardex_db/; s/^ *DB_USERNAME=.*/DB_USERNAME=hardex_user/; s/^ *DB_PASSWORD=.*/DB_PASSWORD=StrongPassword123@/" .env'</pre>
+
+    <h3>6. Clear Cache and Run Migrations</h3>
+    <pre>docker exec hardex-staff sh -lc 'cd /var/www/html/hardex-staff &amp;&amp; php artisan optimize:clear &amp;&amp; php artisan migrate --force'</pre>
+    <pre>docker exec hardex-customer sh -lc 'cd /var/www/html/hardex-customer &amp;&amp; php artisan optimize:clear &amp;&amp; php artisan migrate --force'</pre>
+
+    <h3>7. Confirm Both Apps Use Same Database</h3>
+    <pre>docker exec hardex-staff sh -lc 'cd /var/www/html/hardex-staff &amp;&amp; php artisan tinker --execute="dump(config(\"database.connections.mysql.host\"), config(\"database.connections.mysql.database\"), config(\"database.connections.mysql.username\"));"'</pre>
+    <pre>docker exec hardex-customer sh -lc 'cd /var/www/html/hardex-customer &amp;&amp; php artisan tinker --execute="dump(config(\"database.connections.mysql.host\"), config(\"database.connections.mysql.database\"), config(\"database.connections.mysql.username\"));"'</pre>
+    <p>Both should show:</p>
+    <pre>"hardex-mysql"
+"hardex_db"
+"hardex_user"</pre>
+
+    <h2>Expected Flow Now</h2>
+    <ol>
+        <li>Customer registers at <code>https://customer.buildcore.site/customer/register</code>.</li>
+        <li>The account is saved in <code>hardex_db.customer_accounts</code> with status <code>pending</code>.</li>
+        <li>Super admin opens <code>https://staff.buildcore.site/customer-accounts</code>.</li>
+        <li>Super admin sees the pending account and approves it.</li>
+        <li>Customer logs in at <code>https://customer.buildcore.site/customer/login</code>.</li>
+    </ol>
+
+    <h2>Email Change Made</h2>
+    <p>The staff customer creation email was changed. It now welcomes the customer in Swahili and gives instructions to open the customer portal and create their account, instead of sending a password that may not work when databases were separate.</p>
+
+    <div class="ok">
+        <strong>Current status:</strong> both containers confirmed they are using <code>hardex-mysql</code>, <code>hardex_db</code>, and <code>hardex_user</code>.
+    </div>
+
+    <div class="note">
+        <strong>Important:</strong> do not change one container back to <code>127.0.0.1</code> unless MySQL is intentionally running inside that same container. For this shared setup, both apps should keep <code>DB_HOST=hardex-mysql</code>.
+    </div>
+</body>
+</html>
