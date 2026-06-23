@@ -10,7 +10,20 @@ use Livewire\Volt\Volt;
 
 Route::get('pwa/manifest.json', function () {
     $isCustomerPortal = request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST);
-    $name = $isCustomerPortal ? 'Hardex Customer' : 'Hardex Staff';
+    $companyName = \App\Models\Company::current()?->company_name;
+
+    if (! $companyName) {
+        try {
+            $companyName = \Illuminate\Support\Facades\Schema::hasTable('settings')
+                ? \App\Models\Setting::query()->value('company_name')
+                : null;
+        } catch (\Throwable) {
+            $companyName = null;
+        }
+    }
+
+    $name = $companyName ?: config('app.name', 'Hardex');
+    $shortName = \Illuminate\Support\Str::of($name)->squish()->limit(12, '')->value();
     $description = $isCustomerPortal
         ? 'Customer portal for checking debts, deposits, receipts, payments, and account statements.'
         : 'Staff workspace for inventory, sales, accounting, reporting, and administration.';
@@ -18,7 +31,7 @@ Route::get('pwa/manifest.json', function () {
 
     return response()->json([
         'name' => $name,
-        'short_name' => $isCustomerPortal ? 'Customer' : 'Staff',
+        'short_name' => $shortName ?: 'Hardex',
         'description' => $description,
         'theme_color' => '#f97316',
         'background_color' => '#ffffff',

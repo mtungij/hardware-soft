@@ -1,6 +1,18 @@
 @php
     $isCustomerPortal = request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST);
-    $pwaName = $isCustomerPortal ? 'Hardex Customer' : 'Hardex Staff';
+    $pwaName = \App\Models\Company::current()?->company_name;
+
+    if (! $pwaName) {
+        try {
+            $pwaName = \Illuminate\Support\Facades\Schema::hasTable('settings')
+                ? \App\Models\Setting::query()->value('company_name')
+                : null;
+        } catch (\Throwable) {
+            $pwaName = null;
+        }
+    }
+
+    $pwaName = $pwaName ?: config('app.name', 'Hardex');
 @endphp
 
 <link rel="manifest" href="{{ route('pwa.manifest') }}">
