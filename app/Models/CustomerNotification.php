@@ -14,15 +14,20 @@ class CustomerNotification extends Model
         'type',
         'title',
         'message',
+        'priority',
         'notifiable_type',
         'notifiable_id',
         'read_at',
+        'delivered_at',
+        'channels',
     ];
 
     protected function casts(): array
     {
         return [
             'read_at' => 'datetime',
+            'delivered_at' => 'datetime',
+            'channels' => 'array',
         ];
     }
 

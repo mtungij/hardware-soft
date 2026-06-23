@@ -73,6 +73,11 @@ class CustomerAccount extends Authenticatable
         return $this->hasMany(CustomerNotification::class);
     }
 
+    public function messages(): HasMany
+    {
+        return $this->hasMany(CustomerMessage::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

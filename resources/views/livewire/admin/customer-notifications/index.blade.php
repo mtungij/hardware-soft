@@ -39,20 +39,23 @@ $notifications = computed(function () {
                 <option value="deposit_rejected">Deposit Rejected</option>
                 <option value="new_debt">New Debt</option>
                 <option value="new_invoice">New Invoice</option>
+                <option value="announcement">Announcement</option>
+                <option value="customer_message">Customer Message</option>
             </select>
         </div>
-        <x-table :headers="['Date', 'Customer', 'Type', 'Title', 'Message', 'Read']">
+        <x-table :headers="['Date', 'Customer', 'Type', 'Title', 'Priority', 'Delivered', 'Read']">
             @forelse ($this->notifications as $notification)
                 <tr>
                     <td class="px-4 py-3">{{ $notification->created_at->format('M d, Y H:i') }}</td>
                     <td class="px-4 py-3 font-bold">{{ $notification->customer?->name }}</td>
                     <td class="px-4 py-3">{{ str($notification->type)->replace('_', ' ')->title() }}</td>
                     <td class="px-4 py-3 font-bold">{{ $notification->title }}</td>
-                    <td class="px-4 py-3">{{ $notification->message }}</td>
+                    <td class="px-4 py-3">{{ ucfirst($notification->priority ?? 'normal') }}</td>
+                    <td class="px-4 py-3">{{ $notification->delivered_at?->format('M d, Y H:i') ?: $notification->created_at->format('M d, Y H:i') }}</td>
                     <td class="px-4 py-3">{{ $notification->read_at?->format('M d, Y H:i') ?: 'Unread' }}</td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500">No customer notifications found.</td></tr>
+                <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">No customer notifications found.</td></tr>
             @endforelse
         </x-table>
         <div class="mt-4">{{ $this->notifications->links() }}</div>

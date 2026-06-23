@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\CustomerDeposit;
+use App\Models\CustomerNotification;
 use App\Models\CustomerReceipt;
 use App\Models\Sale;
 use App\Services\AccountingService;
@@ -16,6 +17,13 @@ $outstanding = computed(fn () => app(AccountingService::class)->customerBalance(
 $depositBalance = computed(fn () => CustomerDeposit::where('customer_id', $this->customer->id)->whereIn('status', ['approved', 'partial'])->sum('balance_amount'));
 $pendingReceipts = computed(fn () => CustomerReceipt::where('customer_id', $this->customer->id)->where('status', 'pending')->count());
 $recentSales = computed(fn () => Sale::where('customer_id', $this->customer->id)->latest()->limit(5)->get());
+$importantAnnouncement = computed(fn () => CustomerNotification::query()
+    ->where('customer_id', $this->customer->id)
+    ->where('type', 'announcement')
+    ->whereIn('priority', ['high', 'urgent'])
+    ->whereNull('read_at')
+    ->latest()
+    ->first());
 $paymentStatusLabel = fn (string $status) => [
     'paid' => __('messages.status.paid'),
     'partial' => __('messages.status.partial'),
@@ -36,6 +44,18 @@ $paymentStatusLabel = fn (string $status) => [
         <h2 class="text-xl font-black text-navy-900 dark:text-white">Karibu kwenye {{ $companyName }}</h2>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ __('messages.welcome_message') }}</p>
     </x-card>
+
+    @if ($this->importantAnnouncement)
+        <div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                    <p class="text-sm font-black">{{ __('messages.notifications.important_notice') }}: {{ $this->importantAnnouncement->title }}</p>
+                    <p class="mt-1 text-sm">{{ $this->importantAnnouncement->message }}</p>
+                </div>
+                <a href="{{ route('customer.notifications.index') }}" wire:navigate class="rounded-lg bg-build-orange px-3 py-2 text-center text-sm font-bold text-white">{{ __('messages.notifications.read_more') }}</a>
+            </div>
+        </div>
+    @endif
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <x-card><p class="text-sm font-semibold text-slate-500">{{ __('messages.dashboard.outstanding_debt') }}</p><p class="mt-2 text-2xl font-black text-red-600">TZS {{ number_format($this->outstanding, 2) }}</p></x-card>

@@ -92,6 +92,12 @@
                     ['label' => 'Supplier Balances', 'route' => 'supplier-balances.index', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => 'Cashbook', 'route' => 'cashbook.index', 'icon' => 'accounting', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
                 ]],
+                ['label' => 'Customer Communications', 'icon' => 'mail', 'items' => [
+                    ['label' => 'Announcements', 'route' => 'admin.announcements.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => 'Customer Messages', 'route' => 'admin.customer-messages.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => 'Message Templates', 'route' => 'admin.message-templates.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => 'Sent Messages', 'route' => 'admin.sent-messages.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                ]],
                 ['label' => 'Reports', 'icon' => 'reports', 'items' => [
                     ['label' => 'Sales Reports', 'route' => 'reports.sales', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => 'Purchase Reports', 'route' => 'reports.purchases', 'icon' => 'reports', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],

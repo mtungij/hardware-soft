@@ -243,6 +243,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('admin/customer-deposits/{deposit}/download', [CustomerFileDownloadController::class, 'deposit'])->name('admin.customer-deposits.download');
         Volt::route('admin/customer-statements/{customer}', 'admin.customer-statements.show')->name('admin.customer-statements.show');
         Volt::route('admin/customer-notifications', 'admin.customer-notifications.index')->name('admin.customer-notifications.index');
+        Volt::route('admin/announcements', 'admin.announcements.index')->name('admin.announcements.index');
+        Volt::route('admin/customer-messages', 'admin.customer-messages.index')->name('admin.customer-messages.index');
+        Volt::route('admin/message-templates', 'admin.message-templates.index')->name('admin.message-templates.index');
+        Volt::route('admin/sent-messages', 'admin.sent-messages.index')->name('admin.sent-messages.index');
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Accountant,Cashier')->group(function () {

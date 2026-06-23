@@ -39,6 +39,10 @@ class RolePermissionSeeder extends Seeder
             'supplier balances',
             'cashbook',
             'financial reports',
+            'announcements',
+            'customer messages',
+            'message templates',
+            'sent messages',
         ];
         $actions = ['view', 'create', 'edit', 'delete', 'export', 'approve'];
 
@@ -48,7 +52,7 @@ class RolePermissionSeeder extends Seeder
             }
         }
 
-        foreach (['receive purchases', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'receive sale payments', 'print receipt', 'receive customer payments', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'view customer notifications', 'pay suppliers', 'manage cashbook', 'export reports', 'view stock valuation', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings'] as $permissionName) {
+        foreach (['receive purchases', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'receive sale payments', 'print receipt', 'receive customer payments', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'view customer notifications', 'manage customer communications', 'publish announcements', 'send customer messages', 'pay suppliers', 'manage cashbook', 'export reports', 'view stock valuation', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings'] as $permissionName) {
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
@@ -135,6 +139,22 @@ class RolePermissionSeeder extends Seeder
             'approve customer deposits',
             'view customer statements',
             'view customer notifications',
+            'manage customer communications',
+            'publish announcements',
+            'send customer messages',
+            'view announcements',
+            'create announcements',
+            'edit announcements',
+            'delete announcements',
+            'view customer messages',
+            'create customer messages',
+            'edit customer messages',
+            'delete customer messages',
+            'view message templates',
+            'create message templates',
+            'edit message templates',
+            'delete message templates',
+            'view sent messages',
             'view supplier balances',
             'pay suppliers',
             'view cashbook',

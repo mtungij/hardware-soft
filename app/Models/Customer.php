@@ -55,6 +55,21 @@ class Customer extends Model
         return $this->hasMany(CustomerDeposit::class);
     }
 
+    public function announcements(): HasMany
+    {
+        return $this->hasMany(AnnouncementCustomer::class);
+    }
+
+    public function messages(): HasMany
+    {
+        return $this->hasMany(CustomerMessage::class);
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(CustomerNotification::class);
+    }
+
     protected function casts(): array
     {
         return [

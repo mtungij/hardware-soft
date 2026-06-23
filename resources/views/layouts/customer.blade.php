@@ -39,6 +39,12 @@
     <body class="font-sans antialiased">
         @php
             $customerAccount = auth('customer')->user();
+            $unreadNotifications = $customerAccount
+                ? \App\Models\CustomerNotification::where('customer_id', $customerAccount->customer_id)->whereNull('read_at')->count()
+                : 0;
+            $recentNotifications = $customerAccount
+                ? \App\Models\CustomerNotification::where('customer_id', $customerAccount->customer_id)->latest()->limit(5)->get()
+                : collect();
             $navItems = [
                 ['label' => __('messages.nav.dashboard'), 'route' => 'customer.dashboard'],
                 ['label' => __('messages.nav.debts'), 'route' => 'customer.debts.index'],
@@ -50,7 +56,7 @@
             ];
         @endphp
 
-        <div x-data="{ sidebarOpen: false, profileOpen: false, darkMode: window.hardexTheme?.get() === 'dark' }" x-init="window.addEventListener('hardex-theme-changed', event => darkMode = event.detail.theme === 'dark')" class="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+        <div x-data="{ sidebarOpen: false, profileOpen: false, notificationsOpen: false, darkMode: window.hardexTheme?.get() === 'dark' }" x-init="window.addEventListener('hardex-theme-changed', event => darkMode = event.detail.theme === 'dark')" class="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
             <div x-cloak x-show="sidebarOpen" class="fixed inset-0 z-40 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
 
             <aside class="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition dark:border-slate-800 dark:bg-slate-900 lg:translate-x-0" :class="{ '-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen }">
@@ -102,7 +108,39 @@
                         <x-pwa-install-button class="hidden h-10 w-10 items-center justify-center rounded-xl bg-build-orange text-white sm:inline-flex" />
                         <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = window.hardexTheme?.toggle() === 'dark'" x-text="darkMode ? @js(__('messages.theme.light')) : @js(__('messages.theme.dark'))"></button>
                         <div class="relative">
-                            <button class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
+                            <button type="button" class="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-200" @click="notificationsOpen = !notificationsOpen; profileOpen = false" aria-label="{{ __('messages.nav.notifications') }}">
+                                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                                </svg>
+                                @if ($unreadNotifications > 0)
+                                    <span class="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-build-orange px-1 text-[10px] font-black text-white">{{ $unreadNotifications > 99 ? '99+' : $unreadNotifications }}</span>
+                                @endif
+                            </button>
+                            <div x-cloak x-show="notificationsOpen" x-transition @click.outside="notificationsOpen = false" class="absolute right-0 mt-3 w-80 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-slate-700 dark:bg-navy-900">
+                                <div class="mb-2 flex items-center justify-between">
+                                    <p class="text-sm font-black">{{ __('messages.nav.notifications') }}</p>
+                                    <a href="{{ route('customer.notifications.index') }}" wire:navigate class="text-xs font-bold text-build-orange" @click="notificationsOpen = false">{{ __('messages.notifications.view_all') }}</a>
+                                </div>
+                                <div class="max-h-80 space-y-2 overflow-y-auto">
+                                    @forelse ($recentNotifications as $notification)
+                                        <a href="{{ route('customer.notifications.index') }}" wire:navigate @click="notificationsOpen = false" class="block rounded-lg border border-slate-100 p-3 text-sm hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-white/5">
+                                            <div class="flex items-center gap-2">
+                                                @if (! $notification->read_at)
+                                                    <span class="h-2 w-2 rounded-full bg-build-orange"></span>
+                                                @endif
+                                                <p class="line-clamp-1 font-bold">{{ $notification->title }}</p>
+                                            </div>
+                                            <p class="mt-1 line-clamp-2 text-xs text-slate-500">{{ $notification->message }}</p>
+                                        </a>
+                                    @empty
+                                        <p class="py-6 text-center text-sm text-slate-500">{{ __('messages.notifications.empty') }}</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <button class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen; notificationsOpen = false">
                                 <img class="h-8 w-8 rounded-lg" src="https://ui-avatars.com/api/?name={{ urlencode($customerAccount?->name ?? 'Customer') }}&background=0d2e50&color=fff" alt="">
                                 <span class="hidden text-sm font-bold sm:block">{{ $customerAccount?->name }}</span>
                             </button>

@@ -182,12 +182,26 @@ return [
 
     'notifications' => [
         'empty' => 'Hakuna taarifa mpya kwa sasa.',
+        'all' => 'Zote',
+        'unread' => 'Hazijasomwa',
+        'read' => 'Zimesomwa',
+        'announcements' => 'Matangazo',
+        'promotions' => 'Promosheni',
+        'important' => 'Taarifa Muhimu',
+        'important_notice' => 'Taarifa Muhimu',
+        'read_more' => 'Soma Zaidi',
+        'view_all' => 'Angalia zote',
+        'mark_all_read' => 'Weka zote zimesomwa',
+        'marked_read' => 'Imesomwa',
+        'download_attachment' => 'Pakua Kiambatisho',
         'receipt_approved' => 'Risiti Yako Imethibitishwa',
         'receipt_rejected' => 'Risiti Yako Imekataliwa',
         'deposit_approved' => 'Amana Yako Imethibitishwa',
         'deposit_rejected' => 'Amana Yako Imekataliwa',
         'new_debt_added' => 'Deni Jipya Limeongezwa',
         'new_invoice_generated' => 'Ankara Mpya Imetengenezwa',
+        'announcement' => 'Tangazo',
+        'customer_message' => 'Ujumbe wa Mteja',
     ],
 
     'status' => [

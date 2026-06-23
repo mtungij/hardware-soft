@@ -182,12 +182,26 @@ return [
 
     'notifications' => [
         'empty' => 'No notifications yet.',
+        'all' => 'All',
+        'unread' => 'Unread',
+        'read' => 'Read',
+        'announcements' => 'Announcements',
+        'promotions' => 'Promotions',
+        'important' => 'Important Notices',
+        'important_notice' => 'Important Notice',
+        'read_more' => 'Read More',
+        'view_all' => 'View all',
+        'mark_all_read' => 'Mark all as read',
+        'marked_read' => 'Marked read',
+        'download_attachment' => 'Download Attachment',
         'receipt_approved' => 'Your Receipt Has Been Approved',
         'receipt_rejected' => 'Your Receipt Has Been Rejected',
         'deposit_approved' => 'Your Deposit Has Been Approved',
         'deposit_rejected' => 'Your Deposit Has Been Rejected',
         'new_debt_added' => 'New Debt Added',
         'new_invoice_generated' => 'New Invoice Generated',
+        'announcement' => 'Announcement',
+        'customer_message' => 'Customer Message',
     ],
 
     'status' => [

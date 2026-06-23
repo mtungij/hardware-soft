@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\Branch;
+use App\Models\Announcement;
 use App\Models\Category;
+use App\Models\CustomerNotification;
 use App\Models\CustomerPayment;
 use App\Models\Expense;
 use App\Models\Product;
@@ -395,7 +397,11 @@ $recentTransactions = computed(function (): Collection {
             ['label' => 'Purchase Orders Sent Today', 'value' => number_format(PurchaseEmailLog::where('status', 'sent')->whereDate('sent_at', today())->count()), 'tone' => 'text-emerald-600', 'hint' => 'Supplier PO emails delivered'],
             ['label' => 'Failed Purchase Emails', 'value' => number_format(PurchaseEmailLog::where('status', 'failed')->count()), 'tone' => 'text-red-600', 'hint' => 'Needs SMTP or recipient review'],
             ['label' => 'Pending Purchase Emails', 'value' => number_format(PurchaseEmailLog::where('status', 'pending')->count()), 'tone' => 'text-amber-600', 'hint' => 'Queued and waiting for workers'],
+            ['label' => 'Announcements Sent', 'value' => number_format(CustomerNotification::where('type', 'announcement')->count()), 'tone' => 'text-cyan-600', 'hint' => 'Portal announcement deliveries'],
+            ['label' => 'Unread Customer Messages', 'value' => number_format(CustomerNotification::whereIn('type', ['announcement', 'customer_message'])->whereNull('read_at')->count()), 'tone' => 'text-amber-600', 'hint' => 'Waiting for customer read'],
+            ['label' => 'Customers Reached', 'value' => number_format(CustomerNotification::whereIn('type', ['announcement', 'customer_message'])->distinct('customer_id')->count('customer_id')), 'tone' => 'text-emerald-600', 'hint' => 'Unique customers notified'],
         ];
+        $recentAnnouncements = Announcement::query()->latest()->limit(5)->get();
     @endphp
 
     <x-page-header
@@ -472,6 +478,24 @@ $recentTransactions = computed(function (): Collection {
     </div>
 
     <div class="grid min-w-0 gap-6 xl:grid-cols-2">
+        <x-card title="Recent Announcements" description="Latest customer notices and read progress.">
+            <div class="space-y-3">
+                @forelse ($recentAnnouncements as $announcement)
+                    <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="truncate text-sm font-bold">{{ $announcement->title }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ ucfirst($announcement->status) }} · {{ ucfirst($announcement->priority) }}</p>
+                            </div>
+                            <a href="{{ route('admin.announcements.index') }}" wire:navigate class="text-xs font-bold text-build-orange">Open</a>
+                        </div>
+                    </div>
+                @empty
+                    <p class="py-6 text-center text-sm text-slate-500">No announcements yet.</p>
+                @endforelse
+            </div>
+        </x-card>
+
         <x-card title="Interactive Sales Trend" description="Chart.js view of sales and profit for the last 7 days.">
             <div
                 class="h-72 min-w-0 overflow-hidden"
