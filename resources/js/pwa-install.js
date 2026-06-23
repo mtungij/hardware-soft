@@ -60,12 +60,38 @@
         modal.setAttribute('aria-hidden', 'true');
     };
 
+    const showModal = (button, selector) => {
+        const modal = button.closest('[data-pwa-install-root]')?.querySelector(selector);
+
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+    };
+
+    const hideModal = (button, selector) => {
+        const modal = button.closest('[data-pwa-install-root]')?.querySelector(selector);
+
+        if (!modal) {
+            return;
+        }
+
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    };
+
+    const showHelpModal = (button) => {
+        showModal(button, '[data-pwa-help-modal]');
+    };
+
     const shouldShowInstallButton = () => {
-        if (isStandalone() || dismissedRecently()) {
+        if (isStandalone()) {
             return false;
         }
 
-        return Boolean(deferredInstallPrompt) || isIosSafari();
+        return true;
     };
 
     const refreshInstallButtons = () => {
@@ -91,6 +117,7 @@
                 }
 
                 if (!deferredInstallPrompt) {
+                    showHelpModal(button);
                     showToast(unavailableMessage);
                     return;
                 }
@@ -134,6 +161,17 @@
                 localStorage.setItem(dismissKey, String(Date.now()));
                 hideIosModal(button);
                 refreshInstallButtons();
+            });
+        });
+
+        document.querySelectorAll('[data-pwa-help-close]').forEach((button) => {
+            if (button.dataset.pwaBound === 'true') {
+                return;
+            }
+
+            button.dataset.pwaBound = 'true';
+            button.addEventListener('click', () => {
+                hideModal(button, '[data-pwa-help-modal]');
             });
         });
 

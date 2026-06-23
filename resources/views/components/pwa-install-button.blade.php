@@ -37,4 +37,24 @@
             </button>
         </div>
     </div>
+
+    <div data-pwa-help-modal aria-hidden="true" class="hidden fixed inset-0 z-[9998] bg-slate-950/60 p-4 backdrop-blur-sm">
+        <div class="mx-auto mt-20 max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+            <div class="flex items-center gap-3">
+                <img src="{{ asset('images/hardex.png') }}" alt="Hardex" class="h-10 w-10 rounded-xl bg-white object-contain p-1">
+                <div>
+                    <h2 class="text-base font-black">Install Hardex App</h2>
+                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Browser install instructions</p>
+                </div>
+            </div>
+            <div class="mt-4 space-y-3 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
+                <p><strong>Chrome / Edge:</strong> open the browser menu, then choose Install app or Add to Home screen.</p>
+                <p><strong>Android:</strong> tap the three dots menu, then choose Install app.</p>
+                <p><strong>iPhone:</strong> open Safari Share, then choose Add to Home Screen.</p>
+            </div>
+            <button type="button" data-pwa-help-close class="mt-5 w-full rounded-xl bg-build-orange px-4 py-3 text-sm font-black text-white">
+                OK
+            </button>
+        </div>
+    </div>
 </div>
