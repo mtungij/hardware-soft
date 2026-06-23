@@ -2,15 +2,29 @@
 
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Livewire\Actions\Logout;
+use Illuminate\Container\Container;
 use Illuminate\Support\Facades\Route;
+use Livewire\Volt\LivewireManager as VoltLivewireManager;
 use Livewire\Volt\Volt;
 
 Route::middleware('guest')->group(function () {
     Volt::route('register', 'auth.register')
         ->name('register');
 
-    Volt::route('login', 'auth.login')
-        ->name('login');
+    Route::get('login', function () {
+        $customerHost = parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST);
+
+        if ($customerHost && request()->getHost() === $customerHost) {
+            return response('', 302)->header('Location', route('customer.login', [], false));
+        }
+
+        $container = Container::getInstance();
+
+        return $container->call([
+            $container->make(VoltLivewireManager::class)->new('auth.login'),
+            '__invoke',
+        ]);
+    })->name('login');
 
     Volt::route('forgot-password', 'pages.auth.forgot-password')
         ->name('password.request');

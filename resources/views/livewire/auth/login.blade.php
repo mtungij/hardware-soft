@@ -12,7 +12,17 @@ layout('layouts.auth');
 
 form(LoginForm::class);
 
-$systemInitialized = fn () => (bool) Setting::query()->value('system_initialized');
+$systemInitialized = function () {
+    try {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('settings') || ! \Illuminate\Support\Facades\Schema::hasColumn('settings', 'system_initialized')) {
+            return true;
+        }
+
+        return (bool) Setting::query()->value('system_initialized');
+    } catch (\Throwable) {
+        return true;
+    }
+};
 
 $company = fn () => Company::current();
 
