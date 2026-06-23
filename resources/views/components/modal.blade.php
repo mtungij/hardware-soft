@@ -71,7 +71,7 @@ $maxWidth = [
 
     <div
         x-show="show"
-        class="min-h-full overflow-hidden bg-white shadow-2xl shadow-slate-950/20 transition-all dark:bg-slate-900 sm:mb-6 sm:min-h-0 sm:w-full {{ $maxWidth }} sm:rounded-xl sm:border sm:border-slate-200 sm:dark:border-slate-700 sm:mx-auto"
+        class="flex min-h-full max-h-screen flex-col overflow-hidden bg-white shadow-2xl shadow-slate-950/20 transition-all dark:bg-slate-900 sm:mb-6 sm:min-h-0 sm:max-h-[calc(100vh-3rem)] sm:w-full {{ $maxWidth }} sm:rounded-xl sm:border sm:border-slate-200 sm:dark:border-slate-700 sm:mx-auto"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
         x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"

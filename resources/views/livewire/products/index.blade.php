@@ -238,14 +238,14 @@ $deleteConfirmedProduct = function () {
                     <td class="px-4 py-3"><span class="{{ $product->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($product->status) }}</span></td>
                     <td class="px-4 py-3">
                         @if ($this->canManage())
-                            <div class="hs-dropdown relative inline-flex">
+                            <div class="hs-dropdown relative inline-flex [--placement:bottom-end] [--strategy:fixed]">
                                 <button type="button" class="hs-dropdown-toggle rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
                                     Actions
                                 </button>
-                                <div class="hs-dropdown-menu z-40 mt-2 hidden min-w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
-                                    <button type="button" wire:click="openEditProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">Edit</button>
-                                    <button type="button" wire:click="toggleStatus({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">{{ $product->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
-                                    <button type="button" wire:click="confirmDeleteProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">Delete</button>
+                                <div class="hs-dropdown-menu z-[90] mt-2 hidden min-w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
+                                    <button type="button" wire:click.stop.prevent="openEditProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">Edit</button>
+                                    <button type="button" wire:click.stop.prevent="toggleStatus({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">{{ $product->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
+                                    <button type="button" wire:click.stop.prevent="confirmDeleteProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">Delete</button>
                                 </div>
                             </div>
                         @else
@@ -262,7 +262,7 @@ $deleteConfirmedProduct = function () {
     </x-card>
 
     <x-modal name="product-form" maxWidth="2xl">
-        <form wire:submit="saveProduct">
+        <form wire:submit="saveProduct" class="flex min-h-full flex-col sm:max-h-[calc(100vh-3rem)]">
             <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-700">
                 <div>
                     <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{{ $editing_product_id ? 'Edit Product' : 'Add Product' }}</h2>
@@ -271,7 +271,7 @@ $deleteConfirmedProduct = function () {
                 <button type="button" x-on:click="$dispatch('close-modal', 'product-form')" class="erp-btn-secondary px-2 py-1" wire:loading.attr="disabled">Close</button>
             </div>
 
-            <div class="max-h-[calc(100vh-11rem)] overflow-y-auto px-5 py-5">
+            <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5">
                 <div class="grid gap-4 md:grid-cols-2">
                     <x-form-input label="Product Name" name="name" wire:model="name" required />
                     <x-form-input label="SKU" name="sku" wire:model="sku" required />
