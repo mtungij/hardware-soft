@@ -6,14 +6,14 @@ const APP_SHELL = [
     '/offline',
     '/pwa/manifest.json',
     '/images/hardex.png',
-    '/icons/icon-72x72.png',
-    '/icons/icon-96x96.png',
-    '/icons/icon-128x128.png',
-    '/icons/icon-144x144.png',
-    '/icons/icon-152x152.png',
-    '/icons/icon-192x192.png',
-    '/icons/icon-384x384.png',
-    '/icons/icon-512x512.png'
+    '/pwa/icons/icon-72x72.png',
+    '/pwa/icons/icon-96x96.png',
+    '/pwa/icons/icon-128x128.png',
+    '/pwa/icons/icon-144x144.png',
+    '/pwa/icons/icon-152x152.png',
+    '/pwa/icons/icon-192x192.png',
+    '/pwa/icons/icon-384x384.png',
+    '/pwa/icons/icon-512x512.png'
 ];
 
 const SENSITIVE_PATHS = [
@@ -32,6 +32,7 @@ const isSensitiveRequest = (url) => SENSITIVE_PATHS.some((path) => url.pathname.
 const isCacheableAsset = (url) => (
     url.pathname.startsWith('/build/')
     || url.pathname.startsWith('/icons/')
+    || url.pathname.startsWith('/pwa/icons/')
     || url.pathname.startsWith('/images/')
     || url.pathname === '/pwa/manifest.json'
     || url.pathname === '/offline'

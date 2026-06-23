@@ -29,13 +29,25 @@ Route::get('pwa/manifest.json', function () {
         'id' => $isCustomerPortal ? '/customer' : '/staff',
         'categories' => ['business', 'productivity', 'finance'],
         'icons' => collect([72, 96, 128, 144, 152, 192, 384, 512])->map(fn (int $size) => [
-            'src' => "/icons/icon-{$size}x{$size}.png",
+            'src' => "/pwa/icons/icon-{$size}x{$size}.png",
             'sizes' => "{$size}x{$size}",
             'type' => 'image/png',
             'purpose' => 'any maskable',
         ])->values(),
     ]);
 })->name('pwa.manifest');
+
+Route::get('pwa/icons/{filename}', function (string $filename) {
+    abort_unless(preg_match('/^icon-(72|96|128|144|152|192|384|512)x\1\.png$/', $filename), 404);
+
+    $path = public_path("icons/{$filename}");
+    abort_unless(is_file($path), 404);
+
+    return response()->file($path, [
+        'Content-Type' => 'image/png',
+        'Cache-Control' => 'public, max-age=31536000, immutable',
+    ]);
+})->name('pwa.icon');
 
 Route::post('theme-preference', function (Request $request) {
     $data = $request->validate([
