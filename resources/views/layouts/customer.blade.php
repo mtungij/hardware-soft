@@ -5,7 +5,7 @@
          <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <title>{{ config('app.name', 'Hardex POS') }} Customer Portal</title>
+        <title>{{ config('app.name', 'Hardex POS') }} {{ __('messages.customer_portal') }}</title>
 
         @php
             $themeColor = '#f97316';
@@ -36,12 +36,13 @@
         @php
             $customerAccount = auth('customer')->user();
             $navItems = [
-                ['label' => 'Dashboard', 'route' => 'customer.dashboard'],
-                ['label' => 'My Debts', 'route' => 'customer.debts.index'],
-                ['label' => 'Upload Receipt', 'route' => 'customer.receipts.create'],
-                ['label' => 'My Deposits', 'route' => 'customer.deposits.index'],
-                ['label' => 'Statement', 'route' => 'customer.statement'],
-                ['label' => 'Profile', 'route' => 'customer.profile'],
+                ['label' => __('messages.nav.dashboard'), 'route' => 'customer.dashboard'],
+                ['label' => __('messages.nav.debts'), 'route' => 'customer.debts.index'],
+                ['label' => __('messages.nav.upload_receipt'), 'route' => 'customer.receipts.create'],
+                ['label' => __('messages.nav.deposits'), 'route' => 'customer.deposits.index'],
+                ['label' => __('messages.nav.statements'), 'route' => 'customer.statement'],
+                ['label' => __('messages.nav.notifications'), 'route' => 'customer.notifications.index'],
+                ['label' => __('messages.nav.profile'), 'route' => 'customer.profile'],
             ];
         @endphp
 
@@ -59,7 +60,7 @@
                     </div>
                     <div class="min-w-0">
                         <p class="truncate text-sm font-black uppercase text-navy-900 dark:text-white">{{ $companyName }}</p>
-                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Customer portal</p>
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">{{ __('messages.customer_portal') }}</p>
                     </div>
                 </div>
 
@@ -74,7 +75,7 @@
                 </nav>
 
                 <div class="border-t border-slate-200 p-4 dark:border-slate-800">
-                    <a href="https://wa.me/255629364847" target="_blank" class="block rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">WhatsApp Support<br><span class="text-xs font-semibold">+255629364847</span></a>
+                    <a href="https://wa.me/255629364847" target="_blank" class="block rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">{{ __('messages.support.whatsapp_support') }}<br><span class="text-xs font-semibold">+255629364847</span></a>
                 </div>
             </aside>
 
@@ -83,21 +84,23 @@
                     <div class="flex h-16 items-center gap-3 px-4 sm:px-6">
                         <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 dark:border-slate-700 lg:hidden" @click="sidebarOpen = true">&#9776;</button>
                         <div class="min-w-0 flex-1">
-                            <p class="truncate text-sm font-black text-navy-900 dark:text-white">Welcome, {{ $customerAccount?->name }}</p>
-                            <p class="text-xs font-semibold text-slate-500">Manage debts, receipts, deposits, and statements.</p>
+                            <p class="truncate text-sm font-black text-navy-900 dark:text-white">{{ __('messages.welcome_name', ['name' => $customerAccount?->name]) }}</p>
+                            <p class="text-xs font-semibold text-slate-500">{{ __('messages.dashboard.description') }}</p>
                         </div>
+                        <x-customer-language-switcher class="hidden md:block" />
                         <x-pwa-install-button class="hidden rounded-xl bg-build-orange px-3 py-2 text-sm font-black text-white sm:inline-flex" />
-                        <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = !darkMode" x-text="darkMode ? 'Light' : 'Dark'"></button>
+                        <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = !darkMode" x-text="darkMode ? @js(__('messages.theme.light')) : @js(__('messages.theme.dark'))"></button>
                         <div class="relative">
                             <button class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
                                 <img class="h-8 w-8 rounded-lg" src="https://ui-avatars.com/api/?name={{ urlencode($customerAccount?->name ?? 'Customer') }}&background=0d2e50&color=fff" alt="">
                                 <span class="hidden text-sm font-bold sm:block">{{ $customerAccount?->name }}</span>
                             </button>
                             <div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-3 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-navy-900">
-                                <a class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/5" href="{{ route('customer.profile') }}" wire:navigate>Profile</a>
+                                <div class="px-2 py-1 md:hidden"><x-customer-language-switcher /></div>
+                                <a class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/5" href="{{ route('customer.profile') }}" wire:navigate>{{ __('messages.nav.profile') }}</a>
                                 <form method="POST" action="{{ route('customer.logout') }}">
                                     @csrf
-                                    <button class="block w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">Logout</button>
+                                    <button class="block w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">{{ __('messages.nav.logout') }}</button>
                                 </form>
                             </div>
                         </div>
@@ -110,7 +113,7 @@
                 </main>
 
                 <footer class="border-t border-slate-200 px-4 py-4 text-xs font-semibold text-slate-500 dark:border-slate-800 sm:px-6">
-                    © {{ now()->year }} {{ $companyName }} Customer Portal. Powered by Hardex.
+                    © {{ now()->year }} {{ $companyName }} {{ __('messages.customer_portal') }}. {{ __('messages.powered_by') }}
                 </footer>
             </div>
         </div>

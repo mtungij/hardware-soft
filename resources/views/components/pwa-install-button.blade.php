@@ -7,5 +7,5 @@
     data-pwa-install-button
     class="{{ $class }}"
 >
-    Install Hardex App
+    {{ __('messages.install_app') }}
 </button>

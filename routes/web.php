@@ -3,40 +3,58 @@
 use App\Http\Controllers\CustomerPortal\CustomerFileDownloadController;
 use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\PurchaseOrderPdfController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
 
-Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : redirect()->route('login'));
+Route::get('/', fn () => auth('customer')->check()
+    ? redirect()->route('customer.dashboard')
+    : redirect()->route('customer.login'));
 
-Route::middleware('guest:customer')->group(function () {
-    Volt::route('customer/login', 'customer.auth.login')->name('customer.login');
-    Volt::route('customer/register', 'customer.auth.register')->name('customer.register');
-});
+Route::post('customer/language/{locale}', function (Request $request, string $locale) {
+    abort_unless(in_array($locale, ['sw', 'en'], true), 404);
 
-Route::middleware('auth:customer')->group(function () {
-    Route::post('customer/logout', function () {
-        Auth::guard('customer')->logout();
-        request()->session()->invalidate();
-        request()->session()->regenerateToken();
+    $request->session()->put('customer_locale', $locale);
 
-        return redirect()->route('customer.login');
-    })->name('customer.logout');
+    if ($account = Auth::guard('customer')->user()) {
+        $account->forceFill(['preferred_locale' => $locale])->save();
+    }
 
-    Volt::route('customer/pending', 'customer.pending')->name('customer.pending');
+    return back();
+})->name('customer.language');
 
-    Route::middleware('customer.active')->group(function () {
-        Volt::route('customer/dashboard', 'customer.dashboard')->name('customer.dashboard');
-        Volt::route('customer/debts', 'customer.debts.index')->name('customer.debts.index');
-        Volt::route('customer/debts/{sale}', 'customer.debts.show')->name('customer.debts.show');
-        Volt::route('customer/receipts', 'customer.receipts.index')->name('customer.receipts.index');
-        Volt::route('customer/receipts/create', 'customer.receipts.create')->name('customer.receipts.create');
-        Route::get('customer/receipts/{receipt}/download', [CustomerFileDownloadController::class, 'receipt'])->name('customer.receipts.download');
-        Volt::route('customer/deposits', 'customer.deposits.index')->name('customer.deposits.index');
-        Volt::route('customer/deposits/create', 'customer.deposits.create')->name('customer.deposits.create');
-        Route::get('customer/deposits/{deposit}/download', [CustomerFileDownloadController::class, 'deposit'])->name('customer.deposits.download');
-        Volt::route('customer/statement', 'customer.statement')->name('customer.statement');
-        Volt::route('customer/profile', 'customer.profile')->name('customer.profile');
+Route::middleware('customer.locale')->group(function () {
+    Route::middleware('guest:customer')->group(function () {
+        Volt::route('customer/login', 'customer.auth.login')->name('customer.login');
+        Volt::route('customer/register', 'customer.auth.register')->name('customer.register');
+    });
+
+    Route::middleware('auth:customer')->group(function () {
+        Route::post('customer/logout', function () {
+            Auth::guard('customer')->logout();
+            request()->session()->invalidate();
+            request()->session()->regenerateToken();
+
+            return redirect()->route('customer.login');
+        })->name('customer.logout');
+
+        Volt::route('customer/pending', 'customer.pending')->name('customer.pending');
+
+        Route::middleware('customer.active')->group(function () {
+            Volt::route('customer/dashboard', 'customer.dashboard')->name('customer.dashboard');
+            Volt::route('customer/debts', 'customer.debts.index')->name('customer.debts.index');
+            Volt::route('customer/debts/{sale}', 'customer.debts.show')->name('customer.debts.show');
+            Volt::route('customer/receipts', 'customer.receipts.index')->name('customer.receipts.index');
+            Volt::route('customer/receipts/create', 'customer.receipts.create')->name('customer.receipts.create');
+            Route::get('customer/receipts/{receipt}/download', [CustomerFileDownloadController::class, 'receipt'])->name('customer.receipts.download');
+            Volt::route('customer/deposits', 'customer.deposits.index')->name('customer.deposits.index');
+            Volt::route('customer/deposits/create', 'customer.deposits.create')->name('customer.deposits.create');
+            Route::get('customer/deposits/{deposit}/download', [CustomerFileDownloadController::class, 'deposit'])->name('customer.deposits.download');
+            Volt::route('customer/statement', 'customer.statement')->name('customer.statement');
+            Volt::route('customer/notifications', 'customer.notifications.index')->name('customer.notifications.index');
+            Volt::route('customer/profile', 'customer.profile')->name('customer.profile');
+        });
     });
 });
 

@@ -39,7 +39,7 @@ $save = function () {
     $sale = $data['sale_id'] ? Sale::where('customer_id', $account->customer_id)->findOrFail($data['sale_id']) : null;
 
     if ($sale && (float) $data['amount'] > (float) $sale->balance_amount) {
-        throw ValidationException::withMessages(['amount' => 'Receipt amount cannot exceed the selected sale balance.']);
+        throw ValidationException::withMessages(['amount' => __('messages.receipts.too_much')]);
     }
 
     $path = $this->receipt_file->store('customer-receipts', 'local');
@@ -57,39 +57,39 @@ $save = function () {
         'status' => 'pending',
     ]);
 
-    session()->flash('success', 'Receipt uploaded and waiting for admin approval.');
+    session()->flash('success', __('messages.receipts.uploaded'));
     $this->redirectRoute('customer.receipts.index', navigate: true);
 };
 
 ?>
 
 <div>
-    <x-page-header title="Upload Payment Receipt" description="Submit proof of payment for approval." :breadcrumbs="['Customer Portal' => route('customer.dashboard'), 'Receipts' => route('customer.receipts.index'), 'Upload' => null]" />
+    <x-page-header :title="__('messages.receipts.upload')" :description="__('messages.receipts.upload_description')" :breadcrumbs="[__('messages.customer_portal') => route('customer.dashboard'), __('messages.receipts.title') => route('customer.receipts.index'), __('messages.actions.upload') => null]" />
     <x-card class="max-w-2xl">
         <form wire:submit="save" class="space-y-4">
-            <label class="block text-sm font-bold">Sale / Invoice
+            <label class="block text-sm font-bold">{{ __('messages.receipts.invoice') }}
                 <select wire:model="sale_id" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">General customer payment</option>
+                    <option value="">{{ __('messages.receipts.general_payment') }}</option>
                     @foreach ($this->sales as $sale)
-                        <option value="{{ $sale->id }}">{{ $sale->sale_number }} - Balance TZS {{ number_format((float) $sale->balance_amount, 2) }}</option>
+                        <option value="{{ $sale->id }}">{{ $sale->sale_number }} - {{ __('messages.debts.balance') }} TZS {{ number_format((float) $sale->balance_amount, 2) }}</option>
                     @endforeach
                 </select>
             </label>
-            <x-form-input label="Amount" name="amount" wire:model="amount" type="number" step="0.01" required />
-            <label class="block text-sm font-bold">Payment Method
+            <x-form-input :label="__('messages.receipts.amount')" name="amount" wire:model="amount" type="number" step="0.01" required />
+            <label class="block text-sm font-bold">{{ __('messages.receipts.payment_method') }}
                 <select wire:model="payment_method" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="mobile_money">Mobile Money</option><option value="bank">Bank</option><option value="cash_deposit">Cash Deposit</option>
+                    <option value="mobile_money">{{ __('messages.methods.mobile_money') }}</option><option value="bank">{{ __('messages.methods.bank') }}</option><option value="cash_deposit">{{ __('messages.methods.cash_deposit') }}</option>
                 </select>
             </label>
-            <x-form-input label="Reference Number" name="reference_number" wire:model="reference_number" />
-            <label class="block text-sm font-bold">Receipt Image/PDF
+            <x-form-input :label="__('messages.receipts.reference_number')" name="reference_number" wire:model="reference_number" />
+            <label class="block text-sm font-bold">{{ __('messages.receipts.receipt_file') }}
                 <input wire:model="receipt_file" type="file" accept=".jpg,.jpeg,.png,.pdf" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
             </label>
             @error('receipt_file') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
-            <label class="block text-sm font-bold">Notes
+            <label class="block text-sm font-bold">{{ __('messages.receipts.notes') }}
                 <textarea wire:model="notes" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
             </label>
-            <button class="rounded-xl bg-build-orange px-4 py-3 text-sm font-black text-white" wire:loading.attr="disabled"><span wire:loading.remove>Submit Receipt</span><span wire:loading>Uploading...</span></button>
+            <button class="rounded-xl bg-build-orange px-4 py-3 text-sm font-black text-white" wire:loading.attr="disabled"><span wire:loading.remove>{{ __('messages.receipts.submit') }}</span><span wire:loading>{{ __('messages.receipts.uploading') }}</span></button>
         </form>
     </x-card>
 </div>

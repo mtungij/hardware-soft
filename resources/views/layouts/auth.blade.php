@@ -37,6 +37,10 @@
         @livewireStyles
     </head>
     <body class="font-sans antialiased">
+        <div class="fixed right-4 top-4 z-50">
+            <x-customer-language-switcher />
+        </div>
+
         {{ $slot }}
 
         @livewireScripts

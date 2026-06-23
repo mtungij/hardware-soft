@@ -23,6 +23,7 @@ class CustomerAccount extends Authenticatable
         'email',
         'password',
         'status',
+        'preferred_locale',
         'approved_at',
         'approved_by',
         'last_login_at',

@@ -87,6 +87,7 @@ class CustomerAuthController extends Controller
             'email' => $data['email'],
             'password' => $data['password'],
             'status' => 'pending',
+            'preferred_locale' => 'sw',
         ]);
 
         return response()->json([
@@ -112,6 +113,7 @@ class CustomerAuthController extends Controller
             'phone' => $account->phone,
             'email' => $account->email,
             'status' => $account->status,
+            'preferred_locale' => $account->preferred_locale ?: 'sw',
             'otp_ready' => true,
             'google_login_ready' => true,
         ];

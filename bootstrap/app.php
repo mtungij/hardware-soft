@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Http\Middleware\EnsureCustomerApiAccountIsActive;
 use App\Http\Middleware\EnsureCustomerAccountIsActive;
 use App\Http\Middleware\EnsureUserHasRole;
+use App\Http\Middleware\SetCustomerPortalLocale;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role.any' => EnsureUserHasRole::class,
             'customer.active' => EnsureCustomerAccountIsActive::class,
             'customer.api.active' => EnsureCustomerApiAccountIsActive::class,
+            'customer.locale' => SetCustomerPortalLocale::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

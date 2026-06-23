@@ -6,7 +6,7 @@
 <link rel="apple-touch-startup-image" href="{{ asset('icons/icon-512x512.png') }}">
 <meta name="theme-color" content="#0F172A" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
-<meta name="description" content="Modern Hardware Store Management System for inventory, purchases, warehouse, stock transfers, POS sales, accounting, and reporting.">
+<meta name="description" content="{{ __('messages.welcome_message') }}">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Hardex">

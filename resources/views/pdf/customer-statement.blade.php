@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
     <style>
@@ -14,48 +14,48 @@
     </style>
 </head>
 <body>
-    <h1>Hardex Customer Statement</h1>
-    <p class="muted">Generated on {{ now()->format('M d, Y H:i') }}</p>
+    <h1>Hardex {{ __('messages.statements.title') }}</h1>
+    <p class="muted">{{ __('messages.generated_on') }} {{ now()->format('M d, Y H:i') }}</p>
 
     <div class="summary">
         <strong>{{ $customer['name'] }}</strong><br>
-        Phone: {{ $customer['phone'] ?: '-' }}<br>
-        Email: {{ $customer['email'] ?: '-' }}<br>
-        Outstanding Balance: <strong>TZS {{ number_format((float) $outstanding_balance, 2) }}</strong>
+        {{ __('messages.support.phone') }}: {{ $customer['phone'] ?: '-' }}<br>
+        {{ __('messages.support.email') }}: {{ $customer['email'] ?: '-' }}<br>
+        {{ __('messages.statements.outstanding_balance') }}: <strong>TZS {{ number_format((float) $outstanding_balance, 2) }}</strong>
     </div>
 
-    <h2>Debt History</h2>
+    <h2>{{ __('messages.statements.debt_history') }}</h2>
     <table>
-        <thead><tr><th>Date</th><th>Invoice</th><th class="right">Total</th><th class="right">Paid</th><th class="right">Balance</th><th>Status</th></tr></thead>
+        <thead><tr><th>{{ __('messages.table.date') }}</th><th>{{ __('messages.debts.invoice_number') }}</th><th class="right">{{ __('messages.table.total') }}</th><th class="right">{{ __('messages.table.paid') }}</th><th class="right">{{ __('messages.table.balance') }}</th><th>{{ __('messages.table.status') }}</th></tr></thead>
         <tbody>
             @forelse ($sales as $sale)
-                <tr><td>{{ $sale['date'] }}</td><td>{{ $sale['invoice_number'] }}</td><td class="right">{{ number_format((float) $sale['total_amount'], 2) }}</td><td class="right">{{ number_format((float) $sale['paid_amount'], 2) }}</td><td class="right">{{ number_format((float) $sale['outstanding_balance'], 2) }}</td><td>{{ ucfirst($sale['status']) }}</td></tr>
+                <tr><td>{{ $sale['date'] }}</td><td>{{ $sale['invoice_number'] }}</td><td class="right">{{ number_format((float) $sale['total_amount'], 2) }}</td><td class="right">{{ number_format((float) $sale['paid_amount'], 2) }}</td><td class="right">{{ number_format((float) $sale['outstanding_balance'], 2) }}</td><td>{{ __("messages.status.{$sale['status']}") }}</td></tr>
             @empty
-                <tr><td colspan="6">No sales found.</td></tr>
+                <tr><td colspan="6">{{ __('messages.statements.no_purchases') }}</td></tr>
             @endforelse
         </tbody>
     </table>
 
-    <h2>Payment History</h2>
+    <h2>{{ __('messages.statements.payment_history') }}</h2>
     <table>
-        <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="right">Amount</th></tr></thead>
+        <thead><tr><th>{{ __('messages.table.date') }}</th><th>{{ __('messages.table.method') }}</th><th>{{ __('messages.table.reference') }}</th><th class="right">{{ __('messages.table.amount') }}</th></tr></thead>
         <tbody>
             @forelse ($payments as $payment)
-                <tr><td>{{ $payment['payment_date'] }}</td><td>{{ ucfirst(str_replace('_', ' ', $payment['payment_method'])) }}</td><td>{{ $payment['reference_number'] ?: '-' }}</td><td class="right">{{ number_format((float) $payment['amount'], 2) }}</td></tr>
+                <tr><td>{{ $payment['payment_date'] }}</td><td>{{ __("messages.methods.{$payment['payment_method']}") }}</td><td>{{ $payment['reference_number'] ?: '-' }}</td><td class="right">{{ number_format((float) $payment['amount'], 2) }}</td></tr>
             @empty
-                <tr><td colspan="4">No payments found.</td></tr>
+                <tr><td colspan="4">{{ __('messages.statements.no_payments') }}</td></tr>
             @endforelse
         </tbody>
     </table>
 
-    <h2>Deposit History</h2>
+    <h2>{{ __('messages.statements.deposit_history') }}</h2>
     <table>
-        <thead><tr><th>Date</th><th>Reference</th><th>Status</th><th class="right">Amount</th><th class="right">Remaining</th></tr></thead>
+        <thead><tr><th>{{ __('messages.table.date') }}</th><th>{{ __('messages.table.reference') }}</th><th>{{ __('messages.table.status') }}</th><th class="right">{{ __('messages.table.amount') }}</th><th class="right">{{ __('messages.table.balance') }}</th></tr></thead>
         <tbody>
             @forelse ($deposits as $deposit)
-                <tr><td>{{ $deposit['created_at'] }}</td><td>{{ $deposit['reference_number'] ?: '-' }}</td><td>{{ ucfirst($deposit['status']) }}</td><td class="right">{{ number_format((float) $deposit['amount'], 2) }}</td><td class="right">{{ number_format((float) $deposit['remaining_balance'], 2) }}</td></tr>
+                <tr><td>{{ $deposit['created_at'] }}</td><td>{{ $deposit['reference_number'] ?: '-' }}</td><td>{{ __("messages.status.{$deposit['status']}") }}</td><td class="right">{{ number_format((float) $deposit['amount'], 2) }}</td><td class="right">{{ number_format((float) $deposit['remaining_balance'], 2) }}</td></tr>
             @empty
-                <tr><td colspan="5">No deposits found.</td></tr>
+                <tr><td colspan="5">{{ __('messages.statements.no_deposits') }}</td></tr>
             @endforelse
         </tbody>
     </table>

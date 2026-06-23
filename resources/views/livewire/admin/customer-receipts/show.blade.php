@@ -36,8 +36,8 @@ $approve = function (AccountingService $accounting) {
         'customer_account_id' => $this->receipt->customer_account_id,
         'customer_id' => $this->receipt->customer_id,
         'type' => 'receipt_approved',
-        'title' => 'Receipt Approved',
-        'message' => 'Your payment receipt for TZS '.number_format((float) $this->receipt->amount, 2).' has been approved.',
+        'title' => 'Risiti Yako Imethibitishwa',
+        'message' => 'Risiti yako ya malipo ya TZS '.number_format((float) $this->receipt->amount, 2).' imethibitishwa.',
         'notifiable_type' => CustomerReceipt::class,
         'notifiable_id' => $this->receipt->id,
     ]);
@@ -52,8 +52,8 @@ $reject = function () {
         'customer_account_id' => $this->receipt->customer_account_id,
         'customer_id' => $this->receipt->customer_id,
         'type' => 'receipt_rejected',
-        'title' => 'Receipt Rejected',
-        'message' => 'Your payment receipt was rejected. Reason: '.$this->rejection_reason,
+        'title' => 'Risiti Yako Imekataliwa',
+        'message' => 'Risiti yako ya malipo imekataliwa. Sababu: '.$this->rejection_reason,
         'notifiable_type' => CustomerReceipt::class,
         'notifiable_id' => $this->receipt->id,
     ]);

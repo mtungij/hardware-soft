@@ -173,6 +173,7 @@ class CustomerPortalApiController extends Controller
                 'phone' => $request->user()->phone,
                 'email' => $request->user()->email,
                 'status' => $request->user()->status,
+                'preferred_locale' => $request->user()->preferred_locale ?: 'sw',
             ],
             'customer' => $this->customerPayload($request->user()->customer),
         ]);
@@ -185,9 +186,15 @@ class CustomerPortalApiController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['required', 'email', 'max:255', 'unique:customer_accounts,email,'.$account->id],
+            'preferred_locale' => ['nullable', 'in:sw,en'],
         ]);
 
-        $account->update($data);
+        $account->update([
+            'name' => $data['name'],
+            'phone' => $data['phone'] ?? null,
+            'email' => $data['email'],
+            'preferred_locale' => $data['preferred_locale'] ?? $account->preferred_locale ?? 'sw',
+        ]);
         $account->customer()->update(['phone' => $data['phone'], 'email' => $data['email']]);
 
         return $this->profile($request);

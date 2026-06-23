@@ -34,7 +34,7 @@ $register = function () {
         ->first();
 
     if ($customer?->portalAccounts()->exists()) {
-        throw ValidationException::withMessages(['email' => 'A customer portal account already exists for this customer.']);
+        throw ValidationException::withMessages(['email' => __('messages.auth.already_exists')]);
     }
 
     if (! $customer) {
@@ -60,6 +60,7 @@ $register = function () {
         'email' => $data['email'],
         'password' => $data['password'],
         'status' => 'pending',
+        'preferred_locale' => app()->getLocale() ?: 'sw',
     ]);
 
     Auth::guard('customer')->login($account);
@@ -74,36 +75,36 @@ $register = function () {
     <div class="mx-auto max-w-5xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft dark:border-slate-800 dark:bg-slate-900 lg:grid lg:grid-cols-2">
         <div class="bg-navy-900 p-8 text-white">
             <img src="{{ asset('images/hardex.png') }}" class="h-16 w-16 rounded-2xl bg-white object-contain p-2" alt="Hardex">
-            <h1 class="mt-8 text-3xl font-black">Create Customer Account</h1>
-            <p class="mt-3 text-sm leading-6 text-slate-300">Register for portal access. A Hardex administrator will approve your account before full access is enabled.</p>
+            <h1 class="mt-8 text-3xl font-black">{{ __('messages.auth.create_account') }}</h1>
+            <p class="mt-3 text-sm leading-6 text-slate-300">{{ __('messages.auth.register_intro') }}</p>
             <div class="mt-8 space-y-3 text-sm font-semibold text-slate-200">
-                <p>✓ View debts and invoices</p>
-                <p>✓ Upload payment receipts</p>
-                <p>✓ Track deposit balances</p>
-                <p>✓ Print statements</p>
+                <p>✓ {{ __('messages.auth.features.debts') }}</p>
+                <p>✓ {{ __('messages.auth.features.receipts') }}</p>
+                <p>✓ {{ __('messages.auth.features.deposits') }}</p>
+                <p>✓ {{ __('messages.auth.features.statements') }}</p>
             </div>
         </div>
         <div class="p-6 sm:p-8">
             <form wire:submit="register" class="grid gap-4 sm:grid-cols-2">
-                <x-form-input label="Full Name" name="name" wire:model="name" required />
-                <x-form-input label="Phone Number" name="phone" wire:model="phone" required />
-                <x-form-input label="Business Name" name="business_name" wire:model="business_name" />
-                <x-form-input label="Email Address" name="email" wire:model="email" type="email" required />
-                <x-form-input label="Password" name="password" wire:model="password" type="password" required />
-                <x-form-input label="Confirm Password" name="password_confirmation" wire:model="password_confirmation" type="password" required />
-                <div class="sm:col-span-2"><x-form-input label="Branch Name / Location" name="branch_name" wire:model="branch_name" /></div>
+                <x-form-input :label="__('messages.auth.full_name')" name="name" wire:model="name" required />
+                <x-form-input :label="__('messages.auth.phone')" name="phone" wire:model="phone" required />
+                <x-form-input :label="__('messages.auth.business_name')" name="business_name" wire:model="business_name" />
+                <x-form-input :label="__('messages.auth.email')" name="email" wire:model="email" type="email" required />
+                <x-form-input :label="__('messages.auth.password')" name="password" wire:model="password" type="password" required />
+                <x-form-input :label="__('messages.auth.confirm_password')" name="password_confirmation" wire:model="password_confirmation" type="password" required />
+                <div class="sm:col-span-2"><x-form-input :label="__('messages.auth.branch_location')" name="branch_name" wire:model="branch_name" /></div>
                 <label class="flex gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 sm:col-span-2">
                     <input wire:model="terms" type="checkbox" class="mt-1 rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                    I agree to Terms & Conditions.
+                    {{ __('messages.auth.terms') }}
                 </label>
                 @error('terms') <p class="text-sm font-semibold text-red-600 sm:col-span-2">{{ $message }}</p> @enderror
                 <button class="rounded-xl bg-build-orange px-4 py-3 text-sm font-black text-white sm:col-span-2" wire:loading.attr="disabled">
-                    <span wire:loading.remove>Create Account</span><span wire:loading>Creating...</span>
+                    <span wire:loading.remove>{{ __('messages.auth.create_account') }}</span><span wire:loading>{{ __('messages.auth.creating') }}</span>
                 </button>
             </form>
             <p class="mt-6 text-center text-sm font-semibold text-slate-500">
-                Already registered?
-                <a href="{{ route('customer.login') }}" wire:navigate class="font-black text-build-orange">Back to login</a>
+                {{ __('messages.auth.already_registered') }}
+                <a href="{{ route('customer.login') }}" wire:navigate class="font-black text-build-orange">{{ __('messages.auth.back_to_login') }}</a>
             </p>
         </div>
     </div>

@@ -31,8 +31,8 @@ $approve = function () {
         'customer_account_id' => $this->deposit->customer_account_id,
         'customer_id' => $this->deposit->customer_id,
         'type' => 'deposit_approved',
-        'title' => 'Deposit Approved',
-        'message' => 'Your deposit of TZS '.number_format((float) $this->deposit->amount, 2).' has been approved.',
+        'title' => 'Amana Yako Imethibitishwa',
+        'message' => 'Amana yako ya TZS '.number_format((float) $this->deposit->amount, 2).' imethibitishwa.',
         'notifiable_type' => CustomerDeposit::class,
         'notifiable_id' => $this->deposit->id,
     ]);
@@ -47,8 +47,8 @@ $reject = function () {
         'customer_account_id' => $this->deposit->customer_account_id,
         'customer_id' => $this->deposit->customer_id,
         'type' => 'deposit_rejected',
-        'title' => 'Deposit Rejected',
-        'message' => 'Your deposit was rejected. Reason: '.$this->rejection_reason,
+        'title' => 'Amana Yako Imekataliwa',
+        'message' => 'Amana yako imekataliwa. Sababu: '.$this->rejection_reason,
         'notifiable_type' => CustomerDeposit::class,
         'notifiable_id' => $this->deposit->id,
     ]);
