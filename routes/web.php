@@ -155,6 +155,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports/{report}/export/{format}', ReportExportController::class)->name('reports.export');
         Volt::route('email-settings', 'email-settings.index')->name('email-settings.index');
         Volt::route('purchase-email-logs', 'purchase-email-logs.index')->name('purchase-email-logs.index');
+        Volt::route('customer-accounts', 'admin.customer-accounts.index')->name('customer-accounts.index');
         Volt::route('admin/customer-accounts', 'admin.customer-accounts.index')->name('admin.customer-accounts.index');
         Volt::route('admin/customer-portal-users', 'admin.customer-accounts.index')->name('admin.customer-portal-users.index');
         Volt::route('admin/customer-accounts/{customerAccount}', 'admin.customer-accounts.show')->name('admin.customer-accounts.show');
