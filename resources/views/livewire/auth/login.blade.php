@@ -182,15 +182,13 @@ $login = function () {
                         <button type="button" disabled class="cursor-not-allowed rounded-xl border border-slate-200 px-4 py-3 text-sm font-black opacity-60 dark:border-slate-700">Microsoft</button>
                     </div>
 
-                    @unless ($this->systemInitialized())
-                        <a href="{{ route('setup') }}" wire:navigate class="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-build-orange/40 bg-orange-50 px-4 py-3 text-sm font-black text-navy-900 transition hover:border-build-orange hover:bg-orange-100 dark:border-orange-400/30 dark:bg-orange-500/10 dark:text-white dark:hover:bg-orange-500/15">
-                            <span class="mr-2 grid h-6 w-6 place-items-center rounded-lg bg-build-orange text-white">+</span>
-                            Create Account
-                        </a>
-                        <p class="mt-2 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-                            Opens the professional setup wizard for company, owner, and first branch.
-                        </p>
-                    @endunless
+                    <a href="{{ route('setup') }}" wire:navigate class="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-build-orange/40 bg-orange-50 px-4 py-3 text-sm font-black text-navy-900 transition hover:border-build-orange hover:bg-orange-100 dark:border-orange-400/30 dark:bg-orange-500/10 dark:text-white dark:hover:bg-orange-500/15">
+                        <span class="mr-2 grid h-6 w-6 place-items-center rounded-lg bg-build-orange text-white">+</span>
+                        Create Account
+                    </a>
+                    <p class="mt-2 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
+                        Open the setup wizard for company, owner, and first branch.
+                    </p>
 
                     <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
                         <p class="text-sm font-black text-navy-900 dark:text-white">Need Help?</p>
