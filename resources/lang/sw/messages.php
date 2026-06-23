@@ -45,7 +45,7 @@ return [
         'no_account' => 'Huna akaunti ya mteja?',
         'already_registered' => 'Tayari umejisajili?',
         'back_to_login' => 'Rudi kuingia',
-        'login_intro' => 'Ingia kuona akaunti yako ya Hardex.',
+        // 'login_intro' => 'Karibu.',
         'register_intro' => 'Jisajili kupata huduma za mtandaoni. Msimamizi ataidhinisha akaunti yako kabla ya kupata huduma zote.',
         'full_name' => 'Jina Kamili',
         'business_name' => 'Jina la Biashara',
