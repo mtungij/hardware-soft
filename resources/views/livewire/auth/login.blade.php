@@ -54,14 +54,12 @@ $login = function () {
             'Generate professional business reports instantly.',
             'Manage multiple hardware branches from one system.'
         ],
-        darkMode: localStorage.theme ? localStorage.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches,
+        darkMode: window.hardexTheme?.get() === 'dark',
         toggleTheme() {
-            this.darkMode = ! this.darkMode;
-            localStorage.theme = this.darkMode ? 'dark' : 'light';
-            document.documentElement.classList.toggle('dark', this.darkMode);
+            this.darkMode = window.hardexTheme?.toggle() === 'dark';
         }
     }"
-    x-init="document.documentElement.classList.toggle('dark', darkMode); setInterval(() => tipIndex = (tipIndex + 1) % tips.length, 4200)"
+    x-init="window.addEventListener('hardex-theme-changed', event => darkMode = event.detail.theme === 'dark'); setInterval(() => tipIndex = (tipIndex + 1) % tips.length, 4200)"
 >
     <div class="grid min-h-screen lg:grid-cols-[1.08fr_.92fr]">
         <section class="relative hidden overflow-hidden bg-navy-900 p-8 text-white dark:bg-slate-900 lg:flex lg:flex-col lg:justify-between xl:p-12">

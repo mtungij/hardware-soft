@@ -8,6 +8,16 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
 
+Route::post('theme-preference', function (Request $request) {
+    $data = $request->validate([
+        'theme' => ['required', 'in:dark,light'],
+    ]);
+
+    return response()->json([
+        'theme' => \App\Support\ThemePreference::store($data['theme']),
+    ]);
+})->name('theme.preference');
+
 Route::get('/', function () {
     if (request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST)) {
         return auth('customer')->check()

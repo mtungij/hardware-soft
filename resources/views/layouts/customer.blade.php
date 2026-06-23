@@ -29,6 +29,7 @@
         @endphp
 
         <style>:root { --build-theme: {{ preg_match('/^#[0-9A-Fa-f]{6}$/', $themeColor) ? $themeColor : '#f97316' }}; }</style>
+        <x-theme-script />
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800,900&display=swap" rel="stylesheet" />
         <x-pwa-head />
@@ -49,7 +50,7 @@
             ];
         @endphp
 
-        <div x-data="{ sidebarOpen: false, profileOpen: false, darkMode: localStorage.theme ? localStorage.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches }" x-init="document.documentElement.classList.toggle('dark', darkMode); $watch('darkMode', value => { document.documentElement.classList.toggle('dark', value); localStorage.theme = value ? 'dark' : 'light'; })" class="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+        <div x-data="{ sidebarOpen: false, profileOpen: false, darkMode: window.hardexTheme?.get() === 'dark' }" x-init="window.addEventListener('hardex-theme-changed', event => darkMode = event.detail.theme === 'dark')" class="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
             <div x-cloak x-show="sidebarOpen" class="fixed inset-0 z-40 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
 
             <aside class="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition dark:border-slate-800 dark:bg-slate-900 lg:translate-x-0" :class="{ '-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen }">
@@ -99,7 +100,7 @@
                         </div>
                         <x-customer-language-switcher class="hidden md:block" />
                         <x-pwa-install-button class="hidden rounded-xl bg-build-orange px-3 py-2 text-sm font-black text-white sm:inline-flex" />
-                        <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = !darkMode" x-text="darkMode ? @js(__('messages.theme.light')) : @js(__('messages.theme.dark'))"></button>
+                        <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = window.hardexTheme?.toggle() === 'dark'" x-text="darkMode ? @js(__('messages.theme.light')) : @js(__('messages.theme.dark'))"></button>
                         <div class="relative">
                             <button class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
                                 <img class="h-8 w-8 rounded-lg" src="https://ui-avatars.com/api/?name={{ urlencode($customerAccount?->name ?? 'Customer') }}&background=0d2e50&color=fff" alt="">

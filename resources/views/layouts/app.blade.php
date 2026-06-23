@@ -29,6 +29,7 @@
                 --build-theme: {{ $themeColor }};
             }
         </style>
+        <x-theme-script />
 
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800,900&display=swap" rel="stylesheet" />
@@ -117,15 +118,12 @@
                 sidebarOpen: false,
                 profileOpen: false,
                 collapsed: false,
-                darkMode: localStorage.theme ? localStorage.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches,
+                darkMode: window.hardexTheme?.get() === 'dark',
                 toggleTheme() {
-                    this.darkMode = ! this.darkMode;
-                    localStorage.theme = this.darkMode ? 'dark' : 'light';
-                    document.documentElement.classList.toggle('dark', this.darkMode);
-                    window.dispatchEvent(new CustomEvent('buildmart-theme-changed'));
+                    this.darkMode = window.hardexTheme?.toggle() === 'dark';
                 }
             }"
-            x-init="document.documentElement.classList.toggle('dark', darkMode); $watch('darkMode', value => document.documentElement.classList.toggle('dark', value))"
+            x-init="window.addEventListener('hardex-theme-changed', event => darkMode = event.detail.theme === 'dark')"
             class="min-h-screen bg-slate-100 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100"
         >
             @auth
