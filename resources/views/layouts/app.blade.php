@@ -86,11 +86,13 @@
                     ['label' => 'Customer Accounts', 'route' => 'admin.customer-accounts.index', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => 'Customer Notifications', 'route' => 'admin.customer-notifications.index', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => 'Settings', 'route' => 'settings.index', 'roles' => ['Super Admin', 'Admin']],
+                    ['label' => 'Company Settings', 'route' => 'settings.company', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => 'Email Settings', 'route' => 'email-settings.index', 'roles' => ['Super Admin', 'Admin', 'Manager']],
                     ['label' => 'Email Logs', 'route' => 'purchase-email-logs.index', 'roles' => ['Super Admin', 'Admin', 'Manager']],
                 ]],
             ];
             $user = auth()->user();
+            $company = \App\Models\Company::current();
             $companySettings = null;
 
             try {
@@ -101,8 +103,8 @@
                 $companySettings = null;
             }
 
-            $companyName = $companySettings?->company_name ?: config('app.name', 'Hardex POS');
-            $companyLogo = $companySettings?->company_logo;
+            $companyName = $company?->company_name ?: ($companySettings?->company_name ?: config('app.name', 'Hardex POS'));
+            $companyLogo = $company?->logo ?: $companySettings?->company_logo;
             $companyInitials = collect(preg_split('/\s+/', trim($companyName)))
                 ->filter()
                 ->map(fn ($word) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($word, 0, 1)))

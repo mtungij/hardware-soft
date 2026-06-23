@@ -9,15 +9,26 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'company_name',
+    'business_type',
+    'tin_number',
+    'vrn_number',
     'company_logo',
     'company_phone',
+    'whatsapp_number',
     'company_email',
     'company_address',
+    'region',
+    'district',
+    'country',
+    'business_description',
     'currency',
+    'timezone',
+    'language',
     'receipt_footer_text',
     'tax_enabled',
     'default_branch_id',
     'theme_color',
+    'system_initialized',
     'mail_host',
     'mail_port',
     'mail_username',
@@ -39,6 +50,7 @@ class Setting extends Model
     {
         return [
             'tax_enabled' => 'boolean',
+            'system_initialized' => 'boolean',
             'mail_port' => 'integer',
             'mail_password' => 'encrypted',
         ];

@@ -8,6 +8,7 @@ use App\Http\Middleware\EnsureCustomerApiAccountIsActive;
 use App\Http\Middleware\EnsureCustomerAccountIsActive;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\SetCustomerPortalLocale;
+use App\Http\Middleware\EnsureSystemIsInitialized;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -18,6 +19,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->redirectGuestsTo(fn (Request $request) => $request->is('customer/*') ? route('customer.login') : route('login'));
+        $middleware->web(append: [
+            EnsureSystemIsInitialized::class,
+        ]);
 
         $middleware->alias([
             'role.any' => EnsureUserHasRole::class,

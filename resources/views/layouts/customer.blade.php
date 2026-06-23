@@ -5,11 +5,12 @@
          <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <title>{{ config('app.name', 'Hardex POS') }} {{ __('messages.customer_portal') }}</title>
+        <title>{{ \App\Models\Company::current()?->company_name ?: __('messages.customer_portal') }}</title>
 
         @php
             $themeColor = '#f97316';
             $settings = null;
+            $company = \App\Models\Company::current();
 
             try {
                 if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
@@ -20,8 +21,10 @@
                 $settings = null;
             }
 
-            $companyName = $settings?->company_name ?: 'Hardex POS';
-            $companyLogo = $settings?->company_logo;
+            $companyName = $company?->company_name ?: ($settings?->company_name ?: 'Customer Portal');
+            $companyLogo = $company?->logo ?: $settings?->company_logo;
+            $whatsappNumber = $company?->whatsapp_number ?: $settings?->whatsapp_number;
+            $whatsappLink = $company?->whatsappLink() ?: ($whatsappNumber ? 'https://wa.me/'.preg_replace('/\D+/', '', $whatsappNumber) : null);
             $initials = collect(preg_split('/\s+/', trim($companyName)))->filter()->map(fn ($word) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($word, 0, 1)))->take(2)->join('') ?: 'HX';
         @endphp
 
@@ -75,7 +78,14 @@
                 </nav>
 
                 <div class="border-t border-slate-200 p-4 dark:border-slate-800">
-                    <a href="https://wa.me/255629364847" target="_blank" class="block rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">{{ __('messages.support.whatsapp_support') }}<br><span class="text-xs font-semibold">+255629364847</span></a>
+                    <div class="rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">
+                        <p>{{ __('messages.support.need_help') }}</p>
+                        <p class="mt-1">{{ __('messages.support.whatsapp_support') }}</p>
+                        @if ($whatsappNumber && $whatsappLink)
+                            <a href="{{ $whatsappLink }}" target="_blank" rel="noopener" class="mt-2 inline-flex rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white">{{ __('messages.support.chat_whatsapp') }}</a>
+                            <p class="mt-2 text-xs font-semibold">{{ $whatsappNumber }}</p>
+                        @endif
+                    </div>
                 </div>
             </aside>
 

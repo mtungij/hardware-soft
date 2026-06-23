@@ -8,11 +8,20 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Livewire\Volt\Volt;
 
-Route::get('/', fn () => auth('customer')->check()
-    ? redirect()->route('customer.dashboard')
-    : redirect()->route('customer.login'));
+Route::get('/', function () {
+    if (request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST)) {
+        return auth('customer')->check()
+            ? redirect()->route('customer.dashboard')
+            : redirect()->route('customer.login');
+    }
+
+    return auth()->check()
+        ? redirect()->route('dashboard')
+        : redirect()->route('login');
+});
 
 Route::view('offline', 'offline')->name('offline');
+Volt::route('setup', 'setup.index')->name('setup');
 
 Route::post('customer/language/{locale}', function (Request $request, string $locale) {
     abort_unless(in_array($locale, ['sw', 'en'], true), 404);
@@ -72,6 +81,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Volt::route('roles', 'roles.index')->name('roles.index');
         Volt::route('settings', 'settings.index')->name('settings.index');
+        Volt::route('settings/company', 'settings.company')->name('settings.company');
 
         Volt::route('products/create', 'products.create')->name('products.create');
         Volt::route('products/{product}/edit', 'products.edit')->name('products.edit');

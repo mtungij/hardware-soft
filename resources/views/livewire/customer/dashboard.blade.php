@@ -24,11 +24,16 @@ $paymentStatusLabel = fn (string $status) => [
 
 ?>
 
+@php
+    $company = \App\Models\Company::current();
+    $companyName = $company?->company_name ?: 'Customer Portal';
+@endphp
+
 <div>
     <x-page-header :title="__('messages.dashboard.title')" :description="__('messages.welcome_back', ['name' => $this->account->name])" :breadcrumbs="[__('messages.customer_portal') => null]" />
 
     <x-card class="mb-4">
-        <h2 class="text-xl font-black text-navy-900 dark:text-white">{{ __('messages.welcome_title') }}</h2>
+        <h2 class="text-xl font-black text-navy-900 dark:text-white">Karibu kwenye {{ $companyName }}</h2>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ __('messages.welcome_message') }}</p>
     </x-card>
 

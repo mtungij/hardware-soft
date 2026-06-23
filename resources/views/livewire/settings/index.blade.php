@@ -30,7 +30,7 @@ state([
 ]);
 
 mount(function () {
-    $this->setting = Setting::query()->firstOrCreate(['company_name' => 'Hardex POS']);
+    $this->setting = Setting::query()->first() ?: Setting::query()->create(['company_name' => 'Company']);
 
     $this->company_name = $this->setting->company_name;
     $this->company_logo = $this->setting->company_logo;

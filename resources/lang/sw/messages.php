@@ -6,8 +6,8 @@ return [
     'english' => 'English',
     'install_app' => 'Sakinisha Hardex App',
     'customer_portal' => 'Tovuti ya Mteja',
-    'hardex_customer_portal' => 'Hardex Customer Portal',
-    'welcome_title' => 'Karibu kwenye Hardex Customer Portal',
+    'hardex_customer_portal' => 'Tovuti ya Mteja',
+    'welcome_title' => 'Karibu kwenye Tovuti ya Mteja',
     'welcome_message' => 'Fuatilia madeni yako, amana zako, malipo, risiti, na taarifa za akaunti kwa urahisi ukiwa popote.',
     'welcome_name' => 'Karibu, :name',
     'welcome_back' => 'Karibu tena, :name',
@@ -46,7 +46,7 @@ return [
         'already_registered' => 'Tayari umejisajili?',
         'back_to_login' => 'Rudi kuingia',
         'login_intro' => 'Ingia kuona akaunti yako ya Hardex.',
-        'register_intro' => 'Jisajili kupata huduma za mtandaoni. Msimamizi wa Hardex ataidhinisha akaunti yako kabla ya kupata huduma zote.',
+        'register_intro' => 'Jisajili kupata huduma za mtandaoni. Msimamizi ataidhinisha akaunti yako kabla ya kupata huduma zote.',
         'full_name' => 'Jina Kamili',
         'business_name' => 'Jina la Biashara',
         'branch_location' => 'Tawi / Eneo',
@@ -61,7 +61,7 @@ return [
         'suspended' => 'Akaunti yako ya mteja imesimamishwa. Tafadhali wasiliana na huduma kwa wateja.',
         'already_exists' => 'Akaunti ya tovuti ya mteja tayari ipo kwa mteja huyu.',
         'pending_title' => 'Akaunti Inasubiri Kuidhinishwa',
-        'pending_description' => 'Akaunti yako ya tovuti ya mteja wa Hardex imefunguliwa kikamilifu. Msimamizi lazima aiidhinishe kabla hujaweza kuona madeni, risiti, amana, na taarifa.',
+        'pending_description' => 'Akaunti yako ya tovuti ya mteja imefunguliwa kikamilifu. Msimamizi lazima aiidhinishe kabla hujaweza kuona madeni, risiti, amana, na taarifa.',
     ],
 
     'dashboard' => [

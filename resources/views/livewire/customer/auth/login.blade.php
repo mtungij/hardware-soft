@@ -41,13 +41,21 @@ $login = function () {
 
 ?>
 
+@php
+    $company = \App\Models\Company::current();
+    $companyName = $company?->company_name ?: 'Customer Portal';
+    $companyLogo = $company?->logo;
+    $whatsappNumber = $company?->whatsapp_number;
+    $whatsappLink = $company?->whatsappLink();
+@endphp
+
 <div class="grid min-h-screen bg-slate-100 dark:bg-slate-950 lg:grid-cols-2">
     <section class="hidden bg-navy-900 p-10 text-white lg:flex lg:flex-col lg:justify-between">
         <div>
             <div class="flex items-center gap-3">
-                <img src="{{ asset('images/hardex.png') }}" class="h-14 w-14 rounded-2xl bg-white object-contain p-2" alt="Hardex">
+                <img src="{{ $companyLogo ? asset('storage/'.$companyLogo) : asset('images/hardex.png') }}" class="h-14 w-14 rounded-2xl bg-white object-contain p-2" alt="{{ $companyName }}">
                 <div>
-                    <p class="text-2xl font-black">{{ __('messages.hardex_customer_portal') }}</p>
+                    <p class="text-2xl font-black">{{ $companyName }}</p>
                     <p class="text-sm text-slate-300">{{ __('messages.welcome_message') }}</p>
                 </div>
             </div>
@@ -60,13 +68,13 @@ $login = function () {
                 @endforeach
             </div>
         </div>
-        <p class="text-sm text-slate-300">{{ __('messages.support.need_help') }} WhatsApp +255629364847</p>
+        <p class="text-sm text-slate-300">{{ __('messages.support.need_help') }} {{ $whatsappNumber ? 'WhatsApp '.$whatsappNumber : '' }}</p>
     </section>
 
     <section class="flex items-center justify-center p-6">
         <div class="w-full max-w-md">
             <div class="mb-8 text-center lg:hidden">
-                <img src="{{ asset('images/hardex.png') }}" class="mx-auto h-16 w-16 rounded-2xl bg-white object-contain p-2 shadow-soft" alt="Hardex">
+                <img src="{{ $companyLogo ? asset('storage/'.$companyLogo) : asset('images/hardex.png') }}" class="mx-auto h-16 w-16 rounded-2xl bg-white object-contain p-2 shadow-soft" alt="{{ $companyName }}">
             </div>
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-800 dark:bg-slate-900 sm:p-8">
                 <div class="mb-4 flex justify-end">
@@ -91,7 +99,9 @@ $login = function () {
                     {{ __('messages.auth.no_account') }}
                     <a href="{{ route('customer.register') }}" wire:navigate class="font-black text-build-orange">{{ __('messages.auth.create_account') }}</a>
                 </div>
-                <a href="https://wa.me/255629364847" target="_blank" class="mt-4 block rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-black text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">{{ __('messages.support.chat_whatsapp') }}</a>
+                @if ($whatsappLink)
+                    <a href="{{ $whatsappLink }}" target="_blank" rel="noopener" class="mt-4 block rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-black text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">{{ __('messages.support.chat_whatsapp') }}</a>
+                @endif
             </div>
         </div>
     </section>

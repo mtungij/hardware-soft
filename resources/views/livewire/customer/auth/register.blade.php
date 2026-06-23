@@ -71,10 +71,16 @@ $register = function () {
 
 ?>
 
+@php
+    $company = \App\Models\Company::current();
+    $companyName = $company?->company_name ?: 'Customer Portal';
+    $companyLogo = $company?->logo;
+@endphp
+
 <div class="min-h-screen bg-slate-100 px-4 py-8 dark:bg-slate-950">
     <div class="mx-auto max-w-5xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-soft dark:border-slate-800 dark:bg-slate-900 lg:grid lg:grid-cols-2">
         <div class="bg-navy-900 p-8 text-white">
-            <img src="{{ asset('images/hardex.png') }}" class="h-16 w-16 rounded-2xl bg-white object-contain p-2" alt="Hardex">
+            <img src="{{ $companyLogo ? asset('storage/'.$companyLogo) : asset('images/hardex.png') }}" class="h-16 w-16 rounded-2xl bg-white object-contain p-2" alt="{{ $companyName }}">
             <h1 class="mt-8 text-3xl font-black">{{ __('messages.auth.create_account') }}</h1>
             <p class="mt-3 text-sm leading-6 text-slate-300">{{ __('messages.auth.register_intro') }}</p>
             <div class="mt-8 space-y-3 text-sm font-semibold text-slate-200">

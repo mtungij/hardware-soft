@@ -54,6 +54,8 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    'customer_portal_url' => env('CUSTOMER_PORTAL_URL', 'https://customer.buildcore.site'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone

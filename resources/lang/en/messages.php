@@ -6,8 +6,8 @@ return [
     'english' => 'English',
     'install_app' => 'Install Hardex App',
     'customer_portal' => 'Customer Portal',
-    'hardex_customer_portal' => 'Hardex Customer Portal',
-    'welcome_title' => 'Welcome to Hardex Customer Portal',
+    'hardex_customer_portal' => 'Customer Portal',
+    'welcome_title' => 'Welcome to Customer Portal',
     'welcome_message' => 'Track your debts, deposits, payments, receipts, and account statements easily from anywhere.',
     'welcome_name' => 'Welcome, :name',
     'welcome_back' => 'Welcome back, :name',
@@ -46,7 +46,7 @@ return [
         'already_registered' => 'Already registered?',
         'back_to_login' => 'Back to login',
         'login_intro' => 'Sign in to view your Hardex account.',
-        'register_intro' => 'Register for portal access. A Hardex administrator will approve your account before full access is enabled.',
+        'register_intro' => 'Register for portal access. An administrator will approve your account before full access is enabled.',
         'full_name' => 'Full Name',
         'business_name' => 'Business Name',
         'branch_location' => 'Branch / Location',
@@ -61,7 +61,7 @@ return [
         'suspended' => 'Your customer portal account is suspended. Please contact support.',
         'already_exists' => 'A customer portal account already exists for this customer.',
         'pending_title' => 'Account Pending Approval',
-        'pending_description' => 'Your Hardex customer portal account has been created successfully. An administrator must approve it before you can access debts, receipts, deposits, and statements.',
+        'pending_description' => 'Your customer portal account has been created successfully. An administrator must approve it before you can access debts, receipts, deposits, and statements.',
     ],
 
     'dashboard' => [

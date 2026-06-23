@@ -1,6 +1,7 @@
 <?php
 
 use App\Livewire\Forms\LoginForm;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Session;
 
 use function Livewire\Volt\form;
@@ -9,6 +10,8 @@ use function Livewire\Volt\layout;
 layout('layouts.auth');
 
 form(LoginForm::class);
+
+$systemInitialized = fn () => (bool) Setting::query()->value('system_initialized');
 
 $login = function () {
     $this->validate();
@@ -156,9 +159,11 @@ $login = function () {
                         <button type="button" disabled class="cursor-not-allowed rounded-xl border border-slate-200 px-4 py-3 text-sm font-black opacity-60 dark:border-slate-700">Microsoft</button>
                     </div>
 
-                    <a href="{{ route('register') }}" wire:navigate class="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-navy-900 transition hover:border-build-orange dark:border-slate-700 dark:text-white">
-                        Create Account
-                    </a>
+                    @unless ($this->systemInitialized())
+                        <a href="{{ route('setup') }}" wire:navigate class="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-sm font-black text-navy-900 transition hover:border-build-orange dark:border-slate-700 dark:text-white">
+                            System Setup
+                        </a>
+                    @endunless
 
                     <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
                         <p class="text-sm font-black text-navy-900 dark:text-white">Need Help?</p>
