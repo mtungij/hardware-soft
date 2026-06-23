@@ -177,7 +177,7 @@ return [
         'whatsapp_support' => 'Msaada wa WhatsApp',
         'phone' => 'Simu',
         'email' => 'Barua Pepe',
-        'chat_whatsapp' => 'Piga Gumzo WhatsApp',
+       'chat_whatsapp' => 'Wasiliana Nasi kwa WhatsApp',
     ],
 
     'notifications' => [
