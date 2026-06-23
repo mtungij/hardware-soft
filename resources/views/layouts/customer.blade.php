@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="csrf-token" content="{{ csrf_token() }}">
+        <title>{{ config('app.name', 'Hardex POS') }} Customer Portal</title>
+
+        @php
+            $themeColor = '#f97316';
+            $settings = null;
+
+            try {
+                if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
+                    $settings = \App\Models\Setting::query()->first();
+                    $themeColor = $settings?->theme_color ?: $themeColor;
+                }
+            } catch (\Throwable) {
+                $settings = null;
+            }
+
+            $companyName = $settings?->company_name ?: 'Hardex POS';
+            $companyLogo = $settings?->company_logo;
+            $initials = collect(preg_split('/\s+/', trim($companyName)))->filter()->map(fn ($word) => \Illuminate\Support\Str::upper(\Illuminate\Support\Str::substr($word, 0, 1)))->take(2)->join('') ?: 'HX';
+        @endphp
+
+        <style>:root { --build-theme: {{ preg_match('/^#[0-9A-Fa-f]{6}$/', $themeColor) ? $themeColor : '#f97316' }}; }</style>
+        <link rel="preconnect" href="https://fonts.bunny.net">
+        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800,900&display=swap" rel="stylesheet" />
+        <x-pwa-head />
+        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @livewireStyles
+    </head>
+    <body class="font-sans antialiased">
+        @php
+            $customerAccount = auth('customer')->user();
+            $navItems = [
+                ['label' => 'Dashboard', 'route' => 'customer.dashboard'],
+                ['label' => 'My Debts', 'route' => 'customer.debts.index'],
+                ['label' => 'Upload Receipt', 'route' => 'customer.receipts.create'],
+                ['label' => 'My Deposits', 'route' => 'customer.deposits.index'],
+                ['label' => 'Statement', 'route' => 'customer.statement'],
+                ['label' => 'Profile', 'route' => 'customer.profile'],
+            ];
+        @endphp
+
+        <div x-data="{ sidebarOpen: false, profileOpen: false, darkMode: localStorage.theme ? localStorage.theme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches }" x-init="document.documentElement.classList.toggle('dark', darkMode); $watch('darkMode', value => { document.documentElement.classList.toggle('dark', value); localStorage.theme = value ? 'dark' : 'light'; })" class="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+            <div x-cloak x-show="sidebarOpen" class="fixed inset-0 z-40 bg-slate-950/50 lg:hidden" @click="sidebarOpen = false"></div>
+
+            <aside class="fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-slate-200 bg-white transition dark:border-slate-800 dark:bg-slate-900 lg:translate-x-0" :class="{ '-translate-x-full': !sidebarOpen, 'translate-x-0': sidebarOpen }">
+                <div class="flex h-16 items-center gap-3 border-b border-slate-200 px-4 dark:border-slate-800">
+                    <div class="grid h-11 w-11 place-items-center overflow-hidden rounded-xl bg-build-orange text-lg font-black text-white shadow-lg shadow-orange-500/25">
+                        @if ($companyLogo)
+                            <img src="{{ asset('storage/'.$companyLogo) }}" class="h-full w-full bg-white object-contain p-1.5" alt="{{ $companyName }} logo">
+                        @else
+                            {{ $initials }}
+                        @endif
+                    </div>
+                    <div class="min-w-0">
+                        <p class="truncate text-sm font-black uppercase text-navy-900 dark:text-white">{{ $companyName }}</p>
+                        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Customer portal</p>
+                    </div>
+                </div>
+
+                <nav class="flex-1 space-y-1 overflow-y-auto p-3">
+                    @foreach ($navItems as $item)
+                        @php $isActive = request()->routeIs($item['route']) || request()->routeIs(str($item['route'])->beforeLast('.').'.*'); @endphp
+                        <a href="{{ route($item['route']) }}" wire:navigate @click="sidebarOpen = false" class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold transition {{ $isActive ? 'bg-orange-50 text-build-orange dark:bg-orange-500/15 dark:text-orange-200' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5' }}">
+                            <span class="grid h-9 w-9 place-items-center rounded-lg {{ $isActive ? 'bg-build-orange text-white' : 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-300' }}">{{ collect(explode(' ', $item['label']))->map(fn ($word) => $word[0])->take(2)->join('') }}</span>
+                            {{ $item['label'] }}
+                        </a>
+                    @endforeach
+                </nav>
+
+                <div class="border-t border-slate-200 p-4 dark:border-slate-800">
+                    <a href="https://wa.me/255629364847" target="_blank" class="block rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200">WhatsApp Support<br><span class="text-xs font-semibold">+255629364847</span></a>
+                </div>
+            </aside>
+
+            <div class="lg:pl-72">
+                <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
+                    <div class="flex h-16 items-center gap-3 px-4 sm:px-6">
+                        <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 dark:border-slate-700 lg:hidden" @click="sidebarOpen = true">&#9776;</button>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-black text-navy-900 dark:text-white">Welcome, {{ $customerAccount?->name }}</p>
+                            <p class="text-xs font-semibold text-slate-500">Manage debts, receipts, deposits, and statements.</p>
+                        </div>
+                        <x-pwa-install-button class="hidden rounded-xl bg-build-orange px-3 py-2 text-sm font-black text-white sm:inline-flex" />
+                        <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = !darkMode" x-text="darkMode ? 'Light' : 'Dark'"></button>
+                        <div class="relative">
+                            <button class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
+                                <img class="h-8 w-8 rounded-lg" src="https://ui-avatars.com/api/?name={{ urlencode($customerAccount?->name ?? 'Customer') }}&background=0d2e50&color=fff" alt="">
+                                <span class="hidden text-sm font-bold sm:block">{{ $customerAccount?->name }}</span>
+                            </button>
+                            <div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-3 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-navy-900">
+                                <a class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/5" href="{{ route('customer.profile') }}" wire:navigate>Profile</a>
+                                <form method="POST" action="{{ route('customer.logout') }}">
+                                    @csrf
+                                    <button class="block w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">Logout</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="min-h-[calc(100vh-8rem)] px-4 py-6 sm:px-6">
+                    <x-flash />
+                    {{ $slot }}
+                </main>
+
+                <footer class="border-t border-slate-200 px-4 py-4 text-xs font-semibold text-slate-500 dark:border-slate-800 sm:px-6">
+                    © {{ now()->year }} {{ $companyName }} Customer Portal. Powered by Hardex.
+                </footer>
+            </div>
+        </div>
+
+        @livewireScripts
+    </body>
+</html>

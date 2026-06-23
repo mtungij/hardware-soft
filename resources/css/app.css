@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --build-theme: #f97316;
+    }
+
+    [x-cloak] {
+        display: none !important;
+    }
+}
+
+@layer components {
+    .badge-success {
+        @apply rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300;
+    }
+
+    .badge-warning {
+        @apply rounded-full bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-700 dark:bg-amber-500/15 dark:text-amber-300;
+    }
+
+    .badge-info {
+        @apply rounded-full bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700 dark:bg-blue-500/15 dark:text-blue-300;
+    }
+}
+
+@layer utilities {
+    .bg-build-orange,
+    .dark .dark\:bg-build-orange,
+    .file\:bg-build-orange::file-selector-button,
+    .peer:checked ~ .peer-checked\:bg-build-orange {
+        background-color: var(--build-theme) !important;
+    }
+
+    .bg-orange-50,
+    .bg-orange-100,
+    .hover\:bg-orange-50\/40:hover {
+        background-color: color-mix(in srgb, var(--build-theme) 10%, white) !important;
+    }
+
+    .bg-orange-300,
+    .bg-orange-600,
+    .hover\:bg-orange-600:hover {
+        background-color: var(--build-theme) !important;
+    }
+
+    .dark .dark\:bg-orange-500\/10,
+    .dark .dark\:bg-orange-500\/15 {
+        background-color: color-mix(in srgb, var(--build-theme) 16%, transparent) !important;
+    }
+
+    .dark .dark\:hover\:bg-orange-500\/10:hover {
+        background-color: color-mix(in srgb, var(--build-theme) 16%, transparent) !important;
+    }
+
+    .text-build-orange,
+    .text-orange-300,
+    .text-orange-700,
+    .text-orange-800,
+    .dark .dark\:text-orange-200,
+    .dark .dark\:text-orange-300 {
+        color: var(--build-theme) !important;
+    }
+
+    .border-build-orange,
+    .focus\:border-build-orange:focus,
+    .hover\:border-build-orange:hover,
+    .border-orange-200,
+    .border-orange-300,
+    .hover\:border-build-orange\/40:hover {
+        border-color: var(--build-theme) !important;
+    }
+
+    .dark .dark\:border-orange-500\/40,
+    .dark .dark\:border-orange-500\/30 {
+        border-color: color-mix(in srgb, var(--build-theme) 45%, transparent) !important;
+    }
+
+    .ring-build-orange,
+    .focus\:ring-build-orange:focus {
+        --tw-ring-color: var(--build-theme) !important;
+    }
+
+    .ring-build-orange\/20,
+    .focus\:ring-build-orange\/20:focus,
+    .focus\:ring-orange-500\/20:focus {
+        --tw-ring-color: color-mix(in srgb, var(--build-theme) 20%, transparent) !important;
+    }
+
+    .shadow-orange-500\/20,
+    .shadow-orange-500\/25,
+    .shadow-orange-500\/30 {
+        --tw-shadow-color: color-mix(in srgb, var(--build-theme) 28%, transparent) !important;
+        --tw-shadow: var(--tw-shadow-colored) !important;
+    }
+
+    .accent-build-orange {
+        accent-color: var(--build-theme);
+    }
+}
