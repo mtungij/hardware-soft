@@ -19,10 +19,6 @@ class EnsureSystemIsInitialized
 
         $initialized = $this->isInitialized();
 
-        if (! $initialized && ! $request->is('setup')) {
-            return redirect()->route('setup');
-        }
-
         if ($initialized && $request->is('setup')) {
             return auth()->check()
                 ? redirect()->route('dashboard')
