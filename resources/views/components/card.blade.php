@@ -3,7 +3,7 @@
     'description' => null,
 ])
 
-<article {{ $attributes->merge(['class' => 'erp-surface erp-surface-hover p-4 sm:p-5']) }}>
+<article {{ $attributes->merge(['class' => 'erp-surface erp-surface-hover min-w-0 p-4 sm:p-5']) }}>
     @if ($title || $description)
         <div class="mb-4">
             @if ($title)

@@ -26,7 +26,7 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
         @livewireStyles
     </head>
-    <body class="font-sans antialiased">
+    <body class="overflow-x-hidden font-sans antialiased">
         @php
             $navIcons = [
                 'dashboard' => ['M3 13h8V3H3v10Z', 'M13 21h8V11h-8v10Z', 'M13 3v6h8V3h-8Z', 'M3 21h8v-6H3v6Z'],
@@ -227,9 +227,9 @@
                 </div>
             </aside>
 
-            <div class="transition-all duration-300" :class="{ 'lg:pl-20': collapsed, 'lg:pl-72': !collapsed }">
+            <div class="min-w-0 overflow-x-hidden transition-all duration-300" :class="{ 'lg:pl-20': collapsed, 'lg:pl-72': !collapsed }">
                 <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/90">
-                    <div class="flex h-16 items-center gap-3 px-4 sm:px-6">
+                    <div class="flex h-16 min-w-0 items-center gap-2 px-3 sm:gap-3 sm:px-6">
                         <button class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300 lg:hidden" @click="sidebarOpen = true">
                             <span class="text-xl">&#9776;</span>
                         </button>
@@ -241,7 +241,7 @@
                             </div>
                         </div>
 
-                        <x-pwa-install-button class="hidden rounded-lg bg-build-orange px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/25" />
+                        <x-pwa-install-button class="hidden max-sm:!hidden rounded-lg bg-build-orange px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/25" />
                         <div class="hs-dropdown relative inline-flex">
                             <button type="button" class="hs-dropdown-toggle hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200 sm:inline-flex">
                                 {{ $currentStaffLocale === 'sw' ? '🇹🇿 Kiswahili' : '🇬🇧 English' }}
@@ -277,7 +277,7 @@
                     </div>
                 </header>
 
-                <main class="min-h-[calc(100vh-8rem)] px-4 py-6 sm:px-6 2xl:px-8">
+                <main class="min-w-0 overflow-x-hidden px-3 py-5 sm:px-6 sm:py-6 2xl:px-8">
                     <x-flash />
                     {{ $slot }}
                 </main>

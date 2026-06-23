@@ -375,7 +375,7 @@ $recentTransactions = computed(function (): Collection {
 
 ?>
 
-<div wire:poll.30s class="space-y-6">
+<div wire:poll.30s class="max-w-full min-w-0 overflow-x-hidden space-y-6">
     @php
         $currency = 'TZS';
         $formatMoney = fn ($value) => $currency.' '.number_format((float) $value, 2);
@@ -410,7 +410,7 @@ $recentTransactions = computed(function (): Collection {
     </x-page-header>
 
     <x-card>
-        <div class="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]">
+        <div class="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <label class="block text-sm font-bold">
                 Date Filter
                 <select wire:model.live="dateFilter" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -446,7 +446,7 @@ $recentTransactions = computed(function (): Collection {
         </div>
     </x-card>
 
-    <div wire:loading.delay class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div wire:loading.delay class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach (range(1, 8) as $item)
             <div class="h-32 animate-pulse rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-navy-900">
                 <div class="h-3 w-28 rounded bg-slate-200 dark:bg-slate-700"></div>
@@ -456,7 +456,7 @@ $recentTransactions = computed(function (): Collection {
         @endforeach
     </div>
 
-    <div wire:loading.remove.delay class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div wire:loading.remove.delay class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach ($cards as $card)
             <x-card>
                 <div class="flex items-start justify-between gap-3">
@@ -471,10 +471,10 @@ $recentTransactions = computed(function (): Collection {
         @endforeach
     </div>
 
-    <div class="grid gap-6 xl:grid-cols-2">
+    <div class="grid min-w-0 gap-6 xl:grid-cols-2">
         <x-card title="Interactive Sales Trend" description="Chart.js view of sales and profit for the last 7 days.">
             <div
-                class="h-72"
+                class="h-72 min-w-0 overflow-hidden"
                 x-data="{
                     render() {
                         buildMartChart($refs.canvas, {
@@ -491,13 +491,13 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas x-ref="canvas" aria-label="Sales trend chart"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="Sales trend chart"></canvas>
             </div>
         </x-card>
 
         <x-card title="Revenue vs Expenses" description="Monthly revenue, purchases, and expenses from database records.">
             <div
-                class="h-72"
+                class="h-72 min-w-0 overflow-hidden"
                 x-data="{
                     render() {
                         buildMartChart($refs.canvas, {
@@ -515,13 +515,13 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas x-ref="canvas" aria-label="Monthly revenue versus expenses chart"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="Monthly revenue versus expenses chart"></canvas>
             </div>
         </x-card>
 
         <x-card title="Category Performance" description="Sales amount grouped by product category.">
             <div
-                class="h-72"
+                class="h-72 min-w-0 overflow-hidden"
                 x-data="{
                     render() {
                         buildMartChart($refs.canvas, {
@@ -536,13 +536,13 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas x-ref="canvas" aria-label="Sales by category chart"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="Sales by category chart"></canvas>
             </div>
         </x-card>
 
         <x-card title="Stock Distribution" description="Current stock quantity grouped by stock location.">
             <div
-                class="h-72"
+                class="h-72 min-w-0 overflow-hidden"
                 x-data="{
                     render() {
                         buildMartChart($refs.canvas, {
@@ -557,19 +557,19 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas x-ref="canvas" aria-label="Stock distribution chart"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="Stock distribution chart"></canvas>
             </div>
         </x-card>
     </div>
 
-    <div class="grid gap-6 xl:grid-cols-2">
+    <div class="grid min-w-0 gap-6 xl:grid-cols-2">
         <x-card title="Sales Trend" description="Completed sales total and profit for the last 7 days.">
             @if ($this->salesTrendChart->isEmpty())
                 <p class="py-10 text-center text-sm text-slate-500">No sales trend data available.</p>
             @else
                 <div class="space-y-4">
                     @foreach ($this->salesTrendChart as $row)
-                        <div class="grid grid-cols-[72px_1fr] items-center gap-3">
+                        <div class="grid min-w-0 grid-cols-[64px_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[72px_minmax(0,1fr)]">
                             <p class="text-xs font-bold text-slate-500">{{ $row['date'] }}</p>
                             <div>
                                 <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-build-orange" style="width: {{ min(100, ($row['sales'] / $maxTrend) * 100) }}%"></div></div>
@@ -584,7 +584,7 @@ $recentTransactions = computed(function (): Collection {
         <x-card title="Monthly Revenue vs Expenses" description="Sales revenue, purchases, and operating expenses by month.">
             <div class="space-y-4">
                 @foreach ($this->monthlyRevenueExpenseChart as $row)
-                    <div class="grid grid-cols-[48px_1fr] items-center gap-3">
+                    <div class="grid min-w-0 grid-cols-[44px_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[48px_minmax(0,1fr)]">
                         <p class="text-xs font-bold text-slate-500">{{ $row['month'] }}</p>
                         <div class="space-y-1">
                             <div class="h-2 rounded bg-emerald-500" style="width: {{ min(100, ($row['sales'] / $maxMonthly) * 100) }}%"></div>
@@ -600,7 +600,7 @@ $recentTransactions = computed(function (): Collection {
         <x-card title="Sales by Category" description="Category revenue from sold items.">
             @forelse ($this->salesByCategoryChart as $row)
                 <div class="mb-4">
-                    <div class="mb-1 flex justify-between text-sm"><span class="font-bold">{{ $row->category_name }}</span><span>{{ $formatMoney($row->total_sales) }}</span></div>
+                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row->category_name }}</span><span class="shrink-0">{{ $formatMoney($row->total_sales) }}</span></div>
                     <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-build-orange" style="width: {{ min(100, ((float) $row->total_sales / $maxCategory) * 100) }}%"></div></div>
                 </div>
             @empty
@@ -611,7 +611,7 @@ $recentTransactions = computed(function (): Collection {
         <x-card title="Stock Distribution" description="Current stock quantities by location.">
             @forelse ($this->stockDistributionChart as $row)
                 <div class="mb-4">
-                    <div class="mb-1 flex justify-between text-sm"><span class="font-bold">{{ $row['name'] }} <span class="text-xs font-semibold text-slate-500">({{ ucfirst($row['type']) }})</span></span><span>{{ number_format($row['quantity'], 2) }}</span></div>
+                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row['name'] }} <span class="text-xs font-semibold text-slate-500">({{ ucfirst($row['type']) }})</span></span><span class="shrink-0">{{ number_format($row['quantity'], 2) }}</span></div>
                     <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-navy-800 dark:bg-build-orange" style="width: {{ min(100, ($row['quantity'] / $maxStock) * 100) }}%"></div></div>
                 </div>
             @empty
@@ -620,7 +620,7 @@ $recentTransactions = computed(function (): Collection {
         </x-card>
     </div>
 
-    <div class="grid gap-6 xl:grid-cols-[360px_1fr]">
+    <div class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <div class="space-y-6">
             <x-card title="Inventory Summary">
                 <div class="space-y-3">
@@ -692,7 +692,7 @@ $recentTransactions = computed(function (): Collection {
         </x-card>
     </div>
 
-    <div class="grid gap-6 xl:grid-cols-2">
+    <div class="grid min-w-0 gap-6 xl:grid-cols-2">
         <x-card title="Top Selling Products">
             <x-table>
                 <x-slot:head>
@@ -726,12 +726,12 @@ $recentTransactions = computed(function (): Collection {
         <x-card title="Recent Transactions" description="Latest sales, purchases, transfers, expenses, and customer payments.">
             <div class="space-y-3">
                 @forelse ($this->recentTransactions as $transaction)
-                    <a href="{{ $transaction['route'] }}" wire:navigate class="flex items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 transition hover:border-build-orange/40 hover:bg-orange-50/40 dark:border-slate-800 dark:hover:bg-orange-500/10">
-                        <div>
+                    <a href="{{ $transaction['route'] }}" wire:navigate class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 transition hover:border-build-orange/40 hover:bg-orange-50/40 dark:border-slate-800 dark:hover:bg-orange-500/10">
+                        <div class="min-w-0">
                             <p class="font-bold">{{ $transaction['type'] }} · {{ $transaction['reference'] }}</p>
                             <p class="text-xs text-slate-500">{{ $transaction['date']->format('M d, Y H:i') }} · {{ str($transaction['status'])->replace('_', ' ')->title() }}</p>
                         </div>
-                        <p class="text-sm font-black">{{ is_null($transaction['amount']) ? '-' : $formatMoney($transaction['amount']) }}</p>
+                        <p class="shrink-0 text-sm font-black">{{ is_null($transaction['amount']) ? '-' : $formatMoney($transaction['amount']) }}</p>
                     </a>
                 @empty
                     <p class="py-10 text-center text-sm text-slate-500">No recent transactions for the selected filters.</p>
