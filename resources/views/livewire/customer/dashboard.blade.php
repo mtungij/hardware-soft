@@ -37,13 +37,21 @@ $paymentStatusLabel = fn (string $status) => [
     $companyName = $company?->company_name ?: 'Customer Portal';
 @endphp
 
-<div>
+<div data-tour="customer-dashboard">
     <x-page-header :title="__('messages.dashboard.title')" :description="__('messages.welcome_back', ['name' => $this->account->name])" :breadcrumbs="[__('messages.customer_portal') => null]" />
 
     <x-card class="mb-4">
         <h2 class="text-xl font-black text-navy-900 dark:text-white">Karibu kwenye {{ $companyName }}</h2>
         <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">{{ __('messages.welcome_message') }}</p>
     </x-card>
+
+    <x-help-tip class="mb-4">
+        Pakia risiti za malipo ili deni lako lipungue baada ya uhakiki wa staff.
+    </x-help-tip>
+
+    <div class="mb-4">
+        <x-onboarding-checklist context="customer" />
+    </div>
 
     @if ($this->importantAnnouncement)
         <div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">

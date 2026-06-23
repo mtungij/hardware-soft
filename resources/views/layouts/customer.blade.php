@@ -46,13 +46,14 @@
                 ? \App\Models\CustomerNotification::where('customer_id', $customerAccount->customer_id)->latest()->limit(5)->get()
                 : collect();
             $navItems = [
-                ['label' => __('messages.nav.dashboard'), 'route' => 'customer.dashboard'],
-                ['label' => __('messages.nav.debts'), 'route' => 'customer.debts.index'],
-                ['label' => __('messages.nav.upload_receipt'), 'route' => 'customer.receipts.create'],
-                ['label' => __('messages.nav.deposits'), 'route' => 'customer.deposits.index'],
-                ['label' => __('messages.nav.statements'), 'route' => 'customer.statement'],
-                ['label' => __('messages.nav.notifications'), 'route' => 'customer.notifications.index'],
-                ['label' => __('messages.nav.profile'), 'route' => 'customer.profile'],
+                ['label' => __('messages.nav.dashboard'), 'route' => 'customer.dashboard', 'tour' => 'customer-dashboard'],
+                ['label' => __('messages.nav.debts'), 'route' => 'customer.debts.index', 'tour' => 'customer-debts'],
+                ['label' => __('messages.nav.upload_receipt'), 'route' => 'customer.receipts.create', 'tour' => 'upload-receipt'],
+                ['label' => __('messages.nav.deposits'), 'route' => 'customer.deposits.index', 'tour' => 'customer-deposits'],
+                ['label' => __('messages.nav.statements'), 'route' => 'customer.statement', 'tour' => 'customer-statements'],
+                ['label' => __('messages.nav.notifications'), 'route' => 'customer.notifications.index', 'tour' => 'customer-notifications'],
+                ['label' => __('messages.nav.profile'), 'route' => 'customer.profile', 'tour' => 'customer-profile'],
+                ['label' => 'Msaada', 'route' => 'customer.help-center', 'tour' => 'customer-help'],
             ];
         @endphp
 
@@ -77,7 +78,7 @@
                 <nav class="flex-1 space-y-1 overflow-y-auto p-3">
                     @foreach ($navItems as $item)
                         @php $isActive = request()->routeIs($item['route']) || request()->routeIs(str($item['route'])->beforeLast('.').'.*'); @endphp
-                        <a href="{{ route($item['route']) }}" wire:navigate @click="sidebarOpen = false" class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold transition {{ $isActive ? 'bg-orange-50 text-build-orange dark:bg-orange-500/15 dark:text-orange-200' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5' }}">
+                        <a href="{{ route($item['route']) }}" wire:navigate data-tour="{{ $item['tour'] }}" @click="sidebarOpen = false" class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold transition {{ $isActive ? 'bg-orange-50 text-build-orange dark:bg-orange-500/15 dark:text-orange-200' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5' }}">
                             <span class="grid h-9 w-9 place-items-center rounded-lg {{ $isActive ? 'bg-build-orange text-white' : 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-300' }}">{{ collect(explode(' ', $item['label']))->map(fn ($word) => $word[0])->take(2)->join('') }}</span>
                             {{ $item['label'] }}
                         </a>
@@ -106,9 +107,10 @@
                         </div>
                         <x-customer-language-switcher class="hidden md:block" />
                         <x-pwa-install-button class="hidden h-10 w-10 items-center justify-center rounded-xl bg-build-orange text-white sm:inline-flex" />
+                        <a href="{{ route('customer.help-center') }}" wire:navigate title="Kituo cha Msaada" class="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-sm font-black dark:border-slate-700">?</a>
                         <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = window.hardexTheme?.toggle() === 'dark'" x-text="darkMode ? @js(__('messages.theme.light')) : @js(__('messages.theme.dark'))"></button>
                         <div class="relative">
-                            <button type="button" class="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-200" @click="notificationsOpen = !notificationsOpen; profileOpen = false" aria-label="{{ __('messages.nav.notifications') }}">
+                            <button type="button" data-tour="customer-notifications" class="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-200" @click="notificationsOpen = !notificationsOpen; profileOpen = false" aria-label="{{ __('messages.nav.notifications') }}">
                                 <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                     <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
                                     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -140,7 +142,7 @@
                             </div>
                         </div>
                         <div class="relative">
-                            <button class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen; notificationsOpen = false">
+                            <button data-tour="customer-profile" class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen; notificationsOpen = false">
                                 <img class="h-8 w-8 rounded-lg" src="https://ui-avatars.com/api/?name={{ urlencode($customerAccount?->name ?? 'Customer') }}&background=0d2e50&color=fff" alt="">
                                 <span class="hidden text-sm font-bold sm:block">{{ $customerAccount?->name }}</span>
                             </button>
@@ -166,6 +168,12 @@
                 </footer>
             </div>
         </div>
+
+        <x-onboarding
+            context="customer"
+            role="Mteja"
+            :user-key="$customerAccount?->id ?: 'guest'"
+        />
 
         @livewireScripts
     </body>

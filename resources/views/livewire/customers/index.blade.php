@@ -40,7 +40,7 @@ $deleteCustomer = function (int $customerId) {
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Customers' => null]"
     >
         @if ($this->canManage())
-            <a href="{{ route('customers.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Customer</a>
+            <a href="{{ route('customers.create') }}" wire:navigate data-tour="add-customer" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Customer</a>
         @endif
     </x-page-header>
 
@@ -81,7 +81,7 @@ $deleteCustomer = function (int $customerId) {
                 ->paginate(10);
         @endphp
 
-        <x-table :headers="['Customer', 'Phone', 'Type', 'Branch', 'Credit Limit', 'Opening Balance', 'Status', 'Actions']">
+        <x-table data-tour="customers-list" :headers="['Customer', 'Phone', 'Type', 'Branch', 'Credit Limit', 'Opening Balance', 'Status', 'Actions']">
             @forelse ($customers as $customer)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3"><p class="font-black">{{ $customer->name }}</p><p class="text-xs text-slate-500">{{ $customer->email ?? '-' }}</p></td>

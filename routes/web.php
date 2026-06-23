@@ -69,6 +69,41 @@ Route::post('theme-preference', function (Request $request) {
     ]);
 })->name('theme.preference');
 
+Route::post('onboarding/progress', function (Request $request) {
+    $data = $request->validate([
+        'tour_name' => ['required', 'string', 'max:100'],
+        'completed' => ['nullable', 'boolean'],
+        'skipped' => ['nullable', 'boolean'],
+        'last_step' => ['nullable', 'integer', 'min:0'],
+        'checklist' => ['nullable', 'array'],
+    ]);
+
+    $customerAccount = Auth::guard('customer')->user();
+    $staffUser = Auth::user();
+
+    abort_unless($customerAccount || $staffUser, 403);
+
+    $guard = $customerAccount ? 'customer' : 'web';
+
+    \App\Models\UserOnboardingProgress::query()->updateOrCreate(
+        [
+            'guard' => $guard,
+            'user_id' => $staffUser?->id,
+            'customer_account_id' => $customerAccount?->id,
+            'tour_name' => $data['tour_name'],
+        ],
+        [
+            'completed' => (bool) ($data['completed'] ?? false),
+            'completed_at' => ! empty($data['completed']) ? now() : null,
+            'skipped' => (bool) ($data['skipped'] ?? false),
+            'last_step' => (int) ($data['last_step'] ?? 0),
+            'checklist' => $data['checklist'] ?? null,
+        ]
+    );
+
+    return response()->json(['ok' => true]);
+})->name('onboarding.progress');
+
 Route::post('staff/language/{locale}', function (Request $request, string $locale) {
     abort_unless(in_array($locale, ['en', 'sw'], true), 404);
 
@@ -151,12 +186,14 @@ Route::middleware('customer.locale')->group(function () {
             Volt::route('customer/statement', 'customer.statement')->name('customer.statement');
             Volt::route('customer/notifications', 'customer.notifications.index')->name('customer.notifications.index');
             Volt::route('customer/profile', 'customer.profile')->name('customer.profile');
+            Volt::route('customer/help-center', 'customer.help-center')->name('customer.help-center');
         });
     });
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('dashboard', 'dashboard')->name('dashboard');
+    Volt::route('help-center', 'help-center.index')->name('help-center.index');
 
     Route::view('profile', 'profile')->name('profile');
 

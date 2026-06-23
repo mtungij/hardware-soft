@@ -246,8 +246,9 @@
                         </div>
 
                         <x-pwa-install-button class="hidden h-10 w-10 items-center justify-center rounded-lg bg-build-orange text-white shadow-lg shadow-orange-500/25 sm:inline-flex" />
+                        <a href="{{ route('help-center.index') }}" wire:navigate data-tour="help-center" title="Kituo cha Msaada" class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-sm font-black text-slate-600 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-300">?</a>
                         <div class="hs-dropdown relative inline-flex">
-                            <button type="button" class="hs-dropdown-toggle hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200 sm:inline-flex">
+                            <button type="button" data-tour="language-switcher" class="hs-dropdown-toggle hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200 sm:inline-flex">
                                 {{ $currentStaffLocale === 'sw' ? '🇹🇿 Kiswahili' : '🇬🇧 English' }}
                             </button>
                             <div class="hs-dropdown-menu z-50 mt-2 hidden min-w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
@@ -259,10 +260,10 @@
                                 @endforeach
                             </div>
                         </div>
-                        <button class="hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold transition hover:border-build-orange dark:border-slate-700 sm:inline-flex" :class="darkMode ? 'bg-slate-900 text-white dark:bg-slate-800' : 'bg-white text-slate-700'" @click="toggleTheme()" aria-label="Toggle theme">
+                        <button data-tour="theme-switcher" class="hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold transition hover:border-build-orange dark:border-slate-700 sm:inline-flex" :class="darkMode ? 'bg-slate-900 text-white dark:bg-slate-800' : 'bg-white text-slate-700'" @click="toggleTheme()" aria-label="Toggle theme">
                             <span x-text="darkMode ? 'Dark active' : 'Light active'"></span>
                         </button>
-                        <button class="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" aria-label="Notifications">
+                        <button data-tour="notifications" class="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" aria-label="Notifications">
                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
                                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -271,7 +272,7 @@
                         </button>
 
                         <div class="relative">
-                            <button class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
+                            <button data-tour="profile-menu" class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
                                 <img class="h-8 w-8 rounded-lg object-cover" src="{{ $user?->profile_photo ? asset('storage/'.$user->profile_photo) : 'https://ui-avatars.com/api/?name='.urlencode($user?->name ?? 'Admin').'&background=0d2e50&color=fff' }}" alt="{{ $user?->name ?? 'User' }}">
                                 <span class="hidden text-sm font-bold sm:block">{{ $user?->name ?? 'User' }}</span>
                             </button>
@@ -302,6 +303,12 @@
                 </footer>
             </div>
         </div>
+
+        <x-onboarding
+            context="staff"
+            :role="$user?->roles->pluck('name')->first() ?: 'Mtumiaji'"
+            :user-key="$user?->id ?: 'guest'"
+        />
 
         @livewireScripts
         <script>

@@ -175,13 +175,17 @@ $deleteConfirmedProduct = function () {
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Products' => null]"
     >
         @if ($this->canManage())
-            <button type="button" wire:click="openCreateProduct" class="erp-btn-primary">Create Product</button>
+            <button type="button" data-tour="add-product" wire:click="openCreateProduct" class="erp-btn-primary">Create Product</button>
         @endif
     </x-page-header>
 
+    <x-help-tip class="mb-4">
+        Ongeza bidhaa kabla ya kurekodi manunuzi. SKU ni utambulisho wa kipekee wa bidhaa, na Reorder Level ni kiwango cha chini kabla ya kuagiza tena.
+    </x-help-tip>
+
     <x-card>
-        <div class="mb-4 grid gap-3 md:grid-cols-5">
-            <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 md:col-span-2" placeholder="Search products, SKU, barcode...">
+        <div data-tour="product-filters" class="mb-4 grid gap-3 md:grid-cols-5">
+            <input data-tour="product-search" wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 md:col-span-2" placeholder="Search products, SKU, barcode...">
             <select wire:model.live="statusFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">All statuses</option>
                 <option value="active">Active</option>
@@ -216,7 +220,7 @@ $deleteConfirmedProduct = function () {
                 ->paginate(10);
         @endphp
 
-        <x-table :headers="['Product', 'SKU', 'Barcode', 'Category', 'Unit', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions']">
+        <x-table data-tour="products-list" :headers="['Product', 'SKU', 'Barcode', 'Category', 'Unit', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions']">
             @forelse ($products as $product)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">
@@ -238,7 +242,7 @@ $deleteConfirmedProduct = function () {
                     <td class="px-4 py-3"><span class="{{ $product->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($product->status) }}</span></td>
                     <td class="px-4 py-3">
                         @if ($this->canManage())
-                            <div class="hs-dropdown relative inline-flex [--placement:bottom-end] [--strategy:fixed]">
+                            <div data-tour="product-actions" class="hs-dropdown relative inline-flex [--placement:bottom-end] [--strategy:fixed]">
                                 <button type="button" class="hs-dropdown-toggle rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
                                     Actions
                                 </button>

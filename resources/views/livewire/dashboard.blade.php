@@ -377,7 +377,7 @@ $recentTransactions = computed(function (): Collection {
 
 ?>
 
-<div class="max-w-full min-w-0 overflow-x-hidden space-y-6">
+<div data-tour="dashboard-overview" class="max-w-full min-w-0 overflow-x-hidden space-y-6">
     @php
         $currency = 'TZS';
         $formatMoney = fn ($value) => $currency.' '.number_format((float) $value, 2);
@@ -462,7 +462,7 @@ $recentTransactions = computed(function (): Collection {
         @endforeach
     </div>
 
-    <div wire:loading.remove.delay class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div wire:loading.remove.delay data-tour="dashboard-stats" class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach ($cards as $card)
             <x-card>
                 <div class="flex items-start justify-between gap-3">
@@ -477,7 +477,9 @@ $recentTransactions = computed(function (): Collection {
         @endforeach
     </div>
 
-    <div class="grid min-w-0 gap-6 xl:grid-cols-2">
+    <x-onboarding-checklist />
+
+    <div data-tour="dashboard-charts" class="grid min-w-0 gap-6 xl:grid-cols-2">
         <x-card title="Recent Announcements" description="Latest customer notices and read progress.">
             <div class="space-y-3">
                 @forelse ($recentAnnouncements as $announcement)

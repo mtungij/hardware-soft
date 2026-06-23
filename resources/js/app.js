@@ -73,6 +73,7 @@ window.buildMartChart = (canvas, config) => {
 };
 
 import './pwa-install';
+import './onboarding';
 
 const initializePreline = () => {
     window.HSStaticMethods?.autoInit();
