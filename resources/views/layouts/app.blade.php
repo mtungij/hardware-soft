@@ -235,13 +235,11 @@
                         </button>
 
                         <div class="min-w-0 flex-1">
-                            <div class="relative max-w-2xl">
-                                <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">&#8981;</span>
-                                <input class="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm outline-none ring-build-orange/20 placeholder:text-slate-400 focus:border-build-orange focus:ring-4 dark:border-slate-700 dark:bg-white/5 dark:text-white" placeholder="Search products, categories, suppliers, customers, users...">
-                            </div>
+                            <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ $companyName }}</p>
+                            <p class="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">Staff ERP workspace</p>
                         </div>
 
-                        <x-pwa-install-button class="hidden max-sm:!hidden rounded-lg bg-build-orange px-3 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/25" />
+                        <x-pwa-install-button class="hidden h-10 w-10 items-center justify-center rounded-lg bg-build-orange text-white shadow-lg shadow-orange-500/25 sm:inline-flex" />
                         <div class="hs-dropdown relative inline-flex">
                             <button type="button" class="hs-dropdown-toggle hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200 sm:inline-flex">
                                 {{ $currentStaffLocale === 'sw' ? '🇹🇿 Kiswahili' : '🇬🇧 English' }}
@@ -255,9 +253,14 @@
                                 @endforeach
                             </div>
                         </div>
-                        <button class="hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold transition hover:border-build-orange dark:border-slate-700 sm:inline-flex" @click="toggleTheme()" x-text="darkMode ? 'Light' : 'Dark'" aria-label="Toggle theme"></button>
-                        <button class="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-xs font-bold dark:border-slate-700" aria-label="Notifications">
-                            <span>Bell</span>
+                        <button class="hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold transition hover:border-build-orange dark:border-slate-700 sm:inline-flex" :class="darkMode ? 'bg-slate-900 text-white dark:bg-slate-800' : 'bg-white text-slate-700'" @click="toggleTheme()" aria-label="Toggle theme">
+                            <span x-text="darkMode ? 'Dark active' : 'Light active'"></span>
+                        </button>
+                        <button class="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" aria-label="Notifications">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                            </svg>
                             <span class="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-build-orange ring-2 ring-white dark:ring-navy-950"></span>
                         </button>
 
@@ -266,11 +269,15 @@
                                 <img class="h-8 w-8 rounded-lg object-cover" src="{{ $user?->profile_photo ? asset('storage/'.$user->profile_photo) : 'https://ui-avatars.com/api/?name='.urlencode($user?->name ?? 'Admin').'&background=0d2e50&color=fff' }}" alt="{{ $user?->name ?? 'User' }}">
                                 <span class="hidden text-sm font-bold sm:block">{{ $user?->name ?? 'User' }}</span>
                             </button>
-                            <div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-3 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-navy-900">
-                                <a class="block rounded-lg px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/5" href="{{ route('profile') }}" wire:navigate>Profile</a>
+                            <div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-navy-900">
+                                <div class="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
+                                    <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ $user?->name ?? 'User' }}</p>
+                                    <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ $user?->email ?? '' }}</p>
+                                </div>
+                                <a class="mt-2 block rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-white/5" href="{{ route('profile') }}" wire:navigate>Profile</a>
                                 <form method="POST" action="{{ route('logout') }}">
                                     @csrf
-                                    <button class="block w-full rounded-lg px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">Logout</button>
+                                    <button class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">Logout</button>
                                 </form>
                             </div>
                         </div>

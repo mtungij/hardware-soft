@@ -1,21 +1,22 @@
 @props([
-    'class' => 'hidden inline-flex items-center justify-center gap-2 rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 disabled:cursor-wait disabled:opacity-70',
+    'class' => 'hidden inline-flex h-10 w-10 items-center justify-center rounded-xl bg-build-orange text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 disabled:cursor-wait disabled:opacity-70',
 ])
 
 <div data-pwa-install-root>
     <button
         type="button"
         data-pwa-install-button
+        aria-label="{{ __('messages.install_app') }}"
+        title="{{ __('messages.install_app') }}"
         class="{{ $class }}"
     >
-        <img src="{{ asset('images/hardex.png') }}" alt="" class="h-5 w-5 rounded bg-white object-contain p-0.5">
-        <svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 3v12"></path>
-            <path d="m7 10 5 5 5-5"></path>
-            <path d="M5 21h14"></path>
+        <svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 4v10"></path>
+            <path d="m7 9 5 5 5-5"></path>
+            <path d="M5 20h14"></path>
         </svg>
-        <span data-pwa-install-label>{{ __('messages.install_app') }}</span>
-        <span class="hidden" data-pwa-install-loading>{{ __('messages.receipts.uploading') }}</span>
+        <span class="sr-only" data-pwa-install-label>{{ __('messages.install_app') }}</span>
+        <span class="sr-only hidden" data-pwa-install-loading>{{ __('messages.receipts.uploading') }}</span>
     </button>
 
     <div data-pwa-ios-modal aria-hidden="true" class="hidden fixed inset-0 z-[9998] bg-slate-950/60 p-4 backdrop-blur-sm">

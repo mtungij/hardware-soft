@@ -99,7 +99,7 @@
                             <p class="text-xs font-semibold text-slate-500">{{ __('messages.dashboard.description') }}</p>
                         </div>
                         <x-customer-language-switcher class="hidden md:block" />
-                        <x-pwa-install-button class="hidden rounded-xl bg-build-orange px-3 py-2 text-sm font-black text-white sm:inline-flex" />
+                        <x-pwa-install-button class="hidden h-10 w-10 items-center justify-center rounded-xl bg-build-orange text-white sm:inline-flex" />
                         <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = window.hardexTheme?.toggle() === 'dark'" x-text="darkMode ? @js(__('messages.theme.light')) : @js(__('messages.theme.dark'))"></button>
                         <div class="relative">
                             <button class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">

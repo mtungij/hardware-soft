@@ -68,7 +68,7 @@
                 <section class="flex min-h-screen items-center justify-center px-4 py-10">
                     <div class="w-full max-w-md">
                         <div class="mb-4 flex justify-end">
-                            <x-pwa-install-button class="mr-2 hidden rounded-lg bg-build-orange px-3 py-2 text-sm font-black text-white shadow-lg shadow-orange-500/25" />
+                            <x-pwa-install-button class="mr-2 hidden h-10 w-10 items-center justify-center rounded-lg bg-build-orange text-white shadow-lg shadow-orange-500/25" />
                             <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="toggleTheme()" x-text="darkMode ? 'Light' : 'Dark'"></button>
                         </div>
                         <div class="mb-6 text-center lg:hidden">
