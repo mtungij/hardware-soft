@@ -18,6 +18,7 @@ $maxWidth = [
 @endphp
 
 <div
+    wire:ignore.self
     x-data="{
         show: @js($show),
         matchesModal(detail) {
@@ -52,8 +53,8 @@ $maxWidth = [
     x-on:keydown.tab.prevent="$event.shiftKey || nextFocusable().focus()"
     x-on:keydown.shift.tab.prevent="prevFocusable().focus()"
     x-show="show"
-    class="hs-overlay fixed inset-0 z-[80] overflow-y-auto bg-slate-950/70 backdrop-blur-sm sm:px-4 sm:py-6"
-    style="display: {{ $show ? 'block' : 'none' }};"
+    class="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/75 p-0 backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:px-4 sm:py-6"
+    style="display: {{ $show ? 'flex' : 'none' }};"
 >
     <div
         x-show="show"
@@ -71,7 +72,7 @@ $maxWidth = [
 
     <div
         x-show="show"
-        class="flex min-h-full max-h-screen flex-col overflow-hidden bg-white shadow-2xl shadow-slate-950/20 transition-all dark:bg-slate-900 sm:mb-6 sm:min-h-0 sm:max-h-[calc(100vh-3rem)] sm:w-full {{ $maxWidth }} sm:rounded-xl sm:border sm:border-slate-200 sm:dark:border-slate-700 sm:mx-auto"
+        class="relative z-[101] flex min-h-full max-h-screen w-full flex-col overflow-hidden bg-white shadow-2xl shadow-slate-950/20 transition-all dark:bg-slate-900 sm:min-h-0 sm:max-h-[calc(100vh-3rem)] {{ $maxWidth }} sm:rounded-xl sm:border sm:border-slate-200 sm:dark:border-slate-700"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
         x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"

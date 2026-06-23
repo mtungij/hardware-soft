@@ -243,9 +243,9 @@ $deleteConfirmedProduct = function () {
                                     Actions
                                 </button>
                                 <div class="hs-dropdown-menu z-[90] mt-2 hidden min-w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
-                                    <button type="button" wire:click.stop.prevent="openEditProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">Edit</button>
-                                    <button type="button" wire:click.stop.prevent="toggleStatus({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">{{ $product->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
-                                    <button type="button" wire:click.stop.prevent="confirmDeleteProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">Delete</button>
+                                    <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="openEditProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">Edit</button>
+                                    <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="toggleStatus({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">{{ $product->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
+                                    <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="confirmDeleteProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">Delete</button>
                                 </div>
                             </div>
                         @else
