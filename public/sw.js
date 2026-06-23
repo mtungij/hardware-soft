@@ -1,9 +1,9 @@
-const CACHE_VERSION = 'hardex-pwa-v2';
+const CACHE_VERSION = 'hardex-customer-pwa-v3';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
 const APP_SHELL = [
-    '/offline.html',
+    '/offline',
     '/manifest.json',
     '/images/hardex.png',
     '/icons/icon-72x72.png',
@@ -15,6 +15,27 @@ const APP_SHELL = [
     '/icons/icon-384x384.png',
     '/icons/icon-512x512.png'
 ];
+
+const SENSITIVE_PATHS = [
+    '/api/',
+    '/customer/debts',
+    '/customer/deposits',
+    '/customer/receipts',
+    '/customer/statements',
+    '/customer/statement',
+    '/customer/profile',
+    '/customer/notifications',
+    '/livewire/'
+];
+
+const isSensitiveRequest = (url) => SENSITIVE_PATHS.some((path) => url.pathname.startsWith(path));
+const isCacheableAsset = (url) => (
+    url.pathname.startsWith('/build/')
+    || url.pathname.startsWith('/icons/')
+    || url.pathname.startsWith('/images/')
+    || url.pathname === '/manifest.json'
+    || url.pathname === '/offline'
+);
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
@@ -58,12 +79,16 @@ self.addEventListener('fetch', (event) => {
     if (request.mode === 'navigate') {
         event.respondWith(
             fetch(request)
-                .catch(() => caches.match(request).then((cached) => cached || caches.match('/offline.html')))
+                .catch(() => caches.match('/offline'))
         );
         return;
     }
 
-    if (url.pathname.startsWith('/build/') || url.pathname.startsWith('/icons/') || url.pathname.startsWith('/images/')) {
+    if (isSensitiveRequest(url)) {
+        return;
+    }
+
+    if (isCacheableAsset(url)) {
         event.respondWith(
             caches.match(request).then((cached) => {
                 const fetchPromise = fetch(request)

@@ -1,14 +1,14 @@
 {
-  "name": "Hardex",
+  "name": "Hardex Customer",
   "short_name": "Hardex",
-  "description": "Hardware Store Management System",
-  "theme_color": "#0F172A",
-  "background_color": "#FFFFFF",
+  "description": "Customer portal for checking debts, deposits, receipts, payments, and account statements.",
+  "theme_color": "#f97316",
+  "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",
-  "start_url": "/",
+  "start_url": "https://customer.buildcore.site/",
   "scope": "/",
-  "id": "/",
+  "id": "https://customer.buildcore.site/",
   "categories": ["business", "productivity", "finance"],
   "icons": [
     {

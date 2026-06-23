@@ -4,7 +4,7 @@ return [
     'language' => 'Lugha',
     'kiswahili' => 'Kiswahili',
     'english' => 'English',
-    'install_app' => 'Sakinisha App ya Hardex',
+    'install_app' => 'Sakinisha Hardex App',
     'customer_portal' => 'Tovuti ya Mteja',
     'hardex_customer_portal' => 'Hardex Customer Portal',
     'welcome_title' => 'Karibu kwenye Hardex Customer Portal',

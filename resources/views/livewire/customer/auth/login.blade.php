@@ -69,6 +69,9 @@ $login = function () {
                 <img src="{{ asset('images/hardex.png') }}" class="mx-auto h-16 w-16 rounded-2xl bg-white object-contain p-2 shadow-soft" alt="Hardex">
             </div>
             <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-800 dark:bg-slate-900 sm:p-8">
+                <div class="mb-4 flex justify-end">
+                    <x-pwa-install-button />
+                </div>
                 <h1 class="text-2xl font-black text-navy-900 dark:text-white">{{ __('messages.auth.login') }}</h1>
                 <p class="mt-1 text-sm font-semibold text-slate-500">{{ __('messages.auth.login_intro') }}</p>
 

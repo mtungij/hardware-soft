@@ -12,6 +12,8 @@ Route::get('/', fn () => auth('customer')->check()
     ? redirect()->route('customer.dashboard')
     : redirect()->route('customer.login'));
 
+Route::view('offline', 'offline')->name('offline');
+
 Route::post('customer/language/{locale}', function (Request $request, string $locale) {
     abort_unless(in_array($locale, ['sw', 'en'], true), 404);
 

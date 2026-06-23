@@ -57,7 +57,9 @@ $save = function () {
 ?>
 
 <div>
-    <x-page-header :title="__('messages.profile.title')" :description="__('messages.profile.description')" :breadcrumbs="[__('messages.customer_portal') => route('customer.dashboard'), __('messages.profile.title') => null]" />
+    <x-page-header :title="__('messages.profile.title')" :description="__('messages.profile.description')" :breadcrumbs="[__('messages.customer_portal') => route('customer.dashboard'), __('messages.profile.title') => null]">
+        <x-pwa-install-button />
+    </x-page-header>
     <x-card class="max-w-2xl">
         <form wire:submit="save" class="space-y-4">
             <x-form-input :label="__('messages.auth.full_name')" name="name" wire:model="name" required />
