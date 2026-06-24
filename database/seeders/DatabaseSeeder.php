@@ -18,15 +18,7 @@ class DatabaseSeeder extends Seeder
             SuperAdminSeeder::class,
             CategorySeeder::class,
             UnitSeeder::class,
-            SupplierSeeder::class,
-            CustomerSeeder::class,
-            ProductSeeder::class,
-            StockLocationSeeder::class,
-            PurchaseSeeder::class,
-            StockTransferSeeder::class,
-            SaleSeeder::class,
-            ExpenseCategorySeeder::class,
-            AccountingSeeder::class,
+           
         ]);
     }
 }
