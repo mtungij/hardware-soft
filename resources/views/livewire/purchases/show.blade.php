@@ -23,13 +23,13 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
     abort_unless($this->purchase->email_status === 'sent' ? $this->canResendEmail() : $this->canSendEmail(), 403);
 
     try {
-        $service->queue($this->purchase, auth()->id());
+        $service->send($this->purchase, auth()->id());
         $this->purchase = $this->purchase->refresh()->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product.unit', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
         session()->flash('success', 'Purchase Order email sent successfully.');
     } catch (ValidationException $exception) {
         session()->flash('error', $exception->validator->errors()->first());
     } catch (\Throwable $exception) {
-        session()->flash('error', 'Unable to send email. Please check SMTP settings.');
+        session()->flash('error', 'Unable to send email: '.$exception->getMessage());
     }
 };
 

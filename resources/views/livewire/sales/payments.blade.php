@@ -116,7 +116,7 @@ $receivePayment = function () {
                         <option value="mobile_money">Mobile Money</option>
                         <option value="bank">Bank</option>
                     </select>
-                    <x-form-input label="Amount" wire:model="amount" type="number" step="0.01" />
+                    <x-money-input label="Amount" name="amount" wire:model="amount" required />
                     <x-form-input label="Reference Number" wire:model="reference_number" />
                     <button class="w-full rounded-lg bg-build-orange px-4 py-3 text-sm font-black text-white">Receive Payment</button>
                 </form>

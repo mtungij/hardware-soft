@@ -51,7 +51,7 @@ $save = function () {
     <x-page-header :title="__('messages.deposits.upload')" :description="__('messages.deposits.upload_description')" :breadcrumbs="[__('messages.customer_portal') => route('customer.dashboard'), __('messages.deposits.title') => route('customer.deposits.index'), __('messages.actions.upload') => null]" />
     <x-card class="max-w-2xl">
         <form wire:submit="save" class="space-y-4">
-            <x-form-input :label="__('messages.deposits.amount')" name="amount" wire:model="amount" type="number" step="0.01" required />
+            <x-money-input :label="__('messages.deposits.amount')" name="amount" wire:model="amount" required />
             <label class="block text-sm font-bold">{{ __('messages.deposits.payment_method') }}
                 <select wire:model="payment_method" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                     <option value="mobile_money">{{ __('messages.methods.mobile_money') }}</option><option value="bank">{{ __('messages.methods.bank') }}</option><option value="cash_deposit">{{ __('messages.methods.cash_deposit') }}</option>

@@ -70,7 +70,7 @@ $save = function () {
             <x-form-input label="Phone" name="phone" wire:model="phone" required />
             <x-form-input label="Email" name="email" type="email" wire:model="email" />
             <x-form-input label="Region" name="region" wire:model="region" />
-            <x-form-input label="Opening Balance" name="opening_balance" type="number" step="0.01" wire:model="opening_balance" required />
+            <x-money-input label="Opening Balance" name="opening_balance" wire:model="opening_balance" required />
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Branch

@@ -305,9 +305,9 @@ $deleteConfirmedProduct = function () {
                     <x-form-input label="Brand" name="brand" wire:model="brand" />
                     <x-form-input label="Model / Size" name="model_size" wire:model="model_size" />
                     <x-form-input label="Product Image Path" name="image" wire:model="image" placeholder="products/item.jpg" />
-                    <x-form-input label="Buying Price" name="buying_price" type="number" step="0.01" wire:model="buying_price" required />
-                    <x-form-input label="Selling Price" name="selling_price" type="number" step="0.01" wire:model="selling_price" required />
-                    <x-form-input label="Wholesale Price" name="wholesale_price" type="number" step="0.01" wire:model="wholesale_price" />
+                    <x-money-input label="Buying Price" name="buying_price" wire:model="buying_price" required />
+                    <x-money-input label="Selling Price" name="selling_price" wire:model="selling_price" required />
+                    <x-money-input label="Wholesale Price" name="wholesale_price" wire:model="wholesale_price" />
                     <x-form-input label="Reorder Level" name="reorder_level" type="number" step="0.01" wire:model="reorder_level" required />
 
                     <x-form-select label="Status" name="status" wire:model="status" required>

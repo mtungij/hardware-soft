@@ -8,7 +8,6 @@ use App\Models\PurchaseEmailLog;
 use App\Services\PurchaseOrderEmailService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
 
@@ -31,7 +30,7 @@ class SendPurchaseOrderJob implements ShouldQueue
         $log = PurchaseEmailLog::findOrFail($this->logId);
         $settings = $service->settings();
 
-        $this->configureMailer($settings);
+        $service->configureMailer($settings);
 
         try {
             $recipient = $service->validateCanSend($purchase);
@@ -69,25 +68,4 @@ class SendPurchaseOrderJob implements ShouldQueue
         }
     }
 
-    private function configureMailer($settings): void
-    {
-        if (! $settings?->mail_host) {
-            return;
-        }
-
-        Config::set('mail.mailers.buildmart_smtp', [
-            'transport' => 'smtp',
-            'scheme' => $settings->mail_encryption === 'ssl' ? 'smtps' : 'smtp',
-            'url' => null,
-            'host' => $settings->mail_host,
-            'port' => $settings->mail_port ?: 587,
-            'username' => $settings->mail_username,
-            'password' => $settings->mail_password,
-            'timeout' => 30,
-            'local_domain' => parse_url((string) config('app.url'), PHP_URL_HOST),
-        ]);
-        Config::set('mail.from.address', $settings->mail_from_email ?: config('mail.from.address'));
-        Config::set('mail.from.name', $settings->mail_from_name ?: $settings->company_name);
-        Mail::forgetMailers();
-    }
 }

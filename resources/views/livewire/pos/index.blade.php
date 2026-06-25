@@ -178,9 +178,18 @@ $completeSale = function (InventoryService $inventory) {
                         </div>
                         <div class="mt-3 grid grid-cols-4 gap-2">
                             <input wire:model.live="cart.{{ $index }}.quantity" type="number" step="0.01" class="rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            <input wire:model.live="cart.{{ $index }}.unit_price" type="number" step="0.01" class="rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            <input wire:model.live="cart.{{ $index }}.discount_amount" type="number" step="0.01" class="rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            <input wire:model.live="cart.{{ $index }}.tax_amount" type="number" step="0.01" class="rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
+                            <span data-money-field class="block min-w-0">
+                                <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
+                                <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.unit_price">
+                            </span>
+                            <span data-money-field class="block min-w-0">
+                                <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
+                                <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.discount_amount">
+                            </span>
+                            <span data-money-field class="block min-w-0">
+                                <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
+                                <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.tax_amount">
+                            </span>
                         </div>
                         <p class="mt-2 text-right text-sm font-black">TZS {{ number_format((float) $item['quantity'] * (float) $item['unit_price'] - (float) $item['discount_amount'] + (float) $item['tax_amount'], 2) }}</p>
                     </div>
@@ -208,7 +217,10 @@ $completeSale = function (InventoryService $inventory) {
                                     <option value="credit">Credit</option>
                                 @endif
                             </select>
-                            <input wire:model.live="payments.{{ $index }}.amount" type="number" step="0.01" class="rounded-lg border border-slate-200 px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                            <span data-money-field class="block min-w-0">
+                                <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                                <input type="hidden" data-money-value wire:model.live="payments.{{ $index }}.amount">
+                            </span>
                             <button wire:click="removePayment({{ $index }})" type="button" class="rounded-lg border border-slate-200 px-2 text-xs font-bold dark:border-slate-700">X</button>
                         </div>
                     @endforeach

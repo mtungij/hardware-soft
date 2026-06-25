@@ -45,7 +45,7 @@ $totalAmount = function () {
     return collect($this->items)->sum(fn ($item) => (float) ($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0));
 };
 
-$savePurchase = function (string $status) {
+$savePurchase = function (string $status, bool $sendEmail = false) {
     $validated = $this->validate([
         'branch_id' => ['required', 'exists:branches,id'],
         'supplier_id' => ['required', 'exists:suppliers,id'],
@@ -67,7 +67,7 @@ $savePurchase = function (string $status) {
         throw ValidationException::withMessages(['paid_amount' => 'Paid amount cannot exceed total amount.']);
     }
 
-    DB::transaction(function () use ($validated, $status, $total) {
+    $purchase = DB::transaction(function () use ($validated, $status, $total) {
         $paid = (float) $validated['paid_amount'];
         $balance = max(0, $total - $paid);
 
@@ -103,9 +103,23 @@ $savePurchase = function (string $status) {
                 Product::whereKey($item['product_id'])->update(['selling_price' => $item['selling_price']]);
             }
         }
+
+        return $purchase->refresh();
     });
 
-    session()->flash('success', 'Purchase saved successfully.');
+    if ($sendEmail) {
+        try {
+            app(\App\Services\PurchaseOrderEmailService::class)->send($purchase, auth()->id());
+            session()->flash('success', 'Purchase saved and emailed successfully.');
+        } catch (ValidationException $exception) {
+            session()->flash('error', 'Purchase saved, but email was not sent: '.$exception->validator->errors()->first());
+        } catch (\Throwable $exception) {
+            session()->flash('error', 'Purchase saved, but email was not sent: '.$exception->getMessage());
+        }
+    } else {
+        session()->flash('success', 'Purchase saved successfully.');
+    }
+
     $this->redirectRoute('purchases.index', navigate: true);
 };
 
@@ -136,17 +150,22 @@ $savePurchase = function (string $status) {
                 <x-form-input label="Purchase Date" name="purchase_date" type="date" wire:model="purchase_date" required />
                 <x-form-input label="Invoice Number" name="invoice_number" wire:model="invoice_number" />
                 <x-form-input label="Reference Number" name="reference_number" wire:model="reference_number" required />
-                <x-form-input label="Paid Amount" name="paid_amount" type="number" step="0.01" wire:model.live="paid_amount" required />
+                <x-money-input label="Paid Amount" name="paid_amount" wire:model.live="paid_amount" required />
             </div>
 
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Qty</th><th>Cost</th><th>Selling Price Update</th><th>Line Total</th><th></th></tr></thead>
+                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Qty</th><th>Cost</th><th>Current Selling</th><th>Selling Price Update</th><th>Line Total</th><th></th></tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach ($items as $index => $item)
+                            @php
+                                $selectedProduct = filled($item['product_id'] ?? null)
+                                    ? Product::query()->find($item['product_id'])
+                                    : null;
+                            @endphp
                             <tr>
                                 <td class="px-3 py-3">
-                                    <select wire:model="items.{{ $index }}.product_id" class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                    <select wire:model.live="items.{{ $index }}.product_id" class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                         <option value="">Select product</option>
                                         @foreach (Product::where('status', 'active')->orderBy('name')->get() as $product)
                                             <option value="{{ $product->id }}">{{ $product->name }} / {{ $product->sku }}</option>
@@ -155,8 +174,21 @@ $savePurchase = function (string $status) {
                                     @error("items.{$index}.product_id") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
                                 <td class="px-3 py-3"><input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="0.01" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
-                                <td class="px-3 py-3"><input wire:model.live="items.{{ $index }}.cost_price" type="number" step="0.01" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
-                                <td class="px-3 py-3"><input wire:model="items.{{ $index }}.selling_price" type="number" step="0.01" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
+                                <td class="px-3 py-3">
+                                    <span data-money-field class="block w-36">
+                                        <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                        <input type="hidden" data-money-value wire:model.live="items.{{ $index }}.cost_price">
+                                    </span>
+                                </td>
+                                <td class="px-3 py-3 font-semibold text-slate-700 dark:text-slate-200">
+                                    {{ $selectedProduct ? 'TZS '.number_format((float) $selectedProduct->selling_price, 2) : '-' }}
+                                </td>
+                                <td class="px-3 py-3">
+                                    <span data-money-field class="block w-36">
+                                        <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950" placeholder="{{ $selectedProduct ? number_format((float) $selectedProduct->selling_price, 2) : '' }}">
+                                        <input type="hidden" data-money-value wire:model="items.{{ $index }}.selling_price">
+                                    </span>
+                                </td>
                                 <td class="px-3 py-3 font-black">TZS {{ number_format((float) ($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0), 2) }}</td>
                                 <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
                             </tr>
@@ -181,6 +213,7 @@ $savePurchase = function (string $status) {
             <div class="flex flex-wrap gap-2">
                 <button type="button" wire:click="savePurchase('draft')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Save as Draft</button>
                 <button type="button" wire:click="savePurchase('ordered')" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save as Ordered</button>
+                <button type="button" wire:click="savePurchase('ordered', true)" class="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-black text-build-orange dark:border-orange-500/30 dark:bg-orange-500/10">Save & Send PO</button>
                 <a href="{{ route('purchases.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
             </div>
         </form>

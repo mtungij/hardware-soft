@@ -75,9 +75,89 @@ window.buildMartChart = (canvas, config) => {
 import './pwa-install';
 import './onboarding';
 
+const moneyFormatter = new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+});
+
+const normalizeMoneyValue = (value) => {
+    const cleaned = String(value || '').replace(/[^\d.]/g, '');
+    const parts = cleaned.split('.');
+    const whole = parts.shift() || '';
+    const decimal = parts.join('').slice(0, 2);
+
+    if (!whole && !decimal) {
+        return '';
+    }
+
+    return decimal ? `${whole || '0'}.${decimal}` : whole;
+};
+
+const formatMoneyValue = (value) => {
+    const normalized = normalizeMoneyValue(value);
+
+    if (!normalized) {
+        return '';
+    }
+
+    const [whole, decimal] = normalized.split('.');
+    const formatted = moneyFormatter.format(Number(whole || 0));
+
+    return decimal !== undefined ? `${formatted}.${decimal}` : formatted;
+};
+
+const initializeMoneyInputs = () => {
+    document.querySelectorAll('[data-money-field]').forEach((field) => {
+        if (field.dataset.moneyInitialized === '1') {
+            const display = field.querySelector('[data-money-display]');
+            const value = field.querySelector('[data-money-value]');
+
+            if (display && value && document.activeElement !== display) {
+                display.value = formatMoneyValue(value.value);
+            }
+
+            return;
+        }
+
+        const display = field.querySelector('[data-money-display]');
+        const value = field.querySelector('[data-money-value]');
+
+        if (!display || !value) {
+            return;
+        }
+
+        const syncDisplay = () => {
+            display.value = formatMoneyValue(value.value);
+        };
+
+        display.addEventListener('input', () => {
+            const normalized = normalizeMoneyValue(display.value);
+            display.value = formatMoneyValue(normalized);
+            value.value = normalized;
+            value.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+
+        display.addEventListener('focus', syncDisplay);
+        display.addEventListener('blur', syncDisplay);
+
+        const observer = new MutationObserver(syncDisplay);
+        observer.observe(value, { attributes: true, attributeFilter: ['value'] });
+
+        field.dataset.moneyInitialized = '1';
+        syncDisplay();
+    });
+};
+
 const initializePreline = () => {
     window.HSStaticMethods?.autoInit();
 };
 
 document.addEventListener('DOMContentLoaded', initializePreline);
 document.addEventListener('livewire:navigated', initializePreline);
+document.addEventListener('DOMContentLoaded', initializeMoneyInputs);
+document.addEventListener('livewire:navigated', initializeMoneyInputs);
+document.addEventListener('livewire:init', () => {
+    initializeMoneyInputs();
+    Livewire.hook('morph.updated', initializeMoneyInputs);
+});
+document.addEventListener('livewire:initialized', initializeMoneyInputs);

@@ -64,7 +64,7 @@ $closeSession = function (CashbookService $cashbook) {
             @else
                 @can('manage cashbook')
                     <form wire:submit="closeSession" class="space-y-4">
-                        <x-form-input label="Actual Cash" name="actual_cash" wire:model="actual_cash" type="number" step="0.01" required />
+                        <x-money-input label="Actual Cash" name="actual_cash" wire:model="actual_cash" required />
                         <label class="block text-sm font-bold">Notes<textarea wire:model="notes" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea></label>
                         <button class="w-full rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Close Cashbook</button>
                     </form>

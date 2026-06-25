@@ -75,7 +75,7 @@ $save = function () {
                     @endforeach
                 </select>
             </label>
-            <x-form-input :label="__('messages.receipts.amount')" name="amount" wire:model="amount" type="number" step="0.01" required />
+            <x-money-input :label="__('messages.receipts.amount')" name="amount" wire:model="amount" required />
             <label class="block text-sm font-bold">{{ __('messages.receipts.payment_method') }}
                 <select wire:model="payment_method" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                     <option value="mobile_money">{{ __('messages.methods.mobile_money') }}</option><option value="bank">{{ __('messages.methods.bank') }}</option><option value="cash_deposit">{{ __('messages.methods.cash_deposit') }}</option>

@@ -51,7 +51,7 @@ $save = function (AccountingService $accounting) {
             <label class="block text-sm font-bold">Branch
                 <select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
             </label>
-            <x-form-input label="Amount" name="amount" wire:model="amount" type="number" step="0.01" required />
+            <x-money-input label="Amount" name="amount" wire:model="amount" required />
             <label class="block text-sm font-bold">Payment Method<select wire:model="payment_method" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="cash">Cash</option><option value="mobile_money">Mobile Money</option><option value="bank">Bank</option></select></label>
             <x-form-input label="Reference Number" name="reference_number" wire:model="reference_number" />
             <x-form-input label="Payment Date" name="payment_date" wire:model="payment_date" type="date" required />

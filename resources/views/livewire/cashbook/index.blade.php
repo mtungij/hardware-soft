@@ -51,7 +51,7 @@ $openSession = function (CashbookService $cashbook) {
                 <form wire:submit="openSession" class="space-y-4">
                     <label class="block text-sm font-bold">Branch<select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
                     <x-form-input label="Session Date" name="session_date" wire:model="session_date" type="date" required />
-                    <x-form-input label="Opening Cash" name="opening_cash" wire:model="opening_cash" type="number" step="0.01" required />
+                    <x-money-input label="Opening Cash" name="opening_cash" wire:model="opening_cash" required />
                     <button class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Open Session</button>
                 </form>
             </x-card>

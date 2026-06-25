@@ -50,15 +50,15 @@ $applyConfig = function () {
         'transport' => 'smtp',
         'scheme' => $this->mail_encryption === 'ssl' ? 'smtps' : 'smtp',
         'url' => null,
-        'host' => $this->mail_host,
+        'host' => trim((string) $this->mail_host),
         'port' => (int) $this->mail_port,
-        'username' => $this->mail_username ?: null,
-        'password' => $this->mail_password ?: Setting::first()?->mail_password,
+        'username' => filled($this->mail_username) ? trim((string) $this->mail_username) : null,
+        'password' => filled($this->mail_password) ? trim((string) $this->mail_password) : Setting::first()?->mail_password,
         'timeout' => 30,
         'local_domain' => parse_url((string) config('app.url'), PHP_URL_HOST),
     ]);
-    Config::set('mail.from.address', $this->mail_from_email);
-    Config::set('mail.from.name', $this->mail_from_name);
+    Config::set('mail.from.address', trim((string) $this->mail_from_email));
+    Config::set('mail.from.name', trim((string) $this->mail_from_name));
     Mail::forgetMailers();
 };
 
@@ -68,16 +68,16 @@ $save = function () {
     $settings = Setting::firstOrFail();
 
     $settings->fill([
-        'mail_host' => $data['mail_host'],
+        'mail_host' => trim((string) $data['mail_host']),
         'mail_port' => $data['mail_port'],
-        'mail_username' => $data['mail_username'],
+        'mail_username' => filled($data['mail_username']) ? trim((string) $data['mail_username']) : null,
         'mail_encryption' => $data['mail_encryption'],
-        'mail_from_email' => $data['mail_from_email'],
-        'mail_from_name' => $data['mail_from_name'],
+        'mail_from_email' => trim((string) $data['mail_from_email']),
+        'mail_from_name' => trim((string) $data['mail_from_name']),
     ]);
 
     if (filled($data['mail_password'])) {
-        $settings->mail_password = $data['mail_password'];
+        $settings->mail_password = trim((string) $data['mail_password']);
     }
 
     $settings->save();

@@ -19,17 +19,22 @@
             <x-form-input label="Purchase Date" name="purchase_date" type="date" wire:model="purchase_date" required />
             <x-form-input label="Invoice Number" name="invoice_number" wire:model="invoice_number" />
             <x-form-input label="Reference Number" name="reference_number" wire:model="reference_number" required />
-            <x-form-input label="Paid Amount" name="paid_amount" type="number" step="0.01" wire:model.live="paid_amount" required />
+            <x-money-input label="Paid Amount" name="paid_amount" wire:model.live="paid_amount" required />
         </div>
 
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Qty</th><th>Cost</th><th>Selling Price Update</th><th>Line Total</th><th></th></tr></thead>
+                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Qty</th><th>Cost</th><th>Current Selling</th><th>Selling Price Update</th><th>Line Total</th><th></th></tr></thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                     @foreach ($items as $index => $item)
+                        @php
+                            $selectedProduct = filled($item['product_id'] ?? null)
+                                ? \App\Models\Product::query()->find($item['product_id'])
+                                : null;
+                        @endphp
                         <tr>
                             <td class="px-3 py-3">
-                                <select wire:model="items.{{ $index }}.product_id" class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                <select wire:model.live="items.{{ $index }}.product_id" class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                     <option value="">Select product</option>
                                     @foreach (\App\Models\Product::where('status', 'active')->orderBy('name')->get() as $product)
                                         <option value="{{ $product->id }}">{{ $product->name }} / {{ $product->sku }}</option>
@@ -37,8 +42,21 @@
                                 </select>
                             </td>
                             <td class="px-3 py-3"><input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="0.01" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
-                            <td class="px-3 py-3"><input wire:model.live="items.{{ $index }}.cost_price" type="number" step="0.01" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
-                            <td class="px-3 py-3"><input wire:model="items.{{ $index }}.selling_price" type="number" step="0.01" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
+                            <td class="px-3 py-3">
+                                <span data-money-field class="block w-36">
+                                    <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                    <input type="hidden" data-money-value wire:model.live="items.{{ $index }}.cost_price">
+                                </span>
+                            </td>
+                            <td class="px-3 py-3 font-semibold text-slate-700 dark:text-slate-200">
+                                {{ $selectedProduct ? 'TZS '.number_format((float) $selectedProduct->selling_price, 2) : '-' }}
+                            </td>
+                            <td class="px-3 py-3">
+                                <span data-money-field class="block w-36">
+                                    <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950" placeholder="{{ $selectedProduct ? number_format((float) $selectedProduct->selling_price, 2) : '' }}">
+                                    <input type="hidden" data-money-value wire:model="items.{{ $index }}.selling_price">
+                                </span>
+                            </td>
                             <td class="px-3 py-3 font-black">TZS {{ number_format((float) ($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0), 2) }}</td>
                             <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
                         </tr>
