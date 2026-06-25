@@ -9,18 +9,21 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['purchase' => null, 'received_date' => '', 'notes' => '', 'receivedQuantities' => []]);
+state(['purchase' => null, 'purchase_id' => null, 'received_date' => '', 'notes' => '', 'receivedQuantities' => []]);
 
 mount(function (Purchase $purchase) {
     abort_if($purchase->status === 'cancelled' || $purchase->status === 'received', 403);
 
     $this->purchase = $purchase->load(['supplier', 'branch', 'items.product.unit']);
+    $this->purchase_id = $purchase->id;
     $this->received_date = now()->toDateString();
     $this->receivedQuantities = $this->purchase->items->mapWithKeys(fn ($item) => [$item->id => 0])->all();
 });
 
 $receiveAll = function () {
-    foreach ($this->purchase->items as $item) {
+    $purchase = Purchase::query()->with('items')->findOrFail($this->purchase_id);
+
+    foreach ($purchase->items as $item) {
         $this->receivedQuantities[$item->id] = $item->remainingQuantity();
     }
 };
@@ -33,10 +36,12 @@ $submitReceiving = function (InventoryService $inventory) {
         'receivedQuantities.*' => ['nullable', 'numeric', 'min:0'],
     ]);
 
-    $inventory->receivePurchase($this->purchase, $this->receivedQuantities, $this->received_date, auth()->id(), $this->notes);
+    $purchase = Purchase::query()->findOrFail($this->purchase_id);
+
+    $inventory->receivePurchase($purchase, $this->receivedQuantities, $this->received_date, auth()->id(), $this->notes);
 
     session()->flash('success', 'Purchase received into Main Store.');
-    $this->redirectRoute('purchases.show', $this->purchase, navigate: true);
+    $this->redirectRoute('purchases.show', ['purchase' => $purchase->id], navigate: true);
 };
 
 ?>
@@ -72,7 +77,7 @@ $submitReceiving = function (InventoryService $inventory) {
 
             <div class="flex gap-2">
                 <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Submit Receiving</button>
-                <a href="{{ route('purchases.show', $purchase) }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
+                <a href="{{ route('purchases.show', $purchase->id) }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
             </div>
         </form>
     </x-card>

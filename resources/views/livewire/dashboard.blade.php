@@ -326,7 +326,7 @@ $recentTransactions = computed(function (): Collection {
         'status' => $sale->status,
         'date' => $sale->created_at,
         'route' => route('sales.show', $sale),
-    ]);
+    ])->toBase();
 
     $purchases = Purchase::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Purchase $purchase) => [
         'type' => 'Purchase',
@@ -335,7 +335,7 @@ $recentTransactions = computed(function (): Collection {
         'status' => $purchase->status,
         'date' => $purchase->created_at,
         'route' => route('purchases.show', $purchase),
-    ]);
+    ])->toBase();
 
     $transfers = StockTransfer::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (StockTransfer $transfer) => [
         'type' => 'Transfer',
@@ -344,7 +344,7 @@ $recentTransactions = computed(function (): Collection {
         'status' => $transfer->status,
         'date' => $transfer->created_at,
         'route' => route('stock-transfers.show', $transfer),
-    ]);
+    ])->toBase();
 
     $expenses = Expense::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Expense $expense) => [
         'type' => 'Expense',
@@ -353,7 +353,7 @@ $recentTransactions = computed(function (): Collection {
         'status' => $expense->payment_method,
         'date' => $expense->created_at,
         'route' => route('expenses.index'),
-    ]);
+    ])->toBase();
 
     $customerPayments = CustomerPayment::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (CustomerPayment $payment) => [
         'type' => 'Customer Payment',
@@ -362,7 +362,7 @@ $recentTransactions = computed(function (): Collection {
         'status' => $payment->payment_method,
         'date' => $payment->created_at,
         'route' => route('customer-balances.show', $payment->customer_id),
-    ]);
+    ])->toBase();
 
     return $sales
         ->merge($purchases)
