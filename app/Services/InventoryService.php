@@ -19,20 +19,32 @@ class InventoryService
 {
     public function getMainStoreLocation(int $branchId): StockLocation
     {
-        return StockLocation::query()
-            ->where('branch_id', $branchId)
-            ->where('type', 'store')
-            ->where('code', 'MAIN-STORE')
-            ->firstOrFail();
+        return StockLocation::query()->firstOrCreate(
+            [
+                'branch_id' => $branchId,
+                'type' => 'store',
+                'code' => 'MAIN-STORE',
+            ],
+            [
+                'name' => 'Main Store',
+                'status' => 'active',
+            ]
+        );
     }
 
     public function getDispensingLocation(int $branchId): StockLocation
     {
-        return StockLocation::query()
-            ->where('branch_id', $branchId)
-            ->where('type', 'dispensing')
-            ->where('code', 'DISPENSING')
-            ->firstOrFail();
+        return StockLocation::query()->firstOrCreate(
+            [
+                'branch_id' => $branchId,
+                'type' => 'dispensing',
+                'code' => 'DISPENSING',
+            ],
+            [
+                'name' => 'Dispensing Area',
+                'status' => 'active',
+            ]
+        );
     }
 
     public function getProductStock(int $productId, int $stockLocationId, int $branchId): float

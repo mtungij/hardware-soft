@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             SettingSeeder::class,
             SuperAdminSeeder::class,
+            StockLocationSeeder::class,
             CategorySeeder::class,
             UnitSeeder::class,
            

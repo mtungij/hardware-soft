@@ -3,6 +3,7 @@
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Setting;
+use App\Models\StockLocation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules\Password;
@@ -156,6 +157,30 @@ $complete = function () {
                 'manager_name' => $data['branch_manager_name'] ?: $data['admin_name'],
                 'status' => $data['branch_status'],
                 'is_default' => (bool) $data['branch_is_default'],
+            ]
+        );
+
+        StockLocation::query()->firstOrCreate(
+            [
+                'branch_id' => $branch->id,
+                'code' => 'MAIN-STORE',
+                'type' => 'store',
+            ],
+            [
+                'name' => 'Main Store',
+                'status' => 'active',
+            ]
+        );
+
+        StockLocation::query()->firstOrCreate(
+            [
+                'branch_id' => $branch->id,
+                'code' => 'DISPENSING',
+                'type' => 'dispensing',
+            ],
+            [
+                'name' => 'Dispensing Area',
+                'status' => 'active',
             ]
         );
 
