@@ -5,7 +5,7 @@
 ])
 
 <label class="erp-label" for="{{ $name }}">
-    {{ $label }} @if ($attributes->has('required')) <span class="text-red-500">*</span> @endif
+    {{ \App\Support\UiText::translate($label) }} @if ($attributes->has('required')) <span class="text-red-500">*</span> @endif
     <textarea
         id="{{ $name }}"
         rows="{{ $rows }}"

@@ -45,7 +45,7 @@ $login = function () {
 
     Session::regenerate();
 
-    session()->flash('success', 'Welcome back to Hardex.');
+    session()->flash('success', __('messages.staff.login.success'));
 
     $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
 };
@@ -57,13 +57,7 @@ $login = function () {
     x-data="{
         showPassword: false,
         tipIndex: 0,
-        tips: [
-            'Monitor stock levels in real time.',
-            'Transfer stock between Store and Dispensing Area.',
-            'Track customer balances and supplier debts.',
-            'Generate professional business reports instantly.',
-            'Manage multiple hardware branches from one system.'
-        ],
+        tips: @js(__('messages.staff.login.tips')),
         darkMode: window.hardexTheme?.get() === 'dark',
         toggleTheme() {
             this.darkMode = window.hardexTheme?.toggle() === 'dark';
@@ -81,20 +75,20 @@ $login = function () {
                     </div>
                     <div>
                         <h1 class="text-2xl font-black tracking-tight">Hardex Hardware ERP</h1>
-                        <p class="text-sm font-semibold text-slate-300">Smart Hardware Store Management Solution</p>
+                        <p class="text-sm font-semibold text-slate-300">{{ __('messages.staff.login.tagline') }}</p>
                     </div>
                 </div>
 
                 <div class="mt-12 max-w-2xl">
-                    <p class="text-sm font-black uppercase tracking-wide text-orange-300">Premium hardware business workspace</p>
-                    <h2 class="mt-4 text-4xl font-black leading-tight xl:text-5xl">Manage inventory, POS, warehouse, and accounts from one clean system.</h2>
+                    <p class="text-sm font-black uppercase tracking-wide text-orange-300">{{ __('messages.staff.login.eyebrow') }}</p>
+                    <h2 class="mt-4 text-4xl font-black leading-tight xl:text-5xl">{{ __('messages.staff.login.headline') }}</h2>
                     <p class="mt-5 max-w-xl text-base leading-7 text-slate-300">
-                        Run products, purchases, suppliers, customers, inventory, warehouse, stock transfers, POS sales, expenses, and reports with a fast modern ERP interface.
+                        {{ __('messages.staff.login.description') }}
                     </p>
                 </div>
 
                 <div class="mt-10 grid gap-3 sm:grid-cols-2">
-                    @foreach (['Inventory Management', 'Purchase Management', 'Warehouse Control', 'POS Sales', 'Customer Management', 'Supplier Management', 'Financial Reports', 'Multi-Branch Support'] as $feature)
+                    @foreach (__('messages.staff.login.features') as $feature)
                         <div class="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur">
                             <span class="text-build-orange">✓</span>
                             <span class="ml-2 text-sm font-bold">{{ $feature }}</span>
@@ -104,7 +98,7 @@ $login = function () {
             </div>
 
             <div class="relative rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                <p class="text-xs font-black uppercase tracking-wide text-slate-400">System Tips</p>
+                <p class="text-xs font-black uppercase tracking-wide text-slate-400">{{ __('messages.staff.login.tips_label') }}</p>
                 <p class="mt-2 text-lg font-bold" x-text="tips[tipIndex]" x-transition></p>
             </div>
         </section>
@@ -118,13 +112,10 @@ $login = function () {
                         </div>
                         <div>
                             <p class="font-black text-navy-900 dark:text-white">Hardex</p>
-                            <p class="text-xs font-semibold text-slate-500">Hardware ERP</p>
+                            <p class="text-xs font-semibold text-slate-500">{{ __('messages.staff.login.mobile_subtitle') }}</p>
                         </div>
                     </div>
-                    <div class="ml-auto flex items-center gap-2">
-                        <x-pwa-install-button class="hidden rounded-lg bg-build-orange px-3 py-2 text-xs font-black text-white shadow-lg shadow-orange-500/25" />
-                        <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700" @click="toggleTheme()" x-text="darkMode ? 'Light' : 'Dark'"></button>
-                    </div>
+                  
                 </div>
 
                 <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-800 dark:bg-slate-900 sm:p-8">
@@ -137,22 +128,22 @@ $login = function () {
                     @endif
 
                     <div>
-                        <h2 class="text-2xl font-black text-navy-900 dark:text-white">Welcome Back</h2>
-                        <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Sign in to continue using Hardex</p>
+                        <h2 class="text-2xl font-black text-navy-900 dark:text-white">{{ __('messages.staff.login.welcome') }}</h2>
+                        <p class="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">{{ __('messages.staff.login.intro') }}</p>
                     </div>
 
                     <form wire:submit="login" class="mt-6 space-y-4">
                         <label class="block text-sm font-bold text-slate-700 dark:text-slate-200" for="email">
-                            Email Address
+                            {{ __('messages.staff.login.email') }}
                             <input wire:model="form.email" id="email" type="email" required autofocus autocomplete="username" class="mt-1 block min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none ring-build-orange/20 transition focus:border-build-orange focus:ring-4 dark:border-slate-700 dark:bg-slate-950 dark:text-white">
                             <x-input-error :messages="$errors->get('form.email')" class="mt-2" />
                         </label>
 
                         <label class="block text-sm font-bold text-slate-700 dark:text-slate-200" for="password">
-                            Password
+                            {{ __('messages.staff.login.password') }}
                             <div class="relative mt-1">
                                 <input wire:model="form.password" id="password" :type="showPassword ? 'text' : 'password'" required autocomplete="current-password" class="block min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 pr-20 text-sm outline-none ring-build-orange/20 transition focus:border-build-orange focus:ring-4 dark:border-slate-700 dark:bg-slate-950 dark:text-white">
-                                <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-black text-build-orange" @click="showPassword = !showPassword" x-text="showPassword ? 'Hide' : 'Show'" aria-label="Show or hide password"></button>
+                                <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs font-black text-build-orange" @click="showPassword = !showPassword" x-text="showPassword ? @js(__('messages.staff.login.hide_password')) : @js(__('messages.staff.login.show_password'))" aria-label="{{ __('messages.staff.login.password_toggle') }}"></button>
                             </div>
                             <x-input-error :messages="$errors->get('form.password')" class="mt-2" />
                         </label>
@@ -160,20 +151,20 @@ $login = function () {
                         <div class="flex items-center justify-between gap-3">
                             <label class="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                                 <input wire:model="form.remember" type="checkbox" class="rounded border-slate-300 text-build-orange focus:ring-build-orange dark:border-slate-700 dark:bg-slate-950">
-                                Remember Me
+                                {{ __('messages.staff.login.remember_me') }}
                             </label>
-                            <a href="{{ route('password.request') }}" wire:navigate class="text-sm font-bold text-build-orange">Forgot Password?</a>
+                            <a href="{{ route('password.request') }}" wire:navigate class="text-sm font-bold text-build-orange">{{ __('messages.staff.login.forgot_password') }}</a>
                         </div>
 
                         <button class="flex min-h-11 w-full items-center justify-center rounded-xl bg-build-orange px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/25" wire:loading.attr="disabled">
-                            <span wire:loading.remove>Login</span>
-                            <span wire:loading>Signing in...</span>
+                            <span wire:loading.remove>{{ __('messages.staff.login.login_button') }}</span>
+                            <span wire:loading>{{ __('messages.staff.login.signing_in') }}</span>
                         </button>
                     </form>
 
                     <div class="my-6 flex items-center gap-3">
                         <div class="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
-                        <span class="text-xs font-black text-slate-400">OR</span>
+                        <span class="text-xs font-black text-slate-400">{{ __('messages.staff.login.or') }}</span>
                         <div class="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
                     </div>
 
@@ -184,29 +175,29 @@ $login = function () {
 
                     <a href="{{ route('setup') }}" wire:navigate class="mt-4 flex min-h-11 w-full items-center justify-center rounded-xl border border-build-orange/40 bg-orange-50 px-4 py-3 text-sm font-black text-navy-900 transition hover:border-build-orange hover:bg-orange-100 dark:border-orange-400/30 dark:bg-orange-500/10 dark:text-white dark:hover:bg-orange-500/15">
                         <span class="mr-2 grid h-6 w-6 place-items-center rounded-lg bg-build-orange text-white">+</span>
-                        Create Account
+                        {{ __('messages.staff.login.create_account') }}
                     </a>
                     <p class="mt-2 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-                        Open the setup wizard for company, owner, and first branch.
+                        {{ __('messages.staff.login.setup_help') }}
                     </p>
 
                     <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                        <p class="text-sm font-black text-navy-900 dark:text-white">Need Help?</p>
+                        <p class="text-sm font-black text-navy-900 dark:text-white">{{ __('messages.staff.login.need_help') }}</p>
                         <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div class="text-sm text-slate-500 dark:text-slate-400">
-                                <p class="font-bold text-slate-700 dark:text-slate-200">WhatsApp Support</p>
+                                <p class="font-bold text-slate-700 dark:text-slate-200">{{ __('messages.staff.login.whatsapp_support') }}</p>
                                 <p>{{ $this->supportWhatsapp() }}</p>
                             </div>
                             <a href="{{ $this->supportWhatsappLink() }}" target="_blank" rel="noopener" class="inline-flex items-center justify-center gap-2 rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">
                                 <span aria-hidden="true">☏</span>
-                                Contact Us
+                                {{ __('messages.staff.login.contact_us') }}
                             </a>
                         </div>
                     </div>
                 </div>
 
                 <footer class="mt-6 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    © {{ now()->year }} Hardex Hardware ERP · Powered by Hardex · Version 1.0
+                    © {{ now()->year }} Hardex Hardware ERP · {{ __('messages.staff.login.footer') }} · {{ __('messages.staff.login.version') }}
                 </footer>
             </div>
         </section>

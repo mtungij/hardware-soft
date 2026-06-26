@@ -18,7 +18,7 @@
 <article {{ $attributes->merge(['class' => 'erp-surface erp-surface-hover p-5']) }}>
     <div class="flex items-start justify-between gap-4">
         <div>
-            <p class="text-sm font-medium text-slate-400">{{ $label }}</p>
+            <p class="text-sm font-medium text-slate-400">{{ \App\Support\UiText::translate($label) }}</p>
             <p class="mt-2 text-2xl font-bold text-slate-900 dark:text-white">{{ $value }}</p>
         </div>
         <div class="grid h-10 w-10 place-items-center rounded-lg {{ $tones[$tone] ?? $tones['info'] }}">

@@ -54,7 +54,7 @@ $addProduct = function (int $productId) {
     $available = $this->availableQuantity($productId);
 
     if ($available <= 0) {
-        $this->addError('cart', 'Product is out of stock in selected source.');
+        $this->addError('cart', \App\Support\UiText::translate('Product is out of stock in selected source.'));
         return;
     }
 
@@ -127,30 +127,34 @@ $completeSale = function (InventoryService $inventory) {
 
     $location = StockLocation::findOrFail($this->stock_location_id);
     if ($location->type === 'store' && ! $this->canSellFromStore()) {
-        throw ValidationException::withMessages(['stock_location_id' => 'You are not authorized to sell from Main Store.']);
+        throw ValidationException::withMessages(['stock_location_id' => \App\Support\UiText::translate('You are not authorized to sell from Main Store.')]);
     }
 
     if (collect($this->payments)->contains(fn ($payment) => $payment['payment_method'] === 'credit') && ! $this->canCreditSale()) {
-        throw ValidationException::withMessages(['payments' => 'You are not authorized to create credit sales.']);
+        throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('You are not authorized to create credit sales.')]);
     }
 
     $sale = $inventory->completeSale($this->cart, $this->payments, $this->customer_id ? (int) $this->customer_id : null, (int) $this->stock_location_id, (int) $this->branch_id, auth()->id(), $this->notes);
 
-    session()->flash('success', 'Sale completed successfully.');
+    session()->flash('success', \App\Support\UiText::translate('Sale completed successfully.'));
     $this->redirectRoute('sales.receipt', $sale, navigate: true);
 };
 
 ?>
 
 <div>
+    @php
+        $t = fn ($value) => \App\Support\UiText::translate($value);
+    @endphp
+
     <x-page-header title="POS Sales" description="Sell from Dispensing Area by default, or Main Store when authorized." :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
 
     <div class="grid gap-6 xl:grid-cols-[1fr_440px]">
         <div class="space-y-5">
             <x-card>
                 <div class="grid gap-3 md:grid-cols-3">
-                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search products...">
-                    <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Barcode input">
+                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}">
+                    <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Barcode input') }}">
                     <select wire:model.live="stock_location_id" class="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-navy-950">
                         @foreach (StockLocation::where('status', 'active')->whereIn('type', $this->canSellFromStore() ? ['store', 'dispensing'] : ['dispensing'])->orderBy('type')->get() as $location)
                             <option value="{{ $location->id }}">{{ $location->name }}</option>
@@ -174,7 +178,7 @@ $completeSale = function (InventoryService $inventory) {
                         <img class="h-24 w-full rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
                         <p class="mt-3 font-black">{{ $product->name }}</p>
                         <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $product->unit?->short_name }}</p>
-                        <div class="mt-2 flex items-center justify-between text-sm"><span class="font-bold text-build-orange">TZS {{ number_format((float) $product->selling_price, 2) }}</span><span class="text-slate-500">Stock {{ number_format($available, 2) }}</span></div>
+                        <div class="mt-2 flex items-center justify-between text-sm"><span class="font-bold text-build-orange">TZS {{ number_format((float) $product->selling_price, 2) }}</span><span class="text-slate-500">{{ $t('Stock') }} {{ number_format($available, 2) }}</span></div>
                     </button>
                 @endforeach
             </div>
@@ -183,7 +187,7 @@ $completeSale = function (InventoryService $inventory) {
         <x-card title="Cart & Payment" class="xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">
             <div class="space-y-3">
                 <select wire:model="customer_id" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">Walk-in Customer</option>
+                    <option value="">{{ $t('Walk-in Customer') }}</option>
                     @foreach (Customer::where('status', 'active')->orderBy('name')->get() as $customer)
                         <option value="{{ $customer->id }}">{{ $customer->name }} / {{ $customer->customer_type }}</option>
                     @endforeach
@@ -193,7 +197,7 @@ $completeSale = function (InventoryService $inventory) {
                     <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5">
                         <div class="flex items-start justify-between gap-3">
                             <div><p class="font-bold">{{ $item['name'] }}</p><p class="text-xs text-slate-500">{{ $item['sku'] }}</p></div>
-                            <button wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">Remove</button>
+                            <button wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">{{ $t('Remove') }}</button>
                         </div>
                         <div class="mt-3 grid grid-cols-4 gap-2">
                             <input wire:model.live="cart.{{ $index }}.quantity" type="number" step="0.01" class="rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -217,23 +221,23 @@ $completeSale = function (InventoryService $inventory) {
                 @error('cart') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
 
                 <div class="space-y-2 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
-                    <div class="flex justify-between"><span>Subtotal</span><span>TZS {{ number_format($this->subtotal(), 2) }}</span></div>
-                    <div class="flex justify-between"><span>Discount</span><span>TZS {{ number_format($this->discountTotal(), 2) }}</span></div>
-                    <div class="flex justify-between"><span>Tax/VAT</span><span>TZS {{ number_format($this->taxTotal(), 2) }}</span></div>
-                    <div class="flex justify-between text-lg font-black"><span>Grand Total</span><span>TZS {{ number_format($this->grandTotal(), 2) }}</span></div>
-                    <div class="flex justify-between"><span>Paid</span><span>TZS {{ number_format($this->paidTotal(), 2) }}</span></div>
-                    <div class="flex justify-between"><span>Balance/Change</span><span>TZS {{ number_format(abs($this->grandTotal() - $this->paidTotal()), 2) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Subtotal') }}</span><span>TZS {{ number_format($this->subtotal(), 2) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Discount') }}</span><span>TZS {{ number_format($this->discountTotal(), 2) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Tax/VAT') }}</span><span>TZS {{ number_format($this->taxTotal(), 2) }}</span></div>
+                    <div class="flex justify-between text-lg font-black"><span>{{ $t('Grand Total') }}</span><span>TZS {{ number_format($this->grandTotal(), 2) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Paid') }}</span><span>TZS {{ number_format($this->paidTotal(), 2) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Balance/Change') }}</span><span>TZS {{ number_format(abs($this->grandTotal() - $this->paidTotal()), 2) }}</span></div>
                 </div>
 
                 <div class="space-y-2">
                     @foreach ($payments as $index => $payment)
                         <div class="grid grid-cols-[1fr_1fr_auto] gap-2">
                             <select wire:model="payments.{{ $index }}.payment_method" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                                <option value="cash">Cash</option>
-                                <option value="mobile_money">Mobile Money</option>
-                                <option value="bank">Bank</option>
+                                <option value="cash">{{ $t('Cash') }}</option>
+                                <option value="mobile_money">{{ $t('Mobile Money') }}</option>
+                                <option value="bank">{{ $t('Bank') }}</option>
                                 @if ($this->canCreditSale())
-                                    <option value="credit">Credit</option>
+                                    <option value="credit">{{ $t('Credit') }}</option>
                                 @endif
                             </select>
                             <span data-money-field wire:ignore class="block min-w-0">
@@ -243,17 +247,17 @@ $completeSale = function (InventoryService $inventory) {
                             <button wire:click="removePayment({{ $index }})" type="button" class="rounded-lg border border-slate-200 px-2 text-xs font-bold dark:border-slate-700">X</button>
                         </div>
                     @endforeach
-                    <button type="button" wire:click="addPayment" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">Add Payment</button>
+                    <button type="button" wire:click="addPayment" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ $t('Add Payment') }}</button>
                 </div>
 
-                <button wire:click="completeSale" class="w-full rounded-xl bg-build-orange px-4 py-3 font-black text-white shadow-lg shadow-orange-500/20">Complete Sale</button>
+                <button wire:click="completeSale" class="w-full rounded-xl bg-build-orange px-4 py-3 font-black text-white shadow-lg shadow-orange-500/20">{{ $t('Complete Sale') }}</button>
             </div>
         </x-card>
     </div>
 
     <div class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 xl:hidden">
         <button wire:click="completeSale" class="flex w-full items-center justify-between rounded-xl bg-build-orange px-4 py-3 font-black text-white">
-            <span>Checkout</span>
+            <span>{{ $t('Checkout') }}</span>
             <span>TZS {{ number_format($this->grandTotal(), 2) }}</span>
         </button>
     </div>

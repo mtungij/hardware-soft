@@ -7,12 +7,14 @@
         const preferenceUrl = @js(route('theme.preference', [], false));
 
         const normalizeTheme = (theme) => allowedThemes.includes(theme) ? theme : 'dark';
-        const cookieTheme = document.cookie
+        const readCookieTheme = () => document.cookie
             .split('; ')
             .find((row) => row.startsWith('hardex_theme='))
             ?.split('=')[1];
         const storedTheme = localStorage.getItem('theme');
-        const initialTheme = normalizeTheme(storedTheme || cookieTheme || serverTheme || 'dark');
+        const currentDocumentTheme = () => document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+        const preferredTheme = () => normalizeTheme(localStorage.getItem('theme') || readCookieTheme() || currentDocumentTheme() || serverTheme || 'dark');
+        const initialTheme = preferredTheme();
 
         const applyTheme = (theme) => {
             const normalized = normalizeTheme(theme);
@@ -48,7 +50,7 @@
 
         window.hardexTheme = {
             get() {
-                return normalizeTheme(localStorage.getItem('theme') || cookieTheme || serverTheme || 'dark');
+                return preferredTheme();
             },
             set(theme) {
                 const normalized = applyTheme(theme);
@@ -63,5 +65,6 @@
 
         applyTheme(initialTheme);
         persistTheme(initialTheme);
+        document.addEventListener('livewire:navigated', () => applyTheme(preferredTheme()));
     })();
 </script>

@@ -8,7 +8,7 @@
             <thead class="sticky top-0 z-10 bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-800 dark:text-slate-300">
                 <tr>
                     @foreach ($headers as $header)
-                        <th class="px-4 py-3 font-semibold">{{ $header }}</th>
+                        <th class="px-4 py-3 font-semibold">{{ \App\Support\UiText::translate($header) }}</th>
                     @endforeach
                 </tr>
             </thead>

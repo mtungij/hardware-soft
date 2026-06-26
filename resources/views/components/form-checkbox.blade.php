@@ -9,5 +9,5 @@
         type="checkbox"
         {{ $attributes->merge(['class' => 'mt-1 rounded border-slate-300 text-build-orange shadow-sm focus:ring-build-orange dark:border-slate-700 dark:bg-slate-950']) }}
     >
-    <span>{{ $label }}</span>
+    <span>{{ \App\Support\UiText::translate($label) }}</span>
 </label>

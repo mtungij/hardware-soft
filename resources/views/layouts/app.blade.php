@@ -85,6 +85,7 @@
                 ]],
                 ['label' => __('messages.staff.nav.accounting'), 'icon' => 'accounting', 'items' => [
                     ['label' => __('messages.staff.nav.expenses'), 'route' => 'expenses.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => __('messages.staff.nav.expense_categories'), 'route' => 'expense-categories.index', 'icon' => 'list', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.customer_payments'), 'route' => 'customer-payments.create', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
                     ['label' => __('messages.staff.nav.customer_receipts'), 'route' => 'admin.customer-receipts.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.customer_deposits'), 'route' => 'admin.customer-deposits.index', 'icon' => 'bank', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
@@ -148,7 +149,7 @@
                     this.darkMode = window.hardexTheme?.toggle() === 'dark';
                 }
             }"
-            x-init="window.addEventListener('hardex-theme-changed', event => darkMode = event.detail.theme === 'dark')"
+            x-init="darkMode = window.hardexTheme?.get() === 'dark'; window.hardexTheme?.set(darkMode ? 'dark' : 'light'); window.addEventListener('hardex-theme-changed', event => darkMode = event.detail.theme === 'dark')"
             class="min-h-screen bg-slate-100 text-slate-900 transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100"
         >
             @auth
@@ -182,45 +183,71 @@
                             $visibleItems = collect($group['items'])->filter(fn ($item) => blank($item['roles']) || $user?->hasAnyRole($item['roles']));
                         @endphp
                         @if ($visibleItems->isNotEmpty())
-                            <div class="mb-2" x-data="{ open: true }">
-                                <button type="button" class="group flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold uppercase text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white" @click="open = !open" :aria-expanded="open">
-                                    <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10">
-                                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                            @foreach ($navIcons[$group['icon']] ?? $navIcons['dashboard'] as $path)
-                                                <path d="{{ $path }}" />
-                                            @endforeach
-                                        </svg>
-                                    </span>
-                                    <span x-show="!collapsed" x-transition.opacity class="truncate tracking-wide">{{ $group['label'] }}</span>
-                                    <svg x-show="!collapsed" class="ml-auto h-4 w-4 transition-transform" :class="{ 'rotate-180': open }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                        <path d="M6 9l6 6 6-6" />
-                                    </svg>
-                                </button>
-                                <div x-show="open || collapsed" class="mt-1 space-y-1">
-                                    @foreach ($visibleItems as $item)
-                                        @php
-                                            $activePattern = \Illuminate\Support\Str::endsWith($item['route'], '.index')
-                                                ? \Illuminate\Support\Str::beforeLast($item['route'], '.').'.*'
-                                                : null;
-                                            $isActive = request()->routeIs($item['route']) || ($activePattern && request()->routeIs($activePattern));
-                                            $iconName = $item['icon'] ?? $group['icon'];
-                                        @endphp
-                                        <a href="{{ route($item['route']) }}" wire:navigate @click="sidebarOpen = false" class="group relative flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-orange-500/20 {{ $isActive ? 'bg-orange-50 text-build-orange shadow-sm dark:bg-orange-500/15 dark:text-orange-300' : 'text-slate-700 hover:bg-slate-100 hover:text-navy-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white' }}">
-                                            @if ($isActive)
-                                                <span class="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-build-orange"></span>
-                                            @endif
-                                            <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition {{ $isActive ? 'bg-build-orange text-white shadow-lg shadow-orange-500/25' : 'bg-slate-100 text-slate-500 group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10' }}">
-                                                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                                                    @foreach ($navIcons[$iconName] ?? $navIcons['dashboard'] as $path)
-                                                        <path d="{{ $path }}" />
-                                                    @endforeach
-                                                </svg>
-                                            </span>
-                                            <span x-show="!collapsed" x-transition.opacity class="truncate">{{ $item['label'] }}</span>
-                                        </a>
-                                    @endforeach
+                            @if ($visibleItems->count() === 1)
+                                @php
+                                    $item = $visibleItems->first();
+                                    $activePattern = \Illuminate\Support\Str::endsWith($item['route'], '.index')
+                                        ? \Illuminate\Support\Str::beforeLast($item['route'], '.').'.*'
+                                        : null;
+                                    $isActive = request()->routeIs($item['route']) || ($activePattern && request()->routeIs($activePattern));
+                                    $iconName = $item['icon'] ?? $group['icon'];
+                                @endphp
+                                <div class="mb-2">
+                                    <a href="{{ route($item['route']) }}" wire:navigate @click="sidebarOpen = false" class="group relative flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-orange-500/20 {{ $isActive ? 'bg-orange-50 text-build-orange shadow-sm dark:bg-orange-500/15 dark:text-orange-300' : 'text-slate-700 hover:bg-slate-100 hover:text-navy-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white' }}">
+                                        @if ($isActive)
+                                            <span class="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-build-orange"></span>
+                                        @endif
+                                        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition {{ $isActive ? 'bg-build-orange text-white shadow-lg shadow-orange-500/25' : 'bg-slate-100 text-slate-500 group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10' }}">
+                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                @foreach ($navIcons[$iconName] ?? $navIcons['dashboard'] as $path)
+                                                    <path d="{{ $path }}" />
+                                                @endforeach
+                                            </svg>
+                                        </span>
+                                        <span x-show="!collapsed" x-transition.opacity class="truncate">{{ $item['label'] }}</span>
+                                    </a>
                                 </div>
-                            </div>
+                            @else
+                                <div class="mb-2" x-data="{ open: false }">
+                                    <button type="button" class="group flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-semibold uppercase text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white" @click="open = !open" :aria-expanded="open">
+                                        <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10">
+                                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                @foreach ($navIcons[$group['icon']] ?? $navIcons['dashboard'] as $path)
+                                                    <path d="{{ $path }}" />
+                                                @endforeach
+                                            </svg>
+                                        </span>
+                                        <span x-show="!collapsed" x-transition.opacity class="truncate tracking-wide">{{ $group['label'] }}</span>
+                                        <svg x-show="!collapsed" class="ml-auto h-4 w-4 transition-transform" :class="{ 'rotate-180': open }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                            <path d="M6 9l6 6 6-6" />
+                                        </svg>
+                                    </button>
+                                    <div x-show="open || collapsed" class="mt-1 space-y-1">
+                                        @foreach ($visibleItems as $item)
+                                            @php
+                                                $activePattern = \Illuminate\Support\Str::endsWith($item['route'], '.index')
+                                                    ? \Illuminate\Support\Str::beforeLast($item['route'], '.').'.*'
+                                                    : null;
+                                                $isActive = request()->routeIs($item['route']) || ($activePattern && request()->routeIs($activePattern));
+                                                $iconName = $item['icon'] ?? $group['icon'];
+                                            @endphp
+                                            <a href="{{ route($item['route']) }}" wire:navigate @click="sidebarOpen = false" class="group relative flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-semibold transition focus:outline-none focus:ring-4 focus:ring-orange-500/20 {{ $isActive ? 'bg-orange-50 text-build-orange shadow-sm dark:bg-orange-500/15 dark:text-orange-300' : 'text-slate-700 hover:bg-slate-100 hover:text-navy-900 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-white' }}">
+                                                @if ($isActive)
+                                                    <span class="absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-build-orange"></span>
+                                                @endif
+                                                <span class="grid h-8 w-8 shrink-0 place-items-center rounded-lg transition {{ $isActive ? 'bg-build-orange text-white shadow-lg shadow-orange-500/25' : 'bg-slate-100 text-slate-500 group-hover:bg-white group-hover:text-build-orange dark:bg-white/5 dark:text-slate-300 dark:group-hover:bg-white/10' }}">
+                                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                        @foreach ($navIcons[$iconName] ?? $navIcons['dashboard'] as $path)
+                                                            <path d="{{ $path }}" />
+                                                        @endforeach
+                                                    </svg>
+                                                </span>
+                                                <span x-show="!collapsed" x-transition.opacity class="truncate">{{ $item['label'] }}</span>
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                </div>
+                            @endif
                         @endif
                     @endforeach
                 </nav>
@@ -245,11 +272,11 @@
                             <p class="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">{{ __('messages.staff.erp_workspace') }}</p>
                         </div>
 
-                        <x-pwa-install-button class="hidden h-10 w-10 items-center justify-center rounded-lg bg-build-orange text-white shadow-lg shadow-orange-500/25 sm:inline-flex" />
-                        <a href="{{ route('help-center.index') }}" wire:navigate data-tour="help-center" title="{{ __('messages.staff.help_center') }}" class="grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-sm font-black text-slate-600 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-300">?</a>
-                        <div class="hs-dropdown relative inline-flex">
-                            <button type="button" data-tour="language-switcher" class="hs-dropdown-toggle hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200 sm:inline-flex">
-                                {{ $currentStaffLocale === 'sw' ? '🇹🇿 Kiswahili' : '🇬🇧 English' }}
+                        <x-pwa-install-button class="hidden inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-build-orange text-white shadow-lg shadow-orange-500/25" />
+                        <div class="hs-dropdown relative inline-flex shrink-0">
+                            <button type="button" data-tour="language-switcher" class="hs-dropdown-toggle inline-flex h-10 items-center rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-700 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200 sm:px-3">
+                                <span aria-hidden="true">{{ $currentStaffLocale === 'sw' ? '🇹🇿' : '🇬🇧' }}</span>
+                                <span class="sr-only sm:not-sr-only sm:ml-2">{{ $currentStaffLocale === 'sw' ? 'Kiswahili' : 'English' }}</span>
                             </button>
                             <div class="hs-dropdown-menu z-50 mt-2 hidden min-w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
                                 @foreach (['en' => '🇬🇧 '.__('messages.english'), 'sw' => '🇹🇿 '.__('messages.kiswahili')] as $locale => $label)
@@ -260,10 +287,23 @@
                                 @endforeach
                             </div>
                         </div>
-                        <button data-tour="theme-switcher" class="hidden rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold transition hover:border-build-orange dark:border-slate-700 sm:inline-flex" :class="darkMode ? 'bg-slate-900 text-white dark:bg-slate-800' : 'bg-white text-slate-700'" @click="toggleTheme()" aria-label="Toggle theme">
-                            <span x-text="darkMode ? @js(__('messages.staff.theme_dark_active')) : @js(__('messages.staff.theme_light_active'))"></span>
+                        <button data-tour="theme-switcher" type="button" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 transition hover:border-build-orange dark:border-slate-700" :class="darkMode ? 'bg-slate-900 text-white dark:bg-slate-800' : 'bg-white text-slate-700'" @click="toggleTheme()" :aria-label="darkMode ? @js(__('messages.staff.theme_dark_active')) : @js(__('messages.staff.theme_light_active'))">
+                            <svg x-show="!darkMode" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="4" />
+                                <path d="M12 2v2" />
+                                <path d="M12 20v2" />
+                                <path d="m4.93 4.93 1.41 1.41" />
+                                <path d="m17.66 17.66 1.41 1.41" />
+                                <path d="M2 12h2" />
+                                <path d="M20 12h2" />
+                                <path d="m6.34 17.66-1.41 1.41" />
+                                <path d="m19.07 4.93-1.41 1.41" />
+                            </svg>
+                            <svg x-show="darkMode" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
+                            </svg>
                         </button>
-                        <button data-tour="notifications" class="relative grid h-10 w-10 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" aria-label="{{ __('messages.staff.notifications') }}">
+                        <button data-tour="notifications" class="relative grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300" aria-label="{{ __('messages.staff.notifications') }}">
                             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
                                 <path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -271,7 +311,7 @@
                             <span class="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-build-orange ring-2 ring-white dark:ring-navy-950"></span>
                         </button>
 
-                        <div class="relative">
+                        <div class="relative shrink-0">
                             <button data-tour="profile-menu" class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
                                 <img class="h-8 w-8 rounded-lg object-cover" src="{{ $user?->profile_photo ? asset('storage/'.$user->profile_photo) : 'https://ui-avatars.com/api/?name='.urlencode($user?->name ?? 'Admin').'&background=0d2e50&color=fff' }}" alt="{{ $user?->name ?? 'User' }}">
                                 <span class="hidden text-sm font-bold sm:block">{{ $user?->name ?? 'User' }}</span>
