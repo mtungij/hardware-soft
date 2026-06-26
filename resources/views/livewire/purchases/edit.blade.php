@@ -37,12 +37,25 @@ mount(function (Purchase $purchase) {
 });
 
 $addItem = function () {
+    if (blank($this->supplier_id)) {
+        $this->addError('supplier_id', 'Select supplier before adding products.');
+
+        return;
+    }
+
     $this->items[] = ['id' => null, 'product_id' => '', 'ordered_quantity' => '1', 'cost_price' => '0', 'selling_price' => ''];
 };
 
 $removeItem = function (int $index) {
     unset($this->items[$index]);
     $this->items = array_values($this->items);
+};
+
+$syncProductSellingPrice = function (int $index) {
+    $productId = $this->items[$index]['product_id'] ?? null;
+    $product = $productId ? Product::query()->find($productId) : null;
+
+    $this->items[$index]['selling_price'] = $product ? (string) $product->selling_price : '';
 };
 
 $totalAmount = function () {

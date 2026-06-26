@@ -17,6 +17,14 @@ class ThemePreference
             return $sessionTheme;
         }
 
+        $cookieTheme = request()->cookie('hardex_theme');
+
+        if (self::isValid($cookieTheme)) {
+            session(['theme_preference' => $cookieTheme]);
+
+            return $cookieTheme;
+        }
+
         $userContext = self::userContext();
 
         if ($userContext && self::preferencesTableExists()) {

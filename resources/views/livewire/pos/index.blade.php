@@ -36,6 +36,19 @@ $availableQuantity = function (int $productId) {
     return app(InventoryService::class)->getProductStock($productId, (int) $this->stock_location_id, (int) $this->branch_id);
 };
 
+$syncDefaultPaymentAmount = function () {
+    if (! isset($this->payments[0]) || count($this->payments) !== 1) {
+        return;
+    }
+
+    if ($this->payments[0]['payment_method'] === 'credit') {
+        return;
+    }
+
+    $this->payments[0]['amount'] = (string) $this->grandTotal();
+    $this->dispatch('money-input-updated', model: 'payments.0.amount', value: $this->payments[0]['amount']);
+};
+
 $addProduct = function (int $productId) {
     $product = Product::findOrFail($productId);
     $available = $this->availableQuantity($productId);
@@ -48,6 +61,8 @@ $addProduct = function (int $productId) {
     foreach ($this->cart as $index => $item) {
         if ((int) $item['product_id'] === $productId) {
             $this->cart[$index]['quantity'] = (string) min($available, (float) $item['quantity'] + 1);
+            $this->syncDefaultPaymentAmount();
+
             return;
         }
     }
@@ -61,6 +76,8 @@ $addProduct = function (int $productId) {
         'discount_amount' => '0',
         'tax_amount' => $product->taxable ? (string) round((float) $product->selling_price * 0.18, 2) : '0',
     ];
+
+    $this->syncDefaultPaymentAmount();
 };
 
 $addBarcode = function () {
@@ -74,6 +91,7 @@ $addBarcode = function () {
 $removeItem = function (int $index) {
     unset($this->cart[$index]);
     $this->cart = array_values($this->cart);
+    $this->syncDefaultPaymentAmount();
 };
 
 $addPayment = function () {
@@ -83,6 +101,7 @@ $addPayment = function () {
 $removePayment = function (int $index) {
     unset($this->payments[$index]);
     $this->payments = array_values($this->payments);
+    $this->syncDefaultPaymentAmount();
 };
 
 $subtotal = fn () => collect($this->cart)->sum(fn ($item) => (float) $item['quantity'] * (float) $item['unit_price']);
@@ -178,15 +197,15 @@ $completeSale = function (InventoryService $inventory) {
                         </div>
                         <div class="mt-3 grid grid-cols-4 gap-2">
                             <input wire:model.live="cart.{{ $index }}.quantity" type="number" step="0.01" class="rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            <span data-money-field class="block min-w-0">
+                            <span data-money-field wire:ignore class="block min-w-0">
                                 <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
                                 <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.unit_price">
                             </span>
-                            <span data-money-field class="block min-w-0">
+                            <span data-money-field wire:ignore class="block min-w-0">
                                 <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
                                 <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.discount_amount">
                             </span>
-                            <span data-money-field class="block min-w-0">
+                            <span data-money-field wire:ignore class="block min-w-0">
                                 <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
                                 <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.tax_amount">
                             </span>
@@ -217,9 +236,9 @@ $completeSale = function (InventoryService $inventory) {
                                     <option value="credit">Credit</option>
                                 @endif
                             </select>
-                            <span data-money-field class="block min-w-0">
+                            <span data-money-field wire:ignore class="block min-w-0">
                                 <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                                <input type="hidden" data-money-value wire:model.live="payments.{{ $index }}.amount">
+                                <input type="hidden" data-money-value value="{{ $payment['amount'] ?? '' }}" wire:model.live="payments.{{ $index }}.amount">
                             </span>
                             <button wire:click="removePayment({{ $index }})" type="button" class="rounded-lg border border-slate-200 px-2 text-xs font-bold dark:border-slate-700">X</button>
                         </div>

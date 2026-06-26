@@ -64,9 +64,11 @@ Route::post('theme-preference', function (Request $request) {
         'theme' => ['required', 'in:dark,light'],
     ]);
 
+    $theme = \App\Support\ThemePreference::store($data['theme']);
+
     return response()->json([
-        'theme' => \App\Support\ThemePreference::store($data['theme']),
-    ]);
+        'theme' => $theme,
+    ])->cookie('hardex_theme', $theme, 60 * 24 * 365, '/', null, $request->isSecure(), false, false, 'lax');
 })->name('theme.preference');
 
 Route::post('onboarding/progress', function (Request $request) {
@@ -126,7 +128,7 @@ Route::post('staff/language/{locale}', function (Request $request, string $local
         }
     }
 
-    return back();
+    return back()->withCookie(cookie('hardex_staff_locale', $locale, 60 * 24 * 365, '/', null, $request->isSecure(), false, false, 'lax'));
 })->name('staff.language');
 
 Route::get('/', function () {

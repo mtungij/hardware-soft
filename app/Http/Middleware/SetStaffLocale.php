@@ -20,6 +20,7 @@ class SetStaffLocale
         }
 
         $locale = $request->session()->get('staff_locale')
+            ?: $request->cookie('hardex_staff_locale')
             ?: $this->storedPreference()
             ?: config('app.locale', 'en');
 

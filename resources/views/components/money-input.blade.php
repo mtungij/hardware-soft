@@ -5,7 +5,7 @@
 
 <label class="erp-label" for="{{ $name }}_display">
     {{ $label }} @if ($attributes->has('required')) <span class="text-red-500">*</span> @endif
-    <span data-money-field class="block" data-money-currency="TZS">
+    <span data-money-field wire:ignore class="block" data-money-currency="TZS">
         <input
             id="{{ $name }}_display"
             type="text"

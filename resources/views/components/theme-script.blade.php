@@ -7,13 +7,18 @@
         const preferenceUrl = @js(route('theme.preference', [], false));
 
         const normalizeTheme = (theme) => allowedThemes.includes(theme) ? theme : 'dark';
+        const cookieTheme = document.cookie
+            .split('; ')
+            .find((row) => row.startsWith('hardex_theme='))
+            ?.split('=')[1];
         const storedTheme = localStorage.getItem('theme');
-        const initialTheme = normalizeTheme(storedTheme || serverTheme || 'dark');
+        const initialTheme = normalizeTheme(storedTheme || cookieTheme || serverTheme || 'dark');
 
         const applyTheme = (theme) => {
             const normalized = normalizeTheme(theme);
 
             localStorage.setItem('theme', normalized);
+            document.cookie = `hardex_theme=${normalized}; path=/; max-age=31536000; samesite=lax`;
             document.documentElement.classList.toggle('dark', normalized === 'dark');
             window.dispatchEvent(new CustomEvent('hardex-theme-changed', { detail: { theme: normalized } }));
             window.dispatchEvent(new CustomEvent('buildmart-theme-changed'));
@@ -43,7 +48,7 @@
 
         window.hardexTheme = {
             get() {
-                return normalizeTheme(localStorage.getItem('theme') || serverTheme || 'dark');
+                return normalizeTheme(localStorage.getItem('theme') || cookieTheme || serverTheme || 'dark');
             },
             set(theme) {
                 const normalized = applyTheme(theme);
