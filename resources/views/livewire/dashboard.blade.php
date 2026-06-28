@@ -386,13 +386,15 @@ $recentTransactions = computed(function (): Collection {
         $maxCategory = max(1, $this->salesByCategoryChart->max('total_sales') ?: 1);
         $maxStock = max(1, $this->stockDistributionChart->max('quantity') ?: 1);
         $maxMonthly = max(1, $this->monthlyRevenueExpenseChart->map(fn ($row) => max($row['sales'], $row['purchases'], $row['expenses']))->max() ?: 1);
+        $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
         $cards = [
             ['label' => "Today's Sales", 'value' => $formatMoney($this->todaySales), 'tone' => 'text-emerald-600', 'hint' => 'Completed sales today'],
             ['label' => 'Monthly Sales', 'value' => $formatMoney($this->monthlySales), 'tone' => 'text-navy-900 dark:text-white', 'hint' => now()->format('F Y')],
             ['label' => 'Total Profit', 'value' => $formatMoney($this->totalProfit), 'tone' => 'text-emerald-600', 'hint' => 'Filtered completed sales'],
             ['label' => 'Total Purchases', 'value' => $formatMoney($this->totalPurchases), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Non-cancelled purchases'],
-            ['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation'],
-            ['label' => 'Dispensing Stock Value', 'value' => $formatMoney($this->dispensingStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Sales counter valuation'],
+            ...($warehouseEnabled ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation']] : []),
+            ['label' => 'Dispensing Stock Value', 'value' => $formatMoney($this->dispensingStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => $warehouseEnabled ? 'Sales counter valuation' : 'Direct stock and POS valuation'],
+            ...(! $warehouseEnabled ? [['label' => 'Direct Stock In', 'value' => number_format(\App\Models\StockMovement::where('movement_type', 'direct_stock_in')->count()), 'tone' => 'text-cyan-600', 'hint' => 'Direct stock entries']] : []),
             ['label' => 'Customer Debts', 'value' => $formatMoney($this->customerDebts), 'tone' => 'text-red-600', 'hint' => 'Unpaid and partial sales'],
             ['label' => 'Low Stock Alerts', 'value' => number_format($this->lowStockAlerts), 'tone' => 'text-amber-600', 'hint' => 'At or below reorder level'],
             ['label' => 'Purchase Orders Sent Today', 'value' => number_format(PurchaseEmailLog::where('status', 'sent')->whereDate('sent_at', today())->count()), 'tone' => 'text-emerald-600', 'hint' => 'Supplier PO emails delivered'],
@@ -477,8 +479,6 @@ $recentTransactions = computed(function (): Collection {
             </x-card>
         @endforeach
     </div>
-
-    <x-onboarding-checklist />
 
     <div data-tour="dashboard-charts" class="grid min-w-0 gap-6 xl:grid-cols-2">
         <x-card title="Recent Announcements" description="Latest customer notices and read progress.">
@@ -656,7 +656,7 @@ $recentTransactions = computed(function (): Collection {
                         'Active Products' => $this->inventorySummary['active_products'],
                         'Out of Stock Products' => $this->inventorySummary['out_of_stock_products'],
                         'Low Stock Products' => $this->inventorySummary['low_stock_products'],
-                        'Main Store Stock Items' => $this->inventorySummary['main_store_stock_items'],
+                        ...($warehouseEnabled ? ['Main Store Stock Items' => $this->inventorySummary['main_store_stock_items']] : []),
                         'Dispensing Stock Items' => $this->inventorySummary['dispensing_stock_items'],
                     ] as $label => $value)
                         <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 dark:bg-white/5">

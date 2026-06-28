@@ -5,6 +5,7 @@ use App\Models\Product;
 use App\Models\StockLocation;
 use App\Models\StockTransfer;
 use App\Services\InventoryService;
+use App\Support\InventorySettings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -13,6 +14,8 @@ use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
+
+abort_unless(InventorySettings::warehouseEnabled(), 403);
 
 state(['branch_id' => '', 'transfer_number' => '', 'from_location_id' => '', 'to_location_id' => '', 'transfer_date' => '', 'notes' => '', 'items' => []]);
 

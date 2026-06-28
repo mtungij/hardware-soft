@@ -25,7 +25,7 @@ class StockMovement extends Model
 {
     use HasFactory;
 
-    public const POSITIVE_TYPES = ['purchase_in', 'transfer_in', 'adjustment_in', 'return_in'];
+    public const POSITIVE_TYPES = ['purchase_in', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in'];
 
     public const NEGATIVE_TYPES = ['sale_out', 'transfer_out', 'adjustment_out', 'damage_out'];
 

@@ -58,6 +58,8 @@
                 'settings' => ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M19 12h2', 'M3 12h2', 'M12 3v2', 'M12 19v2', 'M17 7l1.4-1.4', 'M5.6 18.4 7 17', 'M17 17l1.4 1.4', 'M5.6 5.6 7 7'],
                 'mail' => ['M4 4h16v16H4z', 'M4 7l8 6 8-6'],
             ];
+            $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
+            $directStockInAllowed = \App\Support\InventorySettings::directStockInAllowed();
             $navigationGroups = [
                 ['label' => __('messages.staff.nav.dashboard_group'), 'icon' => 'dashboard', 'items' => [['label' => __('messages.staff.nav.dashboard'), 'route' => 'dashboard', 'icon' => 'dashboard', 'roles' => []]]],
                 ['label' => __('messages.staff.nav.inventory'), 'icon' => 'inventory', 'items' => [
@@ -71,9 +73,10 @@
                     ['label' => __('messages.staff.nav.suppliers'), 'route' => 'suppliers.index', 'icon' => 'supplier', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                 ]],
                 ['label' => __('messages.staff.nav.warehouse'), 'icon' => 'warehouse', 'items' => [
-                    ['label' => __('messages.staff.nav.store_stock'), 'route' => 'store-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier']],
+                    ['label' => __('messages.staff.nav.store_stock'), 'route' => 'store-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.dispensing_stock'), 'route' => 'dispensing-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier']],
-                    ['label' => __('messages.staff.nav.stock_transfers'), 'route' => 'stock-transfers.index', 'icon' => 'transfer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant']],
+                    ['label' => __('messages.staff.nav.direct_stock_in'), 'route' => 'direct-stock-in.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper'], 'show' => $directStockInAllowed],
+                    ['label' => __('messages.staff.nav.stock_transfers'), 'route' => 'stock-transfers.index', 'icon' => 'transfer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.stock_movements'), 'route' => 'stock-movements.index', 'icon' => 'truck', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant']],
                     ['label' => __('messages.staff.nav.stock_adjustments'), 'route' => 'stock-adjustments.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper']],
                 ]],
@@ -113,6 +116,7 @@
                     ['label' => __('messages.staff.nav.customer_notifications'), 'route' => 'admin.customer-notifications.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.settings'), 'route' => 'settings.index', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.company_settings'), 'route' => 'settings.company', 'icon' => 'branch', 'roles' => ['Super Admin', 'Admin']],
+                    ['label' => __('messages.staff.nav.inventory_settings'), 'route' => 'settings.inventory', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.email_settings'), 'route' => 'email-settings.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager']],
                     ['label' => __('messages.staff.nav.email_logs'), 'route' => 'purchase-email-logs.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager']],
                 ]],
@@ -180,7 +184,7 @@
                 <nav class="flex-1 overflow-y-auto px-2 py-3">
                     @foreach ($navigationGroups as $group)
                         @php
-                            $visibleItems = collect($group['items'])->filter(fn ($item) => blank($item['roles']) || $user?->hasAnyRole($item['roles']));
+                            $visibleItems = collect($group['items'])->filter(fn ($item) => ($item['show'] ?? true) && (blank($item['roles']) || $user?->hasAnyRole($item['roles'])));
                         @endphp
                         @if ($visibleItems->isNotEmpty())
                             @if ($visibleItems->count() === 1)

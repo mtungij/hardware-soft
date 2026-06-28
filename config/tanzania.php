@@ -1,0 +1,32 @@
+<?php
+
+return [
+    'regions' => [
+        'Arusha' => ['Arusha City', 'Arumeru', 'Karatu', 'Longido', 'Monduli', 'Ngorongoro'],
+        'Dar es Salaam' => ['Ilala', 'Kinondoni', 'Temeke', 'Ubungo', 'Kigamboni'],
+        'Dodoma' => ['Dodoma City', 'Bahi', 'Chamwino', 'Chemba', 'Kondoa', 'Kongwa', 'Mpwapwa'],
+        'Geita' => ['Bukombe', 'Chato', 'Geita', 'Mbogwe', 'Nyang\'hwale'],
+        'Iringa' => ['Iringa', 'Kilolo', 'Mafinga', 'Mufindi'],
+        'Kagera' => ['Biharamulo', 'Bukoba', 'Karagwe', 'Kyerwa', 'Missenyi', 'Muleba', 'Ngara'],
+        'Katavi' => ['Mlele', 'Mpanda', 'Tanganyika'],
+        'Kigoma' => ['Buhigwe', 'Kakonko', 'Kasulu', 'Kibondo', 'Kigoma', 'Uvinza'],
+        'Kilimanjaro' => ['Hai', 'Moshi', 'Mwanga', 'Rombo', 'Same', 'Siha'],
+        'Lindi' => ['Kilwa', 'Lindi', 'Liwale', 'Nachingwea', 'Ruangwa'],
+        'Manyara' => ['Babati', 'Hanang', 'Kiteto', 'Mbulu', 'Simanjiro'],
+        'Mara' => ['Bunda', 'Butiama', 'Musoma', 'Rorya', 'Serengeti', 'Tarime'],
+        'Mbeya' => ['Busokelo', 'Chunya', 'Kyela', 'Mbarali', 'Mbeya', 'Rungwe'],
+        'Morogoro' => ['Gairo', 'Kilombero', 'Kilosa', 'Malinyi', 'Morogoro', 'Mvomero', 'Ulanga'],
+        'Mtwara' => ['Masasi', 'Mtwara', 'Nanyumbu', 'Newala', 'Tandahimba'],
+        'Mwanza' => ['Ilemela', 'Nyamagana', 'Magu', 'Misungwi', 'Kwimba', 'Sengerema', 'Ukerewe'],
+        'Njombe' => ['Ludewa', 'Makambako', 'Makete', 'Njombe', 'Wanging\'ombe'],
+        'Pwani' => ['Bagamoyo', 'Kibaha', 'Kisarawe', 'Mafia', 'Mkuranga', 'Rufiji'],
+        'Rukwa' => ['Kalambo', 'Nkasi', 'Sumbawanga'],
+        'Ruvuma' => ['Mbinga', 'Namtumbo', 'Nyasa', 'Songea', 'Tunduru'],
+        'Shinyanga' => ['Kahama', 'Kishapu', 'Shinyanga'],
+        'Simiyu' => ['Bariadi', 'Busega', 'Itilima', 'Maswa', 'Meatu'],
+        'Singida' => ['Ikungi', 'Iramba', 'Manyoni', 'Mkalama', 'Singida'],
+        'Songwe' => ['Ileje', 'Mbozi', 'Momba', 'Songwe'],
+        'Tabora' => ['Igunga', 'Kaliua', 'Nzega', 'Sikonge', 'Tabora', 'Urambo', 'Uyui'],
+        'Tanga' => ['Handeni', 'Kilindi', 'Korogwe', 'Lushoto', 'Muheza', 'Mkinga', 'Pangani', 'Tanga'],
+    ],
+];

@@ -105,6 +105,7 @@
         'defaultTour' => $isCustomer ? 'customer-portal' : 'dashboard',
         'tours' => $isCustomer ? $customerTours : $staffTours,
         'checklist' => $checklist,
+        'showWelcome' => false,
         'welcome' => [
             'title' => $isCustomer ? 'Karibu Portal ya Wateja' : 'Karibu Hardex ERP',
             'message' => $isCustomer ? 'Karibu kwenye Portal ya Wateja. Tutakuonyesha mwongozo mfupi wa kutumia mfumo huu kwa urahisi.' : "Karibu kwenye Hardex Hardware ERP.\n\nTutakuonyesha mwongozo mfupi wa jinsi ya kutumia mfumo huu kwa urahisi.",

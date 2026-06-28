@@ -15,6 +15,7 @@ state([
     'email' => '',
     'address' => '',
     'region' => '',
+    'district' => '',
     'status' => 'active',
 ]);
 
@@ -25,8 +26,13 @@ rules([
     'email' => ['nullable', 'email', 'max:255'],
     'address' => ['nullable', 'string', 'max:1000'],
     'region' => ['nullable', 'string', 'max:255'],
+    'district' => ['nullable', 'string', 'max:255'],
     'status' => ['required', 'in:active,inactive'],
 ]);
+
+$updatedRegion = function () {
+    $this->district = '';
+};
 
 $save = function () {
     Branch::create($this->validate());
@@ -50,7 +56,7 @@ $save = function () {
             <x-form-input label="Branch Code" name="code" wire:model="code" required />
             <x-form-input label="Phone" name="phone" wire:model="phone" />
             <x-form-input label="Email" name="email" type="email" wire:model="email" />
-            <x-form-input label="Region" name="region" wire:model="region" />
+            <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Status

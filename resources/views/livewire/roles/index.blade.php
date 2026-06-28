@@ -3,6 +3,7 @@
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
+use Illuminate\Validation\Rule;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\rules;
@@ -16,8 +17,15 @@ state([
     'permissions' => [],
 ]);
 
-rules([
-    'name' => ['required', 'string', 'max:255'],
+rules(fn () => [
+    'name' => [
+        'required',
+        'string',
+        'max:255',
+        Rule::unique('roles', 'name')
+            ->where(fn ($query) => $query->where('guard_name', 'web'))
+            ->ignore($this->role_id),
+    ],
     'permissions' => ['array'],
     'permissions.*' => ['exists:permissions,name'],
 ]);
@@ -32,11 +40,15 @@ $editRole = function (int $roleId) {
 
 $save = function () {
     $validated = $this->validate();
+    $validated['permissions'] = $validated['permissions'] ?? [];
 
-    $role = Role::query()->updateOrCreate(
-        ['id' => $this->role_id],
-        ['name' => $validated['name'], 'guard_name' => 'web']
-    );
+    $role = $this->role_id
+        ? Role::query()->findOrFail($this->role_id)
+        : new Role(['guard_name' => 'web']);
+
+    $role->name = $validated['name'];
+    $role->guard_name = 'web';
+    $role->save();
 
     $role->syncPermissions($validated['permissions']);
     app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -66,6 +78,10 @@ $deleteRole = function (int $roleId) {
 ?>
 
 <div>
+    @php
+        $t = fn ($value) => \App\Support\UiText::translate($value);
+    @endphp
+
     <x-page-header
         title="Roles & Permissions"
         description="Manage Phase 1 access roles and grouped permissions."
@@ -78,7 +94,7 @@ $deleteRole = function (int $roleId) {
     @endphp
 
     <div class="grid gap-6 xl:grid-cols-[420px_1fr]">
-        <x-card title="Role Form" description="Create or edit a role and assign permissions.">
+        <x-card :title="$role_id ? 'Edit Role' : 'Create Role'" description="Create or edit a role and assign permissions.">
             <form wire:submit="save" class="space-y-4">
                 <x-form-input label="Role Name" name="name" wire:model="name" required />
 
@@ -88,7 +104,7 @@ $deleteRole = function (int $roleId) {
                             <p class="mb-2 text-sm font-black capitalize">{{ $group }}</p>
                             <div class="grid grid-cols-2 gap-2">
                                 @foreach ($groupPermissions as $permission)
-                                    <label class="flex items-center gap-2 text-sm">
+                                    <label wire:key="permission-{{ $permission->id }}" class="flex items-center gap-2 text-sm">
                                         <input type="checkbox" wire:model="permissions" value="{{ $permission->name }}" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
                                         <span>{{ str($permission->name)->before(' ') }}</span>
                                     </label>
@@ -99,8 +115,8 @@ $deleteRole = function (int $roleId) {
                 </div>
 
                 <div class="flex gap-2">
-                    <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save Role</button>
-                    <button type="button" wire:click="clearForm" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Clear</button>
+                    <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ $role_id ? $t('Update Role') : $t('Save Role') }}</button>
+                    <button type="button" wire:click="clearForm" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Clear') }}</button>
                 </div>
             </form>
         </x-card>
@@ -108,7 +124,7 @@ $deleteRole = function (int $roleId) {
         <x-card title="Roles List">
             <x-table :headers="['Role', 'Users', 'Permissions', 'Actions']">
                 @foreach ($roles as $role)
-                    <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
+                    <tr wire:key="role-{{ $role->id }}" class="hover:bg-slate-50 dark:hover:bg-white/5">
                         <td class="px-4 py-3 font-black">{{ $role->name }}</td>
                         <td class="px-4 py-3">{{ $role->users_count }}</td>
                         <td class="px-4 py-3">

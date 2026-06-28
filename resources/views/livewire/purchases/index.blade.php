@@ -65,7 +65,7 @@ $sendPurchaseOrder = function (int $purchaseId, PurchaseOrderEmailService $servi
 ?>
 
 <div>
-    <x-page-header title="Purchases" description="Create purchase orders and receive stock into Main Store." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => null]">
+    <x-page-header title="Purchases" :description="\App\Support\InventorySettings::warehouseEnabled() ? 'Create purchase orders and receive stock into Main Store.' : 'Create purchase orders and receive stock into Dispensing Area.'" :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => null]">
         @if ($this->canCreate())
             <a href="{{ route('purchases.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Purchase</a>
         @endif

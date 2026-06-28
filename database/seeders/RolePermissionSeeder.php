@@ -31,6 +31,7 @@ class RolePermissionSeeder extends Seeder
             'stock movements',
             'stock transfers',
             'dispensing stock',
+            'direct stock in',
             'inventory summary',
             'sales',
             'expenses',
@@ -92,6 +93,8 @@ class RolePermissionSeeder extends Seeder
             'complete stock transfers',
             'view dispensing stock',
             'view inventory summary',
+            'view direct stock in',
+            'create direct stock in',
             'send purchase emails',
         ];
 

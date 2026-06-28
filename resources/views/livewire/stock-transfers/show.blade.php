@@ -2,12 +2,15 @@
 
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
+use App\Support\InventorySettings;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
+
+abort_unless(InventorySettings::warehouseEnabled(), 403);
 
 state(['stockTransfer' => null]);
 

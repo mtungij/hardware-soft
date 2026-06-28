@@ -132,6 +132,7 @@
 
     const showWelcome = () => {
         if (!state.config || localStorage.getItem(storageKey('never')) === '1') return;
+        if (state.config.showWelcome === false) return;
         if (localStorage.getItem(storageKey('welcome_seen')) === '1') return;
 
         const modal = document.createElement('div');

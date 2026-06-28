@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'email',
     'address',
     'region',
+    'district',
     'customer_type',
     'credit_limit',
     'opening_balance',

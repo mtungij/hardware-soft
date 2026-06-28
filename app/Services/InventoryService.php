@@ -12,6 +12,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
+use App\Support\InventorySettings;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -119,6 +120,42 @@ class InventoryService
     public function generateSaleNumber(): string
     {
         return 'SALE-'.now()->format('Ymd').'-'.str_pad((string) (Sale::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
+    }
+
+    public function directStockIn(array $data, int $createdBy): StockMovement
+    {
+        return DB::transaction(function () use ($data, $createdBy) {
+            $product = Product::query()->whereKey($data['product_id'])->lockForUpdate()->firstOrFail();
+            $location = StockLocation::query()->whereKey($data['stock_location_id'])->lockForUpdate()->firstOrFail();
+            $quantity = (float) $data['quantity'];
+
+            if ($quantity <= 0) {
+                throw ValidationException::withMessages(['quantity' => 'Quantity must be greater than zero.']);
+            }
+
+            if ($location->status !== 'active') {
+                throw ValidationException::withMessages(['stock_location_id' => 'Stock location must be active.']);
+            }
+
+            if (array_key_exists('selling_price', $data) && filled($data['selling_price'])) {
+                $product->update(['selling_price' => (float) $data['selling_price']]);
+            }
+
+            return StockMovement::create([
+                'branch_id' => (int) $data['branch_id'],
+                'product_id' => $product->id,
+                'stock_location_id' => $location->id,
+                'movement_type' => 'direct_stock_in',
+                'quantity' => $quantity,
+                'unit_cost' => (float) $data['cost_price'],
+                'unit_price' => filled($data['selling_price'] ?? null) ? (float) $data['selling_price'] : (float) $product->selling_price,
+                'reference_type' => null,
+                'reference_id' => null,
+                'notes' => trim(($data['reason'] ?? 'Direct Stock In').($data['notes'] ? ' - '.$data['notes'] : '')),
+                'created_by' => $createdBy,
+                'movement_date' => $data['movement_date'] ?? now()->toDateString(),
+            ]);
+        });
     }
 
     /**
@@ -356,11 +393,7 @@ class InventoryService
                 throw ValidationException::withMessages(['purchase' => 'Cancelled purchases cannot be received.']);
             }
 
-            $location = $this->getMainStoreLocation($purchase->branch_id);
-
-            if ($location->type !== 'store') {
-                throw ValidationException::withMessages(['location' => 'Phase 3 receiving is limited to Main Store only.']);
-            }
+            $location = InventorySettings::receivingLocation($purchase->branch_id);
 
             $items = PurchaseItem::query()
                 ->where('purchase_id', $purchase->id)
@@ -481,6 +514,10 @@ class InventoryService
     public function completeStockTransfer(int $stockTransferId, int $completedBy): StockTransfer
     {
         return DB::transaction(function () use ($stockTransferId, $completedBy) {
+            if (! InventorySettings::warehouseEnabled()) {
+                throw ValidationException::withMessages(['transfer' => 'Stock transfer is disabled when warehouse mode is off.']);
+            }
+
             $transfer = StockTransfer::query()
                 ->with(['items.product'])
                 ->whereKey($stockTransferId)

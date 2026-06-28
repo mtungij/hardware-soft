@@ -3,6 +3,7 @@
 use App\Models\StockLocation;
 use App\Models\StockTransfer;
 use App\Services\InventoryService;
+use App\Support\InventorySettings;
 use Livewire\WithPagination;
 
 use function Livewire\Volt\layout;
@@ -11,6 +12,8 @@ use function Livewire\Volt\uses;
 
 layout('layouts.app');
 uses([WithPagination::class]);
+
+abort_unless(InventorySettings::warehouseEnabled(), 403);
 
 state(['search' => '', 'statusFilter' => '', 'fromFilter' => '', 'toFilter' => '', 'dateFrom' => '', 'dateTo' => '']);
 

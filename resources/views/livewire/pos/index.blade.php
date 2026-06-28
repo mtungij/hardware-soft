@@ -5,6 +5,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\StockLocation;
 use App\Services\InventoryService;
+use App\Support\InventorySettings;
 use Illuminate\Validation\ValidationException;
 
 use function Livewire\Volt\layout;
@@ -33,7 +34,16 @@ $canSellFromStore = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin',
 $canCreditSale = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
 
 $availableQuantity = function (int $productId) {
-    return app(InventoryService::class)->getProductStock($productId, (int) $this->stock_location_id, (int) $this->branch_id);
+    $inventory = app(InventoryService::class);
+    $locationId = InventorySettings::warehouseEnabled()
+        ? (int) $this->stock_location_id
+        : $inventory->getDispensingLocation((int) $this->branch_id)->id;
+
+    if (! InventorySettings::warehouseEnabled()) {
+        $this->stock_location_id = (string) $locationId;
+    }
+
+    return $inventory->getProductStock($productId, $locationId, (int) $this->branch_id);
 };
 
 $syncDefaultPaymentAmount = function () {
@@ -125,8 +135,12 @@ $completeSale = function (InventoryService $inventory) {
         'payments.*.amount' => ['required', 'numeric', 'min:0'],
     ]);
 
+    if (! InventorySettings::warehouseEnabled()) {
+        $this->stock_location_id = (string) $inventory->getDispensingLocation((int) $this->branch_id)->id;
+    }
+
     $location = StockLocation::findOrFail($this->stock_location_id);
-    if ($location->type === 'store' && ! $this->canSellFromStore()) {
+    if ($location->type === 'store' && (! InventorySettings::salesFromStoreAllowed() || ! $this->canSellFromStore())) {
         throw ValidationException::withMessages(['stock_location_id' => \App\Support\UiText::translate('You are not authorized to sell from Main Store.')]);
     }
 
@@ -155,11 +169,17 @@ $completeSale = function (InventoryService $inventory) {
                 <div class="grid gap-3 md:grid-cols-3">
                     <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}">
                     <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Barcode input') }}">
-                    <select wire:model.live="stock_location_id" class="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        @foreach (StockLocation::where('status', 'active')->whereIn('type', $this->canSellFromStore() ? ['store', 'dispensing'] : ['dispensing'])->orderBy('type')->get() as $location)
-                            <option value="{{ $location->id }}">{{ $location->name }}</option>
-                        @endforeach
-                    </select>
+                    @if (InventorySettings::warehouseEnabled())
+                        <select wire:model.live="stock_location_id" class="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-navy-950">
+                            @foreach (StockLocation::where('status', 'active')->whereIn('type', InventorySettings::salesFromStoreAllowed() && $this->canSellFromStore() ? ['store', 'dispensing'] : ['dispensing'])->orderBy('type')->get() as $location)
+                                <option value="{{ $location->id }}">{{ $location->name }}</option>
+                            @endforeach
+                        </select>
+                    @else
+                        <div class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm font-bold text-cyan-800 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">
+                            {{ $t('Selling from Dispensing Area') }}
+                        </div>
+                    @endif
                 </div>
             </x-card>
 
@@ -170,6 +190,7 @@ $completeSale = function (InventoryService $inventory) {
                     ->orderBy('name')
                     ->take(24)
                     ->get();
+                $stockLabel = InventorySettings::warehouseEnabled() ? $t('Stock') : $t('Available Stock');
             @endphp
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 @foreach ($products as $product)
@@ -178,7 +199,7 @@ $completeSale = function (InventoryService $inventory) {
                         <img class="h-24 w-full rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
                         <p class="mt-3 font-black">{{ $product->name }}</p>
                         <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $product->unit?->short_name }}</p>
-                        <div class="mt-2 flex items-center justify-between text-sm"><span class="font-bold text-build-orange">TZS {{ number_format((float) $product->selling_price, 2) }}</span><span class="text-slate-500">{{ $t('Stock') }} {{ number_format($available, 2) }}</span></div>
+                        <div class="mt-2 flex items-center justify-between gap-3 text-sm"><span class="font-bold text-build-orange">TZS {{ number_format((float) $product->selling_price, 2) }}</span><span class="text-right text-slate-500">{{ $stockLabel }}: {{ number_format($available, 2) }} {{ $product->unit?->short_name }}</span></div>
                     </button>
                 @endforeach
             </div>

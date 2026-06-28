@@ -26,7 +26,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'language',
     'receipt_footer_text',
     'tax_enabled',
+    'enable_warehouse',
+    'allow_direct_stock_in',
+    'allow_sales_from_store',
     'default_branch_id',
+    'default_stock_location_id',
     'theme_color',
     'system_initialized',
     'mail_host',
@@ -50,6 +54,9 @@ class Setting extends Model
     {
         return [
             'tax_enabled' => 'boolean',
+            'enable_warehouse' => 'boolean',
+            'allow_direct_stock_in' => 'boolean',
+            'allow_sales_from_store' => 'boolean',
             'system_initialized' => 'boolean',
             'mail_port' => 'integer',
             'mail_password' => 'encrypted',

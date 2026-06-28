@@ -13,17 +13,23 @@ use function Livewire\Volt\state;
 
 layout('layouts.auth');
 
-state(['name' => '', 'phone' => '', 'business_name' => '', 'email' => '', 'password' => '', 'password_confirmation' => '', 'branch_name' => '', 'terms' => false]);
+state(['name' => '', 'phone' => '', 'business_name' => '', 'email' => '', 'region' => '', 'district' => '', 'password' => '', 'password_confirmation' => '', 'branch_name' => '', 'terms' => false]);
 
 rules(fn () => [
     'name' => ['required', 'string', 'max:255'],
     'phone' => ['required', 'string', 'max:30'],
     'business_name' => ['nullable', 'string', 'max:255'],
     'email' => ['required', 'email', 'max:255', 'unique:customer_accounts,email'],
+    'region' => ['nullable', 'string', 'max:255'],
+    'district' => ['nullable', 'string', 'max:255'],
     'password' => ['required', 'confirmed', Password::defaults()],
     'branch_name' => ['nullable', 'string', 'max:255'],
     'terms' => ['accepted'],
 ]);
+
+$updatedRegion = function () {
+    $this->district = '';
+};
 
 $register = function () {
     $data = $this->validate();
@@ -44,7 +50,8 @@ $register = function () {
             'phone' => $data['phone'],
             'email' => $data['email'],
             'address' => $data['branch_name'],
-            'region' => null,
+            'region' => $data['region'] ?: null,
+            'district' => $data['district'] ?: null,
             'customer_type' => 'credit',
             'credit_limit' => 0,
             'opening_balance' => 0,
@@ -96,6 +103,7 @@ $register = function () {
                 <x-form-input :label="__('messages.auth.phone')" name="phone" wire:model="phone" required />
                 <x-form-input :label="__('messages.auth.business_name')" name="business_name" wire:model="business_name" />
                 <x-form-input :label="__('messages.auth.email')" name="email" wire:model="email" type="email" required />
+                <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
                 <x-form-input :label="__('messages.auth.password')" name="password" wire:model="password" type="password" required />
                 <x-form-input :label="__('messages.auth.confirm_password')" name="password_confirmation" wire:model="password_confirmation" type="password" required />
                 <div class="sm:col-span-2"><x-form-input :label="__('messages.auth.branch_location')" name="branch_name" wire:model="branch_name" /></div>

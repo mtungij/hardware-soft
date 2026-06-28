@@ -6,11 +6,14 @@ use App\Models\Product;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Services\InventoryService;
+use App\Support\InventorySettings;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
+
+abort_unless(InventorySettings::warehouseEnabled(), 403);
 
 state(['search' => '', 'categoryFilter' => '', 'statusFilter' => '']);
 

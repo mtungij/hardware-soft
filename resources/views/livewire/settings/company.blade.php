@@ -76,6 +76,10 @@ rules([
     'language' => ['required', 'in:sw,en'],
 ]);
 
+$updatedRegion = function () {
+    $this->district = '';
+};
+
 $save = function () {
     $data = $this->validate();
     $logoPath = $this->logo;
@@ -171,8 +175,7 @@ $removeLogo = function () {
             <x-form-input label="Phone Number" name="phone" wire:model="phone" required />
             <x-form-input label="WhatsApp Number" name="whatsapp_number" wire:model="whatsapp_number" required />
             <x-form-input label="Email Address" name="email" wire:model="email" type="email" />
-            <x-form-input label="Region" name="region" wire:model="region" />
-            <x-form-input label="District" name="district" wire:model="district" />
+            <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
             <x-form-input label="Country" name="country" wire:model="country" required />
             <x-form-input label="Default Currency" name="currency" wire:model="currency" required />
             <x-form-input label="Timezone" name="timezone" wire:model="timezone" required />

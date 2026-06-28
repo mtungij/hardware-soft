@@ -9,12 +9,14 @@ use function Livewire\Volt\state;
 
 layout('layouts.customer');
 
-state(['name' => '', 'phone' => '', 'email' => '', 'preferred_locale' => 'sw', 'password' => '', 'password_confirmation' => '']);
+state(['name' => '', 'phone' => '', 'email' => '', 'region' => '', 'district' => '', 'preferred_locale' => 'sw', 'password' => '', 'password_confirmation' => '']);
 
 rules(fn () => [
     'name' => ['required', 'string', 'max:255'],
     'phone' => ['nullable', 'string', 'max:30'],
     'email' => ['required', 'email', 'max:255', 'unique:customer_accounts,email,'.auth('customer')->id()],
+    'region' => ['nullable', 'string', 'max:255'],
+    'district' => ['nullable', 'string', 'max:255'],
     'preferred_locale' => ['required', 'in:sw,en'],
     'password' => ['nullable', 'confirmed', Password::defaults()],
 ]);
@@ -24,8 +26,14 @@ mount(function () {
     $this->name = $account->name;
     $this->phone = $account->phone;
     $this->email = $account->email;
+    $this->region = $account->customer?->region ?: '';
+    $this->district = $account->customer?->district ?: '';
     $this->preferred_locale = $account->preferred_locale ?: app()->getLocale();
 });
+
+$updatedRegion = function () {
+    $this->district = '';
+};
 
 $save = function () {
     $data = $this->validate();
@@ -45,6 +53,8 @@ $save = function () {
     $account->customer()->update([
         'phone' => $data['phone'],
         'email' => $data['email'],
+        'region' => $data['region'] ?: null,
+        'district' => $data['district'] ?: null,
     ]);
 
     $this->password = '';
@@ -65,6 +75,9 @@ $save = function () {
             <x-form-input :label="__('messages.auth.full_name')" name="name" wire:model="name" required />
             <x-form-input :label="__('messages.auth.phone')" name="phone" wire:model="phone" />
             <x-form-input :label="__('messages.auth.email')" name="email" wire:model="email" type="email" required />
+            <div class="grid gap-4 sm:grid-cols-2">
+                <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
+            </div>
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 {{ __('messages.profile.language_preference') }}
                 <select wire:model="preferred_locale" class="mt-1 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm outline-none ring-build-orange/20 transition focus:border-build-orange focus:ring-4 dark:border-slate-700 dark:bg-slate-950 dark:text-white">

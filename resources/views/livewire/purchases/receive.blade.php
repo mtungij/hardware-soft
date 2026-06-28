@@ -2,6 +2,7 @@
 
 use App\Models\Purchase;
 use App\Services\InventoryService;
+use App\Support\InventorySettings;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -40,7 +41,7 @@ $submitReceiving = function (InventoryService $inventory) {
 
     $inventory->receivePurchase($purchase, $this->receivedQuantities, $this->received_date, auth()->id(), $this->notes);
 
-    session()->flash('success', 'Purchase received into Main Store.');
+    session()->flash('success', InventorySettings::warehouseEnabled() ? 'Purchase received into Main Store.' : 'Purchase received into Dispensing Area.');
     $this->redirectRoute('purchases.show', ['purchase' => $purchase->id], navigate: true);
 };
 

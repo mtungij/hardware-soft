@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'email',
     'address',
     'region',
+    'district',
     'opening_balance',
     'status',
 ])]
