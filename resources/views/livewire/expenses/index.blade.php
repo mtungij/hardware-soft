@@ -40,6 +40,10 @@ rules([
 ]);
 
 mount(function () {
+    $this->search = request('search', $this->search);
+    $this->branchFilter = request('branchFilter', $this->branchFilter);
+    $this->date_from = request('date_from', $this->date_from);
+    $this->date_to = request('date_to', $this->date_to);
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
     $this->expense_date = now()->toDateString();
 });

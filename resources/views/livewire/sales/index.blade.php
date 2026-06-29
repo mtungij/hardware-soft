@@ -4,6 +4,7 @@ use App\Models\Customer;
 use App\Models\Sale;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
@@ -16,6 +17,15 @@ state([
     'date_from' => '',
     'date_to' => '',
 ]);
+
+mount(function () {
+    $this->search = request('search', $this->search);
+    $this->status = request('status', $this->status);
+    $this->payment_status = request('payment_status', $this->payment_status);
+    $this->customer_id = request('customer_id', $this->customer_id);
+    $this->date_from = request('date_from', $this->date_from);
+    $this->date_to = request('date_to', $this->date_to);
+});
 
 ?>
 
@@ -37,6 +47,7 @@ state([
             </select>
             <select wire:model.live="payment_status" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">All payments</option>
+                <option value="pending">Pending</option>
                 <option value="paid">Paid</option>
                 <option value="partial">Partial</option>
                 <option value="unpaid">Unpaid</option>
@@ -61,7 +72,8 @@ state([
                     ->orWhereHas('createdBy', fn ($user) => $user->where('name', 'like', "%{$search}%"));
             }))
             ->when($status, fn ($query) => $query->where('status', $status))
-            ->when($payment_status, fn ($query) => $query->where('payment_status', $payment_status))
+            ->when($payment_status === 'pending', fn ($query) => $query->whereIn('payment_status', ['unpaid', 'partial']))
+            ->when($payment_status && $payment_status !== 'pending', fn ($query) => $query->where('payment_status', $payment_status))
             ->when($customer_id, fn ($query) => $query->where('customer_id', $customer_id))
             ->when($date_from, fn ($query) => $query->whereDate('sale_date', '>=', $date_from))
             ->when($date_to, fn ($query) => $query->whereDate('sale_date', '<=', $date_to))

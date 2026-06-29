@@ -23,15 +23,87 @@ state([
     'cart' => [],
     'payments' => [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']],
     'notes' => '',
+    'quick_customer_branch_id' => '',
+    'quick_customer_name' => '',
+    'quick_customer_phone' => '',
+    'quick_customer_email' => '',
+    'quick_customer_address' => '',
+    'quick_customer_region' => '',
+    'quick_customer_district' => '',
+    'quick_customer_type' => 'credit',
+    'quick_customer_credit_limit' => '0',
+    'quick_customer_opening_balance' => '0',
+    'quick_customer_status' => 'active',
 ]);
 
 mount(function (InventoryService $inventory) {
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
     $this->stock_location_id = (string) $inventory->getDispensingLocation((int) $this->branch_id)->id;
+    $this->quick_customer_branch_id = $this->branch_id;
 });
 
 $canSellFromStore = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Store Keeper']);
 $canCreditSale = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
+
+$resetQuickCustomerForm = function () {
+    $this->quick_customer_branch_id = $this->branch_id;
+    $this->quick_customer_name = '';
+    $this->quick_customer_phone = '';
+    $this->quick_customer_email = '';
+    $this->quick_customer_address = '';
+    $this->quick_customer_region = '';
+    $this->quick_customer_district = '';
+    $this->quick_customer_type = 'credit';
+    $this->quick_customer_credit_limit = '0';
+    $this->quick_customer_opening_balance = '0';
+    $this->quick_customer_status = 'active';
+    $this->resetErrorBag();
+};
+
+$updatedQuickCustomerRegion = function () {
+    $this->quick_customer_district = '';
+};
+
+$openQuickCustomerModal = function () {
+    $this->resetQuickCustomerForm();
+    $this->dispatch('open-modal', 'quick-customer');
+};
+
+$saveQuickCustomer = function () {
+    $data = $this->validate([
+        'quick_customer_branch_id' => ['nullable', 'exists:branches,id'],
+        'quick_customer_name' => ['required', 'string', 'max:255'],
+        'quick_customer_phone' => ['required', 'string', 'max:30'],
+        'quick_customer_email' => ['nullable', 'email', 'max:255'],
+        'quick_customer_address' => ['nullable', 'string', 'max:1000'],
+        'quick_customer_region' => ['nullable', 'string', 'max:255'],
+        'quick_customer_district' => ['nullable', 'string', 'max:255'],
+        'quick_customer_type' => ['required', 'in:cash,credit,contractor,wholesale'],
+        'quick_customer_credit_limit' => ['required', 'numeric', 'min:0'],
+        'quick_customer_opening_balance' => ['required', 'numeric', 'min:0'],
+        'quick_customer_status' => ['required', 'in:active,inactive'],
+    ]);
+
+    $customer = Customer::create([
+        'branch_id' => $data['quick_customer_branch_id'] ?: null,
+        'name' => $data['quick_customer_name'],
+        'phone' => $data['quick_customer_phone'],
+        'email' => $data['quick_customer_email'] ?: null,
+        'address' => $data['quick_customer_address'] ?: null,
+        'region' => $data['quick_customer_region'] ?: null,
+        'district' => $data['quick_customer_district'] ?: null,
+        'customer_type' => $data['quick_customer_type'],
+        'credit_limit' => $data['quick_customer_credit_limit'],
+        'opening_balance' => $data['quick_customer_opening_balance'],
+        'balance_amount' => $data['quick_customer_opening_balance'],
+        'status' => $data['quick_customer_status'],
+    ]);
+
+    $this->customer_id = (string) $customer->id;
+    $this->resetQuickCustomerForm();
+    $this->dispatch('close-modal', 'quick-customer');
+    session()->flash('success', \App\Support\UiText::translate('Customer created and selected.'));
+};
 
 $availableQuantity = function (int $productId) {
     $inventory = app(InventoryService::class);
@@ -51,12 +123,16 @@ $syncDefaultPaymentAmount = function () {
         return;
     }
 
-    if ($this->payments[0]['payment_method'] === 'credit') {
+    $this->payments[0]['amount'] = (string) $this->grandTotal();
+    $this->dispatch('money-input-updated', model: 'payments.0.amount', value: $this->payments[0]['amount']);
+};
+
+$updatedPayments = function () {
+    if (! isset($this->payments[0]) || count($this->payments) !== 1) {
         return;
     }
 
-    $this->payments[0]['amount'] = (string) $this->grandTotal();
-    $this->dispatch('money-input-updated', model: 'payments.0.amount', value: $this->payments[0]['amount']);
+    $this->syncDefaultPaymentAmount();
 };
 
 $addProduct = function (int $productId) {
@@ -148,6 +224,10 @@ $completeSale = function (InventoryService $inventory) {
         throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('You are not authorized to create credit sales.')]);
     }
 
+    if (collect($this->payments)->contains(fn ($payment) => $payment['payment_method'] === 'credit') && blank($this->customer_id)) {
+        throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Credit sale requires a customer.')]);
+    }
+
     $sale = $inventory->completeSale($this->cart, $this->payments, $this->customer_id ? (int) $this->customer_id : null, (int) $this->stock_location_id, (int) $this->branch_id, auth()->id(), $this->notes);
 
     session()->flash('success', \App\Support\UiText::translate('Sale completed successfully.'));
@@ -207,12 +287,18 @@ $completeSale = function (InventoryService $inventory) {
 
         <x-card title="Cart & Payment" class="xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">
             <div class="space-y-3">
-                <select wire:model="customer_id" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">{{ $t('Walk-in Customer') }}</option>
-                    @foreach (Customer::where('status', 'active')->orderBy('name')->get() as $customer)
-                        <option value="{{ $customer->id }}">{{ $customer->name }} / {{ $customer->customer_type }}</option>
-                    @endforeach
-                </select>
+                <div class="flex gap-2">
+                    <select wire:model="customer_id" class="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                        <option value="">{{ $t('Walk-in Customer') }}</option>
+                        @foreach (Customer::where('status', 'active')->orderBy('name')->get() as $customer)
+                            <option value="{{ $customer->id }}">{{ $customer->name }} / {{ $customer->customer_type }}</option>
+                        @endforeach
+                    </select>
+                    <button type="button" wire:click="openQuickCustomerModal" class="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-cyan-200 bg-cyan-50 text-xl font-black leading-none text-cyan-700 transition hover:border-cyan-400 hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-200" title="{{ $t('Create Customer') }}" aria-label="{{ $t('Create Customer') }}">
+                        +
+                    </button>
+                </div>
+                @error('customer_id') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
 
                 @foreach ($cart as $index => $item)
                     <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5">
@@ -253,7 +339,7 @@ $completeSale = function (InventoryService $inventory) {
                 <div class="space-y-2">
                     @foreach ($payments as $index => $payment)
                         <div class="grid grid-cols-[1fr_1fr_auto] gap-2">
-                            <select wire:model="payments.{{ $index }}.payment_method" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                            <select wire:model.live="payments.{{ $index }}.payment_method" wire:change="syncDefaultPaymentAmount" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                                 <option value="cash">{{ $t('Cash') }}</option>
                                 <option value="mobile_money">{{ $t('Mobile Money') }}</option>
                                 <option value="bank">{{ $t('Bank') }}</option>
@@ -268,6 +354,8 @@ $completeSale = function (InventoryService $inventory) {
                             <button wire:click="removePayment({{ $index }})" type="button" class="rounded-lg border border-slate-200 px-2 text-xs font-bold dark:border-slate-700">X</button>
                         </div>
                     @endforeach
+                    @error('payments') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+                    @error('payments.*.amount') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
                     <button type="button" wire:click="addPayment" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ $t('Add Payment') }}</button>
                 </div>
 
@@ -282,4 +370,76 @@ $completeSale = function (InventoryService $inventory) {
             <span>TZS {{ number_format($this->grandTotal(), 2) }}</span>
         </button>
     </div>
+
+    <x-modal name="quick-customer" maxWidth="3xl">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+            <div>
+                <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t('Create Customer') }}</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('Add a credit customer without leaving POS.') }}</p>
+            </div>
+            <button type="button" x-on:click="$dispatch('close-modal', 'quick-customer')" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-black dark:border-slate-700">X</button>
+        </div>
+
+        <form wire:submit="saveQuickCustomer" class="max-h-[calc(100vh-9rem)] overflow-y-auto px-5 py-5">
+            <div class="grid gap-4 md:grid-cols-2">
+                <x-form-input label="Customer Name" name="quick_customer_name" wire:model="quick_customer_name" required />
+                <x-form-input label="Phone" name="quick_customer_phone" wire:model="quick_customer_phone" required />
+                <x-form-input label="Email" name="quick_customer_email" type="email" wire:model="quick_customer_email" />
+
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                    {{ $t('Customer Type') }}
+                    <select wire:model="quick_customer_type" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                        <option value="cash">{{ $t('Cash') }}</option>
+                        <option value="credit">{{ $t('Credit') }} / {{ $t('Mkopo') }}</option>
+                        <option value="contractor">{{ $t('Contractor') }}</option>
+                        <option value="wholesale">{{ $t('Wholesale') }}</option>
+                    </select>
+                    @error('quick_customer_type') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                </label>
+
+                <x-tanzania-location-selects
+                    :region="$quick_customer_region"
+                    :district="$quick_customer_district"
+                    region-model="quick_customer_region"
+                    district-model="quick_customer_district"
+                    region-name="quick_customer_region"
+                    district-name="quick_customer_district"
+                />
+
+                <x-money-input label="Credit Limit" name="quick_customer_credit_limit" wire:model="quick_customer_credit_limit" required />
+                <x-money-input label="Opening Balance" name="quick_customer_opening_balance" wire:model="quick_customer_opening_balance" required />
+
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                    {{ $t('Branch') }}
+                    <select wire:model="quick_customer_branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                        <option value="">{{ $t('Global customer') }}</option>
+                        @foreach (Branch::orderBy('name')->get() as $branch)
+                            <option value="{{ $branch->id }}">{{ $branch->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('quick_customer_branch_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                </label>
+
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                    {{ $t('Status') }}
+                    <select wire:model="quick_customer_status" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                        <option value="active">{{ $t('Active') }}</option>
+                        <option value="inactive">{{ $t('Inactive') }}</option>
+                    </select>
+                    @error('quick_customer_status') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                </label>
+
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">
+                    {{ $t('Address') }}
+                    <textarea wire:model="quick_customer_address" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
+                    @error('quick_customer_address') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                </label>
+            </div>
+
+            <div class="sticky bottom-0 -mx-5 mt-5 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
+                <button type="button" x-on:click="$dispatch('close-modal', 'quick-customer')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Cancel') }}</button>
+                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t('Save Customer') }}</button>
+            </div>
+        </form>
+    </x-modal>
 </div>

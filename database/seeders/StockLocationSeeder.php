@@ -13,7 +13,7 @@ class StockLocationSeeder extends Seeder
     {
         $warehouseEnabled = (bool) (Setting::query()->value('enable_warehouse') ?? true);
 
-        Branch::query()->each(function (Branch $branch) {
+        Branch::query()->each(function (Branch $branch) use ($warehouseEnabled) {
             if ($warehouseEnabled) {
                 StockLocation::query()->firstOrCreate(
                     [

@@ -4,10 +4,16 @@ use App\Models\Branch;
 use App\Services\FinancialReportService;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
 state(['branch_id' => '', 'search' => '']);
+
+mount(function () {
+    $this->branch_id = request('branch_id', $this->branch_id);
+    $this->search = request('search', $this->search);
+});
 
 ?>
 

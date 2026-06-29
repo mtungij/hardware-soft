@@ -5,13 +5,23 @@ use App\Models\Customer;
 use Livewire\WithPagination;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
 
 layout('layouts.app');
 uses([WithPagination::class]);
 
-state(['search' => '', 'statusFilter' => '', 'branchFilter' => '', 'typeFilter' => '']);
+state(['search' => '', 'statusFilter' => '', 'branchFilter' => '', 'typeFilter' => '', 'created_from' => '', 'created_to' => '']);
+
+mount(function () {
+    $this->search = request('search', $this->search);
+    $this->statusFilter = request('statusFilter', $this->statusFilter);
+    $this->branchFilter = request('branchFilter', $this->branchFilter);
+    $this->typeFilter = request('typeFilter', $this->typeFilter);
+    $this->created_from = request('created_from', $this->created_from);
+    $this->created_to = request('created_to', $this->created_to);
+});
 
 $canManage = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin']);
 
@@ -77,6 +87,8 @@ $deleteCustomer = function (int $customerId) {
                 ->when($statusFilter, fn ($query) => $query->where('status', $statusFilter))
                 ->when($typeFilter, fn ($query) => $query->where('customer_type', $typeFilter))
                 ->when($branchFilter, fn ($query) => $query->where('branch_id', $branchFilter))
+                ->when($created_from, fn ($query) => $query->whereDate('created_at', '>=', $created_from))
+                ->when($created_to, fn ($query) => $query->whereDate('created_at', '<=', $created_to))
                 ->latest()
                 ->paginate(10);
         @endphp

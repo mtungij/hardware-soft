@@ -178,7 +178,7 @@ class InventoryService
             $containsCredit = collect($payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
 
             if ($containsCredit && ! $customerId) {
-                throw ValidationException::withMessages(['customer_id' => 'Credit sale requires a customer.']);
+                throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Credit sale requires a customer.')]);
             }
 
             $subtotal = 0;
@@ -251,15 +251,15 @@ class InventoryService
                 }
 
                 if ($paid + $creditAmount < $total) {
-                    throw ValidationException::withMessages(['payments' => 'Credit amount must cover the outstanding sale balance.']);
+                    throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('Credit amount must cover the outstanding sale balance.')]);
                 }
 
                 if ($paid + $creditAmount > $total) {
-                    throw ValidationException::withMessages(['payments' => 'Paid amount cannot exceed total for credit sales.']);
+                    throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('Paid amount cannot exceed total for credit sales.')]);
                 }
 
                 if ((float) $customer->balance_amount + $creditAmount > (float) $customer->credit_limit) {
-                    throw ValidationException::withMessages(['customer_id' => 'Customer credit limit exceeded.']);
+                    throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Customer credit limit exceeded.')]);
                 }
             }
 

@@ -5,6 +5,7 @@ use App\Models\Supplier;
 use Livewire\WithPagination;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
 
@@ -12,6 +13,14 @@ layout('layouts.app');
 uses([WithPagination::class]);
 
 state(['search' => '', 'statusFilter' => '', 'supplierFilter' => '', 'dateFrom' => '', 'dateTo' => '']);
+
+mount(function () {
+    $this->search = request('search', $this->search);
+    $this->statusFilter = request('statusFilter', $this->statusFilter);
+    $this->supplierFilter = request('supplierFilter', $this->supplierFilter);
+    $this->dateFrom = request('dateFrom', $this->dateFrom);
+    $this->dateTo = request('dateTo', $this->dateTo);
+});
 
 ?>
 

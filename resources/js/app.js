@@ -463,6 +463,7 @@ const initializeImageCropUploads = () => {
 
 document.addEventListener('DOMContentLoaded', initializePreline);
 document.addEventListener('livewire:navigated', initializePreline);
+document.addEventListener('open-modal', () => window.setTimeout(initializePreline, 50));
 document.addEventListener('DOMContentLoaded', initializeMoneyInputs);
 document.addEventListener('livewire:navigated', initializeMoneyInputs);
 document.addEventListener('DOMContentLoaded', initializeImageCropUploads);

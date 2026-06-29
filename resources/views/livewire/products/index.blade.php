@@ -8,6 +8,7 @@ use Illuminate\Validation\Rule;
 use Livewire\WithPagination;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
 
@@ -19,6 +20,8 @@ state([
     'statusFilter' => '',
     'branchFilter' => '',
     'categoryFilter' => '',
+    'created_from' => '',
+    'created_to' => '',
     'editing_product_id' => null,
     'deleting_product_id' => null,
     'branch_id' => '',
@@ -37,6 +40,15 @@ state([
     'taxable' => false,
     'status' => 'active',
 ]);
+
+mount(function () {
+    $this->search = request('search', $this->search);
+    $this->statusFilter = request('statusFilter', $this->statusFilter);
+    $this->branchFilter = request('branchFilter', $this->branchFilter);
+    $this->categoryFilter = request('categoryFilter', $this->categoryFilter);
+    $this->created_from = request('created_from', $this->created_from);
+    $this->created_to = request('created_to', $this->created_to);
+});
 
 $canManage = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin']);
 
@@ -104,7 +116,7 @@ $saveProduct = function () {
         'category_id' => ['required', 'exists:categories,id'],
         'unit_id' => ['required', 'exists:units,id'],
         'name' => ['required', 'string', 'max:255'],
-        'sku' => ['required', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($this->editing_product_id)],
+        'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($this->editing_product_id)],
         'barcode' => ['nullable', 'string', 'max:100', Rule::unique('products', 'barcode')->ignore($this->editing_product_id)],
         'brand' => ['nullable', 'string', 'max:255'],
         'model_size' => ['nullable', 'string', 'max:255'],
@@ -118,6 +130,7 @@ $saveProduct = function () {
     ]);
 
     $validated['branch_id'] = $validated['branch_id'] ?: null;
+    $validated['sku'] = $validated['sku'] ?: null;
     $validated['barcode'] = $validated['barcode'] ?: null;
     $validated['wholesale_price'] = $validated['wholesale_price'] === '' ? null : $validated['wholesale_price'];
 
@@ -216,6 +229,8 @@ $deleteConfirmedProduct = function () {
                 ->when($statusFilter, fn ($query) => $query->where('status', $statusFilter))
                 ->when($branchFilter, fn ($query) => $query->where('branch_id', $branchFilter))
                 ->when($categoryFilter, fn ($query) => $query->where('category_id', $categoryFilter))
+                ->when($created_from, fn ($query) => $query->whereDate('created_at', '>=', $created_from))
+                ->when($created_to, fn ($query) => $query->whereDate('created_at', '<=', $created_to))
                 ->latest()
                 ->paginate(10);
         @endphp
@@ -232,7 +247,7 @@ $deleteConfirmedProduct = function () {
                             </div>
                         </div>
                     </td>
-                    <td class="px-4 py-3 font-mono text-xs">{{ $product->sku }}</td>
+                    <td class="px-4 py-3 font-mono text-xs">{{ $product->sku ?: '-' }}</td>
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->barcode ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
                     <td class="px-4 py-3">{{ $product->unit?->short_name }}</td>
@@ -278,7 +293,7 @@ $deleteConfirmedProduct = function () {
             <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5">
                 <div class="grid gap-4 md:grid-cols-2">
                     <x-form-input label="Product Name" name="name" wire:model="name" required />
-                    <x-form-input label="SKU" name="sku" wire:model="sku" required />
+                    <x-form-input label="SKU" name="sku" wire:model="sku" />
                     <x-form-input label="Barcode" name="barcode" wire:model="barcode" />
 
                     <x-form-select label="Category" name="category_id" wire:model="category_id" required>
@@ -304,7 +319,6 @@ $deleteConfirmedProduct = function () {
 
                     <x-form-input label="Brand" name="brand" wire:model="brand" />
                     <x-form-input label="Model / Size" name="model_size" wire:model="model_size" />
-                    <x-form-input label="Product Image Path" name="image" wire:model="image" placeholder="products/item.jpg" />
                     <x-money-input label="Buying Price" name="buying_price" value="{{ $buying_price }}" wire:model="buying_price" required />
                     <x-money-input label="Selling Price" name="selling_price" value="{{ $selling_price }}" wire:model="selling_price" required />
                     <x-money-input label="Wholesale Price" name="wholesale_price" value="{{ $wholesale_price }}" wire:model="wholesale_price" />

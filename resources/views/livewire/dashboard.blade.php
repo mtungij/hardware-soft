@@ -3,6 +3,8 @@
 use App\Models\Branch;
 use App\Models\Announcement;
 use App\Models\Category;
+use App\Models\Customer;
+use App\Models\CustomerDeposit;
 use App\Models\CustomerNotification;
 use App\Models\CustomerPayment;
 use App\Models\Expense;
@@ -11,6 +13,7 @@ use App\Models\Purchase;
 use App\Models\PurchaseEmailLog;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
@@ -382,28 +385,76 @@ $recentTransactions = computed(function (): Collection {
         $t = fn ($value) => \App\Support\UiText::translate($value);
         $currency = 'TZS';
         $formatMoney = fn ($value) => $currency.' '.number_format((float) $value, 2);
+        $today = today()->toDateString();
+        $monthStart = now()->startOfMonth()->toDateString();
+        $monthEnd = today()->toDateString();
+        $user = auth()->user();
+        $canSeeCard = fn (array $roles): bool => $user?->hasRole('Super Admin') || $user?->hasAnyRole($roles);
         $maxTrend = max(1, $this->salesTrendChart->max('sales') ?: 1);
         $maxCategory = max(1, $this->salesByCategoryChart->max('total_sales') ?: 1);
         $maxStock = max(1, $this->stockDistributionChart->max('quantity') ?: 1);
         $maxMonthly = max(1, $this->monthlyRevenueExpenseChart->map(fn ($row) => max($row['sales'], $row['purchases'], $row['expenses']))->max() ?: 1);
         $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
-        $cards = [
-            ['label' => "Today's Sales", 'value' => $formatMoney($this->todaySales), 'tone' => 'text-emerald-600', 'hint' => 'Completed sales today'],
-            ['label' => 'Monthly Sales', 'value' => $formatMoney($this->monthlySales), 'tone' => 'text-navy-900 dark:text-white', 'hint' => now()->format('F Y')],
-            ['label' => 'Total Profit', 'value' => $formatMoney($this->totalProfit), 'tone' => 'text-emerald-600', 'hint' => 'Filtered completed sales'],
-            ['label' => 'Total Purchases', 'value' => $formatMoney($this->totalPurchases), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Non-cancelled purchases'],
-            ...($warehouseEnabled ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation']] : []),
-            ['label' => 'Dispensing Stock Value', 'value' => $formatMoney($this->dispensingStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => $warehouseEnabled ? 'Sales counter valuation' : 'Direct stock and POS valuation'],
-            ...(! $warehouseEnabled ? [['label' => 'Direct Stock In', 'value' => number_format(\App\Models\StockMovement::where('movement_type', 'direct_stock_in')->count()), 'tone' => 'text-cyan-600', 'hint' => 'Direct stock entries']] : []),
-            ['label' => 'Customer Debts', 'value' => $formatMoney($this->customerDebts), 'tone' => 'text-red-600', 'hint' => 'Unpaid and partial sales'],
-            ['label' => 'Low Stock Alerts', 'value' => number_format($this->lowStockAlerts), 'tone' => 'text-amber-600', 'hint' => 'At or below reorder level'],
-            ['label' => 'Purchase Orders Sent Today', 'value' => number_format(PurchaseEmailLog::where('status', 'sent')->whereDate('sent_at', today())->count()), 'tone' => 'text-emerald-600', 'hint' => 'Supplier PO emails delivered'],
-            ['label' => 'Failed Purchase Emails', 'value' => number_format(PurchaseEmailLog::where('status', 'failed')->count()), 'tone' => 'text-red-600', 'hint' => 'Needs SMTP or recipient review'],
-            ['label' => 'Pending Purchase Emails', 'value' => number_format(PurchaseEmailLog::where('status', 'pending')->count()), 'tone' => 'text-amber-600', 'hint' => 'Queued and waiting for workers'],
-            ['label' => 'Announcements Sent', 'value' => number_format(CustomerNotification::where('type', 'announcement')->count()), 'tone' => 'text-cyan-600', 'hint' => 'Portal announcement deliveries'],
-            ['label' => 'Unread Customer Messages', 'value' => number_format(CustomerNotification::whereIn('type', ['announcement', 'customer_message'])->whereNull('read_at')->count()), 'tone' => 'text-amber-600', 'hint' => 'Waiting for customer read'],
-            ['label' => 'Customers Reached', 'value' => number_format(CustomerNotification::whereIn('type', ['announcement', 'customer_message'])->distinct('customer_id')->count('customer_id')), 'tone' => 'text-emerald-600', 'hint' => 'Unique customers notified'],
-        ];
+        $settings = Setting::query()->first();
+        $emailSettingsConfigured = filled($settings?->mail_host)
+            && filled($settings?->mail_username)
+            && filled($settings?->mail_password)
+            && filled($settings?->mail_port);
+        $branchId = $this->activeBranchId();
+        $profitForRange = function (string $from, string $to) use ($branchId): float {
+            return (float) SaleItem::query()
+                ->whereHas('sale', fn ($query) => $query
+                    ->where('status', 'completed')
+                    ->whereBetween('sale_date', [$from, $to])
+                    ->when($branchId, fn ($saleQuery) => $saleQuery->where('branch_id', $branchId)))
+                ->get()
+                ->sum(fn (SaleItem $item) => (float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost));
+        };
+        $purchaseValueForDate = fn (string $date): float => (float) Purchase::query()
+            ->where('status', '!=', 'cancelled')
+            ->whereDate('purchase_date', $date)
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->sum('total_amount');
+        $customerDebt = (float) Customer::query()
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->sum('balance_amount');
+        $supplierDebt = (float) Purchase::query()
+            ->where('status', '!=', 'cancelled')
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->sum('balance_amount');
+        $customerDepositBalance = (float) CustomerDeposit::query()
+            ->whereIn('status', ['approved', 'partial'])
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
+            ->sum('balance_amount');
+        $cards = collect([
+            ['label' => "Today's Sales", 'value' => $formatMoney($this->todaySales), 'tone' => 'text-emerald-600', 'hint' => 'Completed sales today', 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Monthly Sales', 'value' => $formatMoney($this->monthlySales), 'tone' => 'text-navy-900 dark:text-white', 'hint' => now()->format('F Y'), 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => "Today's Profit", 'value' => $formatMoney($profitForRange($today, $today)), 'tone' => 'text-emerald-600', 'hint' => 'Profit from sales today', 'url' => route('reports.profit-loss', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ['label' => 'Monthly Profit', 'value' => $formatMoney($profitForRange($monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => 'This month net sales profit', 'url' => route('reports.profit-loss', ['date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ['label' => "Today's Purchases", 'value' => $formatMoney($purchaseValueForDate($today)), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Non-cancelled purchases today', 'url' => route('purchases.index', ['dateFilter' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']],
+            ...($warehouseEnabled ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation', 'url' => route('reports.stock-valuation', ['search' => 'Main Store']), 'roles' => ['Admin', 'Manager', 'Accountant']]] : []),
+            ['label' => 'Dispensing Stock Value', 'value' => $formatMoney($this->dispensingStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => $warehouseEnabled ? 'Sales counter valuation' : 'Direct stock and POS valuation', 'url' => route('reports.stock-valuation', ['search' => 'Dispensing']), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ...(! $warehouseEnabled ? [['label' => 'Direct Stock In', 'value' => number_format(StockMovement::where('movement_type', 'direct_stock_in')->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Direct stock entries', 'url' => route('direct-stock-in.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper']]] : []),
+            ['label' => 'Low Stock Products', 'value' => number_format($this->lowStockAlerts), 'tone' => 'text-amber-600', 'hint' => 'At or below reorder level', 'url' => route('inventory-summary.index', ['statusFilter' => 'low_stock']), 'roles' => ['Admin', 'Manager', 'Store Keeper']],
+            ['label' => 'Credit Customers', 'value' => $formatMoney($customerDebt), 'tone' => 'text-red-600', 'hint' => 'Outstanding customer balances', 'url' => route('customer-balances.index', ['balance' => 'outstanding']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Pending Payments', 'value' => number_format(Sale::query()->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-amber-600', 'hint' => 'Unpaid and partial invoices', 'url' => route('sales.index', ['status' => 'completed', 'payment_status' => 'pending']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Customers Registered Today', 'value' => number_format(Customer::query()->whereDate('created_at', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'New customers today', 'url' => route('customers.index', ['created_from' => $today, 'created_to' => $today]), 'roles' => ['Admin', 'Manager', 'Cashier']],
+            ['label' => 'Products Added Today', 'value' => number_format(Product::query()->whereDate('created_at', $today)->when($branchId, fn ($query) => $query->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $branchId)))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Products created today', 'url' => route('products.index', ['created_from' => $today, 'created_to' => $today]), 'roles' => ['Admin', 'Manager', 'Store Keeper']],
+            ...($warehouseEnabled ? [['label' => 'Stock Transfers Today', 'value' => number_format(StockTransfer::query()->whereDate('transfer_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Transfers created today', 'url' => route('stock-transfers.index', ['dateFrom' => $today, 'dateTo' => $today]), 'roles' => ['Admin', 'Manager', 'Store Keeper']]] : []),
+            ['label' => 'Expenses Today', 'value' => $formatMoney(Expense::query()->whereDate('expense_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('amount')), 'tone' => 'text-red-600', 'hint' => 'Operating costs today', 'url' => route('expenses.index', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ['label' => 'Supplier Balances', 'value' => $formatMoney($supplierDebt), 'tone' => 'text-red-600', 'hint' => 'Outstanding supplier balances', 'url' => route('supplier-balances.index'), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ['label' => 'Customer Deposits', 'value' => $formatMoney($customerDepositBalance), 'tone' => 'text-emerald-600', 'hint' => 'Available customer deposit balance', 'url' => route('admin.customer-deposits.index'), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ...($emailSettingsConfigured ? [
+                ['label' => 'Purchase Orders Sent Today', 'value' => number_format(PurchaseEmailLog::where('status', 'sent')->whereDate('sent_at', today())->count()), 'tone' => 'text-emerald-600', 'hint' => 'Supplier PO emails delivered', 'url' => route('purchase-email-logs.index', ['statusFilter' => 'sent', 'dateFrom' => $today, 'dateTo' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
+                ['label' => 'Failed Purchase Emails', 'value' => number_format(PurchaseEmailLog::where('status', 'failed')->count()), 'tone' => 'text-red-600', 'hint' => 'Needs SMTP or recipient review', 'url' => route('purchase-email-logs.index', ['statusFilter' => 'failed']), 'roles' => ['Admin', 'Manager', 'Accountant']],
+                ['label' => 'Pending Purchase Emails', 'value' => number_format(PurchaseEmailLog::where('status', 'pending')->count()), 'tone' => 'text-amber-600', 'hint' => 'Queued and waiting for workers', 'url' => route('purchase-email-logs.index', ['statusFilter' => 'pending']), 'roles' => ['Admin', 'Manager', 'Accountant']],
+                ['label' => 'Suppliers Contacted Today', 'value' => number_format(PurchaseEmailLog::whereDate('created_at', $today)->distinct('recipient_email')->count('recipient_email')), 'tone' => 'text-cyan-600', 'hint' => 'Unique supplier emails today', 'url' => route('purchase-email-logs.index', ['dateFrom' => $today, 'dateTo' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
+                ['label' => 'Email Queue', 'value' => number_format(PurchaseEmailLog::where('status', 'pending')->count()), 'tone' => 'text-amber-600', 'hint' => 'Queued purchase email jobs', 'url' => route('purchase-email-logs.index', ['statusFilter' => 'pending']), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ] : []),
+            ['label' => 'Announcements Sent', 'value' => number_format(CustomerNotification::where('type', 'announcement')->count()), 'tone' => 'text-cyan-600', 'hint' => 'Portal announcement deliveries', 'url' => route('admin.announcements.index'), 'roles' => ['Admin', 'Manager']],
+            ['label' => 'Unread Customer Messages', 'value' => number_format(CustomerNotification::whereIn('type', ['announcement', 'customer_message'])->whereNull('read_at')->count()), 'tone' => 'text-amber-600', 'hint' => 'Waiting for customer read', 'url' => route('admin.customer-notifications.index'), 'roles' => ['Admin', 'Manager']],
+            ['label' => 'Customers Reached', 'value' => number_format(CustomerNotification::whereIn('type', ['announcement', 'customer_message'])->distinct('customer_id')->count('customer_id')), 'tone' => 'text-emerald-600', 'hint' => 'Unique customers notified', 'url' => route('admin.sent-messages.index'), 'roles' => ['Admin', 'Manager']],
+        ])->filter(fn (array $card) => $canSeeCard($card['roles']))->values();
         $recentAnnouncements = Announcement::query()->latest()->limit(5)->get();
     @endphp
 
@@ -465,18 +516,33 @@ $recentTransactions = computed(function (): Collection {
         @endforeach
     </div>
 
+    @if (! $emailSettingsConfigured && $canSeeCard(['Admin', 'Manager', 'Accountant']))
+        <div wire:loading.remove.delay class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm font-black text-amber-900 dark:text-amber-100">{{ $t('Email settings have not been configured.') }}</p>
+                    <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">{{ $t('Email sending is currently unavailable because email settings have not been configured.') }}</p>
+                </div>
+                <a href="{{ route('email-settings.index') }}" wire:navigate class="inline-flex min-h-10 items-center justify-center rounded-xl bg-amber-500 px-4 text-sm font-black text-white shadow-sm hover:bg-amber-600">
+                    {{ $t('Configure Email Settings') }}
+                </a>
+            </div>
+        </div>
+    @endif
+
     <div wire:loading.remove.delay data-tour="dashboard-stats" class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         @foreach ($cards as $card)
-            <x-card>
+            <a href="{{ $card['url'] }}" wire:navigate class="group block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:border-cyan-400 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:border-slate-800 dark:bg-navy-900 dark:hover:border-cyan-400">
                 <div class="flex items-start justify-between gap-3">
-                    <div>
+                    <div class="min-w-0">
                         <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ $t($card['label']) }}</p>
                         <p class="mt-3 text-2xl font-black {{ $card['tone'] }}">{{ $card['value'] }}</p>
                         <p class="mt-2 text-xs text-slate-500">{{ $t($card['hint']) }}</p>
+                        <p class="mt-4 text-xs font-black text-cyan-600 transition group-hover:text-cyan-500 dark:text-cyan-300">{{ $t('View Details') }} -></p>
                     </div>
-                    <span class="grid h-10 w-10 place-items-center rounded-lg bg-orange-50 text-sm font-black text-build-orange dark:bg-orange-500/10">{{ collect(explode(' ', $card['label']))->map(fn ($word) => $word[0])->take(2)->join('') }}</span>
+                    <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 text-sm font-black text-white shadow-lg shadow-cyan-500/20">{{ collect(explode(' ', $card['label']))->map(fn ($word) => $word[0])->take(2)->join('') }}</span>
                 </div>
-            </x-card>
+            </a>
         @endforeach
     </div>
 

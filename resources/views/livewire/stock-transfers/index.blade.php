@@ -7,6 +7,7 @@ use App\Support\InventorySettings;
 use Livewire\WithPagination;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
 
@@ -16,6 +17,15 @@ uses([WithPagination::class]);
 abort_unless(InventorySettings::warehouseEnabled(), 403);
 
 state(['search' => '', 'statusFilter' => '', 'fromFilter' => '', 'toFilter' => '', 'dateFrom' => '', 'dateTo' => '']);
+
+mount(function () {
+    $this->search = request('search', $this->search);
+    $this->statusFilter = request('statusFilter', $this->statusFilter);
+    $this->fromFilter = request('fromFilter', $this->fromFilter);
+    $this->toFilter = request('toFilter', $this->toFilter);
+    $this->dateFrom = request('dateFrom', $this->dateFrom);
+    $this->dateTo = request('dateTo', $this->dateTo);
+});
 
 $canCreate = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Store Keeper']);
 $canManage = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Store Keeper']);

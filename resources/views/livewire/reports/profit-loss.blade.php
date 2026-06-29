@@ -9,7 +9,11 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 state(['branch_id' => '', 'date_from' => '', 'date_to' => '']);
-mount(function () { $this->date_from = now()->startOfMonth()->toDateString(); $this->date_to = today()->toDateString(); });
+mount(function () {
+    $this->branch_id = request('branch_id', $this->branch_id);
+    $this->date_from = request('date_from', now()->startOfMonth()->toDateString());
+    $this->date_to = request('date_to', today()->toDateString());
+});
 
 ?>
 

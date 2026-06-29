@@ -34,7 +34,7 @@ rules([
     'category_id' => ['required', 'exists:categories,id'],
     'unit_id' => ['required', 'exists:units,id'],
     'name' => ['required', 'string', 'max:255'],
-    'sku' => ['required', 'string', 'max:100', 'unique:products,sku'],
+    'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku'],
     'barcode' => ['nullable', 'string', 'max:100', 'unique:products,barcode'],
     'brand' => ['nullable', 'string', 'max:255'],
     'model_size' => ['nullable', 'string', 'max:255'],
@@ -50,6 +50,7 @@ rules([
 $save = function () {
     $validated = $this->validate();
     $validated['branch_id'] = $validated['branch_id'] ?: null;
+    $validated['sku'] = $validated['sku'] ?: null;
     $validated['barcode'] = $validated['barcode'] ?: null;
     $validated['wholesale_price'] = $validated['wholesale_price'] === '' ? null : $validated['wholesale_price'];
 
@@ -71,7 +72,7 @@ $save = function () {
     <x-card>
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <x-form-input label="Product Name" name="name" wire:model="name" required />
-            <x-form-input label="SKU" name="sku" wire:model="sku" required />
+            <x-form-input label="SKU" name="sku" wire:model="sku" />
             <x-form-input label="Barcode" name="barcode" wire:model="barcode" />
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
@@ -108,7 +109,6 @@ $save = function () {
 
             <x-form-input label="Brand" name="brand" wire:model="brand" />
             <x-form-input label="Model / Size" name="model_size" wire:model="model_size" />
-            <x-form-input label="Product Image Path" name="image" wire:model="image" placeholder="products/item.jpg" />
             <x-money-input label="Buying Price" name="buying_price" value="{{ $buying_price }}" wire:model="buying_price" required />
             <x-money-input label="Selling Price" name="selling_price" value="{{ $selling_price }}" wire:model="selling_price" required />
             <x-money-input label="Wholesale Price" name="wholesale_price" value="{{ $wholesale_price }}" wire:model="wholesale_price" />

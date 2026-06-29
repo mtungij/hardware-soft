@@ -7,11 +7,18 @@ use App\Models\StockLocation;
 use App\Services\InventoryService;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['search' => '', 'categoryFilter' => '']);
+state(['search' => '', 'categoryFilter' => '', 'statusFilter' => '']);
+
+mount(function () {
+    $this->search = request('search', $this->search);
+    $this->categoryFilter = request('categoryFilter', $this->categoryFilter);
+    $this->statusFilter = request('statusFilter', $this->statusFilter);
+});
 
 ?>
 
@@ -19,13 +26,19 @@ state(['search' => '', 'categoryFilter' => '']);
     <x-page-header title="Inventory Summary" description="Combined stock position by Main Store and Dispensing Area." :breadcrumbs="['Dashboard' => route('dashboard'), 'Inventory Summary' => null]" />
 
     <x-card>
-        <div class="mb-4 grid gap-3 md:grid-cols-3">
+        <div class="mb-4 grid gap-3 md:grid-cols-4">
             <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 md:col-span-2" placeholder="Search products...">
             <select wire:model.live="categoryFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">All categories</option>
                 @foreach (Category::orderBy('name')->get() as $category)
                     <option value="{{ $category->id }}">{{ $category->name }}</option>
                 @endforeach
+            </select>
+            <select wire:model.live="statusFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                <option value="">All stock statuses</option>
+                <option value="in_stock">In stock</option>
+                <option value="low_stock">Low stock</option>
+                <option value="out_of_stock">Out of stock</option>
             </select>
         </div>
 
@@ -45,7 +58,8 @@ state(['search' => '', 'categoryFilter' => '']);
                     $totalQty = $storeQty + $dispensingQty;
                     $status = $totalQty <= 0 ? 'out_of_stock' : ($totalQty <= (float) $product->reorder_level ? 'low_stock' : 'in_stock');
                     return compact('product', 'storeQty', 'dispensingQty', 'totalQty', 'status');
-                });
+                })
+                ->when($statusFilter, fn ($rows) => $rows->filter(fn ($row) => $row['status'] === $statusFilter)->values());
         @endphp
 
         <x-table :headers="['Product', 'Category', 'Unit', 'Main Store Qty', 'Dispensing Qty', 'Total Stock', 'Reorder', 'Status']">

@@ -7,6 +7,7 @@ use Illuminate\Validation\ValidationException;
 use Livewire\WithPagination;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
 
@@ -14,6 +15,14 @@ layout('layouts.app');
 uses([WithPagination::class]);
 
 state(['search' => '', 'supplierFilter' => '', 'statusFilter' => '', 'paymentFilter' => '', 'dateFilter' => '']);
+
+mount(function () {
+    $this->search = request('search', $this->search);
+    $this->supplierFilter = request('supplierFilter', $this->supplierFilter);
+    $this->statusFilter = request('statusFilter', $this->statusFilter);
+    $this->paymentFilter = request('paymentFilter', $this->paymentFilter);
+    $this->dateFilter = request('dateFilter', request('date_from', $this->dateFilter));
+});
 
 $canCreate = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Store Keeper']);
 $canManage = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
