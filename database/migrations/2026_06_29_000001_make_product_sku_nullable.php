@@ -35,14 +35,14 @@ return new class extends Migration
             DB::statement('INSERT INTO products_new SELECT * FROM products');
             Schema::drop('products');
             DB::statement('ALTER TABLE products_new RENAME TO products');
-            DB::statement('CREATE UNIQUE INDEX products_sku_unique ON products (sku)');
-            DB::statement('CREATE UNIQUE INDEX products_barcode_unique ON products (barcode)');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS products_sku_unique ON products (sku)');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique ON products (barcode)');
 
             return;
         }
 
         Schema::table('products', function ($table) {
-            $table->string('sku')->nullable()->unique()->change();
+            $table->string('sku')->nullable()->change();
         });
     }
 
@@ -75,14 +75,14 @@ return new class extends Migration
             DB::statement('INSERT INTO products_new SELECT * FROM products WHERE sku IS NOT NULL');
             Schema::drop('products');
             DB::statement('ALTER TABLE products_new RENAME TO products');
-            DB::statement('CREATE UNIQUE INDEX products_sku_unique ON products (sku)');
-            DB::statement('CREATE UNIQUE INDEX products_barcode_unique ON products (barcode)');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS products_sku_unique ON products (sku)');
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS products_barcode_unique ON products (barcode)');
 
             return;
         }
 
         Schema::table('products', function ($table) {
-            $table->string('sku')->nullable(false)->unique()->change();
+            $table->string('sku')->nullable(false)->change();
         });
     }
 };
