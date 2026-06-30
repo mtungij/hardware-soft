@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['stock_transfer_id', 'product_id', 'quantity', 'notes'])]
+#[Fillable(['company_id', 'stock_transfer_id', 'product_id', 'quantity', 'notes'])]
 class StockTransferItem extends Model
 {
-    use HasFactory;
+    use HasCompany, HasFactory;
 
     public function stockTransfer(): BelongsTo
     {

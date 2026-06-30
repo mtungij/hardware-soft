@@ -13,8 +13,9 @@ class SettingSeeder extends Seeder
         $branch = Branch::query()->where('code', 'MAIN')->first();
 
         Setting::query()->firstOrCreate(
-            ['company_name' => 'Hardex POS'],
+            ['company_id' => $branch?->company_id, 'company_name' => 'Hardex POS'],
             [
+                'company_id' => $branch?->company_id,
                 'company_phone' => '+255 700 000 000',
                 'company_email' => 'info@buildmart.test',
                 'company_address' => 'Hardex Head Office, Dar es Salaam',

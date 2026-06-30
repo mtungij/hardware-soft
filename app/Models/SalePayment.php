@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['sale_id', 'payment_method', 'amount', 'reference_number', 'received_by', 'payment_date'])]
+#[Fillable(['company_id', 'sale_id', 'payment_method', 'amount', 'reference_number', 'received_by', 'payment_date'])]
 class SalePayment extends Model
 {
-    use HasFactory;
+    use HasCompany, HasFactory;
 
     public function sale(): BelongsTo
     {

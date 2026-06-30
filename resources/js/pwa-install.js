@@ -94,6 +94,8 @@
         return true;
     };
 
+    const canDeferInstallPrompt = () => installButtons().length > 0 && shouldShowInstallButton() && !dismissedRecently();
+
     const refreshInstallButtons = () => {
         setInstallButtonsVisible(shouldShowInstallButton());
     };
@@ -179,6 +181,10 @@
     };
 
     window.addEventListener('beforeinstallprompt', (event) => {
+        if (!canDeferInstallPrompt()) {
+            return;
+        }
+
         event.preventDefault();
         deferredInstallPrompt = event;
         localStorage.removeItem(dismissKey);
@@ -197,6 +203,24 @@
     document.addEventListener('livewire:navigated', bindInstallButtons);
 
     if ('serviceWorker' in navigator) {
+        const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+
+        if (isLocalHost) {
+            window.addEventListener('load', async () => {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+
+                await Promise.all(registrations.map((registration) => registration.unregister()));
+
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+
+                    await Promise.all(keys.filter((key) => key.startsWith('hardex-')).map((key) => caches.delete(key)));
+                }
+            });
+
+            return;
+        }
+
         window.addEventListener('load', async () => {
             try {
                 const registration = await navigator.serviceWorker.register('/sw.js');

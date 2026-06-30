@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['branch_id', 'name', 'code', 'type', 'status'])]
+#[Fillable(['company_id', 'branch_id', 'name', 'code', 'type', 'status'])]
 class StockLocation extends Model
 {
-    use HasFactory;
+    use HasCompany, HasFactory;
 
     public function branch(): BelongsTo
     {

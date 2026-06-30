@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['branch_id', 'session_date', 'opening_cash', 'cash_sales', 'customer_payments', 'supplier_payments', 'expenses', 'cash_in', 'cash_out', 'expected_cash', 'actual_cash', 'difference', 'status', 'opened_by', 'closed_by', 'closed_at', 'notes'])]
+#[Fillable(['company_id', 'branch_id', 'session_date', 'opening_cash', 'cash_sales', 'customer_payments', 'supplier_payments', 'expenses', 'cash_in', 'cash_out', 'expected_cash', 'actual_cash', 'difference', 'status', 'opened_by', 'closed_by', 'closed_at', 'notes'])]
 class CashbookSession extends Model
 {
-    use HasFactory;
+    use HasCompany, HasFactory;
 
     public function branch(): BelongsTo
     {

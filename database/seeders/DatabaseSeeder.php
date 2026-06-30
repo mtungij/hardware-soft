@@ -19,7 +19,7 @@ class DatabaseSeeder extends Seeder
             StockLocationSeeder::class,
             CategorySeeder::class,
             UnitSeeder::class,
-           
+            ExpenseCategorySeeder::class,
         ]);
     }
 }

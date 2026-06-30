@@ -15,7 +15,8 @@ class FinancialReportService
     {
         $salesQuery = Sale::query()
             ->where('status', 'completed')
-            ->whereBetween('sale_date', [$from, $to])
+            ->whereDate('sale_date', '>=', $from)
+            ->whereDate('sale_date', '<=', $to)
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId));
 
         $revenue = (float) (clone $salesQuery)->sum('total_amount');
@@ -25,7 +26,8 @@ class FinancialReportService
             ->get()
             ->sum(fn (SaleItem $item) => (float) $item->quantity * (float) $item->unit_cost);
         $expenses = (float) Expense::query()
-            ->whereBetween('expense_date', [$from, $to])
+            ->whereDate('expense_date', '>=', $from)
+            ->whereDate('expense_date', '<=', $to)
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
             ->sum('amount');
 

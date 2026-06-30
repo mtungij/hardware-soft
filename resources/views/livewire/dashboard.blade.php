@@ -21,6 +21,7 @@ use App\Models\User;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 use function Livewire\Volt\computed;
 use function Livewire\Volt\layout;
@@ -48,7 +49,7 @@ $dateRange = function (): array {
     };
 };
 
-$canViewAllBranches = fn (): bool => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Accountant']);
+$canViewAllBranches = fn (): bool => Schema::hasTable('branches') && auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Accountant']);
 
 $activeBranchId = function (): ?int {
     if ($this->canViewAllBranches()) {
@@ -143,6 +144,10 @@ $stockItemsByLocationType = function (string $type): int {
 };
 
 $branchOptions = computed(function () {
+    if (! Schema::hasTable('branches')) {
+        return collect();
+    }
+
     return $this->canViewAllBranches()
         ? Branch::query()->where('status', 'active')->orderBy('name')->get()
         : Branch::query()->whereKey(auth()->user()->branch_id)->get();

@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
+    'company_id',
     'branch_id',
     'product_id',
     'stock_location_id',
@@ -23,7 +25,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class StockMovement extends Model
 {
-    use HasFactory;
+    use HasCompany, HasFactory;
 
     public const POSITIVE_TYPES = ['purchase_in', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in'];
 

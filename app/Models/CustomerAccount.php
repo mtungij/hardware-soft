@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,10 +14,12 @@ use Laravel\Sanctum\HasApiTokens;
 class CustomerAccount extends Authenticatable
 {
     use HasApiTokens;
+    use HasCompany;
     use HasFactory;
     use Notifiable;
 
     protected $fillable = [
+        'company_id',
         'customer_id',
         'name',
         'phone',

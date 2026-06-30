@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['goods_receiving_note_id', 'purchase_item_id', 'product_id', 'received_quantity', 'cost_price'])]
+#[Fillable(['company_id', 'goods_receiving_note_id', 'purchase_item_id', 'product_id', 'received_quantity', 'cost_price'])]
 class GoodsReceivingNoteItem extends Model
 {
-    use HasFactory;
+    use HasCompany, HasFactory;
 
     public function goodsReceivingNote(): BelongsTo
     {

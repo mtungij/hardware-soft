@@ -2,13 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CustomerMessage extends Model
 {
+    use HasCompany;
+
     protected $fillable = [
+        'company_id',
         'customer_id',
         'customer_account_id',
         'subject',

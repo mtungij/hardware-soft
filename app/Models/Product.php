@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'branch_id',
+    'company_id',
     'category_id',
     'unit_id',
     'name',
@@ -27,7 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class Product extends Model
 {
-    use HasFactory;
+    use HasCompany, HasFactory;
 
     public function branch(): BelongsTo
     {

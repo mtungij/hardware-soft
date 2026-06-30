@@ -84,7 +84,7 @@ $deleteUser = function (int $userId) {
 
         @php
             $users = User::query()
-                ->with(['branch', 'roles'])
+                ->with(['branch', 'company', 'roles'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
@@ -93,7 +93,7 @@ $deleteUser = function (int $userId) {
                 ->paginate(10);
         @endphp
 
-        <x-table :headers="['User', 'Phone', 'Roles', 'Branch', 'Status', 'Actions']">
+        <x-table :headers="['User', 'Phone', 'Roles', 'Company', 'Branch', 'Status', 'Actions']">
             @forelse ($users as $user)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">
@@ -109,6 +109,7 @@ $deleteUser = function (int $userId) {
                     <td class="px-4 py-3">
                         {{ $user->roles->pluck('name')->join(', ') ?: '-' }}
                     </td>
+                    <td class="px-4 py-3">{{ $user->company?->company_name ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $user->branch?->name ?? '-' }}</td>
                     <td class="px-4 py-3"><span class="{{ $user->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($user->status) }}</span></td>
                     <td class="px-4 py-3">
@@ -121,7 +122,7 @@ $deleteUser = function (int $userId) {
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No users found.</td></tr>
+                <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No users found.</td></tr>
             @endforelse
         </x-table>
 

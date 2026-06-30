@@ -119,7 +119,15 @@ class InventoryService
 
     public function generateSaleNumber(): string
     {
-        return 'SALE-'.now()->format('Ymd').'-'.str_pad((string) (Sale::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
+        $prefix = 'SALE-'.now()->format('Ymd').'-';
+        $nextNumber = Sale::whereDate('created_at', today())->count() + 1;
+
+        do {
+            $saleNumber = $prefix.str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
+            $nextNumber++;
+        } while (Sale::where('sale_number', $saleNumber)->exists());
+
+        return $saleNumber;
     }
 
     public function directStockIn(array $data, int $createdBy): StockMovement

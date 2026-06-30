@@ -20,9 +20,17 @@ class SuperAdminSeeder extends Seeder
         $role = Role::query()->firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
         $role->syncPermissions(Permission::where('guard_name', 'web')->get());
 
+        $ownerEmail = env('SYSTEM_OWNER_EMAIL', 'admin@buildmart.test');
+
+        User::query()
+            ->where('is_system_owner', true)
+            ->where('email', '!=', $ownerEmail)
+            ->update(['is_system_owner' => false]);
+
         $user = User::query()->updateOrCreate(
-            ['email' => 'admin@gmail.com'],
+            ['email' => $ownerEmail],
             [
+                'company_id' => $branch?->company_id,
                 'branch_id' => $branch?->id,
                 'name' => 'Super Admin',
                 'phone' => '+255 700 000 001',

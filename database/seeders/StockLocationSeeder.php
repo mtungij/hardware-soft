@@ -17,11 +17,13 @@ class StockLocationSeeder extends Seeder
             if ($warehouseEnabled) {
                 StockLocation::query()->firstOrCreate(
                     [
+                        'company_id' => $branch->company_id,
                         'branch_id' => $branch->id,
                         'code' => 'MAIN-STORE',
                         'type' => 'store',
                     ],
                     [
+                        'company_id' => $branch->company_id,
                         'name' => 'Main Store',
                         'status' => 'active',
                     ]
@@ -29,17 +31,20 @@ class StockLocationSeeder extends Seeder
             } else {
                 StockLocation::query()
                     ->where('branch_id', $branch->id)
+                    ->where('company_id', $branch->company_id)
                     ->where('code', 'MAIN-STORE')
                     ->update(['status' => 'inactive']);
             }
 
             StockLocation::query()->firstOrCreate(
                 [
+                    'company_id' => $branch->company_id,
                     'branch_id' => $branch->id,
                     'code' => 'DISPENSING',
                     'type' => 'dispensing',
                 ],
                 [
+                    'company_id' => $branch->company_id,
                     'name' => 'Dispensing Area',
                     'status' => 'active',
                 ]

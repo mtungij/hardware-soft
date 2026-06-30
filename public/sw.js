@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'hardex-customer-pwa-v3';
+const CACHE_VERSION = 'hardex-customer-pwa-v4';
 const APP_SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -30,8 +30,7 @@ const SENSITIVE_PATHS = [
 
 const isSensitiveRequest = (url) => SENSITIVE_PATHS.some((path) => url.pathname.startsWith(path));
 const isCacheableAsset = (url) => (
-    url.pathname.startsWith('/build/')
-    || url.pathname.startsWith('/icons/')
+    url.pathname.startsWith('/icons/')
     || url.pathname.startsWith('/pwa/icons/')
     || url.pathname.startsWith('/images/')
     || url.pathname === '/pwa/manifest.json'
@@ -88,6 +87,13 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (isSensitiveRequest(url)) {
+        return;
+    }
+
+    if (url.pathname.startsWith('/build/')) {
+        event.respondWith(
+            fetch(request).catch(() => caches.match(request))
+        );
         return;
     }
 

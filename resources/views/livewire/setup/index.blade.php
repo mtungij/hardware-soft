@@ -5,7 +5,9 @@ use App\Models\Company;
 use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\User;
+use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rules\Password;
 use Livewire\WithFileUploads;
 use Spatie\Permission\Models\Permission;
@@ -131,6 +133,11 @@ $complete = function () {
     $data = $this->validate();
 
     DB::transaction(function () use ($data) {
+        $branchHasCompanyId = Schema::hasColumn('branches', 'company_id');
+        $stockLocationHasCompanyId = Schema::hasColumn('stock_locations', 'company_id');
+        $userHasCompanyId = Schema::hasColumn('users', 'company_id');
+        $settingHasCompanyId = Schema::hasColumn('settings', 'company_id');
+
         $logoPath = $this->logo_upload?->store('company-logos', 'public');
         $photoPath = $this->admin_photo?->store('profile-photos', 'public');
 
@@ -155,75 +162,99 @@ $complete = function () {
 
         Branch::query()->where('is_default', true)->update(['is_default' => false]);
 
-        $branch = Branch::query()->updateOrCreate(
-            ['code' => strtoupper($data['branch_code'] ?: 'MAIN')],
-            [
-                'name' => $data['branch_name'],
-                'phone' => $data['branch_phone'] ?: $data['phone'],
-                'email' => $data['branch_email'] ?: $data['email'],
-                'address' => $data['branch_address'] ?: $data['address'],
-                'region' => $data['branch_region'] ?: $data['region'],
-                'district' => $data['branch_district'] ?: $data['district'],
-                'manager_name' => $data['branch_manager_name'] ?: $data['admin_name'],
-                'status' => $data['branch_status'],
-                'is_default' => (bool) $data['branch_is_default'],
-            ]
-        );
+        $branchAttributes = [
+            'code' => strtoupper($data['branch_code'] ?: 'MAIN'),
+        ];
 
-        $dispensingLocation = StockLocation::query()->firstOrCreate(
-            [
-                'branch_id' => $branch->id,
-                'code' => 'DISPENSING',
-                'type' => 'dispensing',
-            ],
-            [
-                'name' => 'Dispensing Area',
-                'status' => 'active',
-            ]
-        );
+        if ($branchHasCompanyId) {
+            $branchAttributes['company_id'] = $company->id;
+        }
+
+        $branchValues = [
+            'name' => $data['branch_name'],
+            'phone' => $data['branch_phone'] ?: $data['phone'],
+            'email' => $data['branch_email'] ?: $data['email'],
+            'address' => $data['branch_address'] ?: $data['address'],
+            'region' => $data['branch_region'] ?: $data['region'],
+            'district' => $data['branch_district'] ?: $data['district'],
+            'manager_name' => $data['branch_manager_name'] ?: $data['admin_name'],
+            'status' => $data['branch_status'],
+            'is_default' => (bool) $data['branch_is_default'],
+        ];
+
+        if ($branchHasCompanyId) {
+            $branchValues['company_id'] = $company->id;
+        }
+
+        $branch = Branch::query()->updateOrCreate($branchAttributes, $branchValues);
+
+        $dispensingAttributes = [
+            'branch_id' => $branch->id,
+            'code' => 'DISPENSING',
+            'type' => 'dispensing',
+        ];
+
+        if ($stockLocationHasCompanyId) {
+            $dispensingAttributes['company_id'] = $company->id;
+        }
+
+        $dispensingLocation = StockLocation::query()->firstOrCreate($dispensingAttributes, [
+            'name' => 'Dispensing Area',
+            'status' => 'active',
+        ]);
 
         $mainStoreLocation = null;
         if ($data['inventory_stock_mode'] === 'warehouse') {
-            $mainStoreLocation = StockLocation::query()->firstOrCreate(
-                [
-                    'branch_id' => $branch->id,
-                    'code' => 'MAIN-STORE',
-                    'type' => 'store',
-                ],
-                [
-                    'name' => 'Main Store',
-                    'status' => 'active',
-                ]
-            );
+            $mainStoreAttributes = [
+                'branch_id' => $branch->id,
+                'code' => 'MAIN-STORE',
+                'type' => 'store',
+            ];
+
+            if ($stockLocationHasCompanyId) {
+                $mainStoreAttributes['company_id'] = $company->id;
+            }
+
+            $mainStoreLocation = StockLocation::query()->firstOrCreate($mainStoreAttributes, [
+                'name' => 'Main Store',
+                'status' => 'active',
+            ]);
         } else {
             StockLocation::query()
                 ->where('branch_id', $branch->id)
                 ->where('code', 'MAIN-STORE')
+                ->when($stockLocationHasCompanyId, fn ($query) => $query->where('company_id', $company->id))
                 ->update(['status' => 'inactive']);
         }
 
         $enableWarehouse = $data['inventory_stock_mode'] === 'warehouse';
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
-        app(\Database\Seeders\RolePermissionSeeder::class)->run();
+        app(RolePermissionSeeder::class)->run();
         $role = Role::query()->firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
         $role->syncPermissions(Permission::where('guard_name', 'web')->get());
 
-        $user = User::query()->create([
+        $userData = [
             'branch_id' => $branch->id,
             'name' => $data['admin_name'],
             'phone' => $data['admin_phone'],
             'email' => $data['admin_email'],
             'profile_photo' => $photoPath,
             'status' => 'active',
-            'is_system_owner' => true,
+            'is_system_owner' => false,
             'password' => $data['admin_password'],
             'email_verified_at' => now(),
-        ]);
+        ];
+
+        if ($userHasCompanyId) {
+            $userData['company_id'] = $company->id;
+        }
+
+        $user = User::query()->create($userData);
         $user->assignRole($role);
 
-        $setting = Setting::query()->first() ?: new Setting();
-        $setting->fill([
+        $setting = Setting::query()->first() ?: new Setting;
+        $settingData = [
             'company_name' => $company->company_name,
             'business_type' => $company->business_type,
             'tin_number' => $company->tin_number,
@@ -247,7 +278,13 @@ $complete = function () {
             'default_stock_location_id' => $enableWarehouse ? $mainStoreLocation?->id : $dispensingLocation->id,
             'theme_color' => '#06b6d4',
             'system_initialized' => true,
-        ])->save();
+        ];
+
+        if ($settingHasCompanyId) {
+            $settingData['company_id'] = $company->id;
+        }
+
+        $setting->fill($settingData)->save();
     });
 
     session()->flash('success', 'System setup completed. Sign in with your Super Admin account.');

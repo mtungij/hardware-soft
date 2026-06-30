@@ -2,12 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CustomerDepositUsage extends Model
 {
+    use HasCompany;
+
     protected $fillable = [
+        'company_id',
         'customer_deposit_id',
         'customer_id',
         'sale_id',

@@ -2,15 +2,16 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'code', 'phone', 'email', 'address', 'region', 'district', 'manager_name', 'status', 'is_default'])]
+#[Fillable(['company_id', 'name', 'code', 'phone', 'email', 'address', 'region', 'district', 'manager_name', 'status', 'is_default'])]
 class Branch extends Model
 {
-    use HasFactory;
+    use HasCompany, HasFactory;
 
     protected function casts(): array
     {

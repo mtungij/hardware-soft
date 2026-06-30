@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Branch;
+use App\Models\Company;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Auth;
@@ -41,16 +42,25 @@ $register = function () {
     $validated = $this->validate();
 
     $user = DB::transaction(function () use ($validated) {
+        $company = Company::create([
+            'company_name' => $validated['business_name'],
+            'business_type' => 'Hardware Store',
+            'phone' => $validated['phone'],
+            'whatsapp_number' => $validated['phone'],
+            'email' => $validated['email'],
+        ]);
+
         $baseCode = Str::upper(Str::slug(Str::limit($validated['branch_name'], 10, ''), ''));
         $baseCode = $baseCode ?: 'HDX';
         $code = $baseCode;
         $counter = 1;
 
-        while (Branch::query()->where('code', $code)->exists()) {
+        while (Branch::query()->where('company_id', $company->id)->where('code', $code)->exists()) {
             $code = $baseCode.'-'.$counter++;
         }
 
         $branch = Branch::create([
+            'company_id' => $company->id,
             'name' => $validated['branch_name'],
             'code' => $code,
             'phone' => $validated['phone'],
@@ -60,6 +70,7 @@ $register = function () {
         ]);
 
         $user = User::create([
+            'company_id' => $company->id,
             'branch_id' => $branch->id,
             'name' => $validated['name'],
             'email' => $validated['email'],
