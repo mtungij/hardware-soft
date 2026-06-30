@@ -141,6 +141,23 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
 <div>
     <x-page-header title="Create Purchase" description="Create a draft or ordered purchase. Stock is not increased until receiving." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Create' => null]" />
 
+    @php
+        $productSelectOptions = [
+            'placeholder' => blank($supplier_id) ? 'Select supplier first' : 'Search or select product',
+            'hasSearch' => true,
+            'minSearchLength' => 0,
+            'searchPlaceholder' => 'Search product by name or SKU',
+            'searchNoResultText' => 'No product found',
+            'optionAllowEmptyOption' => true,
+            'toggleClasses' => 'relative py-2.5 ps-3 pe-9 flex w-64 cursor-pointer rounded-lg border border-slate-200 bg-white text-start text-sm text-slate-800 shadow-sm outline-none transition before:absolute before:inset-0 before:z-1 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/20 disabled:pointer-events-none disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white dark:focus:border-cyan-400',
+            'dropdownClasses' => 'z-[80] mt-2 max-h-72 w-64 overflow-hidden overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900',
+            'optionClasses' => 'cursor-pointer rounded-lg px-3 py-2 text-sm text-slate-800 hover:bg-cyan-50 focus:bg-cyan-50 hs-selected:bg-cyan-500 hs-selected:text-white dark:text-slate-100 dark:hover:bg-cyan-500/10 dark:focus:bg-cyan-500/10 dark:hs-selected:bg-cyan-500',
+            'searchClasses' => 'block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-cyan-500/20 placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-cyan-400',
+            'searchWrapperClasses' => 'sticky top-0 z-10 bg-white p-1 dark:bg-slate-900',
+            'dropdownScope' => 'parent',
+        ];
+    @endphp
+
     <x-card>
         <form class="space-y-6">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -181,7 +198,14 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                             @endphp
                             <tr>
                                 <td class="px-3 py-3" wire:key="purchase-product-cell-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}">
-                                    <select wire:model.live="items.{{ $index }}.product_id" wire:change="syncProductSellingPrice({{ $index }})" @disabled(blank($supplier_id)) class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-900">
+                                    <select
+                                        wire:model.live="items.{{ $index }}.product_id"
+                                        wire:change="syncProductSellingPrice({{ $index }})"
+                                        wire:key="purchase-product-select-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}"
+                                        data-hs-select='@json($productSelectOptions)'
+                                        class="hidden"
+                                        @disabled(blank($supplier_id))
+                                    >
                                         <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                         @if (filled($supplier_id))
                                             @foreach (Product::where('status', 'active')->orderBy('name')->get() as $product)
