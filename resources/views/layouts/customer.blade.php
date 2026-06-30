@@ -2,9 +2,7 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         <meta charset="utf-8">
-        @production
-            <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
-        @endproduction
+        <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <title>{{ \App\Models\Company::current()?->company_name ?: __('messages.customer_portal') }}</title>
