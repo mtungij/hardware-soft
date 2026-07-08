@@ -17,8 +17,9 @@ class DatabaseSeeder extends Seeder
             SettingSeeder::class,
             SuperAdminSeeder::class,
             StockLocationSeeder::class,
-            CategorySeeder::class,
-            UnitSeeder::class,
+            HardwareCategorySeeder::class,
+            HardwareUnitSeeder::class,
+            HardwareProductSeeder::class,
             ExpenseCategorySeeder::class,
         ]);
     }

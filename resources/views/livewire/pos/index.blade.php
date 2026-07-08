@@ -20,6 +20,7 @@ state([
     'search' => '',
     'barcode' => '',
     'customer_id' => '',
+    'sale_type' => 'retail',
     'cart' => [],
     'payments' => [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']],
     'notes' => '',
@@ -38,12 +39,51 @@ state([
 
 mount(function (InventoryService $inventory) {
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
-    $this->stock_location_id = (string) $inventory->getDispensingLocation((int) $this->branch_id)->id;
+    $this->stock_location_id = (string) (InventorySettings::allowedSaleLocationsForUser(auth()->user(), (int) $this->branch_id)[0]?->id
+        ?? $inventory->getDispensingLocation((int) $this->branch_id)->id);
     $this->quick_customer_branch_id = $this->branch_id;
 });
 
-$canSellFromStore = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Store Keeper']);
 $canCreditSale = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
+
+$allowedSaleLocations = fn () => collect(InventorySettings::allowedSaleLocationsForUser(auth()->user(), (int) $this->branch_id));
+
+$currentSaleLocation = function () {
+    $locations = $this->allowedSaleLocations();
+    return $locations->firstWhere('id', (int) $this->stock_location_id) ?: $locations->first();
+};
+
+$priceForProduct = function (Product $product): string {
+    if ($this->sale_type === 'wholesale') {
+        return filled($product->wholesale_price) ? (string) $product->wholesale_price : '';
+    }
+
+    return (string) $product->selling_price;
+};
+
+$updatedSaleType = function () {
+    foreach ($this->cart as $index => $item) {
+        $product = Product::query()->find($item['product_id'] ?? null);
+
+        if (! $product) {
+            continue;
+        }
+
+        $unitPrice = $this->priceForProduct($product);
+
+        if ($unitPrice === '') {
+            $this->cart[$index]['unit_price'] = '0';
+            $this->cart[$index]['tax_amount'] = '0';
+            continue;
+        }
+
+        $this->cart[$index]['sale_type'] = $this->sale_type;
+        $this->cart[$index]['unit_price'] = $unitPrice;
+        $this->cart[$index]['tax_amount'] = $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0';
+    }
+
+    $this->syncDefaultPaymentAmount();
+};
 
 $resetQuickCustomerForm = function () {
     $this->quick_customer_branch_id = $this->branch_id;
@@ -107,11 +147,10 @@ $saveQuickCustomer = function () {
 
 $availableQuantity = function (int $productId) {
     $inventory = app(InventoryService::class);
-    $locationId = InventorySettings::warehouseEnabled()
-        ? (int) $this->stock_location_id
-        : $inventory->getDispensingLocation((int) $this->branch_id)->id;
+    $location = $this->currentSaleLocation();
+    $locationId = $location?->id ?: $inventory->getDispensingLocation((int) $this->branch_id)->id;
 
-    if (! InventorySettings::warehouseEnabled()) {
+    if (! InventorySettings::warehouseEnabled() && (int) $this->stock_location_id !== (int) $locationId) {
         $this->stock_location_id = (string) $locationId;
     }
 
@@ -144,9 +183,18 @@ $addProduct = function (int $productId) {
         return;
     }
 
+    $unitPrice = $this->priceForProduct($product);
+
+    if ($unitPrice === '') {
+        $this->addError('cart', \App\Support\UiText::translate('Wholesale price is not set for this product.'));
+        return;
+    }
+
     foreach ($this->cart as $index => $item) {
         if ((int) $item['product_id'] === $productId) {
             $this->cart[$index]['quantity'] = (string) min($available, (float) $item['quantity'] + 1);
+            $this->cart[$index]['sale_type'] = $this->sale_type;
+            $this->cart[$index]['unit_price'] = $unitPrice;
             $this->syncDefaultPaymentAmount();
 
             return;
@@ -157,10 +205,11 @@ $addProduct = function (int $productId) {
         'product_id' => $product->id,
         'name' => $product->name,
         'sku' => $product->sku,
+        'sale_type' => $this->sale_type,
         'quantity' => '1',
-        'unit_price' => (string) $product->selling_price,
+        'unit_price' => $unitPrice,
         'discount_amount' => '0',
-        'tax_amount' => $product->taxable ? (string) round((float) $product->selling_price * 0.18, 2) : '0',
+        'tax_amount' => $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0',
     ];
 
     $this->syncDefaultPaymentAmount();
@@ -202,6 +251,7 @@ $completeSale = function (InventoryService $inventory) {
         'customer_id' => ['nullable', 'exists:customers,id'],
         'cart' => ['required', 'array', 'min:1'],
         'cart.*.product_id' => ['required', 'exists:products,id'],
+        'cart.*.sale_type' => ['required', 'in:retail,wholesale'],
         'cart.*.quantity' => ['required', 'numeric', 'gt:0'],
         'cart.*.unit_price' => ['required', 'numeric', 'min:0'],
         'cart.*.discount_amount' => ['required', 'numeric', 'min:0'],
@@ -216,8 +266,8 @@ $completeSale = function (InventoryService $inventory) {
     }
 
     $location = StockLocation::findOrFail($this->stock_location_id);
-    if ($location->type === 'store' && (! InventorySettings::salesFromStoreAllowed() || ! $this->canSellFromStore())) {
-        throw ValidationException::withMessages(['stock_location_id' => \App\Support\UiText::translate('You are not authorized to sell from Main Store.')]);
+    if (! InventorySettings::canUserSellFromLocation(auth()->user(), $location)) {
+        throw ValidationException::withMessages(['stock_location_id' => 'Huna ruhusa ya kuuza kutoka sehemu hii ya stock.']);
     }
 
     if (collect($this->payments)->contains(fn ($payment) => $payment['payment_method'] === 'credit') && ! $this->canCreditSale()) {
@@ -239,6 +289,11 @@ $completeSale = function (InventoryService $inventory) {
 <div>
     @php
         $t = fn ($value) => \App\Support\UiText::translate($value);
+        $saleTypeBadge = $sale_type === 'wholesale'
+            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+            : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300';
+        $allowedLocations = $this->allowedSaleLocations();
+        $selectedSaleLocation = $this->currentSaleLocation();
     @endphp
 
     <x-page-header title="POS Sales" description="Sell from Dispensing Area by default, or Main Store when authorized." :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
@@ -249,18 +304,39 @@ $completeSale = function (InventoryService $inventory) {
                 <div class="grid gap-3 md:grid-cols-3">
                     <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}">
                     <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Barcode input') }}">
-                    @if (InventorySettings::warehouseEnabled())
-                        <select wire:model.live="stock_location_id" class="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            @foreach (StockLocation::where('status', 'active')->whereIn('type', InventorySettings::salesFromStoreAllowed() && $this->canSellFromStore() ? ['store', 'dispensing'] : ['dispensing'])->orderBy('type')->get() as $location)
-                                <option value="{{ $location->id }}">{{ $location->name }}</option>
+                    @if (InventorySettings::warehouseEnabled() && $allowedLocations->count() > 1)
+                        <select wire:model.live="stock_location_id" class="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-navy-950" aria-label="Chagua sehemu ya kuuza">
+                            @foreach ($allowedLocations as $location)
+                                <option value="{{ $location->id }}">{{ InventorySettings::stockLocationLabel($location) }}</option>
                             @endforeach
                         </select>
                     @else
                         <div class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm font-bold text-cyan-800 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">
-                            {{ $t('Selling from Dispensing Area') }}
+                            Unauza kutoka: {{ $selectedSaleLocation ? InventorySettings::stockLocationLabel($selectedSaleLocation) : $t('Selling from Dispensing Area') }}
                         </div>
                     @endif
                 </div>
+                @error('stock_location_id') <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+            </x-card>
+
+            <x-card>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm font-black text-slate-700 dark:text-slate-200">Aina ya Bei</p>
+                        <span class="mt-1 inline-flex rounded-full px-3 py-1 text-xs font-black {{ $saleTypeBadge }}">{{ str($sale_type)->title() }}</span>
+                    </div>
+                    <div class="inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-navy-950">
+                        <label class="cursor-pointer rounded-md px-3 py-2 text-sm font-black {{ $sale_type === 'retail' ? 'bg-blue-500 text-white' : 'text-slate-600 dark:text-slate-300' }}">
+                            <input type="radio" wire:model.live="sale_type" value="retail" class="sr-only">
+                            Retail
+                        </label>
+                        <label class="cursor-pointer rounded-md px-3 py-2 text-sm font-black {{ $sale_type === 'wholesale' ? 'bg-emerald-500 text-white' : 'text-slate-600 dark:text-slate-300' }}">
+                            <input type="radio" wire:model.live="sale_type" value="wholesale" class="sr-only">
+                            Wholesale
+                        </label>
+                    </div>
+                </div>
+                @error('sale_type') <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
             </x-card>
 
             @php
@@ -274,12 +350,15 @@ $completeSale = function (InventoryService $inventory) {
             @endphp
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 @foreach ($products as $product)
-                    @php $available = $this->availableQuantity($product->id); @endphp
+                    @php
+                        $available = $this->availableQuantity($product->id);
+                        $displayPrice = $sale_type === 'wholesale' ? $product->wholesale_price : $product->selling_price;
+                    @endphp
                     <button type="button" wire:click="addProduct({{ $product->id }})" class="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft dark:border-slate-800 dark:bg-navy-900">
                         <img class="h-24 w-full rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
                         <p class="mt-3 font-black">{{ $product->name }}</p>
                         <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $product->unit?->short_name }}</p>
-                        <div class="mt-2 flex items-center justify-between gap-3 text-sm"><span class="font-bold text-build-orange">TZS {{ number_format((float) $product->selling_price, 2) }}</span><span class="text-right text-slate-500">{{ $stockLabel }}: {{ number_format($available, 2) }} {{ $product->unit?->short_name }}</span></div>
+                        <div class="mt-2 flex items-center justify-between gap-3 text-sm"><span class="font-bold text-build-orange">TZS {{ number_format((float) $displayPrice, 2) }}</span><span class="text-right text-slate-500">{{ $stockLabel }}: {{ number_format($available, 2) }} {{ $product->unit?->short_name }}</span></div>
                     </button>
                 @endforeach
             </div>
@@ -303,7 +382,7 @@ $completeSale = function (InventoryService $inventory) {
                 @foreach ($cart as $index => $item)
                     <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5">
                         <div class="flex items-start justify-between gap-3">
-                            <div><p class="font-bold">{{ $item['name'] }}</p><p class="text-xs text-slate-500">{{ $item['sku'] }}</p></div>
+                            <div><p class="font-bold">{{ $item['name'] }}</p><p class="text-xs text-slate-500">{{ $item['sku'] }}</p><span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-black {{ ($item['sale_type'] ?? 'retail') === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item['sale_type'] ?? 'retail')->title() }}</span></div>
                             <button wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">{{ $t('Remove') }}</button>
                         </div>
                         <div class="mt-3 grid grid-cols-4 gap-2">

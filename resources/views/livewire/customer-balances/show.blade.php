@@ -18,7 +18,11 @@ mount(function (Customer $customer) {
 ?>
 
 <div>
-    @php $balance = app(AccountingService::class)->customerBalance($customer); @endphp
+    @php
+        $balance = app(AccountingService::class)->customerBalance($customer);
+        $retailItems = \App\Models\SaleItem::query()->where('sale_type', 'retail')->whereHas('sale', fn ($query) => $query->where('customer_id', $customer->id)->where('status', 'completed'))->get();
+        $wholesaleItems = \App\Models\SaleItem::query()->where('sale_type', 'wholesale')->whereHas('sale', fn ($query) => $query->where('customer_id', $customer->id)->where('status', 'completed'))->get();
+    @endphp
     <x-page-header title="Customer Statement" :description="$customer->name" :breadcrumbs="['Dashboard' => route('dashboard'), 'Customer Balances' => route('customer-balances.index'), $customer->name => null]">
         <a href="{{ route('customer-payments.create', ['customer_id' => $customer->id]) }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Record Payment</a>
     </x-page-header>
@@ -29,12 +33,18 @@ mount(function (Customer $customer) {
         <x-card><p class="text-sm text-slate-500">Outstanding</p><p class="mt-2 text-xl font-black text-red-600">TZS {{ number_format($balance, 2) }}</p></x-card>
         <x-card><p class="text-sm text-slate-500">Overdue</p><p class="mt-2 text-xl font-black text-amber-600">TZS 0.00</p></x-card>
     </div>
+    <div class="mt-4 grid gap-4 sm:grid-cols-4">
+        <x-card><p class="text-sm text-slate-500">Retail Purchases</p><p class="mt-2 text-xl font-black">{{ number_format($retailItems->pluck('sale_id')->unique()->count()) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">Wholesale Purchases</p><p class="mt-2 text-xl font-black">{{ number_format($wholesaleItems->pluck('sale_id')->unique()->count()) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">Total Retail Amount</p><p class="mt-2 text-xl font-black text-blue-600">TZS {{ number_format((float) $retailItems->sum('line_total'), 2) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">Total Wholesale Amount</p><p class="mt-2 text-xl font-black text-emerald-600">TZS {{ number_format((float) $wholesaleItems->sum('line_total'), 2) }}</p></x-card>
+    </div>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-2">
         <x-card title="Credit Sales">
-            <x-table :headers="['Date', 'Sale', 'Total', 'Balance']">
-                @foreach ($customer->sales()->latest()->get() as $sale)
-                    <tr><td class="px-4 py-3">{{ $sale->sale_date?->format('M d, Y') }}</td><td class="px-4 py-3 font-bold">{{ $sale->sale_number }}</td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $sale->total_amount, 2) }}</td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $sale->balance_amount, 2) }}</td></tr>
+            <x-table :headers="['Date', 'Sale', 'Sale Type', 'Total', 'Balance']">
+                @foreach ($customer->sales()->with('items')->latest()->get() as $sale)
+                    <tr><td class="px-4 py-3">{{ $sale->sale_date?->format('M d, Y') }}</td><td class="px-4 py-3 font-bold">{{ $sale->sale_number }}</td><td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $sale->saleType() === 'wholesale' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700' }}">{{ $sale->saleTypeLabel() }}</span></td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $sale->total_amount, 2) }}</td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $sale->balance_amount, 2) }}</td></tr>
                 @endforeach
             </x-table>
         </x-card>

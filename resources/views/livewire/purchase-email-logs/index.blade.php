@@ -25,7 +25,9 @@ mount(function () {
 ?>
 
 <div>
-    <x-page-header title="Purchase Email Report" description="Track outgoing purchase order emails, recipients, status, and failures." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchase Email Logs' => null]" />
+    <x-page-header title="Purchase Email Report" description="Track outgoing purchase order emails, recipients, status, and failures." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchase Email Logs' => null]">
+        <x-export-actions export="tables.email-logs" :params="['search' => $search, 'status' => $statusFilter, 'supplier_id' => $supplierFilter, 'date_from' => $dateFrom, 'date_to' => $dateTo]" />
+    </x-page-header>
 
     @php
         $logs = PurchaseEmailLog::query()

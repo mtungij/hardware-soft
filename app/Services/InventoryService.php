@@ -20,7 +20,7 @@ class InventoryService
 {
     public function getMainStoreLocation(int $branchId): StockLocation
     {
-        return StockLocation::query()->firstOrCreate(
+        $location = StockLocation::query()->firstOrCreate(
             [
                 'branch_id' => $branchId,
                 'type' => 'store',
@@ -31,11 +31,13 @@ class InventoryService
                 'status' => 'active',
             ]
         );
+
+        return $this->ensureLocationIsActive($location);
     }
 
     public function getDispensingLocation(int $branchId): StockLocation
     {
-        return StockLocation::query()->firstOrCreate(
+        $location = StockLocation::query()->firstOrCreate(
             [
                 'branch_id' => $branchId,
                 'type' => 'dispensing',
@@ -46,6 +48,17 @@ class InventoryService
                 'status' => 'active',
             ]
         );
+
+        return $this->ensureLocationIsActive($location);
+    }
+
+    private function ensureLocationIsActive(StockLocation $location): StockLocation
+    {
+        if ($location->status !== 'active') {
+            $location->forceFill(['status' => 'active'])->save();
+        }
+
+        return $location;
     }
 
     public function getProductStock(int $productId, int $stockLocationId, int $branchId): float
@@ -183,6 +196,10 @@ class InventoryService
                 throw ValidationException::withMessages(['stock_source' => 'Cannot sell from an inactive stock location.']);
             }
 
+            if ((int) $location->branch_id !== $branchId) {
+                throw ValidationException::withMessages(['stock_source' => 'Selected stock location does not belong to this branch.']);
+            }
+
             $containsCredit = collect($payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
 
             if ($containsCredit && ! $customerId) {
@@ -202,12 +219,21 @@ class InventoryService
                 }
 
                 $quantity = (float) ($row['quantity'] ?? 0);
-                $unitPrice = (float) ($row['unit_price'] ?? $product->selling_price);
+                $saleType = ($row['sale_type'] ?? 'retail') === 'wholesale' ? 'wholesale' : 'retail';
+                $unitPrice = (float) ($saleType === 'wholesale' ? $product->wholesale_price : $product->selling_price);
                 $itemDiscount = (float) ($row['discount_amount'] ?? 0);
                 $itemTax = (float) ($row['tax_amount'] ?? 0);
 
                 if ($quantity <= 0) {
                     throw ValidationException::withMessages(['cart' => 'Quantity must be greater than zero.']);
+                }
+
+                if ($saleType === 'wholesale' && blank($product->wholesale_price)) {
+                    throw ValidationException::withMessages(['cart' => "{$product->name} does not have a wholesale price."]);
+                }
+
+                if ($unitPrice < (float) $product->buying_price) {
+                    throw ValidationException::withMessages(['cart' => "{$product->name} price cannot be below buying price."]);
                 }
 
                 $gross = $quantity * $unitPrice;
@@ -229,6 +255,7 @@ class InventoryService
 
                 $preparedItems[] = [
                     'product' => $product,
+                    'sale_type' => $saleType,
                     'quantity' => $quantity,
                     'unit_price' => $unitPrice,
                     'discount_amount' => $itemDiscount,
@@ -274,12 +301,14 @@ class InventoryService
             $balance = max(0, $total - $paid);
             $change = max(0, $paid - $total);
             $paymentStatus = $balance <= 0 ? 'paid' : ($paid > 0 ? 'partial' : 'unpaid');
+            $saleType = collect($preparedItems)->contains(fn (array $item) => $item['sale_type'] === 'wholesale') ? 'wholesale' : 'retail';
 
             $sale = Sale::create([
                 'branch_id' => $branchId,
                 'customer_id' => $customerId,
                 'sale_number' => $this->generateSaleNumber(),
                 'sale_date' => now()->toDateString(),
+                'sale_type' => $saleType,
                 'subtotal' => $subtotal,
                 'discount_amount' => $discount,
                 'tax_amount' => $tax,
@@ -291,12 +320,15 @@ class InventoryService
                 'status' => 'completed',
                 'notes' => $notes,
                 'created_by' => $createdBy,
+                'sold_by' => $createdBy,
             ]);
 
             foreach ($preparedItems as $item) {
                 $saleItem = $sale->items()->create([
                     'product_id' => $item['product']->id,
                     'stock_location_id' => $location->id,
+                    'sold_from_label' => InventorySettings::stockLocationLabel($location),
+                    'sale_type' => $item['sale_type'],
                     'quantity' => $item['quantity'],
                     'unit_cost' => $item['unit_cost'],
                     'unit_price' => $item['unit_price'],

@@ -17,7 +17,7 @@
             id="{{ $name }}"
             type="hidden"
             data-money-value
-            {{ $attributes }}
+            {{ $attributes->merge(['value' => $attributes->get('value', '')]) }}
         >
     </span>
     @error($name)

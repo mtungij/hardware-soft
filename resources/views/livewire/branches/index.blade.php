@@ -39,13 +39,13 @@ $deleteBranch = function (int $branchId) {
         description="Manage operating branches for user assignment and future inventory locations."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Branches' => null]"
     >
+        <x-export-actions export="tables.branches" :params="compact('search')" />
         <a href="{{ route('branches.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Branch</a>
     </x-page-header>
 
     <x-card>
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <input wire:model.live.debounce.300ms="search" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 sm:max-w-sm" placeholder="Search branches...">
-            <button class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">Export</button>
         </div>
 
         @php

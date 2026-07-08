@@ -187,6 +187,7 @@ $deleteConfirmedProduct = function () {
         description="Product master data only. Stock quantities will come from stock movements in Phase 3 and Phase 4."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Products' => null]"
     >
+        <x-export-actions export="tables.products" :params="compact('search', 'statusFilter', 'branchFilter', 'categoryFilter', 'created_from', 'created_to')" />
         @if ($this->canManage())
             <button type="button" data-tour="add-product" wire:click="openCreateProduct" class="erp-btn-primary">Create Product</button>
         @endif

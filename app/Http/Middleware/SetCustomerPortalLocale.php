@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -15,6 +16,7 @@ class SetCustomerPortalLocale
     {
         $locale = $request->session()->get('customer_locale')
             ?: auth('customer')->user()?->preferred_locale
+            ?: $request->cookie('hardex_customer_locale')
             ?: config('app.locale', 'sw');
 
         if (! in_array($locale, self::SUPPORTED_LOCALES, true)) {
@@ -22,6 +24,7 @@ class SetCustomerPortalLocale
         }
 
         App::setLocale($locale);
+        Carbon::setLocale($locale);
         $request->session()->put('customer_locale', $locale);
 
         return $next($request);

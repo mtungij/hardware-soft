@@ -326,6 +326,7 @@ $topSellingProducts = computed(function (): Collection {
 $recentTransactions = computed(function (): Collection {
     [$from, $to] = $this->dateRange();
     $branchId = $this->activeBranchId();
+    $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
 
     $sales = Sale::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Sale $sale) => [
         'type' => 'Sale',
@@ -373,8 +374,8 @@ $recentTransactions = computed(function (): Collection {
     ])->toBase();
 
     return $sales
-        ->merge($purchases)
-        ->merge($transfers)
+        ->merge($warehouseEnabled ? $purchases : collect())
+        ->merge($warehouseEnabled ? $transfers : collect())
         ->merge($expenses)
         ->merge($customerPayments)
         ->filter(fn (array $row) => $row['date']->between($from, $to) || $this->dateFilter === 'today')
@@ -415,6 +416,36 @@ $recentTransactions = computed(function (): Collection {
                 ->get()
                 ->sum(fn (SaleItem $item) => (float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost));
         };
+        $salesByTypeForRange = function (string $type, string $from, string $to) use ($branchId): float {
+            return (float) SaleItem::query()
+                ->where('sale_type', $type)
+                ->whereHas('sale', fn ($query) => $query
+                    ->where('status', 'completed')
+                    ->whereBetween('sale_date', [$from, $to])
+                    ->when($branchId, fn ($saleQuery) => $saleQuery->where('branch_id', $branchId)))
+                ->sum('line_total');
+        };
+        $topWholesaleCustomers = Customer::query()
+            ->select('customers.id', 'customers.name')
+            ->join('sales', 'sales.customer_id', '=', 'customers.id')
+            ->join('sale_items', 'sale_items.sale_id', '=', 'sales.id')
+            ->where('sales.status', 'completed')
+            ->where('sale_items.sale_type', 'wholesale')
+            ->when($branchId, fn ($query) => $query->where('sales.branch_id', $branchId))
+            ->selectRaw('sum(sale_items.line_total) as wholesale_total')
+            ->groupBy('customers.id', 'customers.name')
+            ->orderByDesc('wholesale_total')
+            ->limit(5)
+            ->get();
+        $topWholesaleProducts = SaleItem::query()
+            ->where('sale_type', 'wholesale')
+            ->whereHas('sale', fn ($query) => $query->where('status', 'completed')->when($branchId, fn ($saleQuery) => $saleQuery->where('branch_id', $branchId)))
+            ->selectRaw('product_id, sum(quantity) as quantity_sold, sum(line_total) as wholesale_total')
+            ->groupBy('product_id')
+            ->orderByDesc('wholesale_total')
+            ->with('product')
+            ->limit(5)
+            ->get();
         $purchaseValueForDate = fn (string $date): float => (float) Purchase::query()
             ->where('status', '!=', 'cancelled')
             ->whereDate('purchase_date', $date)
@@ -433,13 +464,19 @@ $recentTransactions = computed(function (): Collection {
             ->sum('balance_amount');
         $cards = collect([
             ['label' => "Today's Sales", 'value' => $formatMoney($this->todaySales), 'tone' => 'text-emerald-600', 'hint' => 'Completed sales today', 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Retail Sales Today', 'value' => $formatMoney($salesByTypeForRange('retail', $today, $today)), 'tone' => 'text-blue-600', 'hint' => 'Retail item sales today', 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'retail', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Wholesale Sales Today', 'value' => $formatMoney($salesByTypeForRange('wholesale', $today, $today)), 'tone' => 'text-emerald-600', 'hint' => 'Wholesale item sales today', 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'wholesale', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
             ['label' => 'Monthly Sales', 'value' => $formatMoney($this->monthlySales), 'tone' => 'text-navy-900 dark:text-white', 'hint' => now()->format('F Y'), 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Retail Sales This Month', 'value' => $formatMoney($salesByTypeForRange('retail', $monthStart, $monthEnd)), 'tone' => 'text-blue-600', 'hint' => now()->format('F Y'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'retail', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Wholesale Sales This Month', 'value' => $formatMoney($salesByTypeForRange('wholesale', $monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => now()->format('F Y'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'wholesale', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
             ['label' => "Today's Profit", 'value' => $formatMoney($profitForRange($today, $today)), 'tone' => 'text-emerald-600', 'hint' => 'Profit from sales today', 'url' => route('reports.profit-loss', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ['label' => 'Monthly Profit', 'value' => $formatMoney($profitForRange($monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => 'This month net sales profit', 'url' => route('reports.profit-loss', ['date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant']],
-            ['label' => "Today's Purchases", 'value' => $formatMoney($purchaseValueForDate($today)), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Non-cancelled purchases today', 'url' => route('purchases.index', ['dateFilter' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']],
+            ...($warehouseEnabled ? [['label' => 'Pending Purchases', 'value' => number_format(Purchase::query()->whereIn('status', ['draft', 'ordered', 'partial'])->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-amber-600', 'hint' => 'Purchases waiting for receiving', 'url' => route('purchases.index', ['status' => 'ordered']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
+            ...($warehouseEnabled ? [['label' => 'Stock Received Today', 'value' => number_format(StockMovement::query()->whereIn('movement_type', ['purchase_in'])->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('quantity'), 2), 'tone' => 'text-emerald-600', 'hint' => 'Received into Main Store today', 'url' => route('stock-movements.index', ['movement_type' => 'purchase_in']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
             ...($warehouseEnabled ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation', 'url' => route('reports.stock-valuation', ['search' => 'Main Store']), 'roles' => ['Admin', 'Manager', 'Accountant']]] : []),
             ['label' => 'Dispensing Stock Value', 'value' => $formatMoney($this->dispensingStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => $warehouseEnabled ? 'Sales counter valuation' : 'Direct stock and POS valuation', 'url' => route('reports.stock-valuation', ['search' => 'Dispensing']), 'roles' => ['Admin', 'Manager', 'Accountant']],
-            ...(! $warehouseEnabled ? [['label' => 'Direct Stock In', 'value' => number_format(StockMovement::where('movement_type', 'direct_stock_in')->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Direct stock entries', 'url' => route('direct-stock-in.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper']]] : []),
+            ...(! $warehouseEnabled ? [['label' => 'Direct Stock In Today', 'value' => number_format(StockMovement::where('movement_type', 'direct_stock_in')->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Direct stock entries today', 'url' => route('direct-stock-in.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper']]] : []),
+            ...(! $warehouseEnabled ? [['label' => 'Products In Stock', 'value' => number_format(Product::query()->where('status', 'active')->whereHas('stockMovements', fn ($query) => $query->when($branchId, fn ($movementQuery) => $movementQuery->where('branch_id', $branchId)))->count()), 'tone' => 'text-emerald-600', 'hint' => 'Products with stock movement history', 'url' => route('dispensing-stock.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper', 'Cashier']]] : []),
             ['label' => 'Low Stock Products', 'value' => number_format($this->lowStockAlerts), 'tone' => 'text-amber-600', 'hint' => 'At or below reorder level', 'url' => route('inventory-summary.index', ['statusFilter' => 'low_stock']), 'roles' => ['Admin', 'Manager', 'Store Keeper']],
             ['label' => 'Credit Customers', 'value' => $formatMoney($customerDebt), 'tone' => 'text-red-600', 'hint' => 'Outstanding customer balances', 'url' => route('customer-balances.index', ['balance' => 'outstanding']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
             ['label' => 'Pending Payments', 'value' => number_format(Sale::query()->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-amber-600', 'hint' => 'Unpaid and partial invoices', 'url' => route('sales.index', ['status' => 'completed', 'payment_status' => 'pending']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
@@ -447,7 +484,7 @@ $recentTransactions = computed(function (): Collection {
             ['label' => 'Products Added Today', 'value' => number_format(Product::query()->whereDate('created_at', $today)->when($branchId, fn ($query) => $query->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $branchId)))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Products created today', 'url' => route('products.index', ['created_from' => $today, 'created_to' => $today]), 'roles' => ['Admin', 'Manager', 'Store Keeper']],
             ...($warehouseEnabled ? [['label' => 'Stock Transfers Today', 'value' => number_format(StockTransfer::query()->whereDate('transfer_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Transfers created today', 'url' => route('stock-transfers.index', ['dateFrom' => $today, 'dateTo' => $today]), 'roles' => ['Admin', 'Manager', 'Store Keeper']]] : []),
             ['label' => 'Expenses Today', 'value' => $formatMoney(Expense::query()->whereDate('expense_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('amount')), 'tone' => 'text-red-600', 'hint' => 'Operating costs today', 'url' => route('expenses.index', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
-            ['label' => 'Supplier Balances', 'value' => $formatMoney($supplierDebt), 'tone' => 'text-red-600', 'hint' => 'Outstanding supplier balances', 'url' => route('supplier-balances.index'), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ...($warehouseEnabled ? [['label' => 'Supplier Balances', 'value' => $formatMoney($supplierDebt), 'tone' => 'text-red-600', 'hint' => 'Outstanding supplier balances', 'url' => route('supplier-balances.index'), 'roles' => ['Admin', 'Manager', 'Accountant']]] : []),
             ['label' => 'Customer Deposits', 'value' => $formatMoney($customerDepositBalance), 'tone' => 'text-emerald-600', 'hint' => 'Available customer deposit balance', 'url' => route('admin.customer-deposits.index'), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ...($emailSettingsConfigured ? [
                 ['label' => 'Purchase Orders Sent Today', 'value' => number_format(PurchaseEmailLog::where('status', 'sent')->whereDate('sent_at', today())->count()), 'tone' => 'text-emerald-600', 'hint' => 'Supplier PO emails delivered', 'url' => route('purchase-email-logs.index', ['statusFilter' => 'sent', 'dateFrom' => $today, 'dateTo' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
@@ -785,6 +822,35 @@ $recentTransactions = computed(function (): Collection {
                     </tr>
                 @empty
                     <tr><td colspan="8" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No low stock products for the selected branch.') }}</td></tr>
+                @endforelse
+            </x-table>
+        </x-card>
+    </div>
+
+    <div class="grid min-w-0 gap-6 xl:grid-cols-2">
+        <x-card title="Top Wholesale Customers">
+            <x-table :headers="['Customer', 'Wholesale Total']">
+                @forelse ($topWholesaleCustomers as $customer)
+                    <tr>
+                        <td class="px-4 py-3 font-bold">{{ $customer->name }}</td>
+                        <td class="px-4 py-3 text-right">{{ $formatMoney($customer->wholesale_total) }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="2" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No wholesale customers yet.') }}</td></tr>
+                @endforelse
+            </x-table>
+        </x-card>
+
+        <x-card title="Top Wholesale Products">
+            <x-table :headers="['Product', 'Qty Sold', 'Wholesale Total']">
+                @forelse ($topWholesaleProducts as $row)
+                    <tr>
+                        <td class="px-4 py-3 font-bold">{{ $row->product?->name }}</td>
+                        <td class="px-4 py-3 text-right">{{ number_format((float) $row->quantity_sold, 2) }}</td>
+                        <td class="px-4 py-3 text-right">{{ $formatMoney($row->wholesale_total) }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="3" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No wholesale products yet.') }}</td></tr>
                 @endforelse
             </x-table>
         </x-card>

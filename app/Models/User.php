@@ -13,7 +13,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
 
-#[Fillable(['company_id', 'branch_id', 'name', 'email', 'phone', 'profile_photo', 'status', 'is_system_owner', 'password', 'last_login_at', 'email_verified_at'])]
+#[Fillable(['company_id', 'branch_id', 'name', 'email', 'phone', 'profile_photo', 'status', 'sales_location_access', 'is_system_owner', 'password', 'last_login_at', 'email_verified_at'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -33,6 +33,23 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->status === 'active';
+    }
+
+    public function canAccessPos(): bool
+    {
+        return $this->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Cashier']);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function allowedSalesLocationTypes(): array
+    {
+        return match ($this->sales_location_access ?: 'dispensing') {
+            'store' => ['store'],
+            'both' => ['store', 'dispensing'],
+            default => ['dispensing'],
+        };
     }
 
     /**

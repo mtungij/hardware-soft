@@ -39,6 +39,7 @@ $deleteSupplier = function (int $supplierId) {
         description="Maintain supplier master records for future purchases and balances."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Suppliers' => null]"
     >
+        <x-export-actions export="tables.suppliers" :params="compact('search', 'statusFilter', 'branchFilter')" />
         @if ($this->canManage())
             <a href="{{ route('suppliers.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Supplier</a>
         @endif

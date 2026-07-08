@@ -35,6 +35,7 @@ class SuperAdminSeeder extends Seeder
                 'name' => 'Super Admin',
                 'phone' => '+255 700 000 001',
                 'status' => 'active',
+                'sales_location_access' => 'both',
                 'is_system_owner' => true,
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),

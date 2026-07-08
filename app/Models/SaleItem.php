@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['company_id', 'sale_id', 'product_id', 'stock_location_id', 'quantity', 'unit_cost', 'unit_price', 'discount_amount', 'tax_amount', 'line_total'])]
+#[Fillable(['company_id', 'sale_id', 'product_id', 'stock_location_id', 'sold_from_label', 'sale_type', 'quantity', 'unit_cost', 'unit_price', 'discount_amount', 'tax_amount', 'line_total'])]
 class SaleItem extends Model
 {
     use HasCompany, HasFactory;

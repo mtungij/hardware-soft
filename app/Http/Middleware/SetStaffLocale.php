@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\UserPreference;
+use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -20,15 +21,17 @@ class SetStaffLocale
         }
 
         $locale = $request->session()->get('staff_locale')
-            ?: $request->cookie('hardex_staff_locale')
             ?: $this->storedPreference()
+            ?: $request->cookie('hardex_staff_locale')
+            ?: $this->companyPreference()
             ?: config('app.locale', 'en');
 
         if (! in_array($locale, self::SUPPORTED_LOCALES, true)) {
-            $locale = 'en';
+            $locale = 'sw';
         }
 
         App::setLocale($locale);
+        Carbon::setLocale($locale);
         $request->session()->put('staff_locale', $locale);
 
         return $next($request);
@@ -53,5 +56,30 @@ class SetStaffLocale
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function companyPreference(): ?string
+    {
+        try {
+            if (Schema::hasTable('companies')) {
+                $language = \App\Models\Company::current()?->language;
+
+                if (in_array($language, self::SUPPORTED_LOCALES, true)) {
+                    return $language;
+                }
+            }
+
+            if (Schema::hasTable('settings')) {
+                $language = \App\Models\Setting::query()->value('language');
+
+                if (in_array($language, self::SUPPORTED_LOCALES, true)) {
+                    return $language;
+                }
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return null;
     }
 }

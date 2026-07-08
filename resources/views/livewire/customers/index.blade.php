@@ -49,6 +49,7 @@ $deleteCustomer = function (int $customerId) {
         description="Maintain cash, credit, contractor, and wholesale customer records."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Customers' => null]"
     >
+        <x-export-actions export="tables.customers" :params="compact('search', 'statusFilter', 'branchFilter', 'typeFilter', 'created_from', 'created_to')" />
         @if ($this->canManage())
             <a href="{{ route('customers.create') }}" wire:navigate data-tour="add-customer" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Customer</a>
         @endif

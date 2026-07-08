@@ -31,6 +31,7 @@ mount(function (Sale $sale) {
             <div class="space-y-3 text-sm">
                 <div class="flex justify-between"><span class="text-slate-500">Date</span><span class="font-bold">{{ $sale->sale_date?->format('M d, Y') }}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Customer</span><span class="font-bold">{{ $sale->customer?->name ?? 'Walk-in Customer' }}</span></div>
+                <div class="flex justify-between"><span class="text-slate-500">Sale Type</span><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $sale->saleType() === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ $sale->saleTypeLabel() }}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Branch</span><span class="font-bold">{{ $sale->branch?->name }}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Cashier</span><span class="font-bold">{{ $sale->createdBy?->name }}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Status</span><span class="font-bold">{{ ucfirst($sale->status) }} / {{ ucfirst($sale->payment_status) }}</span></div>
@@ -57,6 +58,7 @@ mount(function (Sale $sale) {
                 <tr>
                     <th class="px-4 py-3 text-left">Product</th>
                     <th class="px-4 py-3 text-left">Stock Source</th>
+                    <th class="px-4 py-3 text-left">Sale Type</th>
                     <th class="px-4 py-3 text-right">Qty</th>
                     <th class="px-4 py-3 text-right">Price</th>
                     <th class="px-4 py-3 text-right">Discount</th>
@@ -67,7 +69,8 @@ mount(function (Sale $sale) {
             @foreach ($sale->items as $item)
                 <tr class="border-t border-slate-100 dark:border-slate-800">
                     <td class="px-4 py-3 font-bold">{{ $item->product?->name }}</td>
-                    <td class="px-4 py-3">{{ $item->stockLocation?->name }}</td>
+                    <td class="px-4 py-3">{{ $item->sold_from_label ?: ($item->stockLocation ? \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) : '-') }}</td>
+                    <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $item->sale_type === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item->sale_type ?? 'retail')->title() }}</span></td>
                     <td class="px-4 py-3 text-right">{{ number_format((float) $item->quantity, 2) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ number_format((float) $item->unit_price, 2) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ number_format((float) $item->discount_amount, 2) }}</td>

@@ -5,6 +5,12 @@ use App\Models\Company;
 use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\User;
+use Database\Seeders\AutoPartsCategorySeeder;
+use Database\Seeders\AutoPartsProductSeeder;
+use Database\Seeders\AutoPartsUnitSeeder;
+use Database\Seeders\HardwareCategorySeeder;
+use Database\Seeders\HardwareProductSeeder;
+use Database\Seeders\HardwareUnitSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -61,7 +67,7 @@ state([
 
 $validationRules = fn () => [
     'company_name' => ['required', 'string', 'max:255'],
-    'business_type' => ['required', 'string', 'max:255'],
+    'business_type' => ['required', 'in:Hardware Store,Auto Spare Parts'],
     'tin_number' => ['nullable', 'string', 'max:100'],
     'vrn_number' => ['nullable', 'string', 'max:100'],
     'phone' => ['required', 'string', 'max:30'],
@@ -202,6 +208,7 @@ $complete = function () {
             'name' => 'Dispensing Area',
             'status' => 'active',
         ]);
+        $dispensingLocation->forceFill(['status' => 'active'])->save();
 
         $mainStoreLocation = null;
         if ($data['inventory_stock_mode'] === 'warehouse') {
@@ -219,6 +226,7 @@ $complete = function () {
                 'name' => 'Main Store',
                 'status' => 'active',
             ]);
+            $mainStoreLocation->forceFill(['status' => 'active'])->save();
         } else {
             StockLocation::query()
                 ->where('branch_id', $branch->id)
@@ -231,8 +239,9 @@ $complete = function () {
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         app(RolePermissionSeeder::class)->run();
+        $permissions = Permission::query()->where('guard_name', 'web')->get();
         $role = Role::query()->firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
-        $role->syncPermissions(Permission::where('guard_name', 'web')->get());
+        $role->syncPermissions($permissions);
 
         $userData = [
             'branch_id' => $branch->id,
@@ -252,6 +261,17 @@ $complete = function () {
 
         $user = User::query()->create($userData);
         $user->assignRole($role);
+        $user->syncPermissions($permissions);
+
+        if ($company->business_type === 'Auto Spare Parts') {
+            (new AutoPartsCategorySeeder($company->id, $branch->id))->run();
+            (new AutoPartsUnitSeeder($company->id, $branch->id))->run();
+            (new AutoPartsProductSeeder($company->id, $branch->id))->run();
+        } else {
+            (new HardwareCategorySeeder($company->id, $branch->id))->run();
+            (new HardwareUnitSeeder($company->id, $branch->id))->run();
+            (new HardwareProductSeeder($company->id, $branch->id))->run();
+        }
 
         $setting = Setting::query()->first() ?: new Setting;
         $settingData = [
@@ -273,7 +293,7 @@ $complete = function () {
             'language' => $company->language,
             'default_branch_id' => $branch->id,
             'enable_warehouse' => $enableWarehouse,
-            'allow_direct_stock_in' => true,
+            'allow_direct_stock_in' => ! $enableWarehouse,
             'allow_sales_from_store' => false,
             'default_stock_location_id' => $enableWarehouse ? $mainStoreLocation?->id : $dispensingLocation->id,
             'theme_color' => '#06b6d4',
@@ -339,7 +359,14 @@ $complete = function () {
                         <p class="mt-1 text-sm text-slate-500">Set the identity, contact details, branding, and localization defaults for this ERP.</p>
                         <div class="mt-6 grid gap-4 md:grid-cols-2">
                             <x-form-input label="Company Name" name="company_name" wire:model="company_name" required />
-                            <x-form-input label="Business Type" name="business_type" wire:model="business_type" required />
+                            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                                Business Type
+                                <select wire:model="business_type" class="mt-1 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
+                                    <option value="Hardware Store">Hardware</option>
+                                    <!-- <option value="Auto Spare Parts">Auto Spare Parts</option> -->
+                                </select>
+                                @error('business_type') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                            </label>
                             <x-form-input label="TIN Number" name="tin_number" wire:model="tin_number" />
                             <x-form-input label="VRN Number" name="vrn_number" wire:model="vrn_number" />
                             <x-form-input label="Phone Number" name="phone" wire:model="phone" required />

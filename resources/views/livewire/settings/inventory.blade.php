@@ -56,6 +56,7 @@ $save = function () {
     }
 
     if (! (bool) $validated['enable_warehouse']) {
+        $validated['allow_direct_stock_in'] = true;
         $validated['allow_sales_from_store'] = false;
         $validated['default_stock_location_id'] = app(InventoryService::class)->getDispensingLocation(InventorySettings::branchId())->id;
         StockLocation::query()
@@ -63,6 +64,7 @@ $save = function () {
             ->where('type', 'store')
             ->update(['status' => 'inactive']);
     } else {
+        $validated['allow_direct_stock_in'] = false;
         $mainStore = app(InventoryService::class)->getMainStoreLocation(InventorySettings::branchId());
         $mainStore->update(['status' => 'active']);
         $validated['default_stock_location_id'] = $validated['default_stock_location_id'] ?: $mainStore->id;
@@ -71,6 +73,7 @@ $save = function () {
     $this->setting->update($validated);
     $this->default_stock_location_id = (string) $this->setting->refresh()->default_stock_location_id;
     $this->allow_sales_from_store = (bool) $this->setting->allow_sales_from_store;
+    $this->allow_direct_stock_in = (bool) $this->setting->allow_direct_stock_in;
 
     session()->flash('success', 'Inventory settings saved.');
 };
@@ -151,9 +154,9 @@ $save = function () {
             <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
                 <span>
                     <span class="block text-sm font-black">Allow Direct Stock In</span>
-                    <span class="mt-1 block text-xs text-slate-500">Let staff add stock without supplier or purchase order.</span>
+                    <span class="mt-1 block text-xs text-slate-500">{{ $enable_warehouse ? 'Disabled in warehouse mode. Use purchases and receiving.' : 'Required in direct mode. Stock goes straight to Dispensing Area.' }}</span>
                 </span>
-                <input type="checkbox" wire:model="allow_direct_stock_in" class="h-5 w-5 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500">
+                <input type="checkbox" wire:model="allow_direct_stock_in" class="h-5 w-5 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500" disabled>
             </label>
 
             <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 {{ ! $enable_warehouse ? 'opacity-60' : '' }}">

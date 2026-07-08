@@ -2,6 +2,7 @@
 
 use App\Models\Branch;
 use App\Models\User;
+use App\Support\InventorySettings;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
@@ -24,6 +25,7 @@ state([
     'role' => '',
     'branch_id' => '',
     'profile_photo' => '',
+    'sales_location_access' => 'dispensing',
 ]);
 
 mount(function (User $user) {
@@ -35,6 +37,7 @@ mount(function (User $user) {
     $this->role = $user->roles()->first()?->name ?? '';
     $this->branch_id = (string) $user->branch_id;
     $this->profile_photo = $user->profile_photo;
+    $this->sales_location_access = $user->sales_location_access ?: 'dispensing';
 });
 
 rules(fn () => [
@@ -46,7 +49,14 @@ rules(fn () => [
     'role' => ['required', 'exists:roles,name'],
     'branch_id' => ['nullable', 'exists:branches,id'],
     'profile_photo' => ['nullable', 'string', 'max:255'],
+    'sales_location_access' => [
+        InventorySettings::warehouseEnabled() && in_array($this->role, ['Super Admin', 'Admin', 'Manager', 'Cashier'], true) ? 'required' : 'nullable',
+        Rule::in(['store', 'dispensing', 'both']),
+    ],
 ]);
+
+$showSalesLocationAccess = fn (): bool => InventorySettings::warehouseEnabled()
+    && in_array($this->role, ['Super Admin', 'Admin', 'Manager', 'Cashier'], true);
 
 $save = function () {
     $validated = $this->validate();
@@ -67,6 +77,9 @@ $save = function () {
         'phone' => $validated['phone'],
         'profile_photo' => $validated['profile_photo'],
         'status' => $validated['status'],
+        'sales_location_access' => InventorySettings::warehouseEnabled()
+            ? ($validated['sales_location_access'] ?: 'dispensing')
+            : 'dispensing',
     ];
 
     if ($validated['password']) {
@@ -108,7 +121,7 @@ $save = function () {
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Assigned Role
-                <select wire:model="role" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                <select wire:model.live="role" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                     <option value="">Select role</option>
                     @foreach (Role::orderBy('name')->pluck('name') as $roleName)
                         <option value="{{ $roleName }}">{{ $roleName }}</option>
@@ -116,6 +129,18 @@ $save = function () {
                 </select>
                 @error('role') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
+
+            @if ($this->showSalesLocationAccess())
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                    Sehemu Anayoruhusiwa Kuuza
+                    <select wire:model="sales_location_access" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                        <option value="store">Ghala Kuu Pekee</option>
+                        <option value="dispensing">Sehemu ya Mauzo Pekee</option>
+                        <option value="both">Kote Kote</option>
+                    </select>
+                    @error('sales_location_access') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                </label>
+            @endif
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Assigned Branch

@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
+use App\Models\User;
 use App\Services\InventoryService;
 
 class InventorySettings
@@ -22,7 +23,9 @@ class InventorySettings
 
     public static function directStockInAllowed(): bool
     {
-        return (bool) self::current()->allow_direct_stock_in;
+        $setting = self::current();
+
+        return ! (bool) $setting->enable_warehouse && (bool) $setting->allow_direct_stock_in;
     }
 
     public static function salesFromStoreAllowed(): bool
@@ -75,6 +78,45 @@ class InventorySettings
         }
 
         return $locations;
+    }
+
+    /**
+     * @return array<int, StockLocation>
+     */
+    public static function allowedSaleLocationsForUser(?User $user, int $branchId): array
+    {
+        $inventory = app(InventoryService::class);
+
+        if (! self::warehouseEnabled()) {
+            return [$inventory->getDispensingLocation($branchId)];
+        }
+
+        $types = $user?->allowedSalesLocationTypes() ?: ['dispensing'];
+        $locations = [];
+
+        if (in_array('store', $types, true)) {
+            $locations[] = $inventory->getMainStoreLocation($branchId);
+        }
+
+        if (in_array('dispensing', $types, true)) {
+            $locations[] = $inventory->getDispensingLocation($branchId);
+        }
+
+        return $locations;
+    }
+
+    public static function canUserSellFromLocation(?User $user, StockLocation $location): bool
+    {
+        if (! self::warehouseEnabled()) {
+            return $location->type === 'dispensing';
+        }
+
+        return in_array($location->type, $user?->allowedSalesLocationTypes() ?: ['dispensing'], true);
+    }
+
+    public static function stockLocationLabel(StockLocation $location): string
+    {
+        return $location->type === 'store' ? 'Ghala Kuu' : 'Sehemu ya Mauzo';
     }
 
     public static function branchId(): int

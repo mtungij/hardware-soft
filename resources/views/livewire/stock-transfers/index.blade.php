@@ -61,6 +61,7 @@ $cancelTransfer = function (int $transferId) {
 
 <div>
     <x-page-header title="Stock Transfers" description="Transfer stock from Main Store to Dispensing Area." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Transfers' => null]">
+        <x-export-actions export="tables.stock-transfers" :params="['search' => $search, 'status' => $statusFilter, 'from_location_id' => $fromFilter, 'to_location_id' => $toFilter, 'date_from' => $dateFrom, 'date_to' => $dateTo]" />
         @if ($this->canCreate())
             <a href="{{ route('stock-transfers.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Transfer</a>
         @endif

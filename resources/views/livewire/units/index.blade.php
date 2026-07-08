@@ -87,7 +87,9 @@ $deleteUnit = function (int $unitId) {
         title="Units"
         description="Maintain product measuring units such as pcs, bag, kg, ltr, m, box, roll, and trip."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Units' => null]"
-    />
+    >
+        <x-export-actions export="tables.units" :params="compact('search', 'statusFilter')" />
+    </x-page-header>
 
     <div class="grid gap-6 xl:grid-cols-[420px_1fr]">
         @if ($this->canManage())

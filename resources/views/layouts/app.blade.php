@@ -69,13 +69,13 @@
                     ['label' => __('messages.staff.nav.inventory_summary'), 'route' => 'inventory-summary.index', 'icon' => 'summary', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                 ]],
                 ['label' => __('messages.staff.nav.purchases_group'), 'icon' => 'purchases', 'items' => [
-                    ['label' => __('messages.staff.nav.purchases'), 'route' => 'purchases.index', 'icon' => 'purchases', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant']],
-                    ['label' => __('messages.staff.nav.suppliers'), 'route' => 'suppliers.index', 'icon' => 'supplier', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
+                    ['label' => __('messages.staff.nav.purchases'), 'route' => 'purchases.index', 'icon' => 'purchases', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant'], 'show' => $warehouseEnabled],
+                    ['label' => __('messages.staff.nav.suppliers'), 'route' => 'suppliers.index', 'icon' => 'supplier', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant'], 'show' => $warehouseEnabled],
                 ]],
                 ['label' => __('messages.staff.nav.warehouse'), 'icon' => 'warehouse', 'items' => [
                     ['label' => __('messages.staff.nav.store_stock'), 'route' => 'store-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.dispensing_stock'), 'route' => 'dispensing-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier']],
-                    ['label' => __('messages.staff.nav.direct_stock_in'), 'route' => 'direct-stock-in.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper'], 'show' => $directStockInAllowed],
+                    ['label' => __('messages.staff.nav.direct_stock_in'), 'route' => 'direct-stock-in.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper'], 'show' => $directStockInAllowed && ! $warehouseEnabled],
                     ['label' => __('messages.staff.nav.stock_transfers'), 'route' => 'stock-transfers.index', 'icon' => 'transfer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.stock_movements'), 'route' => 'stock-movements.index', 'icon' => 'truck', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant']],
                     ['label' => __('messages.staff.nav.stock_adjustments'), 'route' => 'stock-adjustments.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper']],
@@ -92,8 +92,8 @@
                     ['label' => __('messages.staff.nav.customer_payments'), 'route' => 'customer-payments.create', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
                     ['label' => __('messages.staff.nav.customer_receipts'), 'route' => 'admin.customer-receipts.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.customer_deposits'), 'route' => 'admin.customer-deposits.index', 'icon' => 'bank', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
-                    ['label' => __('messages.staff.nav.supplier_payments'), 'route' => 'supplier-payments.create', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
-                    ['label' => __('messages.staff.nav.supplier_balances'), 'route' => 'supplier-balances.index', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => __('messages.staff.nav.supplier_payments'), 'route' => 'supplier-payments.create', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant'], 'show' => $warehouseEnabled],
+                    ['label' => __('messages.staff.nav.supplier_balances'), 'route' => 'supplier-balances.index', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.cashbook'), 'route' => 'cashbook.index', 'icon' => 'accounting', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
                 ]],
                 ['label' => __('messages.staff.nav.communications'), 'icon' => 'mail', 'items' => [
@@ -104,7 +104,7 @@
                 ]],
                 ['label' => __('messages.staff.nav.reports'), 'icon' => 'reports', 'items' => [
                     ['label' => __('messages.staff.nav.sales_reports'), 'route' => 'reports.sales', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
-                    ['label' => __('messages.staff.nav.purchase_reports'), 'route' => 'reports.purchases', 'icon' => 'reports', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => __('messages.staff.nav.purchase_reports'), 'route' => 'reports.purchases', 'icon' => 'reports', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.profit_reports'), 'route' => 'reports.profit-loss', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.stock_reports'), 'route' => 'reports.stock-valuation', 'icon' => 'summary', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                 ]],
@@ -118,7 +118,7 @@
                     ['label' => __('messages.staff.nav.company_settings'), 'route' => 'settings.company', 'icon' => 'branch', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.inventory_settings'), 'route' => 'settings.inventory', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.email_settings'), 'route' => 'email-settings.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager']],
-                    ['label' => __('messages.staff.nav.email_logs'), 'route' => 'purchase-email-logs.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager']],
+                    ['label' => __('messages.staff.nav.email_logs'), 'route' => 'purchase-email-logs.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager'], 'show' => $warehouseEnabled],
                 ]],
             ];
             $user = auth()->user();
@@ -174,7 +174,7 @@
                         <p data-brand-name class="max-w-44 truncate text-sm font-black uppercase tracking-wide text-navy-900 dark:text-white">{{ $companyName }}</p>
                         <p class="text-xs font-medium text-slate-500 dark:text-slate-400">{{ __('messages.staff.workspace') }}</p>
                     </div>
-                    <button type="button" class="ml-auto hidden h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-build-orange hover:text-build-orange dark:border-slate-700 dark:text-slate-300 lg:grid" @click="collapsed = !collapsed" aria-label="Toggle sidebar">
+                    <button type="button" class="ml-auto hidden h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-build-orange hover:text-build-orange dark:border-slate-700 dark:text-slate-300 lg:grid" @click="collapsed = !collapsed" aria-label="{{ __('common.toggle_sidebar') }}">
                         <svg class="h-4 w-4 transition-transform" :class="{ 'rotate-180': collapsed }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                             <path d="M15 18l-6-6 6-6" />
                         </svg>
@@ -317,12 +317,12 @@
 
                         <div class="relative shrink-0">
                             <button data-tour="profile-menu" class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
-                                <img class="h-8 w-8 rounded-lg object-cover" src="{{ $user?->profile_photo ? asset('storage/'.$user->profile_photo) : 'https://ui-avatars.com/api/?name='.urlencode($user?->name ?? 'Admin').'&background=0d2e50&color=fff' }}" alt="{{ $user?->name ?? 'User' }}">
-                                <span class="hidden text-sm font-bold sm:block">{{ $user?->name ?? 'User' }}</span>
+                                <img class="h-8 w-8 rounded-lg object-cover" src="{{ $user?->profile_photo ? asset('storage/'.$user->profile_photo) : 'https://ui-avatars.com/api/?name='.urlencode($user?->name ?? 'Admin').'&background=0d2e50&color=fff' }}" alt="{{ $user?->name ?? __('common.user') }}">
+                                <span class="hidden text-sm font-bold sm:block">{{ $user?->name ?? __('common.user') }}</span>
                             </button>
                             <div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-navy-900">
                                 <div class="border-b border-slate-100 px-3 py-3 dark:border-slate-800">
-                                    <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ $user?->name ?? 'User' }}</p>
+                                    <p class="truncate text-sm font-semibold text-slate-900 dark:text-white">{{ $user?->name ?? __('common.user') }}</p>
                                     <p class="truncate text-xs text-slate-500 dark:text-slate-400">{{ $user?->email ?? '' }}</p>
                                 </div>
                                 <a class="mt-2 block rounded-lg px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-white/5" href="{{ route('profile') }}" wire:navigate>{{ __('messages.staff.profile') }}</a>

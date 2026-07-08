@@ -53,7 +53,7 @@ class RolePermissionSeeder extends Seeder
             }
         }
 
-        foreach (['receive purchases', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'receive sale payments', 'print receipt', 'receive customer payments', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'view customer notifications', 'manage customer communications', 'publish announcements', 'send customer messages', 'pay suppliers', 'manage cashbook', 'export reports', 'view stock valuation', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings'] as $permissionName) {
+        foreach (['receive purchases', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'receive sale payments', 'print receipt', 'receive customer payments', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'view customer notifications', 'manage customer communications', 'publish announcements', 'send customer messages', 'pay suppliers', 'manage cashbook', 'export reports', 'export pdf', 'export excel', 'print reports', 'view stock valuation', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings'] as $permissionName) {
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
@@ -108,6 +108,7 @@ class RolePermissionSeeder extends Seeder
             'view sales',
             'create sales',
             'print receipt',
+            'print reports',
             'sell from dispensing',
             'receive sale payments',
             'view customer balances',
@@ -116,6 +117,7 @@ class RolePermissionSeeder extends Seeder
         ]);
         Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', ...$storeKeeperPermissions, 'view sales', 'sell from store']);
         Role::findByName('Store Keeper', $this->guard)->givePermissionTo('view stock valuation');
+        Role::findByName('Store Keeper', $this->guard)->givePermissionTo(['export pdf', 'export excel', 'print reports']);
         Role::findByName('Accountant', $this->guard)->syncPermissions([
             'view dashboard',
             'export dashboard',
@@ -164,6 +166,9 @@ class RolePermissionSeeder extends Seeder
             'manage cashbook',
             'view financial reports',
             'export reports',
+            'export pdf',
+            'export excel',
+            'print reports',
             'view stock valuation',
             'send purchase emails',
             'resend purchase emails',

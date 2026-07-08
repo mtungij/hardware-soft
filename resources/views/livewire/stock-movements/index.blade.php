@@ -17,7 +17,9 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
 ?>
 
 <div>
-    <x-page-header title="Stock Movements" description="Immutable inventory ledger. Stock movement rows are not deleted." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Movements' => null]" />
+    <x-page-header title="Stock Movements" description="Immutable inventory ledger. Stock movement rows are not deleted." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Movements' => null]">
+        <x-export-actions export="tables.stock-movements" :params="['product_id' => $productFilter, 'stock_location_id' => $locationFilter, 'movement_type' => $typeFilter, 'date_from' => $dateFrom, 'date_to' => $dateTo]" />
+    </x-page-header>
 
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-5">

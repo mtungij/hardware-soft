@@ -73,13 +73,13 @@ $deleteUser = function (int $userId) {
         description="Manage user access, status, branch assignment, and roles."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Users' => null]"
     >
+        <x-export-actions export="tables.users" :params="compact('search')" />
         <a href="{{ route('users.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create User</a>
     </x-page-header>
 
     <x-card>
         <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <input wire:model.live.debounce.300ms="search" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 sm:max-w-sm" placeholder="Search users...">
-            <button class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">Export</button>
         </div>
 
         @php
@@ -93,7 +93,7 @@ $deleteUser = function (int $userId) {
                 ->paginate(10);
         @endphp
 
-        <x-table :headers="['User', 'Phone', 'Roles', 'Company', 'Branch', 'Status', 'Actions']">
+        <x-table :headers="['User', 'Phone', 'Roles', 'Sales Location', 'Company', 'Branch', 'Status', 'Actions']">
             @forelse ($users as $user)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">
@@ -109,6 +109,7 @@ $deleteUser = function (int $userId) {
                     <td class="px-4 py-3">
                         {{ $user->roles->pluck('name')->join(', ') ?: '-' }}
                     </td>
+                    <td class="px-4 py-3">{{ str($user->sales_location_access ?? 'dispensing')->replace('_', ' ')->title() }}</td>
                     <td class="px-4 py-3">{{ $user->company?->company_name ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $user->branch?->name ?? '-' }}</td>
                     <td class="px-4 py-3"><span class="{{ $user->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($user->status) }}</span></td>
@@ -122,7 +123,7 @@ $deleteUser = function (int $userId) {
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No users found.</td></tr>
+                <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No users found.</td></tr>
             @endforelse
         </x-table>
 

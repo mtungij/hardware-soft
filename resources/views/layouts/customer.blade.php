@@ -21,7 +21,7 @@
                 $settings = null;
             }
 
-            $companyName = $company?->company_name ?: ($settings?->company_name ?: 'Customer Portal');
+            $companyName = $company?->company_name ?: ($settings?->company_name ?: __('messages.customer_portal'));
             $companyLogo = $company?->logo ?: $settings?->company_logo;
             $whatsappNumber = $company?->whatsapp_number ?: $settings?->whatsapp_number;
             $whatsappLink = $company?->whatsappLink() ?: ($whatsappNumber ? 'https://wa.me/'.preg_replace('/\D+/', '', $whatsappNumber) : null);
@@ -53,7 +53,7 @@
                 ['label' => __('messages.nav.statements'), 'route' => 'customer.statement', 'tour' => 'customer-statements'],
                 ['label' => __('messages.nav.notifications'), 'route' => 'customer.notifications.index', 'tour' => 'customer-notifications'],
                 ['label' => __('messages.nav.profile'), 'route' => 'customer.profile', 'tour' => 'customer-profile'],
-                ['label' => 'Msaada', 'route' => 'customer.help-center', 'tour' => 'customer-help'],
+                ['label' => __('messages.nav.help'), 'route' => 'customer.help-center', 'tour' => 'customer-help'],
             ];
         @endphp
 
@@ -107,7 +107,7 @@
                         </div>
                         <x-customer-language-switcher class="hidden md:block" />
                         <x-pwa-install-button class="hidden h-10 w-10 items-center justify-center rounded-xl bg-build-orange text-white sm:inline-flex" />
-                        <a href="{{ route('customer.help-center') }}" wire:navigate title="Kituo cha Msaada" class="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-sm font-black dark:border-slate-700">?</a>
+                        <a href="{{ route('customer.help-center') }}" wire:navigate title="{{ __('messages.nav.help') }}" class="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-sm font-black dark:border-slate-700">?</a>
                         <button class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="darkMode = window.hardexTheme?.toggle() === 'dark'" x-text="darkMode ? @js(__('messages.theme.light')) : @js(__('messages.theme.dark'))"></button>
                         <div class="relative">
                             <button type="button" data-tour="customer-notifications" class="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-700 dark:border-slate-700 dark:text-slate-200" @click="notificationsOpen = !notificationsOpen; profileOpen = false" aria-label="{{ __('messages.nav.notifications') }}">
@@ -171,7 +171,7 @@
 
         <x-onboarding
             context="customer"
-            role="Mteja"
+            :role="__('customers.title')"
             :user-key="$customerAccount?->id ?: 'guest'"
         />
 

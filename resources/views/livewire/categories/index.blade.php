@@ -95,7 +95,9 @@ $deleteCategory = function (int $categoryId) {
         title="Categories"
         description="Classify products such as Cement, Mabati, Nondo, Rangi, Plumbing, and Tools."
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Categories' => null]"
-    />
+    >
+        <x-export-actions export="tables.categories" :params="compact('search', 'statusFilter', 'branchFilter')" />
+    </x-page-header>
 
     <div class="grid gap-6 xl:grid-cols-[420px_1fr]">
         @if ($this->canManage())

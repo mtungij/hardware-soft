@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CustomerPortal\CustomerFileDownloadController;
 use App\Http\Controllers\ReportExportController;
+use App\Http\Controllers\GenericExportController;
 use App\Http\Controllers\PurchaseOrderPdfController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -128,6 +129,8 @@ Route::post('staff/language/{locale}', function (Request $request, string $local
         }
     }
 
+    app()->setLocale($locale);
+
     return back()->withCookie(cookie('hardex_staff_locale', $locale, 60 * 24 * 365, '/', null, $request->isSecure(), false, false, 'lax'));
 })->name('staff.language');
 
@@ -155,7 +158,9 @@ Route::post('customer/language/{locale}', function (Request $request, string $lo
         $account->forceFill(['preferred_locale' => $locale])->save();
     }
 
-    return back();
+    app()->setLocale($locale);
+
+    return back()->withCookie(cookie('hardex_customer_locale', $locale, 60 * 24 * 365, '/', null, $request->isSecure(), false, false, 'lax'));
 })->name('customer.language');
 
 Route::middleware('customer.locale')->group(function () {
@@ -211,23 +216,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Volt::route('products/create', 'products.create')->name('products.create');
         Volt::route('products/{product}/edit', 'products.edit')->name('products.edit');
-        Volt::route('suppliers/create', 'suppliers.create')->name('suppliers.create');
-        Volt::route('suppliers/{supplier}/edit', 'suppliers.edit')->name('suppliers.edit');
+        Volt::route('suppliers/create', 'suppliers.create')->middleware('warehouse.enabled')->name('suppliers.create');
+        Volt::route('suppliers/{supplier}/edit', 'suppliers.edit')->middleware('warehouse.enabled')->name('suppliers.edit');
         Volt::route('customers/create', 'customers.create')->name('customers.create');
         Volt::route('customers/{customer}/edit', 'customers.edit')->name('customers.edit');
 
-        Volt::route('purchases/{purchase}/edit', 'purchases.edit')->name('purchases.edit');
+        Volt::route('purchases/{purchase}/edit', 'purchases.edit')->middleware('warehouse.enabled')->name('purchases.edit');
         Volt::route('stock-adjustments/approve', 'stock-adjustments.approve')->name('stock-adjustments.approve');
-        Volt::route('stock-transfers/{stockTransfer}/edit', 'stock-transfers.edit')->name('stock-transfers.edit');
+        Volt::route('stock-transfers/{stockTransfer}/edit', 'stock-transfers.edit')->middleware('warehouse.enabled')->name('stock-transfers.edit');
         Volt::route('sales/{sale}/cancel', 'sales.cancel')->name('sales.cancel');
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper')->group(function () {
-        Volt::route('purchases/create', 'purchases.create')->name('purchases.create');
-        Volt::route('purchases/{purchase}/receive', 'purchases.receive')->name('purchases.receive');
-        Route::get('purchases/{purchase}/purchase-order-pdf', PurchaseOrderPdfController::class)->name('purchases.purchase-order-pdf');
+        Volt::route('purchases/create', 'purchases.create')->middleware('warehouse.enabled')->name('purchases.create');
+        Volt::route('purchases/{purchase}/receive', 'purchases.receive')->middleware('warehouse.enabled')->name('purchases.receive');
+        Route::get('purchases/{purchase}/purchase-order-pdf', PurchaseOrderPdfController::class)->middleware('warehouse.enabled')->name('purchases.purchase-order-pdf');
         Volt::route('stock-adjustments/create', 'stock-adjustments.create')->name('stock-adjustments.create');
-        Volt::route('stock-transfers/create', 'stock-transfers.create')->name('stock-transfers.create');
+        Volt::route('stock-transfers/create', 'stock-transfers.create')->middleware('warehouse.enabled')->name('stock-transfers.create');
         Volt::route('direct-stock-in', 'direct-stock-in.index')->name('direct-stock-in.index');
     });
 
@@ -241,13 +246,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('categories', 'categories.index')->name('categories.index');
         Volt::route('units', 'units.index')->name('units.index');
         Volt::route('products', 'products.index')->name('products.index');
-        Volt::route('suppliers', 'suppliers.index')->name('suppliers.index');
+        Volt::route('suppliers', 'suppliers.index')->middleware('warehouse.enabled')->name('suppliers.index');
         Volt::route('customers', 'customers.index')->name('customers.index');
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper,Accountant')->group(function () {
-        Volt::route('purchases', 'purchases.index')->name('purchases.index');
-        Volt::route('purchases/{purchase}', 'purchases.show')->name('purchases.show');
+        Volt::route('purchases', 'purchases.index')->middleware('warehouse.enabled')->name('purchases.index');
+        Volt::route('purchases/{purchase}', 'purchases.show')->middleware('warehouse.enabled')->name('purchases.show');
         Volt::route('stock-movements', 'stock-movements.index')->name('stock-movements.index');
     });
 
@@ -258,20 +263,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('role.any:Super Admin,Admin,Manager,Accountant')->group(function () {
         Volt::route('expenses', 'expenses.index')->name('expenses.index');
         Volt::route('expense-categories', 'expense-categories.index')->name('expense-categories.index');
-        Volt::route('supplier-balances', 'supplier-balances.index')->name('supplier-balances.index');
-        Volt::route('supplier-balances/{supplier}', 'supplier-balances.show')->name('supplier-balances.show');
-        Volt::route('supplier-payments/create', 'supplier-payments.create')->name('supplier-payments.create');
+        Volt::route('supplier-balances', 'supplier-balances.index')->middleware('warehouse.enabled')->name('supplier-balances.index');
+        Volt::route('supplier-balances/{supplier}', 'supplier-balances.show')->middleware('warehouse.enabled')->name('supplier-balances.show');
+        Volt::route('supplier-payments/create', 'supplier-payments.create')->middleware('warehouse.enabled')->name('supplier-payments.create');
         Volt::route('reports/sales', 'reports.sales')->name('reports.sales');
-        Volt::route('reports/purchases', 'reports.purchases')->name('reports.purchases');
+        Volt::route('reports/purchases', 'reports.purchases')->middleware('warehouse.enabled')->name('reports.purchases');
         Volt::route('reports/expenses', 'reports.expenses')->name('reports.expenses');
         Volt::route('reports/customers', 'reports.customers')->name('reports.customers');
-        Volt::route('reports/suppliers', 'reports.suppliers')->name('reports.suppliers');
+        Volt::route('reports/suppliers', 'reports.suppliers')->middleware('warehouse.enabled')->name('reports.suppliers');
         Volt::route('reports/stock-valuation', 'reports.stock-valuation')->name('reports.stock-valuation');
         Volt::route('reports/profit-loss', 'reports.profit-loss')->name('reports.profit-loss');
         Volt::route('reports/cashbook', 'reports.cashbook')->name('reports.cashbook');
         Route::get('reports/{report}/export/{format}', ReportExportController::class)->name('reports.export');
         Volt::route('email-settings', 'email-settings.index')->name('email-settings.index');
-        Volt::route('purchase-email-logs', 'purchase-email-logs.index')->name('purchase-email-logs.index');
+        Volt::route('purchase-email-logs', 'purchase-email-logs.index')->middleware('warehouse.enabled')->name('purchase-email-logs.index');
         Volt::route('customer-accounts', 'admin.customer-accounts.index')->name('customer-accounts.index');
         Volt::route('admin/customer-accounts', 'admin.customer-accounts.index')->name('admin.customer-accounts.index');
         Volt::route('admin/customer-portal-users', 'admin.customer-accounts.index')->name('admin.customer-portal-users.index');
@@ -290,6 +295,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('admin/sent-messages', 'admin.sent-messages.index')->name('admin.sent-messages.index');
     });
 
+    Route::middleware('role.any:Super Admin,Admin,Manager,Accountant,Cashier,Store Keeper')->group(function () {
+        Route::get('exports/{export}/{format}', GenericExportController::class)->where('export', '.*')->name('exports.download');
+    });
+
     Route::middleware('role.any:Super Admin,Admin,Manager,Accountant,Cashier')->group(function () {
         Volt::route('customer-balances', 'customer-balances.index')->name('customer-balances.index');
         Volt::route('customer-balances/{customer}', 'customer-balances.show')->name('customer-balances.show');
@@ -306,7 +315,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper,Cashier')->group(function () {
-        Volt::route('store-stock', 'store-stock.index')->name('store-stock.index');
+        Volt::route('store-stock', 'store-stock.index')->middleware('warehouse.enabled')->name('store-stock.index');
         Volt::route('dispensing-stock', 'dispensing-stock.index')->name('dispensing-stock.index');
         Volt::route('inventory-summary', 'inventory-summary.index')->name('inventory-summary.index');
     });
@@ -316,8 +325,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper,Accountant')->group(function () {
-        Volt::route('stock-transfers', 'stock-transfers.index')->name('stock-transfers.index');
-        Volt::route('stock-transfers/{stockTransfer}', 'stock-transfers.show')->name('stock-transfers.show');
+        Volt::route('stock-transfers', 'stock-transfers.index')->middleware('warehouse.enabled')->name('stock-transfers.index');
+        Volt::route('stock-transfers/{stockTransfer}', 'stock-transfers.show')->middleware('warehouse.enabled')->name('stock-transfers.show');
     });
 });
 

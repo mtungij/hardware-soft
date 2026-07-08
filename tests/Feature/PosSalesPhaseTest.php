@@ -64,6 +64,81 @@ test('completing cash sale reduces dispensing stock', function () {
     expect($inventory->getProductStock($product->id, $dispensing->id, $branch->id))->toEqual($before - 1);
 });
 
+test('cashier wholesale sale stores sale type sold by unit price and line total', function () {
+    $branch = Branch::where('code', 'MAIN')->firstOrFail();
+    $cashier = User::factory()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'status' => 'active',
+    ]);
+    $cashier->assignRole('Cashier');
+    $inventory = app(InventoryService::class);
+    $dispensing = $inventory->getDispensingLocation($branch->id);
+    $product = Product::firstOrFail();
+    $product->update([
+        'buying_price' => 15000,
+        'selling_price' => 19000,
+        'wholesale_price' => 17500,
+    ]);
+
+    StockMovement::query()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'product_id' => $product->id,
+        'stock_location_id' => $dispensing->id,
+        'movement_type' => 'direct_stock_in',
+        'quantity' => 25,
+        'unit_cost' => 15000,
+        'unit_price' => 17500,
+        'notes' => 'Wholesale test stock',
+        'created_by' => $cashier->id,
+        'movement_date' => today(),
+    ]);
+
+    $this->actingAs($cashier);
+
+    $sale = $inventory->completeSale(
+        [[
+            'product_id' => $product->id,
+            'sale_type' => 'wholesale',
+            'quantity' => 20,
+            'unit_price' => $product->wholesale_price,
+            'discount_amount' => 0,
+            'tax_amount' => 0,
+        ]],
+        [['payment_method' => 'cash', 'amount' => 350000, 'reference_number' => null]],
+        null,
+        $dispensing->id,
+        $branch->id,
+        $cashier->id,
+    );
+
+    $item = $sale->items()->firstOrFail();
+
+    expect($sale->sale_type)->toBe('wholesale');
+    expect($sale->sold_by)->toBe($cashier->id);
+    expect($sale->created_at)->not->toBeNull();
+    expect($item->sale_type)->toBe('wholesale');
+    expect((float) $item->unit_price)->toBe(17500.0);
+    expect((float) $item->line_total)->toBe(350000.0);
+});
+
+test('cashier can see wholesale sale type option on pos', function () {
+    $branch = Branch::where('code', 'MAIN')->firstOrFail();
+    $cashier = User::factory()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'status' => 'active',
+    ]);
+    $cashier->assignRole('Cashier');
+
+    $this->actingAs($cashier)
+        ->get('/pos')
+        ->assertOk()
+        ->assertSee('Aina ya Bei')
+        ->assertSee('Wholesale');
+});
+
 test('sale cannot exceed available stock', function () {
     $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
     $branch = Branch::where('code', 'MAIN')->firstOrFail();

@@ -1,13 +1,16 @@
 <?php
 
 use App\Models\GoodsReceivingNote;
+use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
+use App\Models\Supplier;
 use App\Models\User;
 use App\Services\InventoryService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Validation\ValidationException;
+use Livewire\Volt\Volt;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
@@ -33,6 +36,91 @@ test('stock locations and sample purchase movements are seeded', function () {
     expect(StockLocation::where('code', 'DISPENSING')->where('type', 'dispensing')->exists())->toBeTrue();
     expect(Purchase::where('reference_number', 'PO-SEED-0001')->exists())->toBeTrue();
     expect(StockMovement::where('movement_type', 'purchase_in')->exists())->toBeTrue();
+});
+
+test('purchase create keeps selected product after supplier is selected', function () {
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    $product = Product::firstOrFail();
+    $supplier = Supplier::query()->create([
+        'company_id' => $admin->company_id,
+        'branch_id' => $admin->branch_id,
+        'name' => 'Test Supplier',
+        'phone' => '+255 700 333 333',
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($admin);
+
+    Volt::test('purchases.create')
+        ->set('supplier_id', (string) $supplier->id)
+        ->call('selectProduct', 0, (string) $product->id)
+        ->assertSet('items.0.product_id', (string) $product->id)
+        ->assertSet('items.0.selling_price', (string) $product->selling_price);
+});
+
+test('super admin can update product selling price from purchase create', function () {
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    $product = Product::firstOrFail();
+    $supplier = Supplier::query()->create([
+        'company_id' => $admin->company_id,
+        'branch_id' => $admin->branch_id,
+        'name' => 'Admin Price Supplier',
+        'phone' => '+255 700 444 444',
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($admin);
+
+    Volt::test('purchases.create')
+        ->set('supplier_id', (string) $supplier->id)
+        ->call('selectProduct', 0, (string) $product->id)
+        ->set('items.0.ordered_quantity', '1')
+        ->set('items.0.cost_price', '1000')
+        ->set('items.0.selling_price', '99999')
+        ->set('reference_number', 'PO-ADMIN-PRICE')
+        ->call('savePurchase', 'draft');
+
+    expect((float) $product->refresh()->selling_price)->toBe(99999.0);
+});
+
+test('non admin cannot update product selling price from purchase create', function () {
+    $product = Product::firstOrFail();
+    $originalSellingPrice = (float) $product->selling_price;
+    $branch = \App\Models\Branch::firstOrFail();
+    $storeKeeper = User::factory()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'status' => 'active',
+    ]);
+    $storeKeeper->assignRole('Store Keeper');
+
+    $supplier = Supplier::query()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'name' => 'Store Keeper Price Supplier',
+        'phone' => '+255 700 555 555',
+        'status' => 'active',
+    ]);
+
+    $this->actingAs($storeKeeper);
+
+    Volt::test('purchases.create')
+        ->set('supplier_id', (string) $supplier->id)
+        ->call('selectProduct', 0, (string) $product->id)
+        ->set('items.0.ordered_quantity', '1')
+        ->set('items.0.cost_price', '1000')
+        ->set('items.0.selling_price', '99999')
+        ->set('reference_number', 'PO-STORE-PRICE')
+        ->call('savePurchase', 'draft');
+
+    $purchaseItem = Purchase::query()
+        ->where('reference_number', 'PO-STORE-PRICE')
+        ->firstOrFail()
+        ->items()
+        ->firstOrFail();
+
+    expect((float) $product->refresh()->selling_price)->toBe($originalSellingPrice);
+    expect((float) $purchaseItem->selling_price)->toBe($originalSellingPrice);
 });
 
 test('receiving purchase creates grn and purchase in movements', function () {

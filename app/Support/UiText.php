@@ -13,9 +13,25 @@ class UiText
             return $value;
         }
 
-        $key = 'messages.ui.'.self::key($value);
+        if (Lang::has($value) || Lang::has($value, app()->getLocale(), false)) {
+            return __($value);
+        }
 
-        return Lang::has($key) ? __($key) : $value;
+        $key = self::key($value);
+        $messageKey = 'messages.ui.'.$key;
+        $commonKey = 'common.'.$key;
+
+        if (Lang::has($messageKey)) {
+            return __($messageKey);
+        }
+
+        if (Lang::has($commonKey)) {
+            return __($commonKey);
+        }
+
+        $translated = __($value);
+
+        return $translated === $value ? $value : $translated;
     }
 
     private static function key(string $value): string

@@ -79,6 +79,7 @@ $delete = function (int $id) {
 
 <div>
     <x-page-header title="Expenses" description="Track rent, salaries, utilities, transport, and daily operating costs." :breadcrumbs="['Dashboard' => route('dashboard'), 'Expenses' => null]">
+        <x-export-actions export="tables.expenses" :params="compact('search', 'branchFilter', 'date_from', 'date_to')" />
         <a href="{{ route('expense-categories.index') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">Categories</a>
     </x-page-header>
 

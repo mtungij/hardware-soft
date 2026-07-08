@@ -47,16 +47,22 @@ $removeItem = function (int $index) {
     $this->items = array_values($this->items);
 };
 
-$syncProductSellingPrice = function (int $index) {
-    $productId = $this->items[$index]['product_id'] ?? null;
+$selectProduct = function (int $index, string $productId) {
+    if (! array_key_exists($index, $this->items)) {
+        return;
+    }
+
     $product = $productId ? Product::query()->find($productId) : null;
 
+    $this->items[$index]['product_id'] = $product ? (string) $product->id : '';
     $this->items[$index]['selling_price'] = $product ? (string) $product->selling_price : '';
 };
 
 $totalAmount = function () {
     return collect($this->items)->sum(fn ($item) => (float) ($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0));
 };
+
+$canUpdateSellingPrice = fn (): bool => auth()->user()?->hasAnyRole(['Super Admin', 'Admin']) ?? false;
 
 $savePurchase = function (string $status, bool $sendEmail = false) {
     $validated = $this->validate([
@@ -80,7 +86,9 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         throw ValidationException::withMessages(['paid_amount' => 'Paid amount cannot exceed total amount.']);
     }
 
-    $purchase = DB::transaction(function () use ($validated, $status, $total) {
+    $canUpdateSellingPrice = $this->canUpdateSellingPrice();
+
+    $purchase = DB::transaction(function () use ($validated, $status, $total, $canUpdateSellingPrice) {
         $paid = (float) $validated['paid_amount'];
         $balance = max(0, $total - $paid);
 
@@ -100,20 +108,24 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         ]);
 
         foreach ($validated['items'] as $item) {
+            $product = Product::query()->findOrFail($item['product_id']);
             $quantity = (float) $item['ordered_quantity'];
             $cost = (float) $item['cost_price'];
+            $sellingPrice = $canUpdateSellingPrice
+                ? ($item['selling_price'] ?: null)
+                : (string) $product->selling_price;
 
             $purchase->items()->create([
                 'product_id' => $item['product_id'],
                 'ordered_quantity' => $quantity,
                 'received_quantity' => 0,
                 'cost_price' => $cost,
-                'selling_price' => $item['selling_price'] ?: null,
+                'selling_price' => $sellingPrice,
                 'line_total' => $quantity * $cost,
             ]);
 
-            if ($item['selling_price'] !== '' && $item['selling_price'] !== null) {
-                Product::whereKey($item['product_id'])->update(['selling_price' => $item['selling_price']]);
+            if ($canUpdateSellingPrice && $item['selling_price'] !== '' && $item['selling_price'] !== null) {
+                $product->update(['selling_price' => $item['selling_price']]);
             }
         }
 
@@ -142,6 +154,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
     <x-page-header title="Create Purchase" description="Create a draft or ordered purchase. Stock is not increased until receiving." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Create' => null]" />
 
     @php
+        $canUpdateSellingPrice = $this->canUpdateSellingPrice();
         $productSelectOptions = [
             'placeholder' => blank($supplier_id) ? 'Select supplier first' : 'Search or select product',
             'hasSearch' => true,
@@ -162,7 +175,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         <form class="space-y-6">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Supplier
-                    <select wire:model.live="supplier_id" wire:change="$refresh" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <select wire:model.live="supplier_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                         <option value="">Select supplier</option>
                         @foreach (Supplier::where('status', 'active')->orderBy('name')->get() as $supplier)
                             <option value="{{ $supplier->id }}">{{ $supplier->name }}</option>
@@ -199,8 +212,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                             <tr>
                                 <td class="px-3 py-3" wire:key="purchase-product-cell-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}">
                                     <select
-                                        wire:model.live="items.{{ $index }}.product_id"
-                                        wire:change="syncProductSellingPrice({{ $index }})"
+                                        wire:change="selectProduct({{ $index }}, $event.target.value)"
                                         wire:key="purchase-product-select-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}"
                                         data-hs-select='@json($productSelectOptions)'
                                         class="hidden"
@@ -209,7 +221,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                         <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                         @if (filled($supplier_id))
                                             @foreach (Product::where('status', 'active')->orderBy('name')->get() as $product)
-                                                <option value="{{ $product->id }}">{{ $product->name }} / {{ $product->sku }}</option>
+                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->name }} / {{ $product->sku }}</option>
                                             @endforeach
                                         @endif
                                     </select>
@@ -226,10 +238,16 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                     </span>
                                 </td>
                                 <td class="px-3 py-3" wire:key="purchase-selling-price-{{ $index }}-{{ $item['product_id'] ?: 'no-product' }}">
-                                    <span data-money-field wire:ignore class="block w-36">
-                                        <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                        <input type="hidden" data-money-value value="{{ $sellingPriceValue }}" wire:model="items.{{ $index }}.selling_price">
-                                    </span>
+                                    @if ($canUpdateSellingPrice)
+                                        <span data-money-field wire:ignore class="block w-36">
+                                            <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                            <input type="hidden" data-money-value value="{{ $sellingPriceValue }}" wire:model="items.{{ $index }}.selling_price">
+                                        </span>
+                                    @else
+                                        <div class="w-36 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+                                            TZS {{ number_format((float) $sellingPriceValue, 2) }}
+                                        </div>
+                                    @endif
                                 </td>
                                 <td class="px-3 py-3 font-black">TZS {{ number_format((float) ($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0), 2) }}</td>
                                 <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>

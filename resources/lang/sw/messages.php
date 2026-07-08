@@ -476,6 +476,7 @@ return [
         'statements' => 'Taarifa za Akaunti',
         'notifications' => 'Taarifa',
         'profile' => 'Wasifu Wangu',
+        'help' => 'Kituo cha Msaada',
         'logout' => 'Toka',
     ],
 

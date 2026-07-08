@@ -12,7 +12,7 @@ layout('layouts.app');
 state(['sale' => null, 'settings' => null]);
 
 mount(function (Sale $sale) {
-    $this->sale = $sale->load(['customer', 'createdBy', 'items.product', 'payments']);
+    $this->sale = $sale->load(['customer', 'createdBy', 'items.product', 'items.stockLocation', 'payments']);
     $this->settings = Setting::first();
 });
 
@@ -36,6 +36,7 @@ mount(function (Sale $sale) {
             <p>Date: {{ $sale->created_at?->format('M d, Y H:i') }}</p>
             <p>Cashier: {{ $sale->createdBy?->name }}</p>
             <p>Customer: {{ $sale->customer?->name ?? 'Walk-in Customer' }}</p>
+            <p>Sale Type: {{ $sale->saleTypeLabel() }}</p>
         </div>
 
         <div class="space-y-2">
@@ -45,6 +46,8 @@ mount(function (Sale $sale) {
                         <span>{{ $item->product?->name }}</span>
                         <span>{{ number_format((float) $item->line_total, 2) }}</span>
                     </div>
+                    <p class="text-xs">Sale Type: {{ str($item->sale_type ?? 'retail')->title() }}</p>
+                    <p class="text-xs">Sehemu ya Stock: {{ $item->sold_from_label ?: ($item->stockLocation ? \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) : '-') }}</p>
                     <p class="text-xs">{{ number_format((float) $item->quantity, 2) }} x {{ number_format((float) $item->unit_price, 2) }}</p>
                 </div>
             @endforeach

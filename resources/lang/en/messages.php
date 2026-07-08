@@ -476,6 +476,7 @@ return [
         'statements' => 'Statements',
         'notifications' => 'Notifications',
         'profile' => 'Profile',
+        'help' => 'Help Center',
         'logout' => 'Logout',
     ],
 
