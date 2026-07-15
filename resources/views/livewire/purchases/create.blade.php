@@ -53,9 +53,14 @@ $selectProduct = function (int $index, string $productId) {
     }
 
     $product = $productId ? Product::query()->find($productId) : null;
+    $costPrice = $product ? (string) $product->buying_price : '0';
+    $sellingPrice = $product ? (string) $product->selling_price : '';
 
     $this->items[$index]['product_id'] = $product ? (string) $product->id : '';
-    $this->items[$index]['selling_price'] = $product ? (string) $product->selling_price : '';
+    $this->items[$index]['cost_price'] = $costPrice;
+    $this->items[$index]['selling_price'] = $sellingPrice;
+    $this->dispatch('money-input-updated', model: "items.{$index}.cost_price", value: $costPrice);
+    $this->dispatch('money-input-updated', model: "items.{$index}.selling_price", value: $sellingPrice);
 };
 
 $totalAmount = function () {
@@ -162,12 +167,13 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
             'searchPlaceholder' => 'Search product by name or SKU',
             'searchNoResultText' => 'No product found',
             'optionAllowEmptyOption' => true,
-            'toggleClasses' => 'relative py-2.5 ps-3 pe-9 flex w-64 cursor-pointer rounded-lg border border-slate-200 bg-white text-start text-sm text-slate-800 shadow-sm outline-none transition before:absolute before:inset-0 before:z-1 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/20 disabled:pointer-events-none disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white dark:focus:border-cyan-400',
-            'dropdownClasses' => 'z-[80] mt-2 max-h-72 w-64 overflow-hidden overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-900',
+            'toggleClasses' => 'relative py-2.5 ps-3 pe-9 flex w-72 cursor-pointer rounded-lg border border-slate-200 bg-white text-start text-sm text-slate-800 shadow-sm outline-none transition before:absolute before:inset-0 before:z-1 focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/20 disabled:pointer-events-none disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white dark:focus:border-cyan-400',
+            'dropdownClasses' => 'z-[120] mt-2 max-h-80 w-96 max-w-[calc(100vw-2rem)] overflow-hidden overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-2xl dark:border-slate-700 dark:bg-slate-900',
             'optionClasses' => 'cursor-pointer rounded-lg px-3 py-2 text-sm text-slate-800 hover:bg-cyan-50 focus:bg-cyan-50 hs-selected:bg-cyan-500 hs-selected:text-white dark:text-slate-100 dark:hover:bg-cyan-500/10 dark:focus:bg-cyan-500/10 dark:hs-selected:bg-cyan-500',
             'searchClasses' => 'block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none ring-cyan-500/20 placeholder:text-slate-400 focus:border-cyan-500 focus:ring-4 dark:border-slate-700 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-cyan-400',
             'searchWrapperClasses' => 'sticky top-0 z-10 bg-white p-1 dark:bg-slate-900',
             'dropdownScope' => 'parent',
+            'dropdownVerticalFixedPlacement' => 'bottom',
         ];
     @endphp
 
@@ -196,7 +202,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                 <x-money-input label="Paid Amount" name="paid_amount" value="{{ $paid_amount }}" wire:model.live="paid_amount" required />
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="relative z-20 overflow-x-auto pb-4 transition-[padding] focus-within:pb-96">
                 <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
                     <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Qty</th><th>Cost</th><th>Selling Price</th><th>Line Total</th><th></th></tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -210,7 +216,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                     : ($selectedProduct?->selling_price ?? '');
                             @endphp
                             <tr>
-                                <td class="px-3 py-3" wire:key="purchase-product-cell-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}">
+                                <td class="relative z-30 px-3 py-3" wire:key="purchase-product-cell-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}">
                                     <select
                                         wire:change="selectProduct({{ $index }}, $event.target.value)"
                                         wire:key="purchase-product-select-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}"
@@ -232,7 +238,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                 </td>
                                 <td class="px-3 py-3"><input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="0.01" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
                                 <td class="px-3 py-3">
-                                    <span data-money-field wire:ignore class="block w-36">
+                                    <span data-money-field wire:ignore class="block w-36" wire:key="purchase-cost-price-{{ $index }}-{{ $item['product_id'] ?: 'no-product' }}-{{ $item['cost_price'] ?? '0' }}">
                                         <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                         <input type="hidden" data-money-value value="{{ $item['cost_price'] ?? '' }}" wire:model.live="items.{{ $index }}.cost_price">
                                     </span>

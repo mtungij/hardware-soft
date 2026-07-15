@@ -559,7 +559,7 @@ $recentTransactions = computed(function (): Collection {
     </div>
 
     @if (! $emailSettingsConfigured && $canSeeCard(['Admin', 'Manager', 'Accountant']))
-        <div wire:loading.remove.delay class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+        <!-- <div wire:loading.remove.delay class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <p class="text-sm font-black text-amber-900 dark:text-amber-100">{{ $t('Email settings have not been configured.') }}</p>
@@ -569,7 +569,7 @@ $recentTransactions = computed(function (): Collection {
                     {{ $t('Configure Email Settings') }}
                 </a>
             </div>
-        </div>
+        </div> -->
     @endif
 
     <div wire:loading.remove.delay data-tour="dashboard-stats" class="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
