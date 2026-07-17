@@ -67,7 +67,7 @@
             @forelse ($rows as $row)
                 <tr>
                     @foreach ($row as $value)
-                        <td>{{ $value }}</td>
+                        <td>{!! nl2br(e($value)) !!}</td>
                     @endforeach
                 </tr>
             @empty

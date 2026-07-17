@@ -20,13 +20,17 @@ use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ReportExportService
 {
     public function getCompanyHeader(Request $request): array
     {
         $settings = \App\Models\Setting::query()->first();
-        $branch = $request->integer('branch_id') ? Branch::find($request->integer('branch_id')) : null;
+        $branchId = $request->integer('branch_id') ?: $request->integer('branchFilter');
+        $locationId = $request->integer('stock_location_id');
+        $branch = $branchId ? Branch::find($branchId) : null;
+        $location = $locationId ? StockLocation::find($locationId) : null;
 
         return [
             'company_name' => $settings?->company_name ?: config('app.name', 'HARDEX ERP'),
@@ -39,6 +43,7 @@ class ReportExportService
             'district' => $settings?->district,
             'date_range' => trim(($request->string('date_from')->toString() ?: 'Beginning').' to '.($request->string('date_to')->toString() ?: today()->toDateString())),
             'branch_name' => $branch?->name ?? 'All Branches',
+            'stock_location' => $location?->name ?? 'All Locations',
             'printed_by' => $request->user()?->name ?? '-',
             'printed_date' => now()->format('Y-m-d H:i'),
         ];
@@ -144,70 +149,91 @@ class ReportExportService
             ->when($request->integer('category_id'), fn ($query, $id) => $query->whereHas('product', fn ($productQuery) => $productQuery->where('category_id', $id)))
             ->when($search, fn ($query) => $query->where(fn ($nested) => $nested
                 ->whereHas('product', fn ($productQuery) => $productQuery->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"))
-                ->orWhereHas('sale', fn ($saleQuery) => $saleQuery->where('sale_number', 'like', "%{$search}%"))))
+                ->orWhereHas('sale', fn ($saleQuery) => $saleQuery
+                    ->where('sale_number', 'like', "%{$search}%")
+                    ->orWhereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('soldBy', fn ($userQuery) => $userQuery->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('createdBy', fn ($userQuery) => $userQuery->where('name', 'like', "%{$search}%")))))
             ->latest('id')
             ->get();
 
-        $headers = [$tr('sale_number'), $tr('sale_time'), $tr('product_name'), $tr('sku'), $tr('sale_type'), $tr('customer'), $tr('quantity_sold'), $tr('unit')];
+        $invoiceRows = $rows
+            ->groupBy('sale_id')
+            ->map(function ($items) use ($lineCost, $paymentLabel, $tr) {
+                $sale = $items->first()->sale;
+                $saleTypes = $items->pluck('sale_type')->filter()->unique()->values();
+                $stockSources = $items->map(fn ($item) => $item->sold_from_label ?: $item->stockLocation?->name)->filter()->unique()->values();
+                $paymentMethods = $sale?->payments?->pluck('payment_method')->filter()->unique()->values() ?? collect();
+                $cost = $items->sum(fn ($item) => $lineCost($item));
+                $sales = (float) ($sale?->total_amount ?? $items->sum('line_total'));
+
+                return [
+                    'sale' => $sale,
+                    'items' => $items->values(),
+                    'customer' => $sale?->customer?->name ?: $tr('walk_in_customer'),
+                    'total_quantity' => $items->sum('quantity'),
+                    'cost' => $cost,
+                    'sales' => $sales,
+                    'profit' => $sales - $cost,
+                    'sale_type' => $saleTypes->count() > 1 ? $tr('mixed') : ($saleTypes->first() === 'wholesale' ? $tr('wholesale') : $tr('retail')),
+                    'payment_method' => $sale?->payment_status === 'partial' ? $tr('partial') : ($paymentMethods->count() > 1 ? $tr('mixed') : ($paymentMethods->isEmpty() ? '-' : $paymentLabel((string) $paymentMethods->first()))),
+                    'stock_source' => $stockSources->count() > 1 ? $tr('mixed_locations') : (string) ($stockSources->first() ?: '-'),
+                    'cashier' => $sale?->soldBy?->name ?? $sale?->createdBy?->name,
+                ];
+            })
+            ->sortByDesc(fn ($row) => $row['sale']?->created_at)
+            ->values();
+
+        $headers = [$tr('sale_no'), $tr('customer'), $tr('products_sold'), $tr('total_quantity')];
 
         if ($canViewProfit) {
-            array_push($headers, $tr('buying_price_unit'), $tr('total_cost'));
+            $headers[] = $tr('buying_cost');
         }
 
-        array_push($headers, $tr('selling_price_unit'), $tr('total_sales'), $tr('discount'));
+        $headers[] = $tr('selling_amount');
 
         if ($canViewProfit) {
             $headers[] = $tr('profit');
         }
 
-        array_push($headers, $tr('cashier'), $tr('stock_location'), $tr('payment_status'), $tr('payment_method'));
+        array_push($headers, $tr('sale_type'), $tr('payment_method'), $tr('stock_location'), $tr('cashier'));
 
-        $exportRows = $rows->map(function (SaleItem $item) use ($canViewProfit, $lineCost, $lineProfit, $paymentLabel) {
+        $exportRows = $invoiceRows->map(function (array $invoice) use ($canViewProfit) {
             $row = [
-                $item->sale?->sale_number,
-                $item->sale?->created_at?->format('H:i'),
-                $item->product?->name,
-                $item->product?->sku,
-                $item->sale_type === 'wholesale' ? $tr('wholesale') : $tr('retail'),
-                $item->sale?->customer?->name ?: $tr('walk_in_customer'),
-                number_format((float) $item->quantity, 2),
-                $item->product?->unit?->short_name,
+                $invoice['sale']?->sale_number,
+                $invoice['customer'],
+                $invoice['items']->map(fn ($item) => $item->product?->name.' x '.number_format((float) $item->quantity, 2).' '.$item->product?->unit?->short_name)->join("\n"),
+                number_format((float) $invoice['total_quantity'], 2),
             ];
 
             if ($canViewProfit) {
-                array_push($row, $this->formatCurrency($item->unit_cost), $this->formatCurrency($lineCost($item)));
+                $row[] = $this->formatCurrency($invoice['cost']);
             }
 
-            array_push($row, $this->formatCurrency($item->unit_price), $this->formatCurrency($item->line_total), $this->formatCurrency($item->discount_amount));
+            $row[] = $this->formatCurrency($invoice['sales']);
 
             if ($canViewProfit) {
-                $row[] = $this->formatCurrency($lineProfit($item));
+                $row[] = $this->formatCurrency($invoice['profit']);
             }
 
-            array_push(
-                $row,
-                $item->sale?->soldBy?->name ?? $item->sale?->createdBy?->name,
-                $item->sold_from_label ?: $item->stockLocation?->name,
-                str($item->sale?->payment_status)->title()->toString(),
-                $item->sale?->payments?->pluck('payment_method')->filter()->unique()->map($paymentLabel)->join(', ') ?: '-'
-            );
+            array_push($row, $invoice['sale_type'], $invoice['payment_method'], $invoice['stock_source'], $invoice['cashier']);
 
             return $row;
         })->all();
 
         $totals = [
-            $tr('total_sales') => $this->formatCurrency($rows->sum('line_total')),
-            $tr('sold_quantity_total') => number_format($rows->sum('quantity'), 2),
-            $tr('sales_count') => number_format($rows->pluck('sale_id')->unique()->count()),
+            $tr('total_sales') => $this->formatCurrency($invoiceRows->sum('sales')),
+            $tr('total_customers') => number_format($invoiceRows->pluck('sale.customer_id')->filter()->unique()->count() + ($invoiceRows->contains(fn ($row) => blank($row['sale']?->customer_id)) ? 1 : 0)),
+            $tr('total_invoices') => number_format($invoiceRows->count()),
             $tr('cash_sales_total') => $this->formatCurrency(SalePayment::whereIn('sale_id', $rows->pluck('sale_id')->unique())->where('payment_method', 'cash')->sum('amount')),
             $tr('credit_sales_total') => $this->formatCurrency(SalePayment::whereIn('sale_id', $rows->pluck('sale_id')->unique())->where('payment_method', 'credit')->sum('amount')),
         ];
 
         if ($canViewProfit) {
-            $totals = [$tr('total_cost') => $this->formatCurrency($rows->sum(fn ($item) => $lineCost($item))), $tr('total_profit') => $this->formatCurrency($rows->sum(fn ($item) => $lineProfit($item))), ...$totals];
+            $totals = [$tr('total_cost') => $this->formatCurrency($invoiceRows->sum('cost')), $tr('total_profit') => $this->formatCurrency($invoiceRows->sum('profit')), ...$totals];
         }
 
-        return [$tr('daily_sales_product_details'), $headers, $exportRows, $totals];
+        return [$tr('todays_sales_summary'), $headers, $exportRows, $totals];
     }
 
     private function purchases(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
@@ -244,47 +270,114 @@ class ReportExportService
 
     private function storeStock(Request $request, ?int $branchId, string $search): array
     {
-        $branchId = $branchId ?: (int) ($request->user()?->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
-        $location = StockLocation::where('branch_id', $branchId)->where('type', 'store')->first();
-        $inventory = app(InventoryService::class);
+        $branchId = $branchId ?: $request->integer('branchFilter') ?: null;
+        $locationId = $request->integer('stock_location_id');
+        $categoryId = $request->integer('categoryFilter');
+        $supplierId = $request->integer('supplier_id');
+        $brand = $request->string('brand')->toString();
+        $companyId = $request->user()?->company_id;
+        $user = $request->user();
+        $setting = \App\Support\InventorySettings::current();
 
-        $rows = Product::with(['category', 'unit'])
-            ->when($request->integer('categoryFilter'), fn ($query, $id) => $query->where('category_id', $id))
-            ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))
-            ->orderBy('name')
-            ->get()
-            ->map(function (Product $product) use ($inventory, $location, $branchId) {
-                $quantity = $location ? $inventory->getProductStock($product->id, $location->id, $branchId) : 0;
-                $status = $quantity <= 0 ? 'out_of_stock' : ($quantity <= (float) $product->reorder_level ? 'low_stock' : 'in_stock');
+        if (($setting->inventory_mode ?? 'multi_location') === 'single_location' && $setting->default_stock_location_id) {
+            $locationId = (int) $setting->default_stock_location_id;
+        }
 
-                return [
-                    'product' => $product,
-                    'quantity' => $quantity,
-                    'average_cost' => $location ? $inventory->getAverageCost($product->id, $location->id, $branchId) : 0,
-                    'last_received' => $location ? StockMovement::where('product_id', $product->id)->where('stock_location_id', $location->id)->where('movement_type', 'purchase_in')->latest('movement_date')->value('movement_date') : null,
-                    'status' => $status,
-                ];
+        $locationQuery = StockLocation::query()
+            ->where('status', 'active')
+            ->where('is_active', true)
+            ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
+            ->when($branchId, fn ($query) => $query->where('branch_id', $branchId));
+
+        if (! $user?->can('view all stock locations')) {
+            $locationQuery->whereIn('id', $user?->stockLocations()->wherePivot('can_view', true)->pluck('stock_locations.id') ?? []);
+        }
+
+        $allowedLocationIds = $locationQuery->pluck('id')->all();
+        $stockExpression = "SUM(CASE WHEN stock_movements.quantity_in <> 0 OR stock_movements.quantity_out <> 0 THEN stock_movements.quantity_in - stock_movements.quantity_out WHEN stock_movements.movement_type IN ('sale_out','transfer_out','adjustment_out','damage_out','purchase_receipt_reversal') THEN -stock_movements.quantity ELSE stock_movements.quantity END)";
+        $costNumerator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)";
+        $costDenominator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)";
+
+        $stockSubquery = StockMovement::query()
+            ->select([
+                'company_id',
+                'branch_id',
+                'product_id',
+                'stock_location_id',
+                DB::raw("{$stockExpression} as quantity"),
+                DB::raw("CASE WHEN {$costDenominator} > 0 THEN {$costNumerator} / {$costDenominator} ELSE 0 END as average_cost"),
+            ])
+            ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
+            ->groupBy('company_id', 'branch_id', 'product_id', 'stock_location_id');
+
+        $rows = DB::table('products')
+            ->crossJoin('stock_locations')
+            ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
+            ->leftJoin('units', 'units.id', '=', 'products.unit_id')
+            ->leftJoinSub($stockSubquery, 'stock_totals', function ($join) {
+                $join->on('stock_totals.product_id', '=', 'products.id')
+                    ->on('stock_totals.stock_location_id', '=', 'stock_locations.id')
+                    ->on('stock_totals.branch_id', '=', 'stock_locations.branch_id');
             })
-            ->when($request->string('statusFilter')->toString(), fn ($collection, $status) => $collection->where('status', $status))
-            ->values();
+            ->where('products.status', 'active')
+            ->where('stock_locations.status', 'active')
+            ->where('stock_locations.is_active', true)
+            ->whereIn('stock_locations.id', $allowedLocationIds ?: [0])
+            ->when($companyId, fn ($query) => $query->where('products.company_id', $companyId)->where('stock_locations.company_id', $companyId))
+            ->when($branchId, fn ($query) => $query->where('stock_locations.branch_id', $branchId))
+            ->when($locationId, fn ($query) => $query->where('stock_locations.id', $locationId))
+            ->when($categoryId, fn ($query) => $query->where('products.category_id', $categoryId))
+            ->when($brand, fn ($query) => $query->where('products.brand', $brand))
+            ->when($supplierId, fn ($query) => $query->whereExists(function ($exists) use ($supplierId) {
+                $exists->select(DB::raw(1))
+                    ->from('purchase_items')
+                    ->join('purchases', 'purchases.id', '=', 'purchase_items.purchase_id')
+                    ->whereColumn('purchase_items.product_id', 'products.id')
+                    ->where('purchases.supplier_id', $supplierId);
+            }))
+            ->when($search, fn ($query) => $query->where(fn ($nested) => $nested
+                ->where('products.name', 'like', "%{$search}%")
+                ->orWhere('products.sku', 'like', "%{$search}%")
+                ->orWhere('products.barcode', 'like', "%{$search}%")))
+            ->select([
+                'products.name as product_name',
+                'products.sku',
+                'categories.name as category_name',
+                'units.short_name as unit_name',
+                'stock_locations.name as location_name',
+                'stock_locations.type as location_type',
+                'products.reorder_level',
+                DB::raw('COALESCE(stock_totals.quantity, 0) as quantity'),
+                DB::raw('COALESCE(stock_totals.average_cost, 0) as average_cost'),
+                DB::raw('COALESCE(stock_totals.quantity, 0) * COALESCE(stock_totals.average_cost, 0) as stock_value'),
+                DB::raw("CASE WHEN COALESCE(stock_totals.quantity, 0) <= 0 THEN 'out_of_stock' WHEN COALESCE(stock_totals.quantity, 0) <= products.reorder_level THEN 'low_stock' ELSE 'in_stock' END as stock_status"),
+            ])
+            ->when($request->boolean('low_stock_only'), fn ($query) => $query->whereRaw('COALESCE(stock_totals.quantity, 0) > 0 AND COALESCE(stock_totals.quantity, 0) <= products.reorder_level'))
+            ->when($request->boolean('out_of_stock_only'), fn ($query) => $query->whereRaw('COALESCE(stock_totals.quantity, 0) <= 0'))
+            ->orderBy('products.name')
+            ->orderBy('stock_locations.name')
+            ->get();
 
         return [
-            'Main Store Stock',
-            ['Product', 'SKU', 'Category', 'Unit', 'Store Qty', 'Avg Cost', 'Last Received', 'Reorder', 'Status'],
+            'Stock by Location',
+            ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Location Type', 'Quantity', 'Average Cost', 'Stock Value', 'Reorder Level', 'Status'],
             $rows->map(fn ($row) => [
-                $row['product']->name,
-                $row['product']->sku,
-                $row['product']->category?->name,
-                $row['product']->unit?->short_name,
-                number_format($row['quantity'], 2),
-                $this->formatCurrency($row['average_cost']),
-                $this->formatDate($row['last_received']),
-                number_format((float) $row['product']->reorder_level, 2),
-                str($row['status'])->replace('_', ' ')->title()->toString(),
+                $row->product_name,
+                $row->sku,
+                $row->category_name,
+                $row->unit_name,
+                $row->location_name,
+                str($row->location_type)->replace('_', ' ')->title()->toString(),
+                number_format((float) $row->quantity, 2),
+                $this->formatCurrency($row->average_cost),
+                $this->formatCurrency($row->stock_value),
+                number_format((float) $row->reorder_level, 2),
+                str($row->stock_status)->replace('_', ' ')->title()->toString(),
             ])->all(),
             [
-                'Total Store Qty' => number_format($rows->sum('quantity'), 2),
-                'Total Stock Value' => $this->formatCurrency($rows->sum(fn ($row) => $row['quantity'] * $row['average_cost'])),
+                'Total Quantity' => number_format((float) $rows->sum('quantity'), 2),
+                'Total Stock Value' => $this->formatCurrency($rows->sum('stock_value')),
+                'Active Locations' => count($allowedLocationIds),
             ],
         ];
     }

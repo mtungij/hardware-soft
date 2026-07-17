@@ -85,14 +85,21 @@ class InventorySettings
      */
     public static function allowedSaleLocationsForUser(?User $user, int $branchId): array
     {
-        $inventory = app(InventoryService::class);
+        if ($user) {
+            $locations = $user->permittedStockLocations('can_sell', $branchId)
+                ->filter(fn (StockLocation $location) => $location->can_sell && $location->isActive())
+                ->values();
 
-        if (! self::warehouseEnabled()) {
-            return [$inventory->getDispensingLocation($branchId)];
+            if ($locations->isNotEmpty()) {
+                return $locations->all();
+            }
         }
 
-        $types = $user?->allowedSalesLocationTypes() ?: ['dispensing'];
+        $inventory = app(InventoryService::class);
         $locations = [];
+        $types = self::warehouseEnabled()
+            ? ($user?->allowedSalesLocationTypes() ?: ['dispensing'])
+            : ['dispensing'];
 
         if (in_array('store', $types, true)) {
             $locations[] = $inventory->getMainStoreLocation($branchId);
@@ -107,8 +114,24 @@ class InventorySettings
 
     public static function canUserSellFromLocation(?User $user, StockLocation $location): bool
     {
-        if (! self::warehouseEnabled()) {
-            return $location->type === 'dispensing';
+        if (! $location->isActive() || ! $location->can_sell) {
+            return false;
+        }
+
+        if ($user) {
+            $hasPivotAccess = $user->stockLocations()
+                ->where('stock_locations.id', $location->id)
+                ->wherePivot('can_sell', true)
+                ->exists();
+
+            if ($hasPivotAccess) {
+                return true;
+            }
+
+            // Temporary legacy fallback: if explicit assignments exist, they are authoritative.
+            if ($user->stockLocations()->exists()) {
+                return false;
+            }
         }
 
         return in_array($location->type, $user?->allowedSalesLocationTypes() ?: ['dispensing'], true);
@@ -116,7 +139,7 @@ class InventorySettings
 
     public static function stockLocationLabel(StockLocation $location): string
     {
-        return $location->type === 'store' ? 'Ghala Kuu' : 'Sehemu ya Mauzo';
+        return $location->name ?: (StockLocation::TYPES[$location->type] ?? str($location->type)->headline()->toString());
     }
 
     public static function branchId(): int

@@ -7,16 +7,53 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['company_id', 'branch_id', 'name', 'code', 'type', 'status'])]
+#[Fillable([
+    'company_id',
+    'branch_id',
+    'name',
+    'code',
+    'type',
+    'description',
+    'status',
+    'is_default',
+    'is_active',
+    'can_receive_stock',
+    'can_issue_stock',
+    'can_sell',
+    'can_transfer',
+    'can_transfer_to_dispensing',
+    'is_dispensing_location',
+    'is_warehouse',
+    'created_by',
+])]
 class StockLocation extends Model
 {
-    use HasCompany, HasFactory;
+    use HasCompany, HasFactory, SoftDeletes;
+
+    public const TYPES = [
+        'warehouse' => 'Warehouse',
+        'store' => 'Store',
+        'dispensing' => 'Dispensing',
+        'showroom' => 'Showroom',
+        'branch_store' => 'Branch Store',
+        'returns' => 'Returns',
+        'damaged' => 'Damaged',
+        'transit' => 'Transit',
+        'other' => 'Other',
+    ];
 
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
     }
 
     public function stockMovements(): HasMany
@@ -32,5 +69,32 @@ class StockLocation extends Model
     public function incomingTransfers(): HasMany
     {
         return $this->hasMany(StockTransfer::class, 'to_location_id');
+    }
+
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'user_stock_locations')
+            ->withPivot(['company_id', 'branch_id', 'can_view', 'can_sell', 'can_transfer', 'can_receive', 'is_default', 'assigned_by'])
+            ->withTimestamps();
+    }
+
+    public function isActive(): bool
+    {
+        return (bool) $this->is_active && $this->status === 'active';
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'is_default' => 'boolean',
+            'is_active' => 'boolean',
+            'can_receive_stock' => 'boolean',
+            'can_issue_stock' => 'boolean',
+            'can_sell' => 'boolean',
+            'can_transfer' => 'boolean',
+            'can_transfer_to_dispensing' => 'boolean',
+            'is_dispensing_location' => 'boolean',
+            'is_warehouse' => 'boolean',
+        ];
     }
 }

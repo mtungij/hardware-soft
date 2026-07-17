@@ -53,6 +53,30 @@ $availableQuantity = function (?string $productId) {
     return app(InventoryService::class)->getProductStock((int) $productId, (int) $this->from_location_id, (int) $this->branch_id);
 };
 
+$transferSourceLocations = function () {
+    $locations = auth()->user()?->permittedStockLocations('can_transfer', (int) $this->branch_id)
+        ->filter(fn (StockLocation $location) => $location->can_transfer && $location->can_issue_stock && $location->isActive())
+        ->values() ?? collect();
+
+    if ($locations->isNotEmpty() || auth()->user()?->stockLocations()->exists()) {
+        return $locations;
+    }
+
+    return StockLocation::where('branch_id', $this->branch_id)->where('status', 'active')->where('is_active', true)->where('can_transfer', true)->where('can_issue_stock', true)->orderBy('name')->get();
+};
+
+$transferDestinationLocations = function () {
+    $locations = auth()->user()?->permittedStockLocations('can_receive', (int) $this->branch_id)
+        ->filter(fn (StockLocation $location) => $location->can_receive_stock && $location->isActive())
+        ->values() ?? collect();
+
+    if ($locations->isNotEmpty() || auth()->user()?->stockLocations()->exists()) {
+        return $locations;
+    }
+
+    return StockLocation::where('branch_id', $this->branch_id)->where('status', 'active')->where('is_active', true)->where('can_receive_stock', true)->orderBy('name')->get();
+};
+
 $saveTransfer = function (string $status, InventoryService $inventory) {
     abort_unless($this->stockTransfer->canBeModified(), 403);
 
@@ -73,10 +97,25 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
         throw ValidationException::withMessages(['items' => 'Duplicate product rows are not allowed.']);
     }
 
+    $from = StockLocation::findOrFail($validated['from_location_id']);
+    $to = StockLocation::findOrFail($validated['to_location_id']);
+    if (! $from->isActive() || ! $to->isActive()) {
+        throw ValidationException::withMessages(['location' => 'Transfers require active locations.']);
+    }
+    if (! $from->can_transfer || ! $from->can_issue_stock) {
+        throw ValidationException::withMessages(['from_location_id' => 'Source location is not allowed to transfer stock.']);
+    }
+    if (! $to->can_receive_stock) {
+        throw ValidationException::withMessages(['to_location_id' => 'Destination location is not allowed to receive stock.']);
+    }
+    if (($to->is_dispensing_location || $to->type === 'dispensing') && ! $from->can_transfer_to_dispensing) {
+        throw ValidationException::withMessages(['from_location_id' => 'Source location cannot transfer to Dispensing.']);
+    }
+
     foreach ($validated['items'] as $item) {
         $available = $inventory->getProductStock((int) $item['product_id'], (int) $validated['from_location_id'], (int) $this->branch_id);
         if ((float) $item['quantity'] > $available) {
-            throw ValidationException::withMessages(['items' => 'Transfer quantity cannot exceed available Main Store stock.']);
+            throw ValidationException::withMessages(['items' => 'Transfer quantity cannot exceed available stock.']);
         }
     }
 

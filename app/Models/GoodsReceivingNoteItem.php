@@ -8,7 +8,23 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['company_id', 'goods_receiving_note_id', 'purchase_item_id', 'product_id', 'received_quantity', 'cost_price'])]
+#[Fillable([
+    'company_id',
+    'branch_id',
+    'goods_receiving_note_id',
+    'purchase_item_id',
+    'product_id',
+    'stock_location_id',
+    'ordered_quantity',
+    'previously_received_quantity',
+    'received_quantity',
+    'cost_price',
+    'unit_cost',
+    'total_cost',
+    'batch_number',
+    'expiry_date',
+    'notes',
+])]
 class GoodsReceivingNoteItem extends Model
 {
     use HasCompany, HasFactory;
@@ -28,11 +44,21 @@ class GoodsReceivingNoteItem extends Model
         return $this->belongsTo(Product::class);
     }
 
+    public function stockLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class);
+    }
+
     protected function casts(): array
     {
         return [
             'received_quantity' => 'decimal:2',
             'cost_price' => 'decimal:2',
+            'ordered_quantity' => 'decimal:2',
+            'previously_received_quantity' => 'decimal:2',
+            'unit_cost' => 'decimal:2',
+            'total_cost' => 'decimal:2',
+            'expiry_date' => 'date',
         ];
     }
 }

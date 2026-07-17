@@ -84,7 +84,7 @@ $deleteUser = function (int $userId) {
 
         @php
             $users = User::query()
-                ->with(['branch', 'company', 'roles'])
+                ->with(['branch', 'company', 'roles', 'stockLocations.branch'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
@@ -93,7 +93,7 @@ $deleteUser = function (int $userId) {
                 ->paginate(10);
         @endphp
 
-        <x-table :headers="['User', 'Phone', 'Roles', 'Sales Location', 'Company', 'Branch', 'Status', 'Actions']">
+        <x-table :headers="['User', 'Phone', 'Roles', 'Assigned Stock Locations', 'Company', 'Branch', 'Status', 'Actions']">
             @forelse ($users as $user)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">
@@ -109,7 +109,20 @@ $deleteUser = function (int $userId) {
                     <td class="px-4 py-3">
                         {{ $user->roles->pluck('name')->join(', ') ?: '-' }}
                     </td>
-                    <td class="px-4 py-3">{{ str($user->sales_location_access ?? 'dispensing')->replace('_', ' ')->title() }}</td>
+                    <td class="px-4 py-3">
+                        @if ($user->stockLocations->isNotEmpty())
+                            <div class="space-y-1 text-xs">
+                                @foreach ($user->stockLocations->take(3) as $location)
+                                    <p class="font-semibold">{{ $location->name }} @if($location->pivot->is_default)<span class="badge-success">Default</span>@endif</p>
+                                @endforeach
+                                @if ($user->stockLocations->count() > 3)
+                                    <p class="text-slate-500">+{{ $user->stockLocations->count() - 3 }} more</p>
+                                @endif
+                            </div>
+                        @else
+                            <span class="text-xs text-slate-500">Legacy: {{ str($user->sales_location_access ?? 'dispensing')->replace('_', ' ')->title() }}</span>
+                        @endif
+                    </td>
                     <td class="px-4 py-3">{{ $user->company?->company_name ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $user->branch?->name ?? '-' }}</td>
                     <td class="px-4 py-3"><span class="{{ $user->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($user->status) }}</span></td>

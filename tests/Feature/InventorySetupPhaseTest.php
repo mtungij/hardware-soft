@@ -29,12 +29,13 @@ function enableDirectInventoryModeForBranch(int $branchId): StockLocation
         ->where('type', 'dispensing')
         ->firstOrFail();
 
-    $dispensing->forceFill(['status' => 'active'])->save();
+    $dispensing->forceFill(['status' => 'active', 'is_active' => true, 'can_sell' => true])->save();
 
     Setting::query()->firstOrFail()->update([
         'enable_warehouse' => false,
         'allow_direct_stock_in' => true,
         'allow_sales_from_store' => false,
+        'inventory_mode' => 'single_location',
         'default_stock_location_id' => $dispensing->id,
     ]);
 
@@ -57,13 +58,14 @@ function enableWarehouseInventoryModeForBranch(int $branchId): array
         ->where('type', 'dispensing')
         ->firstOrFail();
 
-    $store->forceFill(['status' => 'active'])->save();
-    $dispensing->forceFill(['status' => 'active'])->save();
+    $store->forceFill(['status' => 'active', 'is_active' => true, 'can_sell' => true])->save();
+    $dispensing->forceFill(['status' => 'active', 'is_active' => true, 'can_sell' => true])->save();
 
     Setting::query()->firstOrFail()->update([
         'enable_warehouse' => true,
         'allow_direct_stock_in' => false,
         'allow_sales_from_store' => true,
+        'inventory_mode' => 'multi_location',
         'default_stock_location_id' => $store->id,
     ]);
 
@@ -116,14 +118,38 @@ test('direct inventory mode hides warehouse only workflows and keeps direct sale
     $this->actingAs($admin)->get('/reports/purchases')->assertForbidden();
 });
 
-test('pos user sales location access controls selected stock source', function () {
+test('pos requires location selection in multi location mode', function () {
     $branch = Branch::firstOrFail();
-    [$store] = enableWarehouseInventoryModeForBranch((int) $branch->id);
+    enableWarehouseInventoryModeForBranch((int) $branch->id);
     $cashier = User::factory()->create([
         'company_id' => $branch->company_id,
         'branch_id' => $branch->id,
         'status' => 'active',
-        'sales_location_access' => 'store',
+        'sales_location_access' => 'both',
+    ]);
+    $cashier->assignRole('Cashier');
+
+    $this->actingAs($cashier);
+
+    Volt::test('pos.index')
+        ->assertSet('stock_location_id', '')
+        ->assertSee('Selling From')
+        ->assertSee('Select Selling Location');
+});
+
+test('single selling location companies auto select the location', function () {
+    $branch = Branch::firstOrFail();
+    [$store] = enableWarehouseInventoryModeForBranch((int) $branch->id);
+    StockLocation::query()
+        ->where('branch_id', $branch->id)
+        ->where('type', 'dispensing')
+        ->update(['status' => 'inactive', 'is_active' => false]);
+
+    $cashier = User::factory()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'status' => 'active',
+        'sales_location_access' => 'both',
     ]);
     $cashier->assignRole('Cashier');
 
@@ -131,8 +157,61 @@ test('pos user sales location access controls selected stock source', function (
 
     Volt::test('pos.index')
         ->assertSet('stock_location_id', (string) $store->id)
-        ->assertSee('Unauza kutoka: Ghala Kuu')
-        ->assertDontSee('Chagua sehemu ya kuuza');
+        ->assertSee('Unauza kutoka:')
+        ->assertDontSee('Select Selling Location');
+});
+
+test('products cannot be added before selecting selling location', function () {
+    $branch = Branch::firstOrFail();
+    enableWarehouseInventoryModeForBranch((int) $branch->id);
+    $cashier = User::factory()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'status' => 'active',
+        'sales_location_access' => 'both',
+    ]);
+    $cashier->assignRole('Cashier');
+
+    $this->actingAs($cashier);
+
+    Volt::test('pos.index')
+        ->call('addProduct', Product::firstOrFail()->id)
+        ->assertHasErrors(['stock_location_id'])
+        ->assertSet('cart', []);
+});
+
+test('changing selling location clears cart after confirmation', function () {
+    $branch = Branch::firstOrFail();
+    [$store, $dispensing] = enableWarehouseInventoryModeForBranch((int) $branch->id);
+    $product = Product::firstOrFail();
+    $cashier = User::factory()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'status' => 'active',
+        'sales_location_access' => 'both',
+    ]);
+    $cashier->assignRole('Cashier');
+
+    $this->actingAs($cashier);
+
+    Volt::test('pos.index')
+        ->set('stock_location_id', (string) $dispensing->id)
+        ->set('cart', [[
+            'product_id' => $product->id,
+            'name' => $product->name,
+            'sku' => $product->sku,
+            'sale_type' => 'retail',
+            'quantity' => '1',
+            'unit_price' => (string) $product->selling_price,
+            'discount_amount' => '0',
+            'tax_amount' => '0',
+        ]])
+        ->call('requestStockLocationChange', (string) $store->id)
+        ->assertSet('pending_stock_location_id', (string) $store->id)
+        ->assertDispatched('open-modal')
+        ->call('confirmStockLocationChange')
+        ->assertSet('stock_location_id', (string) $store->id)
+        ->assertSet('cart', []);
 });
 
 test('pos blocks sale from unauthorized stock location', function () {

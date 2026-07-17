@@ -13,7 +13,7 @@ layout('layouts.app');
 state(['purchase' => null]);
 
 mount(function (Purchase $purchase) {
-    $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product.unit', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
+    $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product.unit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
 });
 
 $canSendEmail = fn () => auth()->user()->can('send purchase emails');
@@ -24,7 +24,7 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
 
     try {
         $service->send($this->purchase, auth()->id());
-        $this->purchase = $this->purchase->refresh()->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product.unit', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
+        $this->purchase = $this->purchase->refresh()->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product.unit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
         session()->flash('success', 'Purchase Order email sent successfully.');
     } catch (ValidationException $exception) {
         session()->flash('error', $exception->validator->errors()->first());
@@ -82,18 +82,28 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
         </x-card>
     </div>
 
-    <x-card title="Goods Receiving Notes" class="mt-6">
-        <x-table :headers="['GRN #', 'Received Date', 'Received By', 'Items', 'Notes']">
+    <x-card title="Goods Receipts" class="mt-6">
+        <x-table :headers="['Receipt Number', 'Receiving Date', 'Received By', 'Delivery Note', 'Supplier Invoice', 'Total Qty', 'Total Cost', 'Locations', 'Status', 'Actions']">
             @forelse ($purchase->goodsReceivingNotes as $grn)
+                @php
+                    $locations = $grn->items->map(fn ($item) => $item->stockLocation?->name)->filter()->unique()->join(', ');
+                    $totalQuantity = $grn->items->sum('received_quantity');
+                    $totalCost = $grn->items->sum(fn ($item) => (float) ($item->total_cost ?: ((float) $item->received_quantity * (float) $item->cost_price)));
+                @endphp
                 <tr>
                     <td class="px-4 py-3 font-black">{{ $grn->grn_number }}</td>
                     <td class="px-4 py-3">{{ $grn->received_date->format('d M Y') }}</td>
                     <td class="px-4 py-3">{{ $grn->receiver?->name }}</td>
-                    <td class="px-4 py-3">{{ $grn->items->count() }}</td>
-                    <td class="px-4 py-3">{{ $grn->notes ?? '-' }}</td>
+                    <td class="px-4 py-3">{{ $grn->supplier_delivery_note_number ?: '-' }}</td>
+                    <td class="px-4 py-3">{{ $grn->supplier_invoice_number ?: '-' }}</td>
+                    <td class="px-4 py-3">{{ number_format((float) $totalQuantity, 2) }}</td>
+                    <td class="px-4 py-3">TZS {{ number_format($totalCost, 2) }}</td>
+                    <td class="px-4 py-3">{{ $locations ?: '-' }}</td>
+                    <td class="px-4 py-3"><span class="{{ $grn->status === 'posted' ? 'badge-success' : ($grn->status === 'cancelled' ? 'rounded-full bg-red-100 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ ucfirst($grn->status ?? 'posted') }}</span></td>
+                    <td class="px-4 py-3"><a href="{{ route('goods-receipts.show', $grn) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">View</a></td>
                 </tr>
             @empty
-                <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No receiving notes yet.</td></tr>
+                <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No goods receipts yet.</td></tr>
             @endforelse
         </x-table>
     </x-card>

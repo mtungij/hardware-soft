@@ -13,8 +13,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'branch_id',
     'product_id',
     'stock_location_id',
+    'source_location_id',
+    'destination_location_id',
     'movement_type',
     'quantity',
+    'quantity_in',
+    'quantity_out',
     'unit_cost',
     'unit_price',
     'reference_type',
@@ -27,9 +31,9 @@ class StockMovement extends Model
 {
     use HasCompany, HasFactory;
 
-    public const POSITIVE_TYPES = ['purchase_in', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in'];
+    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in'];
 
-    public const NEGATIVE_TYPES = ['sale_out', 'transfer_out', 'adjustment_out', 'damage_out'];
+    public const NEGATIVE_TYPES = ['sale_out', 'transfer_out', 'adjustment_out', 'damage_out', 'purchase_receipt_reversal'];
 
     public function branch(): BelongsTo
     {
@@ -46,6 +50,16 @@ class StockMovement extends Model
         return $this->belongsTo(StockLocation::class);
     }
 
+    public function sourceLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class, 'source_location_id');
+    }
+
+    public function destinationLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class, 'destination_location_id');
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -53,6 +67,10 @@ class StockMovement extends Model
 
     public function signedQuantity(): float
     {
+        if ((float) $this->quantity_in !== 0.0 || (float) $this->quantity_out !== 0.0) {
+            return (float) $this->quantity_in - (float) $this->quantity_out;
+        }
+
         return in_array($this->movement_type, self::NEGATIVE_TYPES, true)
             ? -1 * (float) $this->quantity
             : (float) $this->quantity;
@@ -62,6 +80,8 @@ class StockMovement extends Model
     {
         return [
             'quantity' => 'decimal:2',
+            'quantity_in' => 'decimal:2',
+            'quantity_out' => 'decimal:2',
             'unit_cost' => 'decimal:2',
             'unit_price' => 'decimal:2',
             'movement_date' => 'date',

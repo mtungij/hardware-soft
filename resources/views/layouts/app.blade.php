@@ -66,6 +66,7 @@
                     ['label' => __('messages.staff.nav.products'), 'route' => 'products.index', 'icon' => 'product', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                     ['label' => __('messages.staff.nav.categories'), 'route' => 'categories.index', 'icon' => 'list', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                     ['label' => __('messages.staff.nav.units'), 'route' => 'units.index', 'icon' => 'ruler', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
+                    ['label' => __('messages.staff.nav.stock_locations'), 'route' => 'stock-locations.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier']],
                     ['label' => __('messages.staff.nav.inventory_summary'), 'route' => 'inventory-summary.index', 'icon' => 'summary', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                 ]],
                 ['label' => __('messages.staff.nav.purchases_group'), 'icon' => 'purchases', 'items' => [

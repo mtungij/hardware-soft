@@ -59,6 +59,8 @@ mount(function () {
         $t = fn (string $key): string => __('messages.sales_items.'.$key);
         $money = fn ($value): string => 'TZS '.number_format((float) $value, 2);
         $canViewProfit = auth()->user()?->can('view sales profit') ?? false;
+        $canExportPdf = auth()->user()?->can('export pdf') ?? false;
+        $canExportExcel = auth()->user()?->can('export excel') ?? false;
         $allowedViews = ['items', 'product', 'customer', 'cashier', 'stock_location'];
         $view = in_array($view, ['invoices', ...$allowedViews], true) ? $view : 'invoices';
         $isItemView = $view !== 'invoices';
@@ -97,7 +99,7 @@ mount(function () {
         };
     @endphp
 
-    <x-page-header :title="$isItemView ? $t('daily_sales_product_details') : $t('sales')" :description="$isItemView ? $t('daily_sales_description') : $t('sales_description')" :breadcrumbs="['Dashboard' => route('dashboard'), $t('sales') => null]">
+    <x-page-header :title="$view === 'items' ? $t('todays_sales_summary') : ($isItemView ? $t('daily_sales_product_details') : $t('sales'))" :description="$isItemView ? $t('daily_sales_description') : $t('sales_description')" :breadcrumbs="['Dashboard' => route('dashboard'), $t('sales') => null]">
         <x-export-actions :export="$isItemView ? 'tables.sales-items' : 'tables.sales'" :params="$exportParams" />
         @role('Super Admin|Admin|Manager|Cashier')
             <a href="{{ route('pos.index') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white shadow-sm">{{ $t('open_pos') }}</a>
@@ -109,7 +111,7 @@ mount(function () {
             <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('search_placeholder') }}">
             <select wire:model.live="view" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="invoices">{{ $t('invoice_view') }}</option>
-                <option value="items">{{ $t('item_details') }}</option>
+                <option value="items">{{ $t('todays_sales_summary') }}</option>
                 <option value="product">{{ $t('group_by_product') }}</option>
                 <option value="customer">{{ $t('group_by_customer') }}</option>
                 <option value="cashier">{{ $t('group_by_cashier') }}</option>
@@ -185,19 +187,40 @@ mount(function () {
     @if ($isItemView)
         @php
             $summaryItems = $itemQuery()->get();
-            $filteredSaleIds = $summaryItems->pluck('sale_id')->unique()->values();
+            $invoiceRows = $summaryItems
+                ->groupBy('sale_id')
+                ->map(function ($items) use ($lineCost, $lineProfit, $customerLabel, $cashierLabel, $paymentLabel, $saleTypeLabel) {
+                    $sale = $items->first()->sale;
+                    $saleTypes = $items->pluck('sale_type')->filter()->unique()->values();
+                    $stockSources = $items->map(fn ($item) => $item->sold_from_label ?: ($item->stockLocation ? InventorySettings::stockLocationLabel($item->stockLocation) : '-'))->filter()->unique()->values();
+                    $paymentMethods = $sale?->payments?->pluck('payment_method')->filter()->unique()->values() ?? collect();
+
+                    return [
+                        'sale' => $sale,
+                        'items' => $items->values(),
+                        'customer' => $customerLabel($sale?->customer),
+                        'cashier' => $cashierLabel($sale),
+                        'total_quantity' => $items->sum('quantity'),
+                        'cost' => $items->sum(fn ($item) => $lineCost($item)),
+                        'sales' => (float) ($sale?->total_amount ?? $items->sum('line_total')),
+                        'profit' => (float) ($sale?->total_amount ?? $items->sum('line_total')) - $items->sum(fn ($item) => $lineCost($item)),
+                        'sale_type' => $saleTypes->count() > 1 ? __('messages.sales_items.mixed') : $saleTypeLabel((string) ($saleTypes->first() ?: 'retail')),
+                        'payment_method' => $sale?->payment_status === 'partial' ? __('messages.sales_items.partial') : ($paymentMethods->count() > 1 ? __('messages.sales_items.mixed') : ($paymentMethods->isEmpty() ? '-' : $paymentLabel((string) $paymentMethods->first()))),
+                        'stock_source' => $stockSources->count() > 1 ? __('messages.sales_items.mixed_locations') : (string) ($stockSources->first() ?: '-'),
+                    ];
+                })
+                ->sortByDesc(fn ($row) => $row['sale']?->created_at)
+                ->values();
+            $filteredSaleIds = $invoiceRows->pluck('sale.id')->filter()->unique()->values();
             $summary = [
-                ['label' => $t('today_sales_total'), 'value' => $money($summaryItems->sum('line_total')), 'tone' => 'text-emerald-600'],
+                ['label' => $t('total_sales'), 'value' => $money($invoiceRows->sum('sales')), 'tone' => 'text-emerald-600'],
                 ...($canViewProfit ? [
-                    ['label' => $t('goods_cost_total'), 'value' => $money($summaryItems->sum(fn ($item) => $lineCost($item))), 'tone' => 'text-red-600'],
-                    ['label' => $t('today_profit'), 'value' => $money($summaryItems->sum(fn ($item) => $lineProfit($item))), 'tone' => 'text-cyan-600'],
+                    ['label' => $t('total_cost'), 'value' => $money($invoiceRows->sum('cost')), 'tone' => 'text-red-600'],
+                    ['label' => $t('total_profit'), 'value' => $money($invoiceRows->sum('profit')), 'tone' => 'text-cyan-600'],
                 ] : []),
-                ['label' => $t('sold_quantity_total'), 'value' => number_format($summaryItems->sum('quantity'), 2), 'tone' => 'text-navy-900 dark:text-white'],
-                ['label' => $t('sales_count'), 'value' => number_format($filteredSaleIds->count()), 'tone' => 'text-navy-900 dark:text-white'],
-                ['label' => $t('retail_sales_total'), 'value' => $money($summaryItems->where('sale_type', 'retail')->sum('line_total')), 'tone' => 'text-cyan-600'],
-                ['label' => $t('wholesale_sales_total'), 'value' => $money($summaryItems->where('sale_type', 'wholesale')->sum('line_total')), 'tone' => 'text-emerald-600'],
-                ['label' => $t('cash_sales_total'), 'value' => $money(SalePayment::whereIn('sale_id', $filteredSaleIds)->where('payment_method', 'cash')->sum('amount')), 'tone' => 'text-emerald-600'],
-                ['label' => $t('credit_sales_total'), 'value' => $money(SalePayment::whereIn('sale_id', $filteredSaleIds)->where('payment_method', 'credit')->sum('amount')), 'tone' => 'text-amber-600'],
+                ['label' => $t('total_invoices'), 'value' => number_format($invoiceRows->count()), 'tone' => 'text-navy-900 dark:text-white'],
+                ['label' => $t('total_customers'), 'value' => number_format($invoiceRows->pluck('sale.customer_id')->filter()->unique()->count() + ($invoiceRows->contains(fn ($row) => blank($row['sale']?->customer_id)) ? 1 : 0)), 'tone' => 'text-navy-900 dark:text-white'],
+                ['label' => $t('total_products_sold'), 'value' => number_format($invoiceRows->sum('total_quantity'), 2), 'tone' => 'text-navy-900 dark:text-white'],
             ];
         @endphp
 
@@ -211,68 +234,152 @@ mount(function () {
         </div>
 
         @if ($view === 'items')
-            @php $saleItems = $itemQuery()->latest('id')->paginate(25); @endphp
-            <x-card class="mt-6">
+            @php
+                $page = LengthAwarePaginator::resolveCurrentPage();
+                $invoices = new LengthAwarePaginator($invoiceRows->forPage($page, 15)->values(), $invoiceRows->count(), 15, $page, ['path' => request()->url(), 'query' => request()->query()]);
+            @endphp
+            <x-card class="mt-6" x-data="{ openInvoice: null, productInvoice: null }">
                 <x-table>
                     <x-slot:head>
                         <tr>
-                            <th class="px-3 py-3 text-left">{{ $t('sale_number') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('sale_time') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('product_name') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('sku') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('sale_type') }}</th>
+                            <th class="px-3 py-3 text-left">{{ $t('sale_no') }}</th>
                             <th class="px-3 py-3 text-left">{{ $t('customer') }}</th>
-                            <th class="px-3 py-3 text-right">{{ $t('quantity_sold') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('unit') }}</th>
+                            <th class="px-3 py-3 text-left">{{ $t('products_sold') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('total_quantity') }}</th>
                             @if ($canViewProfit)
-                                <th class="px-3 py-3 text-right">{{ $t('buying_price_unit') }}</th>
-                                <th class="px-3 py-3 text-right">{{ $t('total_cost') }}</th>
+                                <th class="px-3 py-3 text-right">{{ $t('buying_cost') }}</th>
                             @endif
-                            <th class="px-3 py-3 text-right">{{ $t('selling_price_unit') }}</th>
-                            <th class="px-3 py-3 text-right">{{ $t('total_sales') }}</th>
-                            <th class="px-3 py-3 text-right">{{ $t('discount') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('selling_amount') }}</th>
                             @if ($canViewProfit)
                                 <th class="px-3 py-3 text-right">{{ $t('profit') }}</th>
                             @endif
-                            <th class="px-3 py-3 text-left">{{ $t('cashier') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('stock_location') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('payment_status') }}</th>
+                            <th class="px-3 py-3 text-left">{{ $t('sale_type') }}</th>
                             <th class="px-3 py-3 text-left">{{ $t('payment_method') }}</th>
+                            <th class="px-3 py-3 text-left">{{ $t('stock_location') }}</th>
+                            <th class="px-3 py-3 text-left">{{ $t('cashier') }}</th>
+                            <th class="px-3 py-3 text-right">{{ $t('actions') }}</th>
                         </tr>
                     </x-slot:head>
-                    @forelse ($saleItems as $item)
+                    @forelse ($invoices as $row)
                         @php
-                            $methods = $item->sale?->payments?->pluck('payment_method')->filter()->unique()->map(fn ($method) => $paymentLabel($method))->join(', ') ?: '-';
+                            $sale = $row['sale'];
+                            $visibleItems = $row['items']->take(5);
+                            $hiddenCount = max(0, $row['items']->count() - 5);
+                            $colspan = $canViewProfit ? 12 : 10;
                         @endphp
-                        <tr class="border-t border-slate-100 text-xs dark:border-slate-800">
-                            <td class="px-3 py-2 font-bold">{{ $item->sale?->sale_number }}</td>
-                            <td class="px-3 py-2">{{ $item->sale?->created_at?->format('H:i') }}</td>
-                            <td class="px-3 py-2 font-bold">{{ $item->product?->name }}</td>
-                            <td class="px-3 py-2 font-mono">{{ $item->product?->sku }}</td>
-                            <td class="px-3 py-2"><span class="rounded-full px-2 py-1 text-xs font-bold {{ $item->sale_type === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300' }}">{{ $saleTypeLabel($item->sale_type) }}</span></td>
-                            <td class="px-3 py-2">{{ $customerLabel($item->sale?->customer) }}</td>
-                            <td class="px-3 py-2 text-right">{{ number_format((float) $item->quantity, 2) }}</td>
-                            <td class="px-3 py-2">{{ $item->product?->unit?->short_name }}</td>
-                            @if ($canViewProfit)
-                                <td class="px-3 py-2 text-right">{{ $money($item->unit_cost) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $money($lineCost($item)) }}</td>
-                            @endif
-                            <td class="px-3 py-2 text-right">{{ $money($item->unit_price) }}</td>
-                            <td class="px-3 py-2 text-right font-bold">{{ $money($item->line_total) }}</td>
-                            <td class="px-3 py-2 text-right">{{ $money($item->discount_amount) }}</td>
-                            @if ($canViewProfit)
-                                <td class="px-3 py-2 text-right font-bold {{ $lineProfit($item) >= 0 ? 'text-emerald-600' : 'text-red-600' }}">{{ $money($lineProfit($item)) }}</td>
-                            @endif
-                            <td class="px-3 py-2">{{ $cashierLabel($item->sale) }}</td>
-                            <td class="px-3 py-2">{{ $item->sold_from_label ?: ($item->stockLocation ? InventorySettings::stockLocationLabel($item->stockLocation) : '-') }}</td>
-                            <td class="px-3 py-2">{{ str($item->sale?->payment_status)->title() }}</td>
-                            <td class="px-3 py-2">{{ $methods }}</td>
-                        </tr>
+                            <tr class="align-top text-xs">
+                                <td class="px-3 py-3">
+                                    <p class="font-black">{{ $sale?->sale_number }}</p>
+                                    <p class="mt-1 text-slate-500">{{ $sale?->created_at?->format('H:i') }}</p>
+                                </td>
+                                <td class="px-3 py-3 font-semibold">{{ $row['customer'] }}</td>
+                                <td class="px-3 py-3">
+                                    <div class="space-y-1">
+                                        @foreach ($visibleItems as $item)
+                                            <p>{{ $item->product?->name }} x {{ number_format((float) $item->quantity, 2) }} {{ $item->product?->unit?->short_name }}</p>
+                                        @endforeach
+                                        @if ($hiddenCount > 0)
+                                            <div x-show="productInvoice === {{ $sale?->id ?? 0 }}" class="space-y-1" style="display: none;">
+                                                @foreach ($row['items']->skip(5) as $item)
+                                                    <p>{{ $item->product?->name }} x {{ number_format((float) $item->quantity, 2) }} {{ $item->product?->unit?->short_name }}</p>
+                                                @endforeach
+                                            </div>
+                                            <button type="button" x-on:click="productInvoice = productInvoice === {{ $sale?->id ?? 0 }} ? null : {{ $sale?->id ?? 0 }}" class="text-xs font-black text-cyan-600">
+                                                <span x-show="productInvoice !== {{ $sale?->id ?? 0 }}">+{{ $hiddenCount }} {{ $t('more_products') }}</span>
+                                                <span x-show="productInvoice === {{ $sale?->id ?? 0 }}" style="display: none;">{{ $t('show_less') }}</span>
+                                            </button>
+                                        @endif
+                                    </div>
+                                </td>
+                                <td class="px-3 py-3 text-right font-bold">{{ number_format($row['total_quantity'], 2) }} {{ $t('items_label') }}</td>
+                                @if ($canViewProfit)
+                                    <td class="px-3 py-3 text-right">{{ $money($row['cost']) }}</td>
+                                @endif
+                                <td class="px-3 py-3 text-right font-bold">{{ $money($row['sales']) }}</td>
+                                @if ($canViewProfit)
+                                    <td class="px-3 py-3 text-right font-bold {{ $row['profit'] >= 0 ? 'text-emerald-600' : 'text-red-600' }}">{{ $money($row['profit']) }}</td>
+                                @endif
+                                <td class="px-3 py-3">{{ $row['sale_type'] }}</td>
+                                <td class="px-3 py-3">{{ $row['payment_method'] }}</td>
+                                <td class="px-3 py-3">{{ $row['stock_source'] }}</td>
+                                <td class="px-3 py-3">{{ $row['cashier'] }}</td>
+                                <td class="px-3 py-3 text-right">
+                                    <div class="flex justify-end gap-2">
+                                        <button type="button" x-on:click="openInvoice = openInvoice === {{ $sale?->id ?? 0 }} ? null : {{ $sale?->id ?? 0 }}" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black dark:border-slate-700">
+                                            <span x-show="openInvoice !== {{ $sale?->id ?? 0 }}">{{ $t('expand') }}</span>
+                                            <span x-show="openInvoice === {{ $sale?->id ?? 0 }}" style="display: none;">{{ $t('collapse') }}</span>
+                                        </button>
+                                        <x-dropdown align="right" width="48">
+                                            <x-slot:trigger>
+                                                <button type="button" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black dark:border-slate-700">{{ $t('actions') }}</button>
+                                            </x-slot:trigger>
+                                            <x-slot:content>
+                                                <a href="{{ route('sales.receipt', $sale) }}" wire:navigate class="block px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/10">{{ $t('view_receipt') }}</a>
+                                                <a href="{{ route('sales.receipt', $sale) }}" target="_blank" class="block px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/10">{{ $t('print_receipt') }}</a>
+                                                @if ($canExportPdf)
+                                                    <a href="{{ route('exports.download', ['export' => 'tables.sales-items', 'format' => 'pdf', 'search' => $sale?->sale_number]) }}" class="block px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/10">{{ $t('download_pdf') }}</a>
+                                                @endif
+                                                @if ($canExportExcel)
+                                                    <a href="{{ route('exports.download', ['export' => 'tables.sales-items', 'format' => 'excel', 'search' => $sale?->sale_number]) }}" class="block px-4 py-2 text-sm hover:bg-slate-100 dark:hover:bg-white/10">{{ $t('download_excel') }}</a>
+                                                @endif
+                                            </x-slot:content>
+                                        </x-dropdown>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr x-show="openInvoice === {{ $sale?->id ?? 0 }}" style="display: none;">
+                                <td colspan="{{ $colspan }}" class="bg-slate-50 px-3 py-4 dark:bg-white/5">
+                                    <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                                        <table class="min-w-full text-xs">
+                                            <thead class="bg-slate-100 text-left uppercase text-slate-500 dark:bg-slate-800">
+                                                <tr>
+                                                    <th class="px-3 py-2">{{ $t('product_name') }}</th>
+                                                    <th class="px-3 py-2">{{ $t('sku') }}</th>
+                                                    <th class="px-3 py-2 text-right">{{ $t('quantity_sold') }}</th>
+                                                    <th class="px-3 py-2">{{ $t('unit') }}</th>
+                                                    @if ($canViewProfit)
+                                                        <th class="px-3 py-2 text-right">{{ $t('buying_price_unit') }}</th>
+                                                    @endif
+                                                    <th class="px-3 py-2 text-right">{{ $t('selling_price_unit') }}</th>
+                                                    @if ($canViewProfit)
+                                                        <th class="px-3 py-2 text-right">{{ $t('total_cost') }}</th>
+                                                    @endif
+                                                    <th class="px-3 py-2 text-right">{{ $t('total_sales') }}</th>
+                                                    @if ($canViewProfit)
+                                                        <th class="px-3 py-2 text-right">{{ $t('profit') }}</th>
+                                                    @endif
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                                @foreach ($row['items'] as $item)
+                                                    <tr>
+                                                        <td class="px-3 py-2 font-bold">{{ $item->product?->name }}</td>
+                                                        <td class="px-3 py-2 font-mono">{{ $item->product?->sku }}</td>
+                                                        <td class="px-3 py-2 text-right">{{ number_format((float) $item->quantity, 2) }}</td>
+                                                        <td class="px-3 py-2">{{ $item->product?->unit?->short_name }}</td>
+                                                        @if ($canViewProfit)
+                                                            <td class="px-3 py-2 text-right">{{ $money($item->unit_cost) }}</td>
+                                                        @endif
+                                                        <td class="px-3 py-2 text-right">{{ $money($item->unit_price) }}</td>
+                                                        @if ($canViewProfit)
+                                                            <td class="px-3 py-2 text-right">{{ $money($lineCost($item)) }}</td>
+                                                        @endif
+                                                        <td class="px-3 py-2 text-right font-bold">{{ $money($item->line_total) }}</td>
+                                                        @if ($canViewProfit)
+                                                            <td class="px-3 py-2 text-right font-bold">{{ $money($lineProfit($item)) }}</td>
+                                                        @endif
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </td>
+                            </tr>
                     @empty
-                        <tr><td colspan="{{ $canViewProfit ? 18 : 15 }}" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('no_sales_found') }}</td></tr>
+                        <tr><td colspan="{{ $canViewProfit ? 12 : 10 }}" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('no_sales_found') }}</td></tr>
                     @endforelse
                 </x-table>
-                <div class="mt-4">{{ $saleItems->links() }}</div>
+                <div class="mt-4">{{ $invoices->links() }}</div>
             </x-card>
         @else
             @php

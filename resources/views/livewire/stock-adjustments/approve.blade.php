@@ -13,7 +13,7 @@ $approve = function (int $adjustmentId, InventoryService $inventory) {
 };
 
 $reject = function (int $adjustmentId) {
-    StockAdjustment::whereKey($adjustmentId)->where('status', 'pending')->update([
+    StockAdjustment::whereKey($adjustmentId)->whereIn('status', ['pending', 'pending_approval'])->update([
         'status' => 'rejected',
         'approved_by' => auth()->id(),
         'approved_at' => now(),
@@ -24,16 +24,18 @@ $reject = function (int $adjustmentId) {
 ?>
 
 <div>
-    <x-page-header title="Approve Stock Adjustments" description="Approve pending Main Store adjustments." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Adjustments' => route('stock-adjustments.index'), 'Approve' => null]" />
+    <x-page-header title="Approve Stock Adjustments" description="Approve pending location-based stock adjustments." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Adjustments' => route('stock-adjustments.index'), 'Approve' => null]" />
 
     <x-card>
-        @php $adjustments = StockAdjustment::with(['product', 'stockLocation', 'requester'])->where('status', 'pending')->latest()->get(); @endphp
-        <x-table :headers="['Product', 'Location', 'Type', 'Qty', 'Reason', 'Requested By', 'Actions']">
+        @php $adjustments = StockAdjustment::with(['product', 'stockLocation', 'requester'])->withCount('lines')->whereIn('status', ['pending', 'pending_approval'])->latest()->get(); @endphp
+        <x-table :headers="['Reference', 'Date', 'Product(s)', 'Location', 'Type', 'Qty', 'Reason', 'Requested By', 'Actions']">
             @forelse ($adjustments as $adjustment)
                 <tr>
-                    <td class="px-4 py-3 font-bold">{{ $adjustment->product?->name }}</td>
+                    <td class="px-4 py-3 font-bold">{{ $adjustment->reference_number ?: 'ADJ-'.$adjustment->id }}</td>
+                    <td class="px-4 py-3">{{ $adjustment->adjustment_date?->format('d M Y') ?? $adjustment->created_at?->format('d M Y') }}</td>
+                    <td class="px-4 py-3 font-bold">{{ $adjustment->lines_count > 1 ? $adjustment->lines_count.' products' : $adjustment->product?->name }}</td>
                     <td class="px-4 py-3">{{ $adjustment->stockLocation?->name }}</td>
-                    <td class="px-4 py-3">{{ $adjustment->adjustment_type }}</td>
+                    <td class="px-4 py-3">{{ str($adjustment->adjustment_type)->replace('_', ' ')->title() }}</td>
                     <td class="px-4 py-3">{{ number_format((float) $adjustment->quantity, 2) }}</td>
                     <td class="px-4 py-3">{{ $adjustment->reason }}</td>
                     <td class="px-4 py-3">{{ $adjustment->requester?->name }}</td>
@@ -45,7 +47,7 @@ $reject = function (int $adjustmentId) {
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No pending adjustments.</td></tr>
+                <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No pending adjustments.</td></tr>
             @endforelse
         </x-table>
     </x-card>

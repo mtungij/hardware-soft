@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['company_id', 'branch_id', 'name', 'email', 'phone', 'profile_photo', 'status', 'sales_location_access', 'is_system_owner', 'password', 'last_login_at', 'email_verified_at'])]
@@ -28,6 +30,13 @@ class User extends Authenticatable
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function stockLocations(): BelongsToMany
+    {
+        return $this->belongsToMany(StockLocation::class, 'user_stock_locations')
+            ->withPivot(['company_id', 'branch_id', 'can_view', 'can_sell', 'can_transfer', 'can_receive', 'can_adjust', 'is_default', 'assigned_by'])
+            ->withTimestamps();
     }
 
     public function isActive(): bool
@@ -50,6 +59,48 @@ class User extends Authenticatable
             'both' => ['store', 'dispensing'],
             default => ['dispensing'],
         };
+    }
+
+    public function permittedStockLocations(string $ability = 'can_view', ?int $branchId = null): Collection
+    {
+        $hasExplicitAssignments = $this->stockLocations()
+            ->when($branchId, fn ($query) => $query->where('stock_locations.branch_id', $branchId))
+            ->exists();
+
+        $locations = $this->stockLocations()
+            ->wherePivot($ability, true)
+            ->where('stock_locations.is_active', true)
+            ->where('stock_locations.status', 'active')
+            ->when($branchId, fn ($query) => $query->where('stock_locations.branch_id', $branchId))
+            ->orderByDesc('user_stock_locations.is_default')
+            ->orderBy('stock_locations.name')
+            ->get();
+
+        if ($locations->isNotEmpty()) {
+            return $locations;
+        }
+
+        // Temporary legacy fallback: only used until every existing user has user_stock_locations rows.
+        if ($hasExplicitAssignments) {
+            return collect();
+        }
+
+        if (! $branchId) {
+            $branchId = (int) $this->branch_id;
+        }
+
+        if (! $branchId) {
+            return collect();
+        }
+
+        return StockLocation::query()
+            ->where('branch_id', $branchId)
+            ->whereIn('type', $this->allowedSalesLocationTypes())
+            ->where('status', 'active')
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
     }
 
     /**

@@ -229,7 +229,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper')->group(function () {
         Volt::route('purchases/create', 'purchases.create')->middleware('warehouse.enabled')->name('purchases.create');
-        Volt::route('purchases/{purchase}/receive', 'purchases.receive')->middleware('warehouse.enabled')->name('purchases.receive');
+        Volt::route('purchases/{purchase}/receive', 'purchases.receive')->name('purchases.receive');
         Route::get('purchases/{purchase}/purchase-order-pdf', PurchaseOrderPdfController::class)->middleware('warehouse.enabled')->name('purchases.purchase-order-pdf');
         Volt::route('stock-adjustments/create', 'stock-adjustments.create')->name('stock-adjustments.create');
         Volt::route('stock-transfers/create', 'stock-transfers.create')->middleware('warehouse.enabled')->name('stock-transfers.create');
@@ -315,9 +315,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper,Cashier')->group(function () {
+        Volt::route('stock-locations', 'stock-locations.index')->name('stock-locations.index');
         Volt::route('store-stock', 'store-stock.index')->middleware('warehouse.enabled')->name('store-stock.index');
         Volt::route('dispensing-stock', 'dispensing-stock.index')->name('dispensing-stock.index');
         Volt::route('inventory-summary', 'inventory-summary.index')->name('inventory-summary.index');
+        Volt::route('goods-receipts/{receipt}', 'goods-receipts.show')->name('goods-receipts.show');
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper')->group(function () {

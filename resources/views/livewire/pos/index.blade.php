@@ -17,6 +17,7 @@ layout('layouts.app');
 state([
     'branch_id' => '',
     'stock_location_id' => '',
+    'pending_stock_location_id' => '',
     'search' => '',
     'barcode' => '',
     'customer_id' => '',
@@ -35,12 +36,20 @@ state([
     'quick_customer_credit_limit' => '0',
     'quick_customer_opening_balance' => '0',
     'quick_customer_status' => 'active',
+    'credit_limit_warning' => [],
+    'credit_limit_override_confirmed' => false,
 ]);
 
 mount(function (InventoryService $inventory) {
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
-    $this->stock_location_id = (string) (InventorySettings::allowedSaleLocationsForUser(auth()->user(), (int) $this->branch_id)[0]?->id
-        ?? $inventory->getDispensingLocation((int) $this->branch_id)->id);
+    $allowedLocations = collect(InventorySettings::allowedSaleLocationsForUser(auth()->user(), (int) $this->branch_id));
+    $setting = InventorySettings::current();
+
+    if ($allowedLocations->count() === 1 || ($setting->inventory_mode ?? 'multi_location') === 'single_location') {
+        $this->stock_location_id = (string) ($allowedLocations->first()?->id
+            ?? $inventory->getDispensingLocation((int) $this->branch_id)->id);
+    }
+
     $this->quick_customer_branch_id = $this->branch_id;
 });
 
@@ -50,7 +59,49 @@ $allowedSaleLocations = fn () => collect(InventorySettings::allowedSaleLocations
 
 $currentSaleLocation = function () {
     $locations = $this->allowedSaleLocations();
-    return $locations->firstWhere('id', (int) $this->stock_location_id) ?: $locations->first();
+    return $locations->firstWhere('id', (int) $this->stock_location_id);
+};
+
+$hasSelectedSaleLocation = fn () => filled($this->stock_location_id) && (bool) $this->currentSaleLocation();
+
+$applyStockLocation = function ($locationId) {
+    $this->stock_location_id = filled($locationId) ? (string) $locationId : '';
+    $this->pending_stock_location_id = '';
+    $this->search = '';
+    $this->barcode = '';
+    $this->resetErrorBag(['stock_location_id', 'cart']);
+};
+
+$requestStockLocationChange = function ($locationId) {
+    $locationId = filled($locationId) ? (string) $locationId : '';
+
+    if ($locationId === (string) $this->stock_location_id) {
+        return;
+    }
+
+    if ($this->cart !== []) {
+        $this->pending_stock_location_id = $locationId;
+        $this->dispatch('open-modal', 'confirm-selling-location-change');
+
+        return;
+    }
+
+    $this->applyStockLocation($locationId);
+};
+
+$confirmStockLocationChange = function () {
+    $locationId = $this->pending_stock_location_id;
+    $this->cart = [];
+    $this->syncDefaultPaymentAmount();
+    $this->credit_limit_override_confirmed = false;
+    $this->credit_limit_warning = [];
+    $this->applyStockLocation($locationId);
+    $this->dispatch('close-modal', 'confirm-selling-location-change');
+};
+
+$cancelStockLocationChange = function () {
+    $this->pending_stock_location_id = '';
+    $this->dispatch('close-modal', 'confirm-selling-location-change');
 };
 
 $priceForProduct = function (Product $product): string {
@@ -146,15 +197,12 @@ $saveQuickCustomer = function () {
 };
 
 $availableQuantity = function (int $productId) {
-    $inventory = app(InventoryService::class);
     $location = $this->currentSaleLocation();
-    $locationId = $location?->id ?: $inventory->getDispensingLocation((int) $this->branch_id)->id;
-
-    if (! InventorySettings::warehouseEnabled() && (int) $this->stock_location_id !== (int) $locationId) {
-        $this->stock_location_id = (string) $locationId;
+    if (! $location) {
+        return 0;
     }
 
-    return $inventory->getProductStock($productId, $locationId, (int) $this->branch_id);
+    return app(InventoryService::class)->getProductStock($productId, $location->id, (int) $this->branch_id);
 };
 
 $syncDefaultPaymentAmount = function () {
@@ -175,6 +223,12 @@ $updatedPayments = function () {
 };
 
 $addProduct = function (int $productId) {
+    if (! $this->hasSelectedSaleLocation()) {
+        $this->addError('stock_location_id', \App\Support\UiText::translate('Select Selling Location'));
+
+        return;
+    }
+
     $product = Product::findOrFail($productId);
     $available = $this->availableQuantity($productId);
 
@@ -216,6 +270,12 @@ $addProduct = function (int $productId) {
 };
 
 $addBarcode = function () {
+    if (! $this->hasSelectedSaleLocation()) {
+        $this->addError('stock_location_id', \App\Support\UiText::translate('Select Selling Location'));
+
+        return;
+    }
+
     $product = Product::where('barcode', $this->barcode)->first();
     if ($product) {
         $this->addProduct($product->id);
@@ -245,6 +305,73 @@ $taxTotal = fn () => collect($this->cart)->sum(fn ($item) => (float) ($item['tax
 $grandTotal = fn () => max(0, $this->subtotal() - $this->discountTotal() + $this->taxTotal());
 $paidTotal = fn () => collect($this->payments)->reject(fn ($payment) => $payment['payment_method'] === 'credit')->sum(fn ($payment) => (float) $payment['amount']);
 
+$usesCreditPayment = fn () => collect($this->payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
+
+$creditLimitWarningData = function (): ?array {
+    if (! $this->usesCreditPayment()) {
+        return null;
+    }
+
+    if ((InventorySettings::current()->credit_limit_enforcement ?? 'block') !== 'warn') {
+        return null;
+    }
+
+    if (blank($this->customer_id)) {
+        return null;
+    }
+
+    $customer = Customer::query()->find($this->customer_id);
+    if (! $customer) {
+        return null;
+    }
+
+    $total = (float) $this->grandTotal();
+    $paid = (float) $this->paidTotal();
+    $creditAmount = collect($this->payments)
+        ->where('payment_method', 'credit')
+        ->sum(fn ($payment) => (float) ($payment['amount'] ?? 0));
+
+    if ($creditAmount <= 0) {
+        $creditAmount = max(0, $total - $paid);
+    }
+
+    $currentBalance = (float) $customer->balance_amount;
+    $creditLimit = (float) $customer->credit_limit;
+    $balanceAfterSale = $currentBalance + $creditAmount;
+
+    if ($balanceAfterSale <= $creditLimit) {
+        return null;
+    }
+
+    return [
+        'customer_name' => $customer->name,
+        'current_balance' => $currentBalance,
+        'credit_limit' => $creditLimit,
+        'current_sale_amount' => $creditAmount,
+        'balance_after_sale' => $balanceAfterSale,
+    ];
+};
+
+$canOverrideCreditLimit = fn () => auth()->user()->can('override customer credit limit');
+
+$cancelCreditLimitWarning = function () {
+    $this->credit_limit_warning = [];
+    $this->credit_limit_override_confirmed = false;
+    $this->dispatch('close-modal', 'credit-limit-warning');
+};
+
+$continueCreditLimitSale = function (InventoryService $inventory) {
+    if (! $this->canOverrideCreditLimit()) {
+        $this->addError('customer_id', \App\Support\UiText::translate('You are not authorized to override the customer credit limit.'));
+
+        return;
+    }
+
+    $this->credit_limit_override_confirmed = true;
+    $this->dispatch('close-modal', 'credit-limit-warning');
+    $this->completeSale($inventory);
+};
+
 $completeSale = function (InventoryService $inventory) {
     $this->validate([
         'stock_location_id' => ['required', 'exists:stock_locations,id'],
@@ -265,6 +392,10 @@ $completeSale = function (InventoryService $inventory) {
         $this->stock_location_id = (string) $inventory->getDispensingLocation((int) $this->branch_id)->id;
     }
 
+    if (blank($this->stock_location_id)) {
+        throw ValidationException::withMessages(['stock_location_id' => \App\Support\UiText::translate('Select Selling Location')]);
+    }
+
     $location = StockLocation::findOrFail($this->stock_location_id);
     if (! InventorySettings::canUserSellFromLocation(auth()->user(), $location)) {
         throw ValidationException::withMessages(['stock_location_id' => 'Huna ruhusa ya kuuza kutoka sehemu hii ya stock.']);
@@ -278,7 +409,23 @@ $completeSale = function (InventoryService $inventory) {
         throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Credit sale requires a customer.')]);
     }
 
-    $sale = $inventory->completeSale($this->cart, $this->payments, $this->customer_id ? (int) $this->customer_id : null, (int) $this->stock_location_id, (int) $this->branch_id, auth()->id(), $this->notes);
+    if (! $this->credit_limit_override_confirmed && $warning = $this->creditLimitWarningData()) {
+        $this->credit_limit_warning = $warning;
+        $this->dispatch('open-modal', 'credit-limit-warning');
+
+        return;
+    }
+
+    $sale = $inventory->completeSale(
+        $this->cart,
+        $this->payments,
+        $this->customer_id ? (int) $this->customer_id : null,
+        (int) $this->stock_location_id,
+        (int) $this->branch_id,
+        auth()->id(),
+        $this->notes,
+        $this->credit_limit_override_confirmed && $this->canOverrideCreditLimit(),
+    );
 
     session()->flash('success', \App\Support\UiText::translate('Sale completed successfully.'));
     $this->redirectRoute('sales.receipt', $sale, navigate: true);
@@ -294,22 +441,27 @@ $completeSale = function (InventoryService $inventory) {
             : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300';
         $allowedLocations = $this->allowedSaleLocations();
         $selectedSaleLocation = $this->currentSaleLocation();
+        $locationReady = $this->hasSelectedSaleLocation();
     @endphp
 
-    <x-page-header title="POS Sales" description="Sell from Dispensing Area by default, or Main Store when authorized." :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
+    <x-page-header title="POS Sales" description="Select the selling location before loading available stock." :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
 
     <div class="grid gap-6 xl:grid-cols-[1fr_440px]">
         <div class="space-y-5">
             <x-card>
                 <div class="grid gap-3 md:grid-cols-3">
-                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}">
-                    <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Barcode input') }}">
+                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}" @disabled(! $locationReady)>
+                    <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Barcode input') }}" @disabled(! $locationReady)>
                     @if (InventorySettings::warehouseEnabled() && $allowedLocations->count() > 1)
-                        <select wire:model.live="stock_location_id" class="rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm dark:border-slate-700 dark:bg-navy-950" aria-label="Chagua sehemu ya kuuza">
-                            @foreach ($allowedLocations as $location)
-                                <option value="{{ $location->id }}">{{ InventorySettings::stockLocationLabel($location) }}</option>
-                            @endforeach
-                        </select>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400" for="selling-location">
+                            {{ $t('Selling From') }} *
+                            <select id="selling-location" wire:change="requestStockLocationChange($event.target.value)" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white" aria-label="{{ $t('Selling From') }}">
+                                <option value="" @selected(blank($stock_location_id))>{{ $t('Select Selling Location') }}</option>
+                                @foreach ($allowedLocations as $location)
+                                    <option value="{{ $location->id }}" @selected((string) $stock_location_id === (string) $location->id)>{{ InventorySettings::stockLocationLabel($location) }}</option>
+                                @endforeach
+                            </select>
+                        </label>
                     @else
                         <div class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm font-bold text-cyan-800 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">
                             Unauza kutoka: {{ $selectedSaleLocation ? InventorySettings::stockLocationLabel($selectedSaleLocation) : $t('Selling from Dispensing Area') }}
@@ -340,21 +492,28 @@ $completeSale = function (InventoryService $inventory) {
             </x-card>
 
             @php
-                $products = Product::with(['unit'])
-                    ->where('status', 'active')
-                    ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhere('barcode', 'like', "%{$search}%")))
-                    ->orderBy('name')
-                    ->take(24)
-                    ->get();
+                $products = $locationReady
+                    ? Product::with(['unit'])
+                        ->where('status', 'active')
+                        ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhere('barcode', 'like', "%{$search}%")))
+                        ->orderBy('name')
+                        ->take(24)
+                        ->get()
+                    : collect();
                 $stockLabel = InventorySettings::warehouseEnabled() ? $t('Stock') : $t('Available Stock');
             @endphp
+            @unless ($locationReady)
+                <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                    {{ $t('Select Selling Location') }}
+                </div>
+            @endunless
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 @foreach ($products as $product)
                     @php
                         $available = $this->availableQuantity($product->id);
                         $displayPrice = $sale_type === 'wholesale' ? $product->wholesale_price : $product->selling_price;
                     @endphp
-                    <button type="button" wire:click="addProduct({{ $product->id }})" class="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft dark:border-slate-800 dark:bg-navy-900">
+                    <button type="button" wire:click="addProduct({{ $product->id }})" class="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-navy-900" @disabled(! $locationReady)>
                         <img class="h-24 w-full rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
                         <p class="mt-3 font-black">{{ $product->name }}</p>
                         <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $product->unit?->short_name }}</p>
@@ -449,6 +608,45 @@ $completeSale = function (InventoryService $inventory) {
             <span>TZS {{ number_format($this->grandTotal(), 2) }}</span>
         </button>
     </div>
+
+    <x-modal name="confirm-selling-location-change" maxWidth="md">
+        <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+            <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t('Change Selling Location') }}</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('Changing the selling location will clear the current cart.') }}</p>
+        </div>
+        <div class="px-5 py-5">
+            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ $t('Do you want to continue?') }}</p>
+            <div class="mt-5 flex justify-end gap-2">
+                <button type="button" wire:click="cancelStockLocationChange" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Cancel') }}</button>
+                <button type="button" wire:click="confirmStockLocationChange" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t('Continue') }}</button>
+            </div>
+        </div>
+    </x-modal>
+
+    <x-modal name="credit-limit-warning" maxWidth="lg">
+        <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+            <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t('Credit Limit Warning') }}</h2>
+            <p class="mt-1 text-sm font-bold text-red-600 dark:text-red-300">{{ $t('This customer has exceeded the approved credit limit.') }}</p>
+        </div>
+        <div class="px-5 py-5">
+            <dl class="grid gap-3 text-sm sm:grid-cols-2">
+                <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5"><dt class="text-slate-500">{{ $t('Customer Name') }}</dt><dd class="mt-1 font-black">{{ $credit_limit_warning['customer_name'] ?? '-' }}</dd></div>
+                <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5"><dt class="text-slate-500">{{ $t('Current Outstanding Balance') }}</dt><dd class="mt-1 font-black">TZS {{ number_format((float) ($credit_limit_warning['current_balance'] ?? 0), 2) }}</dd></div>
+                <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5"><dt class="text-slate-500">{{ $t('Credit Limit') }}</dt><dd class="mt-1 font-black">TZS {{ number_format((float) ($credit_limit_warning['credit_limit'] ?? 0), 2) }}</dd></div>
+                <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5"><dt class="text-slate-500">{{ $t('Amount of Current Sale') }}</dt><dd class="mt-1 font-black">TZS {{ number_format((float) ($credit_limit_warning['current_sale_amount'] ?? 0), 2) }}</dd></div>
+                <div class="rounded-lg bg-red-50 p-3 text-red-700 dark:bg-red-500/10 dark:text-red-200 sm:col-span-2"><dt>{{ $t('Outstanding Balance After Sale') }}</dt><dd class="mt-1 font-black">TZS {{ number_format((float) ($credit_limit_warning['balance_after_sale'] ?? 0), 2) }}</dd></div>
+            </dl>
+            @unless ($this->canOverrideCreditLimit())
+                <p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">{{ $t('You are not authorized to override the customer credit limit.') }}</p>
+            @endunless
+            <div class="mt-5 flex justify-end gap-2">
+                <button type="button" wire:click="cancelCreditLimitWarning" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Cancel Sale') }}</button>
+                @if ($this->canOverrideCreditLimit())
+                    <button type="button" wire:click="continueCreditLimitSale" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t('Continue Anyway') }}</button>
+                @endif
+            </div>
+        </div>
+    </x-modal>
 
     <x-modal name="quick-customer" maxWidth="3xl">
         <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">

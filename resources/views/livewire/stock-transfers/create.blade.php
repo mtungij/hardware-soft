@@ -45,6 +45,30 @@ $availableQuantity = function (?string $productId) {
     return app(InventoryService::class)->getProductStock((int) $productId, (int) $this->from_location_id, (int) $this->branch_id);
 };
 
+$transferSourceLocations = function () {
+    $locations = auth()->user()?->permittedStockLocations('can_transfer', (int) $this->branch_id)
+        ->filter(fn (StockLocation $location) => $location->can_transfer && $location->can_issue_stock && $location->isActive())
+        ->values() ?? collect();
+
+    if ($locations->isNotEmpty() || auth()->user()?->stockLocations()->exists()) {
+        return $locations;
+    }
+
+    return StockLocation::where('branch_id', $this->branch_id)->where('status', 'active')->where('is_active', true)->where('can_transfer', true)->where('can_issue_stock', true)->orderBy('name')->get();
+};
+
+$transferDestinationLocations = function () {
+    $locations = auth()->user()?->permittedStockLocations('can_receive', (int) $this->branch_id)
+        ->filter(fn (StockLocation $location) => $location->can_receive_stock && $location->isActive())
+        ->values() ?? collect();
+
+    if ($locations->isNotEmpty() || auth()->user()?->stockLocations()->exists()) {
+        return $locations;
+    }
+
+    return StockLocation::where('branch_id', $this->branch_id)->where('status', 'active')->where('is_active', true)->where('can_receive_stock', true)->orderBy('name')->get();
+};
+
 $saveTransfer = function (string $status, InventoryService $inventory) {
     $validated = $this->validate([
         'branch_id' => ['required', 'exists:branches,id'],
@@ -66,8 +90,17 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
 
     $from = StockLocation::findOrFail($validated['from_location_id']);
     $to = StockLocation::findOrFail($validated['to_location_id']);
-    if ($from->status !== 'active' || $to->status !== 'active') {
+    if (! $from->isActive() || ! $to->isActive()) {
         throw ValidationException::withMessages(['location' => 'Transfers require active locations.']);
+    }
+    if (! $from->can_transfer || ! $from->can_issue_stock) {
+        throw ValidationException::withMessages(['from_location_id' => 'Source location is not allowed to transfer stock.']);
+    }
+    if (! $to->can_receive_stock) {
+        throw ValidationException::withMessages(['to_location_id' => 'Destination location is not allowed to receive stock.']);
+    }
+    if (($to->is_dispensing_location || $to->type === 'dispensing') && ! $from->can_transfer_to_dispensing) {
+        throw ValidationException::withMessages(['from_location_id' => 'Source location cannot transfer to Dispensing.']);
     }
 
     foreach ($validated['items'] as $item) {
@@ -77,7 +110,7 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
         }
         $available = $inventory->getProductStock((int) $item['product_id'], (int) $validated['from_location_id'], (int) $validated['branch_id']);
         if ((float) $item['quantity'] > $available) {
-            throw ValidationException::withMessages(['items' => "{$product->name} quantity exceeds available Main Store stock."]);
+            throw ValidationException::withMessages(['items' => "{$product->name} quantity exceeds available stock."]);
         }
     }
 
@@ -111,7 +144,7 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
 ?>
 
 <div>
-    <x-page-header title="Create Stock Transfer" description="Move stock from Main Store to Dispensing Area." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Transfers' => route('stock-transfers.index'), 'Create' => null]" />
+    <x-page-header title="Create Stock Transfer" description="Move stock between authorized stock locations." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Transfers' => route('stock-transfers.index'), 'Create' => null]" />
 
     <x-card>
         <form class="space-y-6">
@@ -127,21 +160,21 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
                 <x-form-input label="Transfer Date" name="transfer_date" type="date" wire:model="transfer_date" required />
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">From Location
                     <select wire:model="from_location_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        @foreach (StockLocation::where('type', 'store')->where('status', 'active')->orderBy('name')->get() as $location)
-                            <option value="{{ $location->id }}">{{ $location->name }}</option>
+                        @foreach ($this->transferSourceLocations() as $location)
+                            <option value="{{ $location->id }}">{{ InventorySettings::stockLocationLabel($location) }}</option>
                         @endforeach
                     </select>
                 </label>
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">To Location
                     <select wire:model="to_location_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        @foreach (StockLocation::where('type', 'dispensing')->where('status', 'active')->orderBy('name')->get() as $location)
-                            <option value="{{ $location->id }}">{{ $location->name }}</option>
+                        @foreach ($this->transferDestinationLocations() as $location)
+                            <option value="{{ $location->id }}">{{ InventorySettings::stockLocationLabel($location) }}</option>
                         @endforeach
                     </select>
                 </label>
             </div>
 
-            <x-table :headers="['Product', 'Available Main Store', 'Unit', 'Transfer Qty', 'Notes', '']">
+            <x-table :headers="['Product', 'Available Source', 'Unit', 'Transfer Qty', 'Notes', '']">
                 @foreach ($items as $index => $item)
                     @php
                         $product = $item['product_id'] ? Product::with('unit')->find($item['product_id']) : null;

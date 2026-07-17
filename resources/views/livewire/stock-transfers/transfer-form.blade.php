@@ -5,21 +5,21 @@
             <x-form-input label="Transfer Date" name="transfer_date" type="date" wire:model="transfer_date" required />
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">From Location
                 <select wire:model="from_location_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    @foreach (\App\Models\StockLocation::where('type', 'store')->where('status', 'active')->orderBy('name')->get() as $location)
-                        <option value="{{ $location->id }}">{{ $location->name }}</option>
+                    @foreach ($this->transferSourceLocations() as $location)
+                        <option value="{{ $location->id }}">{{ \App\Support\InventorySettings::stockLocationLabel($location) }}</option>
                     @endforeach
                 </select>
             </label>
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">To Location
                 <select wire:model="to_location_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    @foreach (\App\Models\StockLocation::where('type', 'dispensing')->where('status', 'active')->orderBy('name')->get() as $location)
-                        <option value="{{ $location->id }}">{{ $location->name }}</option>
+                    @foreach ($this->transferDestinationLocations() as $location)
+                        <option value="{{ $location->id }}">{{ \App\Support\InventorySettings::stockLocationLabel($location) }}</option>
                     @endforeach
                 </select>
             </label>
         </div>
 
-        <x-table :headers="['Product', 'Available Main Store', 'Unit', 'Transfer Qty', 'Notes', '']">
+        <x-table :headers="['Product', 'Available Source', 'Unit', 'Transfer Qty', 'Notes', '']">
             @foreach ($items as $index => $item)
                 @php
                     $product = $item['product_id'] ? \App\Models\Product::with('unit')->find($item['product_id']) : null;

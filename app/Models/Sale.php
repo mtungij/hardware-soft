@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'branch_id',
     'company_id',
+    'stock_location_id',
     'customer_id',
     'sale_number',
     'sale_date',
@@ -70,6 +71,11 @@ class Sale extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function stockLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class);
     }
 
     public function customer(): BelongsTo
