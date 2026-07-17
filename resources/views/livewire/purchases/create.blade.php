@@ -3,6 +3,7 @@
 use App\Models\Branch;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\StockLocation;
 use App\Models\Supplier;
 use App\Services\InventoryService;
 use Illuminate\Support\Facades\DB;
@@ -160,6 +161,9 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
 
     @php
         $canUpdateSellingPrice = $this->canUpdateSellingPrice();
+        $stockBranchId = (int) ($branch_id ?: (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id')));
+        $storeLocation = StockLocation::where('branch_id', $stockBranchId)->where('type', 'store')->first();
+        $inventory = app(InventoryService::class);
         $productSelectOptions = [
             'placeholder' => blank($supplier_id) ? 'Select supplier first' : 'Search or select product',
             'hasSearch' => true,
@@ -219,15 +223,20 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                 <td class="relative z-30 px-3 py-3" wire:key="purchase-product-cell-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}">
                                     <select
                                         wire:change="selectProduct({{ $index }}, $event.target.value)"
-                                        wire:key="purchase-product-select-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}"
+                                        wire:key="purchase-product-select-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}-{{ $branch_id ?: 'no-branch' }}"
                                         data-hs-select='@json($productSelectOptions)'
                                         class="hidden"
                                         @disabled(blank($supplier_id))
                                     >
                                         <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                         @if (filled($supplier_id))
-                                            @foreach (Product::where('status', 'active')->orderBy('name')->get() as $product)
-                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->name }} / {{ $product->sku }}</option>
+                                            @foreach (Product::with('unit')->where('status', 'active')->orderBy('name')->get() as $product)
+                                                @php
+                                                    $storeQty = $storeLocation
+                                                        ? $inventory->getProductStock($product->id, $storeLocation->id, $stockBranchId)
+                                                        : 0;
+                                                @endphp
+                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->name }} - Store Qty: {{ number_format($storeQty, 2) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
                                             @endforeach
                                         @endif
                                     </select>

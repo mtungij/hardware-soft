@@ -20,7 +20,9 @@ state(['search' => '', 'categoryFilter' => '', 'statusFilter' => '']);
 ?>
 
 <div>
-    <x-page-header title="Main Store Stock" description="Current warehouse stock calculated from stock movements." :breadcrumbs="['Dashboard' => route('dashboard'), 'Store Stock' => null]" />
+    <x-page-header title="Main Store Stock" description="Current warehouse stock calculated from stock movements." :breadcrumbs="['Dashboard' => route('dashboard'), 'Store Stock' => null]">
+        <x-export-actions export="tables.store-stock" :params="compact('search', 'categoryFilter', 'statusFilter')" />
+    </x-page-header>
 
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-3">
