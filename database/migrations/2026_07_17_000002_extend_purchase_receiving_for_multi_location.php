@@ -148,7 +148,11 @@ return new class extends Migration
             $table->foreignId('branch_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
             $table->foreignId('stock_location_id')->nullable()->constrained('stock_locations')->nullOnDelete();
-            $table->foreignId('preferred_receiving_location_id')->nullable()->constrained('stock_locations')->nullOnDelete();
+            $table->foreignId('preferred_receiving_location_id')->nullable();
+            $table->foreign('preferred_receiving_location_id', 'pls_pref_receiving_location_fk')
+                ->references('id')
+                ->on('stock_locations')
+                ->nullOnDelete();
             $table->decimal('reorder_level', 15, 2)->nullable();
             $table->decimal('reorder_quantity', 15, 2)->nullable();
             $table->timestamps();
