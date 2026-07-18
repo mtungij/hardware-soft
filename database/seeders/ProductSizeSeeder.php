@@ -49,6 +49,8 @@ class ProductSizeSeeder extends Seeder
             ['3 × 3', '3 × 3', 'Three inch by three inch'],
             ['4 × 4 (3mm)', '4 × 4 (3mm)', 'Four inch by four inch, 3mm thickness'],
             ['6 × 6 (3mm)', '6 × 6 (3mm)', 'Six inch by six inch, 3mm thickness'],
+            ['Stick kubwa', 'Stick kubwa', 'Large stick'],
+            ['Stick ndogo', 'Stick ndogo', 'Small stick'],
         ];
 
         foreach ($this->companies() as $company) {
