@@ -53,7 +53,7 @@ class RolePermissionSeeder extends Seeder
             }
         }
 
-        foreach (['view user stock locations', 'manage user stock locations', 'assign selling locations', 'assign transfer locations', 'assign receiving locations', 'assign default stock location', 'view all stock locations', 'sell from multiple locations', 'manage cross branch stock locations', 'receive purchases', 'edit draft goods receipts', 'post goods receipts', 'cancel goods receipts', 'adjust purchase receiving cost', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'override customer credit limit', 'receive sale payments', 'print receipt', 'receive customer payments', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'view customer notifications', 'manage customer communications', 'publish announcements', 'send customer messages', 'pay suppliers', 'manage cashbook', 'export reports', 'export pdf', 'export excel', 'print reports', 'view stock valuation', 'view sales profit', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings'] as $permissionName) {
+        foreach (['view user stock locations', 'manage user stock locations', 'assign selling locations', 'assign transfer locations', 'assign receiving locations', 'assign default stock location', 'view all stock locations', 'sell from multiple locations', 'manage cross branch stock locations', 'receive purchases', 'edit draft goods receipts', 'post goods receipts', 'cancel goods receipts', 'adjust purchase receiving cost', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'create unassigned credit sales', 'view unassigned credit sales', 'assign unassigned credit customer', 'receive credit payments', 'view customer balances', 'customer-balances.view', 'receive sale payments', 'print receipt', 'receive customer payments', 'customer-payments.view', 'customer-payments.create', 'customer-payments.print', 'customer-payment-reports.view', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'customer-statements.view', 'customer-statements.export', 'view customer notifications', 'manage customer communications', 'publish announcements', 'send customer messages', 'pay suppliers', 'manage cashbook', 'export reports', 'export pdf', 'export excel', 'print reports', 'view stock valuation', 'view sales profit', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings'] as $permissionName) {
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
@@ -109,10 +109,13 @@ class RolePermissionSeeder extends Seeder
             'access pos',
             'view sales',
             'create sales',
+            'create credit sales',
+            'create unassigned credit sales',
             'print receipt',
             'print reports',
             'sell from dispensing',
             'receive sale payments',
+            'receive credit payments',
             'view customer balances',
             'receive customer payments',
             'view cashbook',

@@ -29,6 +29,8 @@ $toggleStatus = function (int $customerId) {
     abort_unless($this->canManage(), 403);
 
     $customer = Customer::findOrFail($customerId);
+    abort_if($customer->is_system_customer, 403);
+
     $customer->update(['status' => $customer->status === 'active' ? 'inactive' : 'active']);
 
     session()->flash('success', 'Customer status updated.');
@@ -37,7 +39,10 @@ $toggleStatus = function (int $customerId) {
 $deleteCustomer = function (int $customerId) {
     abort_unless($this->canManage(), 403);
 
-    Customer::findOrFail($customerId)->delete();
+    $customer = Customer::findOrFail($customerId);
+    abort_if($customer->is_system_customer, 403);
+
+    $customer->delete();
     session()->flash('success', 'Customer deleted.');
 };
 
@@ -81,6 +86,7 @@ $deleteCustomer = function (int $customerId) {
         @php
             $customers = Customer::query()
                 ->with('branch')
+                ->where(fn ($query) => $query->where('is_system_customer', false)->orWhereNull('is_system_customer'))
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
@@ -94,15 +100,14 @@ $deleteCustomer = function (int $customerId) {
                 ->paginate(10);
         @endphp
 
-        <x-table data-tour="customers-list" :headers="['Customer', 'Phone', 'Type', 'Branch', 'Credit Limit', 'Opening Balance', 'Status', 'Actions']">
+        <x-table data-tour="customers-list" :headers="['Customer', 'Phone', 'Type', 'Branch', 'Opening Balance', 'Status', 'Actions']">
             @forelse ($customers as $customer)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3"><p class="font-black">{{ $customer->name }}</p><p class="text-xs text-slate-500">{{ $customer->email ?? '-' }}</p></td>
                     <td class="px-4 py-3">{{ $customer->phone }}</td>
                     <td class="px-4 py-3 capitalize">{{ $customer->customer_type }}</td>
                     <td class="px-4 py-3">{{ $customer->branch?->name ?? 'Global' }}</td>
-                    <td class="px-4 py-3">TZS {{ number_format((float) $customer->credit_limit, 2) }}</td>
-                    <td class="px-4 py-3">TZS {{ number_format((float) $customer->opening_balance, 2) }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($customer->opening_balance) }}</td>
                     <td class="px-4 py-3"><span class="{{ $customer->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($customer->status) }}</span></td>
                     <td class="px-4 py-3">
                         @if ($this->canManage())
@@ -117,7 +122,7 @@ $deleteCustomer = function (int $customerId) {
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No customers found.</td></tr>
+                <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No customers found.</td></tr>
             @endforelse
         </x-table>
 

@@ -21,7 +21,7 @@ state([
     'allow_sales_from_store' => false,
     'inventory_mode' => 'multi_location',
     'allow_multiple_dispensing_locations' => false,
-    'credit_limit_enforcement' => 'block',
+    'allow_credit_sale_without_customer' => true,
     'default_stock_location_id' => '',
     'has_stock_movements' => false,
 ]);
@@ -40,7 +40,7 @@ mount(function (InventoryService $inventory) {
     $this->allow_sales_from_store = (bool) $this->setting->allow_sales_from_store;
     $this->inventory_mode = $this->setting->inventory_mode ?: ((bool) $this->setting->enable_warehouse ? 'multi_location' : 'single_location');
     $this->allow_multiple_dispensing_locations = (bool) $this->setting->allow_multiple_dispensing_locations;
-    $this->credit_limit_enforcement = $this->setting->credit_limit_enforcement ?: 'block';
+    $this->allow_credit_sale_without_customer = (bool) ($this->setting->allow_credit_sale_without_customer ?? true);
     $this->default_stock_location_id = (string) $this->setting->default_stock_location_id;
     $this->has_stock_movements = StockMovement::query()->exists();
 });
@@ -51,7 +51,7 @@ rules(fn () => [
     'allow_sales_from_store' => ['boolean'],
     'inventory_mode' => ['required', Rule::in(['single_location', 'multi_location'])],
     'allow_multiple_dispensing_locations' => ['boolean'],
-    'credit_limit_enforcement' => ['required', Rule::in(['block', 'warn', 'ignore'])],
+    'allow_credit_sale_without_customer' => ['boolean'],
     'default_stock_location_id' => ['nullable', Rule::exists('stock_locations', 'id')],
 ]);
 
@@ -95,7 +95,7 @@ $save = function () {
     $this->allow_direct_stock_in = (bool) $this->setting->allow_direct_stock_in;
     $this->inventory_mode = $this->setting->inventory_mode;
     $this->allow_multiple_dispensing_locations = (bool) $this->setting->allow_multiple_dispensing_locations;
-    $this->credit_limit_enforcement = $this->setting->credit_limit_enforcement ?: 'block';
+    $this->allow_credit_sale_without_customer = (bool) ($this->setting->allow_credit_sale_without_customer ?? true);
 
     session()->flash('success', 'Inventory settings saved.');
 };
@@ -214,15 +214,12 @@ $save = function () {
                 <input type="checkbox" wire:model="allow_multiple_dispensing_locations" class="h-5 w-5 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500">
             </label>
 
-            <label class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-                <span class="block text-sm font-black">Credit Limit Enforcement</span>
-                <span class="mt-1 block text-xs text-slate-500">Choose how POS handles customers who exceed their approved credit limit.</span>
-                <select wire:model="credit_limit_enforcement" class="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="block">Block Sales</option>
-                    <option value="warn">Warn Only</option>
-                    <option value="ignore">Ignore Credit Limit</option>
-                </select>
-                @error('credit_limit_enforcement') <span class="mt-2 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+            <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                <span>
+                    <span class="block text-sm font-black">Allow Credit Sale Without Customer</span>
+                    <span class="mt-1 block text-xs text-slate-500">When enabled, POS can record credit sales under the protected unassigned credit customer.</span>
+                </span>
+                <input type="checkbox" wire:model="allow_credit_sale_without_customer" class="h-5 w-5 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500">
             </label>
 
             <div class="lg:col-span-2 flex justify-end">

@@ -28,7 +28,7 @@ $methodLabel = fn (string $method) => __("messages.methods.$method") === "messag
                     <td class="px-4 py-3 font-bold">{{ $receipt->sale?->sale_number ?: __('messages.receipts.general_payment') }}</td>
                     <td class="px-4 py-3">{{ $receipt->reference_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $this->methodLabel($receipt->payment_method) }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $receipt->amount, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($receipt->amount) }}</td>
                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-black {{ $receipt->status === 'approved' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200' : ($receipt->status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-200' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200') }}">{{ $this->statusLabel($receipt->status) }}</span></td>
                     <td class="px-4 py-3"><a href="{{ route('customer.receipts.download', $receipt) }}" class="text-sm font-black text-build-orange">{{ __('messages.receipts.download') }}</a></td>
                 </tr>

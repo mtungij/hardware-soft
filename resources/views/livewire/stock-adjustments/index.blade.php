@@ -53,7 +53,7 @@ state(['statusFilter' => '']);
                     <td class="px-4 py-3 font-bold">{{ $adjustment->lines_count > 1 ? $adjustment->lines_count.' products' : $adjustment->product?->name }}</td>
                     <td class="px-4 py-3">{{ $adjustment->stockLocation?->name }}</td>
                     <td class="px-4 py-3">{{ str($adjustment->adjustment_type)->replace('_', ' ')->title() }}</td>
-                    <td class="px-4 py-3">{{ number_format((float) $adjustment->quantity, 2) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($adjustment->quantity) }}</td>
                     <td class="px-4 py-3">{{ $adjustment->reason }}</td>
                     <td class="px-4 py-3"><span class="{{ in_array($adjustment->status, ['approved', 'posted'], true) ? 'badge-success' : ($adjustment->status === 'rejected' ? 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ str($adjustment->status)->replace('_', ' ')->title() }}</span></td>
                     <td class="px-4 py-3">{{ $adjustment->requester?->name }}</td>

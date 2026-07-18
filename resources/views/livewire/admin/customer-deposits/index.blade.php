@@ -38,8 +38,8 @@ $deposits = computed(function () {
                     <td class="px-4 py-3">{{ $deposit->created_at->format('M d, Y') }}</td>
                     <td class="px-4 py-3 font-bold">{{ $deposit->customer?->name }}</td>
                     <td class="px-4 py-3">{{ $deposit->reference_number ?: '-' }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $deposit->amount, 2) }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $deposit->balance_amount, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->amount) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->balance_amount) }}</td>
                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-black {{ in_array($deposit->status, ['approved', 'partial']) ? 'bg-emerald-100 text-emerald-700' : ($deposit->status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700') }}">{{ str($deposit->status)->title() }}</span></td>
                     <td class="px-4 py-3"><a href="{{ route('admin.customer-deposits.show', $deposit) }}" wire:navigate class="text-sm font-black text-build-orange">Review</a></td>
                 </tr>

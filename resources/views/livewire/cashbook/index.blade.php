@@ -61,7 +61,7 @@ $openSession = function (CashbookService $cashbook) {
             <div class="grid gap-4 sm:grid-cols-3">
                 <x-card><p class="text-sm text-slate-500">Open Today</p><p class="mt-2 text-2xl font-black">{{ $openToday }}</p></x-card>
                 <x-card><p class="text-sm text-slate-500">Closed Sessions</p><p class="mt-2 text-2xl font-black">{{ CashbookSession::where('status', 'closed')->count() }}</p></x-card>
-                <x-card><p class="text-sm text-slate-500">Total Difference</p><p class="mt-2 text-2xl font-black">TZS {{ number_format((float) CashbookSession::sum('difference'), 2) }}</p></x-card>
+                <x-card><p class="text-sm text-slate-500">Total Difference</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money(CashbookSession::sum('difference')) }}</p></x-card>
             </div>
             <x-card title="Sessions">
                 <x-table :headers="['Date', 'Branch', 'Expected', 'Actual', 'Difference', 'Status', 'Actions']">
@@ -69,9 +69,9 @@ $openSession = function (CashbookService $cashbook) {
                         <tr>
                             <td class="px-4 py-3">{{ $session->session_date?->format('M d, Y') }}</td>
                             <td class="px-4 py-3">{{ $session->branch?->name }}</td>
-                            <td class="px-4 py-3 text-right">TZS {{ number_format((float) $session->expected_cash, 2) }}</td>
-                            <td class="px-4 py-3 text-right">TZS {{ number_format((float) $session->actual_cash, 2) }}</td>
-                            <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $session->difference, 2) }}</td>
+                            <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($session->expected_cash) }}</td>
+                            <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($session->actual_cash) }}</td>
+                            <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($session->difference) }}</td>
                             <td class="px-4 py-3"><span class="rounded-full px-2 py-1 text-xs font-bold {{ $session->status === 'open' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700' }}">{{ ucfirst($session->status) }}</span></td>
                             <td class="px-4 py-3 text-right"><a href="{{ route('cashbook.show', $session) }}" wire:navigate class="text-sm font-bold text-build-orange">View</a></td>
                         </tr>

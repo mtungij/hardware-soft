@@ -27,9 +27,9 @@ $methodLabel = fn (string $method) => __("messages.methods.$method") === "messag
                     <td class="px-4 py-3">{{ $deposit->created_at->format('M d, Y') }}</td>
                     <td class="px-4 py-3">{{ $deposit->reference_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $this->methodLabel($deposit->payment_method) }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $deposit->amount, 2) }}</td>
-                    <td class="px-4 py-3 text-right">TZS {{ number_format((float) $deposit->used_amount, 2) }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $deposit->balance_amount, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->amount) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($deposit->used_amount) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->balance_amount) }}</td>
                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-black {{ in_array($deposit->status, ['approved', 'partial']) ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200' : ($deposit->status === 'rejected' ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-200' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200') }}">{{ $this->statusLabel($deposit->status) }}</span></td>
                     <td class="px-4 py-3"><a href="{{ route('customer.deposits.download', $deposit) }}" class="text-sm font-black text-build-orange">{{ __('messages.deposits.download') }}</a></td>
                 </tr>

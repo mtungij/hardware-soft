@@ -23,6 +23,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'opening_balance',
     'balance_amount',
     'status',
+    'is_system_customer',
+    'is_unassigned_credit_customer',
 ])]
 class Customer extends Model
 {
@@ -79,6 +81,8 @@ class Customer extends Model
             'credit_limit' => 'decimal:2',
             'opening_balance' => 'decimal:2',
             'balance_amount' => 'decimal:2',
+            'is_system_customer' => 'boolean',
+            'is_unassigned_credit_customer' => 'boolean',
         ];
     }
 }

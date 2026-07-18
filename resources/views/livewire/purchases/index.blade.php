@@ -132,9 +132,9 @@ $sendPurchaseOrder = function (int $purchaseId, PurchaseOrderEmailService $servi
                     <td class="px-4 py-3"><p class="font-black">{{ $purchase->reference_number }}</p><p class="text-xs text-slate-500">{{ $purchase->invoice_number ?? 'No invoice' }}</p></td>
                     <td class="px-4 py-3">{{ $purchase->supplier?->name }}</td>
                     <td class="px-4 py-3">{{ $purchase->purchase_date->format('d M Y') }}</td>
-                    <td class="px-4 py-3">TZS {{ number_format((float) $purchase->total_amount, 2) }}</td>
-                    <td class="px-4 py-3">TZS {{ number_format((float) $purchase->paid_amount, 2) }}</td>
-                    <td class="px-4 py-3 font-bold">TZS {{ number_format((float) $purchase->balance_amount, 2) }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($purchase->total_amount) }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($purchase->paid_amount) }}</td>
+                    <td class="px-4 py-3 font-bold">TZS {{ \App\Support\NumberFormatter::money($purchase->balance_amount) }}</td>
                     <td class="px-4 py-3"><span class="badge-info">{{ ucfirst($purchase->status) }}</span></td>
                     <td class="px-4 py-3">
                         <span class="{{ $purchase->email_status === 'sent' ? 'badge-success' : ($purchase->email_status === 'failed' ? 'rounded-full bg-red-100 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ ucfirst($purchase->email_status ?? 'pending') }}</span>

@@ -29,15 +29,15 @@ $paymentStatusLabel = fn (string $status) => [
         @endif
     </x-page-header>
     <div class="grid gap-4 sm:grid-cols-4">
-        <x-card><p class="text-sm text-slate-500">{{ __('messages.debts.total_amount') }}</p><p class="mt-2 text-xl font-black">TZS {{ number_format((float) $sale->total_amount, 2) }}</p></x-card>
-        <x-card><p class="text-sm text-slate-500">{{ __('messages.debts.paid_amount') }}</p><p class="mt-2 text-xl font-black text-emerald-600">TZS {{ number_format((float) $sale->paid_amount, 2) }}</p></x-card>
-        <x-card><p class="text-sm text-slate-500">{{ __('messages.debts.balance') }}</p><p class="mt-2 text-xl font-black text-red-600">TZS {{ number_format((float) $sale->balance_amount, 2) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">{{ __('messages.debts.total_amount') }}</p><p class="mt-2 text-xl font-black">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">{{ __('messages.debts.paid_amount') }}</p><p class="mt-2 text-xl font-black text-emerald-600">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">{{ __('messages.debts.balance') }}</p><p class="mt-2 text-xl font-black text-red-600">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</p></x-card>
         <x-card><p class="text-sm text-slate-500">{{ __('messages.debts.status') }}</p><p class="mt-2"><span class="rounded-full px-2.5 py-1 text-xs font-black {{ $sale->payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200' : ($sale->payment_status === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200' : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-200') }}">{{ $this->paymentStatusLabel($sale->payment_status) }}</span></p></x-card>
     </div>
     <x-card :title="__('messages.debts.items')" class="mt-6">
         <x-table :headers="[__('messages.debts.product'), __('messages.debts.quantity'), __('messages.debts.price'), __('messages.table.total')]">
             @foreach ($sale->items as $item)
-                <tr><td class="px-4 py-3 font-bold">{{ $item->product?->name }}</td><td class="px-4 py-3 text-right">{{ number_format((float) $item->quantity, 2) }}</td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $item->unit_price, 2) }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $item->line_total, 2) }}</td></tr>
+                <tr><td class="px-4 py-3 font-bold">{{ $item->product?->name }}</td><td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->quantity) }}</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($item->unit_price) }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($item->line_total) }}</td></tr>
             @endforeach
         </x-table>
     </x-card>

@@ -66,10 +66,10 @@ $paymentStatusLabel = fn (string $status) => [
     @endif
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <x-card><p class="text-sm font-semibold text-slate-500">{{ __('messages.dashboard.outstanding_debt') }}</p><p class="mt-2 text-2xl font-black text-red-600">TZS {{ number_format($this->outstanding, 2) }}</p></x-card>
-        <x-card><p class="text-sm font-semibold text-slate-500">{{ __('messages.dashboard.approved_deposits') }}</p><p class="mt-2 text-2xl font-black text-emerald-600">TZS {{ number_format((float) $this->depositBalance, 2) }}</p></x-card>
+        <x-card><p class="text-sm font-semibold text-slate-500">{{ __('messages.dashboard.outstanding_debt') }}</p><p class="mt-2 text-2xl font-black text-red-600">TZS {{ \App\Support\NumberFormatter::money($this->outstanding) }}</p></x-card>
+        <x-card><p class="text-sm font-semibold text-slate-500">{{ __('messages.dashboard.approved_deposits') }}</p><p class="mt-2 text-2xl font-black text-emerald-600">TZS {{ \App\Support\NumberFormatter::money($this->depositBalance) }}</p></x-card>
         <x-card><p class="text-sm font-semibold text-slate-500">{{ __('messages.dashboard.pending_receipts') }}</p><p class="mt-2 text-2xl font-black text-amber-600">{{ $this->pendingReceipts }}</p></x-card>
-        <x-card><p class="text-sm font-semibold text-slate-500">{{ __('messages.dashboard.credit_limit') }}</p><p class="mt-2 text-2xl font-black">TZS {{ number_format((float) $this->customer->credit_limit, 2) }}</p></x-card>
+        <x-card><p class="text-sm font-semibold text-slate-500">{{ __('messages.dashboard.credit_limit') }}</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($this->customer->credit_limit) }}</p></x-card>
     </div>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-3">
@@ -87,9 +87,9 @@ $paymentStatusLabel = fn (string $status) => [
                     <tr>
                         <td class="px-4 py-3">{{ $sale->sale_date?->format('M d, Y') }}</td>
                         <td class="px-4 py-3 font-bold">{{ $sale->sale_number }}</td>
-                        <td class="px-4 py-3 text-right">TZS {{ number_format((float) $sale->total_amount, 2) }}</td>
-                        <td class="px-4 py-3 text-right">TZS {{ number_format((float) $sale->paid_amount, 2) }}</td>
-                        <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $sale->balance_amount, 2) }}</td>
+                        <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</td>
+                        <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</td>
+                        <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</td>
                         <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-black {{ $sale->payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200' : ($sale->payment_status === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200' : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-200') }}">{{ $this->paymentStatusLabel($sale->payment_status) }}</span></td>
                     </tr>
                 @empty

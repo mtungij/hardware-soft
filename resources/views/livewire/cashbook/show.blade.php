@@ -41,20 +41,20 @@ $closeSession = function (CashbookService $cashbook) {
     </x-page-header>
 
     <div class="grid gap-4 sm:grid-cols-4">
-        <x-card><p class="text-sm text-slate-500">Opening Cash</p><p class="mt-2 text-xl font-black">TZS {{ number_format((float) $cashbookSession->opening_cash, 2) }}</p></x-card>
-        <x-card><p class="text-sm text-slate-500">Cash In</p><p class="mt-2 text-xl font-black text-emerald-600">TZS {{ number_format((float) $cashbookSession->cash_in, 2) }}</p></x-card>
-        <x-card><p class="text-sm text-slate-500">Cash Out</p><p class="mt-2 text-xl font-black text-red-600">TZS {{ number_format((float) $cashbookSession->cash_out, 2) }}</p></x-card>
-        <x-card><p class="text-sm text-slate-500">Expected Cash</p><p class="mt-2 text-xl font-black">TZS {{ number_format((float) $cashbookSession->expected_cash, 2) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">Opening Cash</p><p class="mt-2 text-xl font-black">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->opening_cash) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">Cash In</p><p class="mt-2 text-xl font-black text-emerald-600">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->cash_in) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">Cash Out</p><p class="mt-2 text-xl font-black text-red-600">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->cash_out) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">Expected Cash</p><p class="mt-2 text-xl font-black">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->expected_cash) }}</p></x-card>
     </div>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">
         <x-card title="Daily Cash Movement">
             <x-table :headers="['Metric', 'Amount']">
-                <tr><td class="px-4 py-3">Cash sales</td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $cashbookSession->cash_sales, 2) }}</td></tr>
-                <tr><td class="px-4 py-3">Customer payments</td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $cashbookSession->customer_payments, 2) }}</td></tr>
-                <tr><td class="px-4 py-3">Supplier payments</td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $cashbookSession->supplier_payments, 2) }}</td></tr>
-                <tr><td class="px-4 py-3">Expenses</td><td class="px-4 py-3 text-right">TZS {{ number_format((float) $cashbookSession->expenses, 2) }}</td></tr>
-                <tr><td class="px-4 py-3 font-bold">Difference</td><td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $cashbookSession->difference, 2) }}</td></tr>
+                <tr><td class="px-4 py-3">Cash sales</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->cash_sales) }}</td></tr>
+                <tr><td class="px-4 py-3">Customer payments</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->customer_payments) }}</td></tr>
+                <tr><td class="px-4 py-3">Supplier payments</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->supplier_payments) }}</td></tr>
+                <tr><td class="px-4 py-3">Expenses</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->expenses) }}</td></tr>
+                <tr><td class="px-4 py-3 font-bold">Difference</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($cashbookSession->difference) }}</td></tr>
             </x-table>
         </x-card>
 

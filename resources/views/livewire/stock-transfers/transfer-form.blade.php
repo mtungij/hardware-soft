@@ -34,7 +34,7 @@
                             @endforeach
                         </select>
                     </td>
-                    <td class="px-4 py-3 font-black">{{ number_format($available, 2) }}</td>
+                    <td class="px-4 py-3 font-black">{{ \App\Support\NumberFormatter::quantity($available) }}</td>
                     <td class="px-4 py-3">{{ $product?->unit?->short_name ?? '-' }}</td>
                     <td class="px-4 py-3"><input wire:model="items.{{ $index }}.quantity" type="number" step="0.01" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
                     <td class="px-4 py-3"><input wire:model="items.{{ $index }}.notes" class="w-56 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>

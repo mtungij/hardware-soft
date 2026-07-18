@@ -57,7 +57,8 @@ mount(function () {
 <div>
     @php
         $t = fn (string $key): string => __('messages.sales_items.'.$key);
-        $money = fn ($value): string => 'TZS '.number_format((float) $value, 2);
+        $money = fn ($value): string => 'TZS '.\App\Support\NumberFormatter::money($value);
+        $quantity = fn ($value): string => \App\Support\NumberFormatter::quantity($value);
         $canViewProfit = auth()->user()?->can('view sales profit') ?? false;
         $canExportPdf = auth()->user()?->can('export pdf') ?? false;
         $canExportExcel = auth()->user()?->can('export excel') ?? false;
@@ -220,7 +221,7 @@ mount(function () {
                 ] : []),
                 ['label' => $t('total_invoices'), 'value' => number_format($invoiceRows->count()), 'tone' => 'text-navy-900 dark:text-white'],
                 ['label' => $t('total_customers'), 'value' => number_format($invoiceRows->pluck('sale.customer_id')->filter()->unique()->count() + ($invoiceRows->contains(fn ($row) => blank($row['sale']?->customer_id)) ? 1 : 0)), 'tone' => 'text-navy-900 dark:text-white'],
-                ['label' => $t('total_products_sold'), 'value' => number_format($invoiceRows->sum('total_quantity'), 2), 'tone' => 'text-navy-900 dark:text-white'],
+                ['label' => $t('total_products_sold'), 'value' => $quantity($invoiceRows->sum('total_quantity')), 'tone' => 'text-navy-900 dark:text-white'],
             ];
         @endphp
 
@@ -276,12 +277,12 @@ mount(function () {
                                 <td class="px-3 py-3">
                                     <div class="space-y-1">
                                         @foreach ($visibleItems as $item)
-                                            <p>{{ $item->product?->name }} x {{ number_format((float) $item->quantity, 2) }} {{ $item->product?->unit?->short_name }}</p>
+                                            <p>{{ $item->product?->name }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
                                         @endforeach
                                         @if ($hiddenCount > 0)
                                             <div x-show="productInvoice === {{ $sale?->id ?? 0 }}" class="space-y-1" style="display: none;">
                                                 @foreach ($row['items']->skip(5) as $item)
-                                                    <p>{{ $item->product?->name }} x {{ number_format((float) $item->quantity, 2) }} {{ $item->product?->unit?->short_name }}</p>
+                                                    <p>{{ $item->product?->name }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
                                                 @endforeach
                                             </div>
                                             <button type="button" x-on:click="productInvoice = productInvoice === {{ $sale?->id ?? 0 }} ? null : {{ $sale?->id ?? 0 }}" class="text-xs font-black text-cyan-600">
@@ -291,7 +292,7 @@ mount(function () {
                                         @endif
                                     </div>
                                 </td>
-                                <td class="px-3 py-3 text-right font-bold">{{ number_format($row['total_quantity'], 2) }} {{ $t('items_label') }}</td>
+                                <td class="px-3 py-3 text-right font-bold">{{ $quantity($row['total_quantity']) }} {{ $t('items_label') }}</td>
                                 @if ($canViewProfit)
                                     <td class="px-3 py-3 text-right">{{ $money($row['cost']) }}</td>
                                 @endif
@@ -355,7 +356,7 @@ mount(function () {
                                                     <tr>
                                                         <td class="px-3 py-2 font-bold">{{ $item->product?->name }}</td>
                                                         <td class="px-3 py-2 font-mono">{{ $item->product?->sku }}</td>
-                                                        <td class="px-3 py-2 text-right">{{ number_format((float) $item->quantity, 2) }}</td>
+                                                        <td class="px-3 py-2 text-right">{{ $quantity($item->quantity) }}</td>
                                                         <td class="px-3 py-2">{{ $item->product?->unit?->short_name }}</td>
                                                         @if ($canViewProfit)
                                                             <td class="px-3 py-2 text-right">{{ $money($item->unit_cost) }}</td>
@@ -433,7 +434,7 @@ mount(function () {
                     @forelse ($groups as $row)
                         <tr class="border-t border-slate-100 dark:border-slate-800">
                             <td class="px-4 py-3"><p class="font-black">{{ $row['label'] }}</p><p class="text-xs text-slate-500">{{ $row['sub'] }}</p></td>
-                            <td class="px-4 py-3 text-right">{{ number_format($row['quantity'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">{{ $quantity($row['quantity']) }}</td>
                             @if ($canViewProfit)
                                 <td class="px-4 py-3 text-right">{{ $money($row['cost']) }}</td>
                             @endif
@@ -441,8 +442,8 @@ mount(function () {
                             @if ($canViewProfit)
                                 <td class="px-4 py-3 text-right font-bold">{{ $money($row['profit']) }}</td>
                             @endif
-                            <td class="px-4 py-3 text-right">{{ number_format($row['retail_quantity'], 2) }}</td>
-                            <td class="px-4 py-3 text-right">{{ number_format($row['wholesale_quantity'], 2) }}</td>
+                            <td class="px-4 py-3 text-right">{{ $quantity($row['retail_quantity']) }}</td>
+                            <td class="px-4 py-3 text-right">{{ $quantity($row['wholesale_quantity']) }}</td>
                         </tr>
                     @empty
                         <tr><td colspan="{{ $canViewProfit ? 7 : 5 }}" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('no_sales_found') }}</td></tr>

@@ -197,9 +197,9 @@ class InventoryService
      * @param  array<int, array<string, mixed>>  $cart
      * @param  array<int, array<string, mixed>>  $payments
      */
-    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false): Sale
+    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = []): Sale
     {
-        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $overrideCreditLimit) {
+        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails) {
             if ($cart === []) {
                 throw ValidationException::withMessages(['cart' => 'Cart is required.']);
             }
@@ -220,8 +220,15 @@ class InventoryService
 
             $containsCredit = collect($payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
 
+            $creditCustomerUnassigned = false;
+
             if ($containsCredit && ! $customerId) {
-                throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Credit sale requires a customer.')]);
+                if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true)) {
+                    throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
+                }
+
+                $customerId = app(UnassignedCreditCustomerService::class)->forLocation($location)->id;
+                $creditCustomerUnassigned = true;
             }
 
             $subtotal = 0;
@@ -230,7 +237,7 @@ class InventoryService
             $preparedItems = [];
 
             foreach ($cart as $row) {
-                $product = Product::query()->whereKey($row['product_id'] ?? null)->lockForUpdate()->firstOrFail();
+                $product = Product::query()->with('category')->whereKey($row['product_id'] ?? null)->lockForUpdate()->firstOrFail();
 
                 if ($product->status !== 'active') {
                     throw ValidationException::withMessages(['cart' => "{$product->name} is inactive."]);
@@ -239,34 +246,71 @@ class InventoryService
                 $quantity = (float) ($row['quantity'] ?? 0);
                 $saleType = ($row['sale_type'] ?? 'retail') === 'wholesale' ? 'wholesale' : 'retail';
                 $unitPrice = (float) ($saleType === 'wholesale' ? $product->wholesale_price : $product->selling_price);
-                $itemDiscount = (float) ($row['discount_amount'] ?? 0);
-                $itemTax = (float) ($row['tax_amount'] ?? 0);
+                $discountPerUnit = (float) ($row['discount_per_unit'] ?? $row['discount_amount'] ?? 0);
+                $taxPerUnit = (float) ($row['tax_amount'] ?? 0);
+                $allowsFractionalSale = $product->supportsFractionalSales();
+                $conversionFactor = $allowsFractionalSale ? max(0.0001, (float) ($product->conversion_factor ?: 1)) : 1.0;
+                $baseQuantity = round($quantity / $conversionFactor, 4);
+                $minimumSaleQuantity = $allowsFractionalSale ? (float) ($product->minimum_sale_quantity ?: 1) : 1.0;
+                $quantityStep = $allowsFractionalSale ? (float) ($product->quantity_step ?: 1) : 1.0;
 
                 if ($quantity <= 0) {
                     throw ValidationException::withMessages(['cart' => 'Quantity must be greater than zero.']);
+                }
+
+                if (! $allowsFractionalSale && abs($quantity - round($quantity)) > 0.0001) {
+                    throw ValidationException::withMessages(['cart' => "{$product->name} must be sold in whole quantities."]);
+                }
+
+                if ($quantity < $minimumSaleQuantity) {
+                    throw ValidationException::withMessages(['cart' => "{$product->name} minimum sale quantity is {$minimumSaleQuantity}."]);
+                }
+
+                if ($quantityStep > 0) {
+                    $steps = ($quantity - $minimumSaleQuantity) / $quantityStep;
+
+                    if (abs($steps - round($steps)) > 0.0001) {
+                        throw ValidationException::withMessages(['cart' => "{$product->name} quantity must follow the configured step of {$quantityStep}."]);
+                    }
+                }
+
+                if ($baseQuantity <= 0) {
+                    throw ValidationException::withMessages(['cart' => "{$product->name} converted base quantity must be greater than zero."]);
                 }
 
                 if ($saleType === 'wholesale' && blank($product->wholesale_price)) {
                     throw ValidationException::withMessages(['cart' => "{$product->name} does not have a wholesale price."]);
                 }
 
-                if ($unitPrice < (float) $product->buying_price) {
+                $baseUnitCost = (float) $product->buying_price;
+                $sellingUnitCost = $baseUnitCost / $conversionFactor;
+
+                if ($unitPrice < $sellingUnitCost) {
                     throw ValidationException::withMessages(['cart' => "{$product->name} price cannot be below buying price."]);
                 }
 
-                $gross = $quantity * $unitPrice;
-
-                if ($itemDiscount > $gross) {
-                    throw ValidationException::withMessages(['cart' => 'Discount cannot exceed item total.']);
+                if ($discountPerUnit < 0) {
+                    throw ValidationException::withMessages(['cart' => 'Discount per unit cannot be negative.']);
                 }
 
-                $available = $this->getProductStock($product->id, $location->id, $branchId);
+                if ($discountPerUnit >= $unitPrice && $unitPrice > 0) {
+                    throw ValidationException::withMessages(['cart' => \App\Support\UiText::translate('The discount per unit must be less than the unit price.')]);
+                }
 
-                if ($quantity > $available) {
+                $gross = $quantity * $unitPrice;
+                $itemDiscount = $quantity * $discountPerUnit;
+                $itemTax = $quantity * $taxPerUnit;
+                $netUnitPrice = $unitPrice - $discountPerUnit;
+                $netTotal = $quantity * $netUnitPrice;
+
+                $available = $this->getProductStock($product->id, $location->id, $branchId);
+                $availableSellingQuantity = $available * $conversionFactor;
+
+                if ($baseQuantity > $available) {
                     throw ValidationException::withMessages(['cart' => "{$product->name} quantity exceeds available stock."]);
                 }
 
-                $lineTotal = $gross - $itemDiscount + $itemTax;
+                $lineTotal = $netTotal + $itemTax;
                 $subtotal += $gross;
                 $discount += $itemDiscount;
                 $tax += $itemTax;
@@ -275,11 +319,21 @@ class InventoryService
                     'product' => $product,
                     'sale_type' => $saleType,
                     'quantity' => $quantity,
+                    'base_quantity' => $baseQuantity,
+                    'selling_unit_id' => $allowsFractionalSale ? ($product->selling_unit_id ?: $product->unit_id) : $product->unit_id,
+                    'base_unit_id' => $product->unit_id,
+                    'conversion_factor' => $conversionFactor,
                     'unit_price' => $unitPrice,
+                    'discount_per_unit' => $discountPerUnit,
                     'discount_amount' => $itemDiscount,
+                    'discount_total' => $itemDiscount,
+                    'gross_total' => $gross,
+                    'net_unit_price' => $netUnitPrice,
+                    'net_total' => $netTotal,
                     'tax_amount' => $itemTax,
                     'line_total' => $lineTotal,
-                    'unit_cost' => $this->getAverageCost($product->id, $location->id, $branchId),
+                    'unit_cost' => $this->getAverageCost($product->id, $location->id, $branchId) / $conversionFactor,
+                    'base_unit_cost' => $this->getAverageCost($product->id, $location->id, $branchId),
                 ];
             }
 
@@ -296,9 +350,7 @@ class InventoryService
                 throw ValidationException::withMessages(['payments' => 'Paid amount cannot be negative.']);
             }
 
-            if ($containsCredit && $customerId) {
-                $customer = \App\Models\Customer::query()->whereKey($customerId)->lockForUpdate()->firstOrFail();
-
+            if ($containsCredit) {
                 if ($creditAmount <= 0) {
                     $creditAmount = max(0, $total - $paid);
                 }
@@ -309,16 +361,6 @@ class InventoryService
 
                 if ($paid + $creditAmount > $total) {
                     throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('Paid amount cannot exceed total for credit sales.')]);
-                }
-
-                $creditLimitEnforcement = InventorySettings::current()->credit_limit_enforcement ?? 'block';
-
-                if (
-                    $creditLimitEnforcement !== 'ignore'
-                    && (float) $customer->balance_amount + $creditAmount > (float) $customer->credit_limit
-                    && ! ($creditLimitEnforcement === 'warn' && $overrideCreditLimit)
-                ) {
-                    throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Customer credit limit exceeded.')]);
                 }
             }
 
@@ -331,6 +373,14 @@ class InventoryService
                 'branch_id' => $branchId,
                 'stock_location_id' => $location->id,
                 'customer_id' => $customerId,
+                'credit_customer_unassigned' => $creditCustomerUnassigned,
+                'credit_assignment_status' => $creditCustomerUnassigned ? 'unassigned' : 'assigned',
+                'temporary_customer_name' => $creditCustomerUnassigned ? ($creditDetails['temporary_customer_name'] ?? null) : null,
+                'temporary_customer_phone' => $creditCustomerUnassigned ? ($creditDetails['temporary_customer_phone'] ?? null) : null,
+                'project_name' => $creditCustomerUnassigned ? ($creditDetails['project_name'] ?? null) : null,
+                'vehicle_number' => $creditCustomerUnassigned ? ($creditDetails['vehicle_number'] ?? null) : null,
+                'expected_payment_date' => $creditCustomerUnassigned ? ($creditDetails['expected_payment_date'] ?? null) : null,
+                'credit_notes' => $creditCustomerUnassigned ? ($creditDetails['credit_notes'] ?? null) : null,
                 'sale_number' => $this->generateSaleNumber(),
                 'sale_date' => now()->toDateString(),
                 'sale_type' => $saleType,
@@ -355,9 +405,18 @@ class InventoryService
                     'sold_from_label' => InventorySettings::stockLocationLabel($location),
                     'sale_type' => $item['sale_type'],
                     'quantity' => $item['quantity'],
+                    'base_quantity' => $item['base_quantity'],
+                    'selling_unit_id' => $item['selling_unit_id'],
+                    'base_unit_id' => $item['base_unit_id'],
+                    'conversion_factor' => $item['conversion_factor'],
                     'unit_cost' => $item['unit_cost'],
                     'unit_price' => $item['unit_price'],
+                    'discount_per_unit' => $item['discount_per_unit'],
                     'discount_amount' => $item['discount_amount'],
+                    'discount_total' => $item['discount_total'],
+                    'gross_total' => $item['gross_total'],
+                    'net_unit_price' => $item['net_unit_price'],
+                    'net_total' => $item['net_total'],
                     'tax_amount' => $item['tax_amount'],
                     'line_total' => $item['line_total'],
                 ]);
@@ -367,10 +426,10 @@ class InventoryService
                     'product_id' => $item['product']->id,
                     'stock_location_id' => $location->id,
                     'movement_type' => 'sale_out',
-                    'quantity' => $item['quantity'],
+                    'quantity' => $item['base_quantity'],
                     'quantity_in' => 0,
-                    'quantity_out' => $item['quantity'],
-                    'unit_cost' => $item['unit_cost'],
+                    'quantity_out' => $item['base_quantity'],
+                    'unit_cost' => $item['base_unit_cost'],
                     'unit_price' => $item['unit_price'],
                     'reference_type' => Sale::class,
                     'reference_id' => $sale->id,
@@ -415,15 +474,17 @@ class InventoryService
             }
 
             foreach ($sale->items as $item) {
+                $returnQuantity = (float) ($item->base_quantity ?: $item->quantity);
+
                 StockMovement::create([
                     'branch_id' => $sale->branch_id,
                     'product_id' => $item->product_id,
                     'stock_location_id' => $item->stock_location_id,
                     'movement_type' => 'return_in',
-                    'quantity' => $item->quantity,
-                    'quantity_in' => $item->quantity,
+                    'quantity' => $returnQuantity,
+                    'quantity_in' => $returnQuantity,
                     'quantity_out' => 0,
-                    'unit_cost' => $item->unit_cost,
+                    'unit_cost' => (float) $item->unit_cost * (float) ($item->conversion_factor ?: 1),
                     'unit_price' => $item->unit_price,
                     'reference_type' => Sale::class,
                     'reference_id' => $sale->id,

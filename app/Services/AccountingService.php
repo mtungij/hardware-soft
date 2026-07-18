@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\CustomerPayment;
+use App\Models\CustomerPaymentAllocation;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\Supplier;
@@ -39,6 +40,7 @@ class AccountingService
             $payment = CustomerPayment::create([
                 'branch_id' => $data['branch_id'],
                 'customer_id' => $customer->id,
+                'receipt_number' => $this->nextCustomerPaymentReceiptNumber(),
                 'amount' => $amount,
                 'payment_method' => $data['payment_method'],
                 'reference_number' => $data['reference_number'] ?? null,
@@ -67,6 +69,15 @@ class AccountingService
                     'payment_date' => $data['payment_date'],
                 ]);
 
+                CustomerPaymentAllocation::create([
+                    'company_id' => $customer->company_id,
+                    'branch_id' => $data['branch_id'],
+                    'customer_payment_id' => $payment->id,
+                    'sale_id' => $sale->id,
+                    'allocated_amount' => $applied,
+                    'created_by' => $receivedBy,
+                ]);
+
                 $sale->update([
                     'paid_amount' => min($newPaid, (float) $sale->total_amount),
                     'balance_amount' => $newBalance,
@@ -78,6 +89,15 @@ class AccountingService
 
             return $payment;
         });
+    }
+
+    private function nextCustomerPaymentReceiptNumber(): string
+    {
+        do {
+            $number = 'CPAY-'.now()->format('Ymd').'-'.str_pad((string) (CustomerPayment::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
+        } while (CustomerPayment::where('receipt_number', $number)->exists());
+
+        return $number;
     }
 
     public function paySupplier(Supplier $supplier, array $data, int $paidBy): SupplierPayment

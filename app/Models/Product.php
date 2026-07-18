@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'company_id',
     'category_id',
     'unit_id',
+    'selling_unit_id',
     'name',
     'sku',
     'barcode',
@@ -23,6 +24,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'buying_price',
     'selling_price',
     'wholesale_price',
+    'conversion_factor',
+    'allow_fractional_sale',
+    'minimum_sale_quantity',
+    'quantity_step',
     'reorder_level',
     'taxable',
     'status',
@@ -44,6 +49,11 @@ class Product extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
+    }
+
+    public function sellingUnit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class, 'selling_unit_id');
     }
 
     public function purchaseItems(): HasMany
@@ -71,12 +81,22 @@ class Product extends Model
         return $this->hasMany(SaleItem::class);
     }
 
+    public function supportsFractionalSales(): bool
+    {
+        return (bool) $this->allow_fractional_sale
+            || (bool) $this->category?->allow_fractional_sales;
+    }
+
     protected function casts(): array
     {
         return [
             'buying_price' => 'decimal:2',
             'selling_price' => 'decimal:2',
             'wholesale_price' => 'decimal:2',
+            'conversion_factor' => 'decimal:4',
+            'allow_fractional_sale' => 'boolean',
+            'minimum_sale_quantity' => 'decimal:4',
+            'quantity_step' => 'decimal:4',
             'reorder_level' => 'decimal:2',
             'taxable' => 'boolean',
         ];

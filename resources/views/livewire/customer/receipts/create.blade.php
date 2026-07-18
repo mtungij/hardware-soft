@@ -71,7 +71,7 @@ $save = function () {
                 <select wire:model="sale_id" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                     <option value="">{{ __('messages.receipts.general_payment') }}</option>
                     @foreach ($this->sales as $sale)
-                        <option value="{{ $sale->id }}">{{ $sale->sale_number }} - {{ __('messages.debts.balance') }} TZS {{ number_format((float) $sale->balance_amount, 2) }}</option>
+                        <option value="{{ $sale->id }}">{{ $sale->sale_number }} - {{ __('messages.debts.balance') }} TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</option>
                     @endforeach
                 </select>
             </label>

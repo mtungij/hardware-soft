@@ -256,9 +256,9 @@ $postReceipt = function (InventoryService $inventory) {
             'Purchase Date' => $purchase->purchase_date?->format('d M Y'),
             'Ordered By' => $purchase->creator?->name,
             'Purchase Status' => ucfirst($purchase->status),
-            'Total Ordered Quantity' => number_format((float) $totalOrdered, 2),
-            'Previously Received Quantity' => number_format((float) $totalReceived, 2),
-            'Remaining Quantity' => number_format((float) $totalRemaining, 2),
+            'Total Ordered Quantity' => \App\Support\NumberFormatter::quantity($totalOrdered),
+            'Previously Received Quantity' => \App\Support\NumberFormatter::quantity($totalReceived),
+            'Remaining Quantity' => \App\Support\NumberFormatter::quantity($totalRemaining),
         ] as $label => $value)
             <x-card>
                 <p class="text-xs font-bold uppercase text-slate-500">{{ $label }}</p>
@@ -314,9 +314,9 @@ $postReceipt = function (InventoryService $inventory) {
                                 <td class="px-3 py-3 font-black">{{ $item->product?->name }}</td>
                                 <td class="px-3 py-3 font-mono">{{ $item->product?->sku }}</td>
                                 <td class="px-3 py-3">{{ $item->product?->unit?->short_name }}</td>
-                                <td class="px-3 py-3 text-right">{{ number_format((float) $item->ordered_quantity, 2) }}</td>
-                                <td class="px-3 py-3 text-right">{{ number_format((float) $item->received_quantity, 2) }}</td>
-                                <td class="px-3 py-3 text-right font-bold">{{ number_format($item->remainingQuantity(), 2) }}</td>
+                                <td class="px-3 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
+                                <td class="px-3 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
+                                <td class="px-3 py-3 text-right font-bold">{{ \App\Support\NumberFormatter::quantity($item->remainingQuantity()) }}</td>
                                 <td class="px-3 py-3">
                                     <input wire:model.live="lines.{{ $item->id }}.quantity" type="number" step="0.01" max="{{ $item->remainingQuantity() }}" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                     @error("lines.{$item->id}.quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
@@ -346,10 +346,10 @@ $postReceipt = function (InventoryService $inventory) {
             <div class="grid gap-3 md:grid-cols-5">
                 @foreach ([
                     'Selected Products' => number_format($summary['selected_lines']),
-                    'Quantity to Receive' => number_format($summary['quantity'], 2),
-                    'Total Receiving Cost' => 'TZS '.number_format($summary['cost'], 2),
+                    'Quantity to Receive' => \App\Support\NumberFormatter::quantity($summary['quantity']),
+                    'Total Receiving Cost' => 'TZS '.\App\Support\NumberFormatter::money($summary['cost']),
                     'Receiving Locations' => number_format($summary['locations']),
-                    'Remaining After Receipt' => number_format($summary['remaining_after'], 2),
+                    'Remaining After Receipt' => \App\Support\NumberFormatter::quantity($summary['remaining_after']),
                 ] as $label => $value)
                     <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                         <p class="text-xs font-bold uppercase text-slate-500">{{ $label }}</p>
@@ -372,14 +372,14 @@ $postReceipt = function (InventoryService $inventory) {
                 <p><span class="font-bold">Purchase:</span> {{ $purchase->reference_number }}</p>
                 <p><span class="font-bold">Supplier:</span> {{ $purchase->supplier?->name }}</p>
                 <p><span class="font-bold">Receiving Date:</span> {{ $received_date }}</p>
-                <p><span class="font-bold">Total Quantity:</span> {{ number_format($summary['quantity'], 2) }}</p>
-                <p><span class="font-bold">Total Cost:</span> TZS {{ number_format($summary['cost'], 2) }}</p>
+                <p><span class="font-bold">Total Quantity:</span> {{ \App\Support\NumberFormatter::quantity($summary['quantity']) }}</p>
+                <p><span class="font-bold">Total Cost:</span> TZS {{ \App\Support\NumberFormatter::money($summary['cost']) }}</p>
             </div>
             <div class="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 @foreach ($this->locationBreakdown() as $row)
                     <div class="flex justify-between gap-4 py-1 text-sm">
                         <span class="font-bold">{{ $row['name'] }}</span>
-                        <span>{{ number_format($row['quantity'], 2) }}</span>
+                        <span>{{ \App\Support\NumberFormatter::quantity($row['quantity']) }}</span>
                     </div>
                 @endforeach
             </div>

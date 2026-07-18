@@ -17,6 +17,7 @@ uses([WithPagination::class]);
 state([
     'search' => '',
     'branchFilter' => '',
+    'dateFilter' => 'today',
     'date_from' => '',
     'date_to' => '',
     'editingId' => null,
@@ -42,11 +43,47 @@ rules([
 mount(function () {
     $this->search = request('search', $this->search);
     $this->branchFilter = request('branchFilter', $this->branchFilter);
-    $this->date_from = request('date_from', $this->date_from);
-    $this->date_to = request('date_to', $this->date_to);
+    $this->date_from = request('date_from', today()->toDateString());
+    $this->date_to = request('date_to', today()->toDateString());
+    $this->dateFilter = request('dateFilter', $this->dateFilter);
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
     $this->expense_date = now()->toDateString();
 });
+
+$setDateFilter = function (string $filter) {
+    $this->dateFilter = $filter;
+
+    match ($filter) {
+        'today' => [
+            $this->date_from = today()->toDateString(),
+            $this->date_to = today()->toDateString(),
+        ],
+        'this_week' => [
+            $this->date_from = now()->startOfWeek()->toDateString(),
+            $this->date_to = now()->endOfWeek()->toDateString(),
+        ],
+        'this_month' => [
+            $this->date_from = now()->startOfMonth()->toDateString(),
+            $this->date_to = now()->endOfMonth()->toDateString(),
+        ],
+        default => null,
+    };
+
+    $this->resetPage();
+};
+
+$updatedDateFrom = function () {
+    $this->dateFilter = 'custom';
+    $this->resetPage();
+};
+
+$updatedDateTo = function () {
+    $this->dateFilter = 'custom';
+    $this->resetPage();
+};
+
+$updatedSearch = fn () => $this->resetPage();
+$updatedBranchFilter = fn () => $this->resetPage();
 
 $edit = function (int $id) {
     $expense = Expense::findOrFail($id);
@@ -79,20 +116,24 @@ $delete = function (int $id) {
 
 <div>
     <x-page-header title="Expenses" description="Track rent, salaries, utilities, transport, and daily operating costs." :breadcrumbs="['Dashboard' => route('dashboard'), 'Expenses' => null]">
-        <x-export-actions export="tables.expenses" :params="compact('search', 'branchFilter', 'date_from', 'date_to')" />
+        <x-export-actions export="tables.expenses" :params="compact('search', 'branchFilter', 'dateFilter', 'date_from', 'date_to')" />
         <a href="{{ route('expense-categories.index') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">Categories</a>
     </x-page-header>
 
     @php
-        $expenses = Expense::query()
+        $expenseQuery = Expense::query()
             ->with(['branch', 'category', 'paidBy'])
-            ->when($search, fn ($query) => $query->where('reference_number', 'like', "%{$search}%")->orWhereHas('category', fn ($q) => $q->where('name', 'like', "%{$search}%")))
+            ->when($search, fn ($query) => $query->where(fn ($q) => $q
+                ->where('reference_number', 'like', "%{$search}%")
+                ->orWhere('notes', 'like', "%{$search}%")
+                ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('name', 'like', "%{$search}%"))))
             ->when($branchFilter, fn ($query) => $query->where('branch_id', $branchFilter))
             ->when($date_from, fn ($query) => $query->whereDate('expense_date', '>=', $date_from))
-            ->when($date_to, fn ($query) => $query->whereDate('expense_date', '<=', $date_to))
-            ->latest()
-            ->paginate(10);
-        $total = (clone $expenses->getCollection())->sum('amount');
+            ->when($date_to, fn ($query) => $query->whereDate('expense_date', '<=', $date_to));
+        $filteredTotal = (clone $expenseQuery)->sum('amount');
+        $filteredCount = (clone $expenseQuery)->count();
+        $cashTotal = (clone $expenseQuery)->where('payment_method', 'cash')->sum('amount');
+        $expenses = $expenseQuery->latest()->paginate(10);
     @endphp
 
     <div class="grid gap-6 xl:grid-cols-[380px_1fr]">
@@ -128,11 +169,16 @@ $delete = function (int $id) {
 
         <div class="space-y-4">
             <div class="grid gap-4 sm:grid-cols-3">
-                <x-card><p class="text-sm text-slate-500">Filtered Expenses</p><p class="mt-2 text-2xl font-black">TZS {{ number_format((float) $total, 2) }}</p></x-card>
-                <x-card><p class="text-sm text-slate-500">This Month</p><p class="mt-2 text-2xl font-black">TZS {{ number_format((float) Expense::whereMonth('expense_date', now()->month)->whereYear('expense_date', now()->year)->sum('amount'), 2) }}</p></x-card>
-                <x-card><p class="text-sm text-slate-500">Today</p><p class="mt-2 text-2xl font-black">TZS {{ number_format((float) Expense::whereDate('expense_date', today())->sum('amount'), 2) }}</p></x-card>
+                <x-card><p class="text-sm text-slate-500">Filtered Expenses</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($filteredTotal) }}</p></x-card>
+                <x-card><p class="text-sm text-slate-500">Entries</p><p class="mt-2 text-2xl font-black">{{ number_format($filteredCount) }}</p></x-card>
+                <x-card><p class="text-sm text-slate-500">Cash Expenses</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($cashTotal) }}</p></x-card>
             </div>
             <x-card>
+                <div class="mb-4 flex flex-wrap gap-2">
+                    <button type="button" wire:click="setDateFilter('today')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'today' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">Today</button>
+                    <button type="button" wire:click="setDateFilter('this_week')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'this_week' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">This Week</button>
+                    <button type="button" wire:click="setDateFilter('this_month')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'this_month' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">This Month</button>
+                </div>
                 <div class="mb-4 grid gap-3 md:grid-cols-4">
                     <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search category/ref">
                     <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
@@ -145,7 +191,7 @@ $delete = function (int $id) {
                             <td class="px-4 py-3">{{ $expense->expense_date?->format('M d, Y') }}</td>
                             <td class="px-4 py-3 font-bold">{{ $expense->category?->name }}</td>
                             <td class="px-4 py-3">{{ str($expense->payment_method)->replace('_', ' ')->title() }}</td>
-                            <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $expense->amount, 2) }}</td>
+                            <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($expense->amount) }}</td>
                             <td class="px-4 py-3">{{ $expense->paidBy?->name }}</td>
                             <td class="px-4 py-3 text-right"><button wire:click="edit({{ $expense->id }})" class="text-sm font-bold text-build-orange">Edit</button><button wire:click="delete({{ $expense->id }})" wire:confirm="Delete expense?" class="ml-3 text-sm font-bold text-red-600">Delete</button></td>
                         </tr>

@@ -78,7 +78,7 @@ class StockAdjustment extends Model
     protected function casts(): array
     {
         return [
-            'quantity' => 'decimal:2',
+            'quantity' => 'decimal:4',
             'adjustment_date' => 'date',
             'approved_at' => 'datetime',
             'posted_at' => 'datetime',

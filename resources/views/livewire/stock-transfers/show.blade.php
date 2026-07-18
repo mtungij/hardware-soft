@@ -46,7 +46,7 @@ mount(function (StockTransfer $stockTransfer) {
                         <td class="px-4 py-3 font-black">{{ $item->product?->name }}</td>
                         <td class="px-4 py-3 font-mono text-xs">{{ $item->product?->sku }}</td>
                         <td class="px-4 py-3">{{ $item->product?->unit?->short_name }}</td>
-                        <td class="px-4 py-3">{{ number_format((float) $item->quantity, 2) }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->quantity) }}</td>
                         <td class="px-4 py-3">{{ $item->notes ?? '-' }}</td>
                     </tr>
                 @endforeach
@@ -69,7 +69,7 @@ mount(function (StockTransfer $stockTransfer) {
                     <td class="px-4 py-3">{{ $movement->product?->name }}</td>
                     <td class="px-4 py-3">{{ $movement->stockLocation?->name }}</td>
                     <td class="px-4 py-3">{{ $movement->movement_type }}</td>
-                    <td class="px-4 py-3">{{ number_format((float) $movement->quantity, 2) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($movement->quantity) }}</td>
                 </tr>
             @empty
                 <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No stock movements yet. Draft transfers do not affect stock.</td></tr>

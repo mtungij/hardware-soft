@@ -38,6 +38,7 @@ class HardwareCategorySeeder extends Seeder
                         'name' => $name,
                         'description' => $description,
                         'status' => 'active',
+                        'allow_fractional_sales' => $code === 'PIP',
                     ]
                 );
             }

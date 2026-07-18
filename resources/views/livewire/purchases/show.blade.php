@@ -59,9 +59,9 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Recipient</dt><dd>{{ $purchase->email_recipient ?: $purchase->supplier?->email ?: '-' }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Last Sent</dt><dd>{{ $purchase->email_sent_at?->format('M d, Y H:i') ?? '-' }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Sent By</dt><dd>{{ $purchase->emailSentBy?->name ?? '-' }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-slate-500">Total</dt><dd class="font-black">TZS {{ number_format((float) $purchase->total_amount, 2) }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-slate-500">Paid</dt><dd>TZS {{ number_format((float) $purchase->paid_amount, 2) }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-slate-500">Balance</dt><dd class="font-black">TZS {{ number_format((float) $purchase->balance_amount, 2) }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Total</dt><dd class="font-black">TZS {{ \App\Support\NumberFormatter::money($purchase->total_amount) }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Paid</dt><dd>TZS {{ \App\Support\NumberFormatter::money($purchase->paid_amount) }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Balance</dt><dd class="font-black">TZS {{ \App\Support\NumberFormatter::money($purchase->balance_amount) }}</dd></div>
             </dl>
         </x-card>
 
@@ -70,12 +70,12 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
                 @foreach ($purchase->items as $item)
                     <tr>
                         <td class="px-4 py-3 font-bold">{{ $item->product?->name }}</td>
-                        <td class="px-4 py-3">{{ number_format((float) $item->ordered_quantity, 2) }} {{ $item->product?->unit?->short_name }}</td>
-                        <td class="px-4 py-3">{{ number_format((float) $item->received_quantity, 2) }}</td>
-                        <td class="px-4 py-3 font-bold">{{ number_format($item->remainingQuantity(), 2) }}</td>
-                        <td class="px-4 py-3">TZS {{ number_format((float) $item->cost_price, 2) }}</td>
-                        <td class="px-4 py-3">TZS {{ number_format((float) $item->selling_price, 2) }}</td>
-                        <td class="px-4 py-3">TZS {{ number_format((float) $item->line_total, 2) }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ $item->product?->unit?->short_name }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
+                        <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($item->remainingQuantity()) }}</td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }}</td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->selling_price) }}</td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->line_total) }}</td>
                     </tr>
                 @endforeach
             </x-table>
@@ -96,8 +96,8 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
                     <td class="px-4 py-3">{{ $grn->receiver?->name }}</td>
                     <td class="px-4 py-3">{{ $grn->supplier_delivery_note_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $grn->supplier_invoice_number ?: '-' }}</td>
-                    <td class="px-4 py-3">{{ number_format((float) $totalQuantity, 2) }}</td>
-                    <td class="px-4 py-3">TZS {{ number_format($totalCost, 2) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($totalQuantity) }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($totalCost) }}</td>
                     <td class="px-4 py-3">{{ $locations ?: '-' }}</td>
                     <td class="px-4 py-3"><span class="{{ $grn->status === 'posted' ? 'badge-success' : ($grn->status === 'cancelled' ? 'rounded-full bg-red-100 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ ucfirst($grn->status ?? 'posted') }}</span></td>
                     <td class="px-4 py-3"><a href="{{ route('goods-receipts.show', $grn) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">View</a></td>

@@ -64,9 +64,9 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
                     <td class="px-4 py-3 font-bold">{{ $movement->product?->name }}</td>
                     <td class="px-4 py-3">{{ $movement->stockLocation?->name }}</td>
                     <td class="px-4 py-3"><span class="badge-info">{{ $movement->movement_type }}</span></td>
-                    <td class="px-4 py-3 text-emerald-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::POSITIVE_TYPES, true) ? number_format((float) $movement->quantity, 2) : '-' }}</td>
-                    <td class="px-4 py-3 text-red-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::NEGATIVE_TYPES, true) ? number_format((float) $movement->quantity, 2) : '-' }}</td>
-                    <td class="px-4 py-3">TZS {{ number_format((float) $movement->unit_cost, 2) }}</td>
+                    <td class="px-4 py-3 text-emerald-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::POSITIVE_TYPES, true) ? \App\Support\NumberFormatter::quantity($movement->quantity) : '-' }}</td>
+                    <td class="px-4 py-3 text-red-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::NEGATIVE_TYPES, true) ? \App\Support\NumberFormatter::quantity($movement->quantity) : '-' }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>
                     <td class="px-4 py-3 text-xs">{{ class_basename($movement->reference_type) }} #{{ $movement->reference_id }}</td>
                     <td class="px-4 py-3">{{ $movement->creator?->name }}</td>
                 </tr>

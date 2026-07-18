@@ -34,8 +34,8 @@ $cancelSale = function (InventoryService $inventory) {
 
         <div class="mt-5 space-y-2 text-sm">
             <div class="flex justify-between"><span class="text-slate-500">Customer</span><span class="font-bold">{{ $sale->customer?->name ?? 'Walk-in Customer' }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">Total</span><span class="font-bold">TZS {{ number_format((float) $sale->total_amount, 2) }}</span></div>
-            <div class="flex justify-between"><span class="text-slate-500">Balance</span><span class="font-bold">TZS {{ number_format((float) $sale->balance_amount, 2) }}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Total</span><span class="font-bold">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Balance</span><span class="font-bold">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</span></div>
             <div class="flex justify-between"><span class="text-slate-500">Items</span><span class="font-bold">{{ $sale->items->count() }}</span></div>
             <div class="flex justify-between"><span class="text-slate-500">Status</span><span class="font-bold">{{ ucfirst($sale->status) }}</span></div>
         </div>

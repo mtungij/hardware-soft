@@ -12,7 +12,7 @@ layout('layouts.app');
 state(['sale' => null, 'settings' => null]);
 
 mount(function (Sale $sale) {
-    $this->sale = $sale->load(['customer', 'createdBy', 'items.product', 'items.stockLocation', 'payments']);
+    $this->sale = $sale->load(['customer', 'createdBy', 'items.product', 'items.stockLocation', 'items.sellingUnit', 'items.baseUnit', 'payments']);
     $this->settings = Setting::first();
 });
 
@@ -41,26 +41,36 @@ mount(function (Sale $sale) {
 
         <div class="space-y-2">
             @foreach ($sale->items as $item)
+                @php
+                    $discountPerUnit = (float) ($item->discount_per_unit ?? 0);
+                    $netUnitPrice = (float) ($item->net_unit_price ?? ((float) $item->unit_price - $discountPerUnit));
+                    $lineDiscount = (float) ($item->discount_total ?? $item->discount_amount);
+                @endphp
                 <div>
                     <div class="flex justify-between gap-3">
                         <span>{{ $item->product?->name }}</span>
-                        <span>{{ number_format((float) $item->line_total, 2) }}</span>
+                        <span>{{ \App\Support\NumberFormatter::money($item->line_total) }}</span>
                     </div>
                     <p class="text-xs">Sale Type: {{ str($item->sale_type ?? 'retail')->title() }}</p>
                     <p class="text-xs">Sehemu ya Stock: {{ $item->sold_from_label ?: ($item->stockLocation ? \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) : '-') }}</p>
-                    <p class="text-xs">{{ number_format((float) $item->quantity, 2) }} x {{ number_format((float) $item->unit_price, 2) }}</p>
+                    <p class="text-xs">Selling Quantity: {{ \App\Support\NumberFormatter::quantity($item->quantity) }} {{ $item->sellingUnit?->short_name }} x {{ \App\Support\NumberFormatter::money($item->unit_price) }}</p>
+                    <p class="text-xs">Base Quantity Deducted: {{ \App\Support\NumberFormatter::quantity($item->base_quantity ?: $item->quantity) }} {{ $item->baseUnit?->short_name }}</p>
+                    @if ($discountPerUnit > 0)
+                        <p class="text-xs">Discount: {{ \App\Support\NumberFormatter::money($discountPerUnit) }} each / {{ \App\Support\NumberFormatter::money($lineDiscount) }} total</p>
+                        <p class="text-xs">Net Unit Price: {{ \App\Support\NumberFormatter::money($netUnitPrice) }}</p>
+                    @endif
                 </div>
             @endforeach
         </div>
 
         <div class="my-4 border-t border-dashed border-slate-400 pt-3">
-            <div class="flex justify-between"><span>Subtotal</span><span>{{ number_format((float) $sale->subtotal, 2) }}</span></div>
-            <div class="flex justify-between"><span>Discount</span><span>{{ number_format((float) $sale->discount_amount, 2) }}</span></div>
-            <div class="flex justify-between"><span>Tax/VAT</span><span>{{ number_format((float) $sale->tax_amount, 2) }}</span></div>
-            <div class="flex justify-between text-base font-black"><span>Total</span><span>{{ number_format((float) $sale->total_amount, 2) }}</span></div>
-            <div class="flex justify-between"><span>Paid</span><span>{{ number_format((float) $sale->paid_amount, 2) }}</span></div>
-            <div class="flex justify-between"><span>Balance</span><span>{{ number_format((float) $sale->balance_amount, 2) }}</span></div>
-            <div class="flex justify-between"><span>Change</span><span>{{ number_format((float) $sale->change_amount, 2) }}</span></div>
+            <div class="flex justify-between"><span>Subtotal</span><span>{{ \App\Support\NumberFormatter::money($sale->subtotal) }}</span></div>
+            <div class="flex justify-between"><span>Discount</span><span>{{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</span></div>
+            <div class="flex justify-between"><span>Tax/VAT</span><span>{{ \App\Support\NumberFormatter::money($sale->tax_amount) }}</span></div>
+            <div class="flex justify-between text-base font-black"><span>Total</span><span>{{ \App\Support\NumberFormatter::money($sale->total_amount) }}</span></div>
+            <div class="flex justify-between"><span>Paid</span><span>{{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</span></div>
+            <div class="flex justify-between"><span>Balance</span><span>{{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</span></div>
+            <div class="flex justify-between"><span>Change</span><span>{{ \App\Support\NumberFormatter::money($sale->change_amount) }}</span></div>
         </div>
 
         <div class="border-t border-dashed border-slate-400 pt-3 text-center text-xs">

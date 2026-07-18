@@ -81,9 +81,9 @@ $receivePayment = function () {
     <div class="grid gap-6 lg:grid-cols-[1fr_420px]">
         <x-card title="Payment History">
             <div class="mb-4 grid gap-4 sm:grid-cols-3">
-                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Total</p><p class="text-lg font-black">TZS {{ number_format((float) $sale->total_amount, 2) }}</p></div>
-                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Paid</p><p class="text-lg font-black">TZS {{ number_format((float) $sale->paid_amount, 2) }}</p></div>
-                <div class="rounded-lg bg-navy-900 p-4 text-white"><p class="text-xs text-slate-300">Balance</p><p class="text-lg font-black">TZS {{ number_format((float) $sale->balance_amount, 2) }}</p></div>
+                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Total</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</p></div>
+                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Paid</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</p></div>
+                <div class="rounded-lg bg-navy-900 p-4 text-white"><p class="text-xs text-slate-300">Balance</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</p></div>
             </div>
             <x-table>
                 <x-slot:head>
@@ -99,7 +99,7 @@ $receivePayment = function () {
                         <td class="px-4 py-3">{{ $payment->payment_date?->format('M d, Y') }}</td>
                         <td class="px-4 py-3">{{ str($payment->payment_method)->replace('_', ' ')->title() }}</td>
                         <td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td>
-                        <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $payment->amount, 2) }}</td>
+                        <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td>
                     </tr>
                 @endforeach
             </x-table>

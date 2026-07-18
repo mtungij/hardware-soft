@@ -326,9 +326,9 @@ $metrics = function (StockLocation $location): array {
                             @endforeach
                         </div>
                     </td>
-                    <td class="px-4 py-3 text-right font-bold">{{ number_format($quantity, 2) }}</td>
-                    <td class="px-4 py-3 text-right">TZS {{ number_format($value, 2) }}</td>
-                    <td class="px-4 py-3 text-right">TZS {{ number_format($todaySales, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">{{ \App\Support\NumberFormatter::quantity($quantity) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($value) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($todaySales) }}</td>
                     <td class="px-4 py-3">{{ $location->users_count }}</td>
                     <td class="px-4 py-3"><span class="{{ $location->isActive() ? 'badge-success' : 'badge-warning' }}">{{ $location->isActive() ? 'Active' : 'Inactive' }}</span>@if ($location->is_default)<span class="ml-1 badge-success">Default</span>@endif</td>
                     <td class="px-4 py-3">

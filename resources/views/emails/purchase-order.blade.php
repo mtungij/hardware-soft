@@ -13,14 +13,14 @@ Please find attached the official purchase order from **{{ $settings?->company_n
 **Purchase Date:** {{ $purchase->purchase_date?->format('M d, Y') }}  
 **Reference Number:** {{ $purchase->reference_number }}  
 **Supplier:** {{ $purchase->supplier?->name }}  
-**Grand Total:** {{ $settings?->currency ?? 'TZS' }} {{ number_format((float) $purchase->total_amount, 2) }}
+**Grand Total:** {{ $settings?->currency ?? 'TZS' }} {{ \App\Support\NumberFormatter::money($purchase->total_amount) }}
 @endcomponent
 
 @component('mail::table')
 | Product | SKU | Qty | Unit | Cost | Total |
 | --- | --- | ---: | --- | ---: | ---: |
 @foreach ($purchase->items as $item)
-| {{ $item->product?->name }} | {{ $item->product?->sku }} | {{ number_format((float) $item->ordered_quantity, 2) }} | {{ $item->product?->unit?->short_name }} | {{ number_format((float) $item->cost_price, 2) }} | {{ number_format((float) $item->line_total, 2) }} |
+| {{ $item->product?->name }} | {{ $item->product?->sku }} | {{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} | {{ $item->product?->unit?->short_name }} | {{ \App\Support\NumberFormatter::money($item->cost_price) }} | {{ \App\Support\NumberFormatter::money($item->line_total) }} |
 @endforeach
 @endcomponent
 

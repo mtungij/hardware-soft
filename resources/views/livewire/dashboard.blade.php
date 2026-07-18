@@ -390,7 +390,8 @@ $recentTransactions = computed(function (): Collection {
     @php
         $t = fn ($value) => \App\Support\UiText::translate($value);
         $currency = 'TZS';
-        $formatMoney = fn ($value) => $currency.' '.number_format((float) $value, 2);
+        $formatMoney = fn ($value) => $currency.' '.\App\Support\NumberFormatter::money($value);
+        $formatQuantity = fn ($value) => \App\Support\NumberFormatter::quantity($value);
         $today = today()->toDateString();
         $monthStart = now()->startOfMonth()->toDateString();
         $monthEnd = today()->toDateString();
@@ -472,7 +473,7 @@ $recentTransactions = computed(function (): Collection {
             ['label' => "Today's Profit", 'value' => $formatMoney($profitForRange($today, $today)), 'tone' => 'text-emerald-600', 'hint' => 'Profit from sales today', 'url' => route('reports.profit-loss', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ['label' => 'Monthly Profit', 'value' => $formatMoney($profitForRange($monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => 'This month net sales profit', 'url' => route('reports.profit-loss', ['date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ...($warehouseEnabled ? [['label' => 'Pending Purchases', 'value' => number_format(Purchase::query()->whereIn('status', ['draft', 'ordered', 'partial'])->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-amber-600', 'hint' => 'Purchases waiting for receiving', 'url' => route('purchases.index', ['status' => 'ordered']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
-            ...($warehouseEnabled ? [['label' => 'Stock Received Today', 'value' => number_format(StockMovement::query()->whereIn('movement_type', ['purchase_in'])->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('quantity'), 2), 'tone' => 'text-emerald-600', 'hint' => 'Received into Main Store today', 'url' => route('stock-movements.index', ['movement_type' => 'purchase_in']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
+            ...($warehouseEnabled ? [['label' => 'Stock Received Today', 'value' => $formatQuantity(StockMovement::query()->whereIn('movement_type', ['purchase_in'])->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('quantity')), 'tone' => 'text-emerald-600', 'hint' => 'Received into Main Store today', 'url' => route('stock-movements.index', ['movement_type' => 'purchase_in']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
             ...($warehouseEnabled ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation', 'url' => route('reports.stock-valuation', ['search' => 'Main Store']), 'roles' => ['Admin', 'Manager', 'Accountant']]] : []),
             ['label' => 'Dispensing Stock Value', 'value' => $formatMoney($this->dispensingStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => $warehouseEnabled ? 'Sales counter valuation' : 'Direct stock and POS valuation', 'url' => route('reports.stock-valuation', ['search' => 'Dispensing']), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ...(! $warehouseEnabled ? [['label' => 'Direct Stock In Today', 'value' => number_format(StockMovement::where('movement_type', 'direct_stock_in')->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Direct stock entries today', 'url' => route('direct-stock-in.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper']]] : []),
@@ -746,7 +747,7 @@ $recentTransactions = computed(function (): Collection {
         <x-card title="Stock Distribution" description="Current stock quantities by location.">
             @forelse ($this->stockDistributionChart as $row)
                 <div class="mb-4">
-                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row['name'] }} <span class="text-xs font-semibold text-slate-500">({{ $t(ucfirst($row['type'])) }})</span></span><span class="shrink-0">{{ number_format($row['quantity'], 2) }}</span></div>
+                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row['name'] }} <span class="text-xs font-semibold text-slate-500">({{ $t(ucfirst($row['type'])) }})</span></span><span class="shrink-0">{{ $formatQuantity($row['quantity']) }}</span></div>
                     <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-navy-800 dark:bg-build-orange" style="width: {{ min(100, ($row['quantity'] / $maxStock) * 100) }}%"></div></div>
                 </div>
             @empty
@@ -814,9 +815,9 @@ $recentTransactions = computed(function (): Collection {
                         </td>
                         <td class="px-4 py-3">{{ $product->sku }}</td>
                         <td class="px-4 py-3">{{ $product->category?->name ?? $t('Uncategorized') }}</td>
-                        <td class="px-4 py-3 text-right">{{ number_format($row['current_stock'], 2) }}</td>
-                        <td class="px-4 py-3 text-right">{{ number_format((float) $product->reorder_level, 2) }}</td>
-                        <td class="px-4 py-3">{{ $row['locations']->isEmpty() ? $t('No stock location') : $row['locations']->map(fn ($location) => $location['name'].' ('.number_format($location['quantity'], 2).')')->join(', ') }}</td>
+                        <td class="px-4 py-3 text-right">{{ $formatQuantity($row['current_stock']) }}</td>
+                        <td class="px-4 py-3 text-right">{{ $formatQuantity($product->reorder_level) }}</td>
+                        <td class="px-4 py-3">{{ $row['locations']->isEmpty() ? $t('No stock location') : $row['locations']->map(fn ($location) => $location['name'].' ('.$formatQuantity($location['quantity']).')')->join(', ') }}</td>
                         <td class="px-4 py-3"><span class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700 dark:bg-red-500/10 dark:text-red-300">{{ $row['current_stock'] <= 0 ? $t('Out of Stock') : $t('Low Stock') }}</span></td>
                         <td class="px-4 py-3 text-right"><a href="{{ route('products.index') }}" wire:navigate class="text-sm font-bold text-build-orange">{{ $t('View') }}</a></td>
                     </tr>
@@ -846,7 +847,7 @@ $recentTransactions = computed(function (): Collection {
                 @forelse ($topWholesaleProducts as $row)
                     <tr>
                         <td class="px-4 py-3 font-bold">{{ $row->product?->name }}</td>
-                        <td class="px-4 py-3 text-right">{{ number_format((float) $row->quantity_sold, 2) }}</td>
+                        <td class="px-4 py-3 text-right">{{ $formatQuantity($row->quantity_sold) }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatMoney($row->wholesale_total) }}</td>
                     </tr>
                 @empty
@@ -877,7 +878,7 @@ $recentTransactions = computed(function (): Collection {
                             </div>
                         </td>
                         <td class="px-4 py-3">{{ $row->product?->sku }}</td>
-                        <td class="px-4 py-3 text-right">{{ number_format((float) $row->quantity_sold, 2) }}</td>
+                        <td class="px-4 py-3 text-right">{{ $formatQuantity($row->quantity_sold) }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatMoney($row->total_sales) }}</td>
                         <td class="px-4 py-3 text-right font-bold text-emerald-600">{{ $formatMoney($row->profit_amount) }}</td>
                     </tr>

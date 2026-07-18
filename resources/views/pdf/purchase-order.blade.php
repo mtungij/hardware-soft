@@ -70,10 +70,10 @@
                 <tr>
                     <td>{{ $item->product?->name }}</td>
                     <td>{{ $item->product?->sku }}</td>
-                    <td class="right">{{ number_format((float) $item->ordered_quantity, 2) }}</td>
+                    <td class="right">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
                     <td>{{ $item->product?->unit?->short_name }}</td>
-                    <td class="right">{{ number_format((float) $item->cost_price, 2) }}</td>
-                    <td class="right">{{ number_format((float) $item->line_total, 2) }}</td>
+                    <td class="right">{{ \App\Support\NumberFormatter::money($item->cost_price) }}</td>
+                    <td class="right">{{ \App\Support\NumberFormatter::money($item->line_total) }}</td>
                 </tr>
             @endforeach
         </tbody>
@@ -84,9 +84,9 @@
         $tax = 0;
     @endphp
     <table>
-        <tr><td class="right">Subtotal</td><td class="right" width="25%">{{ $settings?->currency ?? 'TZS' }} {{ number_format($subtotal, 2) }}</td></tr>
-        <tr><td class="right">Tax</td><td class="right">{{ $settings?->currency ?? 'TZS' }} {{ number_format($tax, 2) }}</td></tr>
-        <tr><td class="right total">Grand Total</td><td class="right total">{{ $settings?->currency ?? 'TZS' }} {{ number_format((float) $purchase->total_amount, 2) }}</td></tr>
+        <tr><td class="right">Subtotal</td><td class="right" width="25%">{{ $settings?->currency ?? 'TZS' }} {{ \App\Support\NumberFormatter::money($subtotal) }}</td></tr>
+        <tr><td class="right">Tax</td><td class="right">{{ $settings?->currency ?? 'TZS' }} {{ \App\Support\NumberFormatter::money($tax) }}</td></tr>
+        <tr><td class="right total">Grand Total</td><td class="right total">{{ $settings?->currency ?? 'TZS' }} {{ \App\Support\NumberFormatter::money($purchase->total_amount) }}</td></tr>
     </table>
 
     <p class="muted">Thank you for supplying Hardex POS. Please confirm availability and expected delivery date.</p>

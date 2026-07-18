@@ -40,8 +40,8 @@ class PurchaseItem extends Model
     protected function casts(): array
     {
         return [
-            'ordered_quantity' => 'decimal:2',
-            'received_quantity' => 'decimal:2',
+            'ordered_quantity' => 'decimal:4',
+            'received_quantity' => 'decimal:4',
             'cost_price' => 'decimal:2',
             'selling_price' => 'decimal:2',
             'line_total' => 'decimal:2',

@@ -33,11 +33,17 @@ state([
     'quick_customer_region' => '',
     'quick_customer_district' => '',
     'quick_customer_type' => 'credit',
-    'quick_customer_credit_limit' => '0',
     'quick_customer_opening_balance' => '0',
     'quick_customer_status' => 'active',
-    'credit_limit_warning' => [],
-    'credit_limit_override_confirmed' => false,
+    'unassigned_credit_confirmed' => false,
+    'temporary_customer_name' => '',
+    'temporary_customer_phone' => '',
+    'project_name' => '',
+    'vehicle_number' => '',
+    'expected_payment_date' => '',
+    'credit_notes' => '',
+    'auto_payment_amount' => '0',
+    'payment_amount_manually_edited' => false,
 ]);
 
 mount(function (InventoryService $inventory) {
@@ -53,7 +59,8 @@ mount(function (InventoryService $inventory) {
     $this->quick_customer_branch_id = $this->branch_id;
 });
 
-$canCreditSale = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
+$canCreditSale = fn () => auth()->user()->can('create credit sales') || auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
+$canCreateUnassignedCreditSale = fn () => auth()->user()->can('create unassigned credit sales') || auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
 
 $allowedSaleLocations = fn () => collect(InventorySettings::allowedSaleLocationsForUser(auth()->user(), (int) $this->branch_id));
 
@@ -93,8 +100,7 @@ $confirmStockLocationChange = function () {
     $locationId = $this->pending_stock_location_id;
     $this->cart = [];
     $this->syncDefaultPaymentAmount();
-    $this->credit_limit_override_confirmed = false;
-    $this->credit_limit_warning = [];
+    $this->unassigned_credit_confirmed = false;
     $this->applyStockLocation($locationId);
     $this->dispatch('close-modal', 'confirm-selling-location-change');
 };
@@ -145,7 +151,6 @@ $resetQuickCustomerForm = function () {
     $this->quick_customer_region = '';
     $this->quick_customer_district = '';
     $this->quick_customer_type = 'credit';
-    $this->quick_customer_credit_limit = '0';
     $this->quick_customer_opening_balance = '0';
     $this->quick_customer_status = 'active';
     $this->resetErrorBag();
@@ -164,27 +169,28 @@ $saveQuickCustomer = function () {
     $data = $this->validate([
         'quick_customer_branch_id' => ['nullable', 'exists:branches,id'],
         'quick_customer_name' => ['required', 'string', 'max:255'],
-        'quick_customer_phone' => ['required', 'string', 'max:30'],
+        'quick_customer_phone' => ['nullable', 'string', 'max:30'],
         'quick_customer_email' => ['nullable', 'email', 'max:255'],
         'quick_customer_address' => ['nullable', 'string', 'max:1000'],
         'quick_customer_region' => ['nullable', 'string', 'max:255'],
         'quick_customer_district' => ['nullable', 'string', 'max:255'],
         'quick_customer_type' => ['required', 'in:cash,credit,contractor,wholesale'],
-        'quick_customer_credit_limit' => ['required', 'numeric', 'min:0'],
         'quick_customer_opening_balance' => ['required', 'numeric', 'min:0'],
         'quick_customer_status' => ['required', 'in:active,inactive'],
     ]);
 
+    $fallbackPhone = 'QUICK-'.str($data['quick_customer_name'])->slug('-')->limit(20, '').'-'.now()->format('His');
+
     $customer = Customer::create([
         'branch_id' => $data['quick_customer_branch_id'] ?: null,
         'name' => $data['quick_customer_name'],
-        'phone' => $data['quick_customer_phone'],
+        'phone' => $data['quick_customer_phone'] ?: $fallbackPhone,
         'email' => $data['quick_customer_email'] ?: null,
         'address' => $data['quick_customer_address'] ?: null,
         'region' => $data['quick_customer_region'] ?: null,
         'district' => $data['quick_customer_district'] ?: null,
         'customer_type' => $data['quick_customer_type'],
-        'credit_limit' => $data['quick_customer_credit_limit'],
+        'credit_limit' => 0,
         'opening_balance' => $data['quick_customer_opening_balance'],
         'balance_amount' => $data['quick_customer_opening_balance'],
         'status' => $data['quick_customer_status'],
@@ -202,7 +208,12 @@ $availableQuantity = function (int $productId) {
         return 0;
     }
 
-    return app(InventoryService::class)->getProductStock($productId, $location->id, (int) $this->branch_id);
+    $product = Product::query()->with('category')->find($productId);
+    $baseStock = app(InventoryService::class)->getProductStock($productId, $location->id, (int) $this->branch_id);
+
+    return $product && $product->supportsFractionalSales()
+        ? $baseStock * (float) ($product->conversion_factor ?: 1)
+        : $baseStock;
 };
 
 $syncDefaultPaymentAmount = function () {
@@ -210,7 +221,14 @@ $syncDefaultPaymentAmount = function () {
         return;
     }
 
-    $this->payments[0]['amount'] = (string) $this->grandTotal();
+    $grandTotal = (float) $this->grandTotal();
+
+    if ($this->payment_amount_manually_edited && (float) ($this->payments[0]['amount'] ?? 0) > $grandTotal) {
+        return;
+    }
+
+    $this->payments[0]['amount'] = (string) $grandTotal;
+    $this->auto_payment_amount = (string) $grandTotal;
     $this->dispatch('money-input-updated', model: 'payments.0.amount', value: $this->payments[0]['amount']);
 };
 
@@ -222,6 +240,10 @@ $updatedPayments = function () {
     $this->syncDefaultPaymentAmount();
 };
 
+$updatedCart = function () {
+    $this->syncDefaultPaymentAmount();
+};
+
 $addProduct = function (int $productId) {
     if (! $this->hasSelectedSaleLocation()) {
         $this->addError('stock_location_id', \App\Support\UiText::translate('Select Selling Location'));
@@ -229,8 +251,9 @@ $addProduct = function (int $productId) {
         return;
     }
 
-    $product = Product::findOrFail($productId);
+    $product = Product::query()->with(['category', 'unit', 'sellingUnit'])->findOrFail($productId);
     $available = $this->availableQuantity($productId);
+    $supportsFractionalSales = $product->supportsFractionalSales();
 
     if ($available <= 0) {
         $this->addError('cart', \App\Support\UiText::translate('Product is out of stock in selected source.'));
@@ -246,7 +269,8 @@ $addProduct = function (int $productId) {
 
     foreach ($this->cart as $index => $item) {
         if ((int) $item['product_id'] === $productId) {
-            $this->cart[$index]['quantity'] = (string) min($available, (float) $item['quantity'] + 1);
+            $step = $supportsFractionalSales ? max(0.0001, (float) ($product->quantity_step ?: 1)) : 1;
+            $this->cart[$index]['quantity'] = (string) min($available, (float) $item['quantity'] + $step);
             $this->cart[$index]['sale_type'] = $this->sale_type;
             $this->cart[$index]['unit_price'] = $unitPrice;
             $this->syncDefaultPaymentAmount();
@@ -260,10 +284,18 @@ $addProduct = function (int $productId) {
         'name' => $product->name,
         'sku' => $product->sku,
         'sale_type' => $this->sale_type,
-        'quantity' => '1',
+        'quantity' => $supportsFractionalSales
+            ? (string) ($product->minimum_sale_quantity ?: ($product->quantity_step ?: 1))
+            : '1',
         'unit_price' => $unitPrice,
         'discount_amount' => '0',
         'tax_amount' => $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0',
+        'selling_unit' => $supportsFractionalSales ? ($product->sellingUnit?->short_name ?: $product->unit?->short_name) : $product->unit?->short_name,
+        'base_unit' => $product->unit?->short_name,
+        'conversion_factor' => $supportsFractionalSales ? (string) ($product->conversion_factor ?: 1) : '1',
+        'allow_fractional_sale' => $supportsFractionalSales,
+        'minimum_sale_quantity' => $supportsFractionalSales ? (string) ($product->minimum_sale_quantity ?: 1) : '1',
+        'quantity_step' => $supportsFractionalSales ? (string) ($product->quantity_step ?: 1) : '1',
     ];
 
     $this->syncDefaultPaymentAmount();
@@ -299,77 +331,64 @@ $removePayment = function (int $index) {
     $this->syncDefaultPaymentAmount();
 };
 
-$subtotal = fn () => collect($this->cart)->sum(fn ($item) => (float) $item['quantity'] * (float) $item['unit_price']);
-$discountTotal = fn () => collect($this->cart)->sum(fn ($item) => (float) ($item['discount_amount'] ?? 0));
-$taxTotal = fn () => collect($this->cart)->sum(fn ($item) => (float) ($item['tax_amount'] ?? 0));
-$grandTotal = fn () => max(0, $this->subtotal() - $this->discountTotal() + $this->taxTotal());
-$paidTotal = fn () => collect($this->payments)->reject(fn ($payment) => $payment['payment_method'] === 'credit')->sum(fn ($payment) => (float) $payment['amount']);
+$subtotal = fn () => collect($this->cart)->sum(function ($item) {
+    $quantity = (float) ($item['quantity'] ?? 0);
+    $unitPrice = (float) ($item['unit_price'] ?? 0);
+
+    return $quantity * $unitPrice;
+});
+
+$discountTotal = fn () => collect($this->cart)->sum(function ($item) {
+    $quantity = (float) ($item['quantity'] ?? 0);
+    $discountPerUnit = (float) ($item['discount_amount'] ?? 0);
+
+    return $quantity * $discountPerUnit;
+});
+
+$taxTotal = fn () => collect($this->cart)->sum(function ($item) {
+    $quantity = (float) ($item['quantity'] ?? 0);
+    $taxPerUnit = (float) ($item['tax_amount'] ?? 0);
+
+    return $quantity * $taxPerUnit;
+});
+
+$grandTotal = fn () => max(
+    0,
+    $this->subtotal()
+    - $this->discountTotal()
+    + $this->taxTotal()
+);
+
+$paidTotal = fn () => collect($this->payments)
+    ->reject(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit')
+    ->sum(fn ($payment) => (float) ($payment['amount'] ?? 0));
 
 $usesCreditPayment = fn () => collect($this->payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
 
-$creditLimitWarningData = function (): ?array {
-    if (! $this->usesCreditPayment()) {
-        return null;
-    }
-
-    if ((InventorySettings::current()->credit_limit_enforcement ?? 'block') !== 'warn') {
-        return null;
-    }
-
-    if (blank($this->customer_id)) {
-        return null;
-    }
-
-    $customer = Customer::query()->find($this->customer_id);
-    if (! $customer) {
-        return null;
-    }
-
-    $total = (float) $this->grandTotal();
-    $paid = (float) $this->paidTotal();
-    $creditAmount = collect($this->payments)
-        ->where('payment_method', 'credit')
-        ->sum(fn ($payment) => (float) ($payment['amount'] ?? 0));
-
-    if ($creditAmount <= 0) {
-        $creditAmount = max(0, $total - $paid);
-    }
-
-    $currentBalance = (float) $customer->balance_amount;
-    $creditLimit = (float) $customer->credit_limit;
-    $balanceAfterSale = $currentBalance + $creditAmount;
-
-    if ($balanceAfterSale <= $creditLimit) {
-        return null;
-    }
-
-    return [
-        'customer_name' => $customer->name,
-        'current_balance' => $currentBalance,
-        'credit_limit' => $creditLimit,
-        'current_sale_amount' => $creditAmount,
-        'balance_after_sale' => $balanceAfterSale,
-    ];
+$cancelUnassignedCreditWarning = function () {
+    $this->unassigned_credit_confirmed = false;
+    $this->dispatch('close-modal', 'unassigned-credit-warning');
 };
 
-$canOverrideCreditLimit = fn () => auth()->user()->can('override customer credit limit');
-
-$cancelCreditLimitWarning = function () {
-    $this->credit_limit_warning = [];
-    $this->credit_limit_override_confirmed = false;
-    $this->dispatch('close-modal', 'credit-limit-warning');
-};
-
-$continueCreditLimitSale = function (InventoryService $inventory) {
-    if (! $this->canOverrideCreditLimit()) {
-        $this->addError('customer_id', \App\Support\UiText::translate('You are not authorized to override the customer credit limit.'));
+$continueWithoutCustomer = function (InventoryService $inventory) {
+    if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true) || ! $this->canCreateUnassignedCreditSale()) {
+        $this->addError('customer_id', \App\Support\UiText::translate('Select a customer or create a customer before completing this credit sale.'));
 
         return;
     }
 
-    $this->credit_limit_override_confirmed = true;
-    $this->dispatch('close-modal', 'credit-limit-warning');
+    $this->unassigned_credit_confirmed = true;
+    $this->dispatch('close-modal', 'unassigned-credit-warning');
     $this->completeSale($inventory);
+};
+
+$selectCustomerFromWarning = function () {
+    $this->dispatch('close-modal', 'unassigned-credit-warning');
+};
+
+$quickAddCustomerFromWarning = function () {
+    $this->dispatch('close-modal', 'unassigned-credit-warning');
+    $this->openQuickCustomerModal();
 };
 
 $completeSale = function (InventoryService $inventory) {
@@ -386,7 +405,24 @@ $completeSale = function (InventoryService $inventory) {
         'payments' => ['required', 'array', 'min:1'],
         'payments.*.payment_method' => ['required', 'in:cash,mobile_money,bank,credit'],
         'payments.*.amount' => ['required', 'numeric', 'min:0'],
+        'temporary_customer_name' => ['nullable', 'string', 'max:255'],
+        'temporary_customer_phone' => ['nullable', 'string', 'max:30'],
+        'project_name' => ['nullable', 'string', 'max:255'],
+        'vehicle_number' => ['nullable', 'string', 'max:255'],
+        'expected_payment_date' => ['nullable', 'date'],
+        'credit_notes' => ['nullable', 'string', 'max:2000'],
     ]);
+
+    foreach ($this->cart as $item) {
+        $unitPrice = (float) ($item['unit_price'] ?? 0);
+        $discountPerUnit = (float) ($item['discount_amount'] ?? 0);
+
+        if ($unitPrice > 0 && $discountPerUnit >= $unitPrice) {
+            throw ValidationException::withMessages([
+                'cart' => \App\Support\UiText::translate('The discount per unit must be less than the unit price.'),
+            ]);
+        }
+    }
 
     if (! InventorySettings::warehouseEnabled()) {
         $this->stock_location_id = (string) $inventory->getDispensingLocation((int) $this->branch_id)->id;
@@ -405,13 +441,12 @@ $completeSale = function (InventoryService $inventory) {
         throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('You are not authorized to create credit sales.')]);
     }
 
-    if (collect($this->payments)->contains(fn ($payment) => $payment['payment_method'] === 'credit') && blank($this->customer_id)) {
-        throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Credit sale requires a customer.')]);
-    }
+    if ($this->usesCreditPayment() && blank($this->customer_id) && ! $this->unassigned_credit_confirmed) {
+        if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true) || ! $this->canCreateUnassignedCreditSale()) {
+            throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
+        }
 
-    if (! $this->credit_limit_override_confirmed && $warning = $this->creditLimitWarningData()) {
-        $this->credit_limit_warning = $warning;
-        $this->dispatch('open-modal', 'credit-limit-warning');
+        $this->dispatch('open-modal', 'unassigned-credit-warning');
 
         return;
     }
@@ -424,7 +459,15 @@ $completeSale = function (InventoryService $inventory) {
         (int) $this->branch_id,
         auth()->id(),
         $this->notes,
-        $this->credit_limit_override_confirmed && $this->canOverrideCreditLimit(),
+        false,
+        [
+            'temporary_customer_name' => $this->temporary_customer_name ?: null,
+            'temporary_customer_phone' => $this->temporary_customer_phone ?: null,
+            'project_name' => $this->project_name ?: null,
+            'vehicle_number' => $this->vehicle_number ?: null,
+            'expected_payment_date' => $this->expected_payment_date ?: null,
+            'credit_notes' => $this->credit_notes ?: null,
+        ],
     );
 
     session()->flash('success', \App\Support\UiText::translate('Sale completed successfully.'));
@@ -442,6 +485,8 @@ $completeSale = function (InventoryService $inventory) {
         $allowedLocations = $this->allowedSaleLocations();
         $selectedSaleLocation = $this->currentSaleLocation();
         $locationReady = $this->hasSelectedSaleLocation();
+        $selectedCustomer = $customer_id ? Customer::query()->find($customer_id) : null;
+        $remainingCredit = max(0, $this->grandTotal() - $this->paidTotal());
     @endphp
 
     <x-page-header title="POS Sales" description="Select the selling location before loading available stock." :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
@@ -493,7 +538,7 @@ $completeSale = function (InventoryService $inventory) {
 
             @php
                 $products = $locationReady
-                    ? Product::with(['unit'])
+                    ? Product::with(['category', 'unit', 'sellingUnit'])
                         ->where('status', 'active')
                         ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhere('barcode', 'like', "%{$search}%")))
                         ->orderBy('name')
@@ -512,12 +557,36 @@ $completeSale = function (InventoryService $inventory) {
                     @php
                         $available = $this->availableQuantity($product->id);
                         $displayPrice = $sale_type === 'wholesale' ? $product->wholesale_price : $product->selling_price;
+                        $supportsFractionalSales = $product->supportsFractionalSales();
+                        $sellingUnitLabel = $supportsFractionalSales
+                            ? ($product->sellingUnit?->short_name ?: $product->unit?->short_name)
+                            : $product->unit?->short_name;
+                        $baseUnitLabel = $product->unit?->short_name;
+                        $conversionFactor = $supportsFractionalSales ? max(0.0001, (float) ($product->conversion_factor ?: 1)) : 1;
+                        $baseAvailable = $available / $conversionFactor;
+                        $showsBaseStock = $supportsFractionalSales && $baseUnitLabel && ($sellingUnitLabel !== $baseUnitLabel || abs($conversionFactor - 1) > 0.0001);
                     @endphp
                     <button type="button" wire:click="addProduct({{ $product->id }})" class="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-navy-900" @disabled(! $locationReady)>
                         <img class="h-24 w-full rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
                         <p class="mt-3 font-black">{{ $product->name }}</p>
-                        <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $product->unit?->short_name }}</p>
-                        <div class="mt-2 flex items-center justify-between gap-3 text-sm"><span class="font-bold text-build-orange">TZS {{ number_format((float) $displayPrice, 2) }}</span><span class="text-right text-slate-500">{{ $stockLabel }}: {{ number_format($available, 2) }} {{ $product->unit?->short_name }}</span></div>
+                        <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $sellingUnitLabel }}</p>
+                        <div class="mt-2 flex items-start justify-between gap-3 text-sm">
+                            <span class="font-bold text-build-orange">TZS {{ \App\Support\NumberFormatter::money($displayPrice) }}</span>
+                            <span class="text-right text-slate-500">
+                                <span class="block">{{ $stockLabel }}: {{ \App\Support\NumberFormatter::quantity($available) }} {{ $sellingUnitLabel }}</span>
+                                @if ($showsBaseStock)
+                                    <span class="block text-[11px]">{{ $t('Base Stock') }}: {{ \App\Support\NumberFormatter::quantity($baseAvailable) }} {{ $baseUnitLabel }}</span>
+                                @endif
+                            </span>
+                        </div>
+                        @if ($showsBaseStock)
+                            <p class="mt-2 rounded-lg bg-cyan-50 px-2 py-1 text-[11px] font-bold text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-200">
+                                1 {{ $baseUnitLabel }} = {{ \App\Support\NumberFormatter::quantity($conversionFactor) }} {{ $sellingUnitLabel }}
+                            </p>
+                        @endif
+                        @if ($supportsFractionalSales)
+                            <span class="mt-2 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-black text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-200">{{ $t('Fractional Sale') }}</span>
+                        @endif
                     </button>
                 @endforeach
             </div>
@@ -528,7 +597,7 @@ $completeSale = function (InventoryService $inventory) {
                 <div class="flex gap-2">
                     <select wire:model="customer_id" class="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                         <option value="">{{ $t('Walk-in Customer') }}</option>
-                        @foreach (Customer::where('status', 'active')->orderBy('name')->get() as $customer)
+                        @foreach (Customer::where('status', 'active')->where(fn ($query) => $query->where('is_system_customer', false)->orWhereNull('is_system_customer'))->orderBy('name')->get() as $customer)
                             <option value="{{ $customer->id }}">{{ $customer->name }} / {{ $customer->customer_type }}</option>
                         @endforeach
                     </select>
@@ -538,40 +607,107 @@ $completeSale = function (InventoryService $inventory) {
                 </div>
                 @error('customer_id') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
 
+                @if ($this->usesCreditPayment())
+                    <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                        @if ($selectedCustomer)
+                            <div class="flex justify-between gap-3"><span>{{ $t('Customer') }}</span><span class="font-black text-right">{{ $selectedCustomer->name }}</span></div>
+                            <div class="mt-1 flex justify-between gap-3"><span>{{ $t('Current Outstanding Balance') }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($selectedCustomer->balance_amount) }}</span></div>
+                        @else
+                            <span class="inline-flex rounded-full bg-amber-200 px-2.5 py-1 text-xs font-black text-amber-900 dark:bg-amber-400/20 dark:text-amber-100">{{ $t('Unassigned Credit Sale') }}</span>
+                        @endif
+                        <div class="mt-2 grid gap-1">
+                            <div class="flex justify-between gap-3"><span>{{ $t('Sale Total') }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span></div>
+                            <div class="flex justify-between gap-3"><span>{{ $t('Amount Paid Now') }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($this->paidTotal()) }}</span></div>
+                            <div class="flex justify-between gap-3"><span>{{ $t('Remaining Credit') }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($remainingCredit) }}</span></div>
+                        </div>
+                    </div>
+                @endif
+
                 @foreach ($cart as $index => $item)
+                    @php
+                        $quantity = (float) ($item['quantity'] ?? 0);
+                        $unitPrice = (float) ($item['unit_price'] ?? 0);
+                        $discountPerUnit = (float) ($item['discount_amount'] ?? 0);
+                        $taxPerUnit = (float) ($item['tax_amount'] ?? 0);
+                        $sellingUnitLabel = $item['selling_unit'] ?? '';
+                        $baseUnitLabel = $item['base_unit'] ?? '';
+                        $isFractionalSale = (bool) ($item['allow_fractional_sale'] ?? false);
+                        $conversionFactor = $isFractionalSale ? max(0.0001, (float) ($item['conversion_factor'] ?? 1)) : 1;
+                        $baseQuantity = $quantity / $conversionFactor;
+                        $availableSellingQuantity = $this->availableQuantity((int) ($item['product_id'] ?? 0));
+                        $availableBaseQuantity = $availableSellingQuantity / $conversionFactor;
+                        $quantityStep = (string) ($item['quantity_step'] ?? 1);
+                        $minimumQuantity = (string) ($item['minimum_sale_quantity'] ?? 1);
+                    @endphp
                     <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5">
                         <div class="flex items-start justify-between gap-3">
-                            <div><p class="font-bold">{{ $item['name'] }}</p><p class="text-xs text-slate-500">{{ $item['sku'] }}</p><span class="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-black {{ ($item['sale_type'] ?? 'retail') === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item['sale_type'] ?? 'retail')->title() }}</span></div>
+                            <div>
+                                <p class="font-bold">{{ $item['name'] }}</p>
+                                <p class="text-xs text-slate-500">{{ $item['sku'] }} / {{ $sellingUnitLabel }}</p>
+                                <div class="mt-1 flex flex-wrap gap-1.5">
+                                    <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-black {{ ($item['sale_type'] ?? 'retail') === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item['sale_type'] ?? 'retail')->title() }}</span>
+                                    @if ($isFractionalSale)
+                                        <span class="inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-black text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-200">{{ $t('Fractional') }}</span>
+                                    @endif
+                                </div>
+                            </div>
                             <button wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">{{ $t('Remove') }}</button>
                         </div>
-                        <div class="mt-3 grid grid-cols-4 gap-2">
-                            <input wire:model.live="cart.{{ $index }}.quantity" type="number" step="0.01" class="rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            <span data-money-field wire:ignore class="block min-w-0">
-                                <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
-                                <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.unit_price">
-                            </span>
-                            <span data-money-field wire:ignore class="block min-w-0">
-                                <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
-                                <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.discount_amount">
-                            </span>
-                            <span data-money-field wire:ignore class="block min-w-0">
-                                <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700 dark:bg-navy-950">
-                                <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.tax_amount">
-                            </span>
+                        <div class="mt-3 grid gap-2 sm:grid-cols-4">
+                            <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {{ $t('Qty') }} ({{ $sellingUnitLabel ?: '-' }})
+                                <input wire:model.live="cart.{{ $index }}.quantity" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
+                            </label>
+                            <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {{ $t('Unit Price') }}
+                                <span data-money-field wire:ignore class="mt-1 block min-w-0">
+                                    <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
+                                    <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.unit_price">
+                                </span>
+                            </label>
+                            <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {{ $t('Discount') }}
+                                <span data-money-field wire:ignore class="mt-1 block min-w-0">
+                                    <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
+                                    <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.discount_amount">
+                                </span>
+                            </label>
+                            <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                {{ $t('VAT') }}
+                                <span data-money-field wire:ignore class="mt-1 block min-w-0">
+                                    <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
+                                    <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.tax_amount">
+                                </span>
+                            </label>
                         </div>
-                        <p class="mt-2 text-right text-sm font-black">TZS {{ number_format((float) $item['quantity'] * (float) $item['unit_price'] - (float) $item['discount_amount'] + (float) $item['tax_amount'], 2) }}</p>
+
+                        <div class="mt-2 grid gap-1 text-xs text-slate-500 dark:text-slate-400">
+                            @if ($isFractionalSale)
+                                <div class="flex justify-between"><span>{{ $t('Available Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span></div>
+                                @if ($baseUnitLabel && ($baseUnitLabel !== $sellingUnitLabel || abs($conversionFactor - 1) > 0.0001))
+                                    <div class="flex justify-between"><span>{{ $t('Available Base Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableBaseQuantity) }} {{ $baseUnitLabel }}</span></div>
+                                    <div class="flex justify-between"><span>{{ $t('Unit Conversion') }}</span><span>1 {{ $baseUnitLabel }} = {{ \App\Support\NumberFormatter::quantity($conversionFactor) }} {{ $sellingUnitLabel }}</span></div>
+                                @endif
+                                <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t('Selling Quantity') }}</span><span>{{ \App\Support\NumberFormatter::quantity($quantity) }} {{ $sellingUnitLabel }}</span></div>
+                                <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t('Base Quantity Deducted') }}</span><span>{{ \App\Support\NumberFormatter::quantity($baseQuantity) }} {{ $baseUnitLabel }}</span></div>
+                            @endif
+                        </div>
                     </div>
                 @endforeach
 
                 @error('cart') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
 
                 <div class="space-y-2 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
-                    <div class="flex justify-between"><span>{{ $t('Subtotal') }}</span><span>TZS {{ number_format($this->subtotal(), 2) }}</span></div>
-                    <div class="flex justify-between"><span>{{ $t('Discount') }}</span><span>TZS {{ number_format($this->discountTotal(), 2) }}</span></div>
-                    <div class="flex justify-between"><span>{{ $t('Tax/VAT') }}</span><span>TZS {{ number_format($this->taxTotal(), 2) }}</span></div>
-                    <div class="flex justify-between text-lg font-black"><span>{{ $t('Grand Total') }}</span><span>TZS {{ number_format($this->grandTotal(), 2) }}</span></div>
-                    <div class="flex justify-between"><span>{{ $t('Paid') }}</span><span>TZS {{ number_format($this->paidTotal(), 2) }}</span></div>
-                    <div class="flex justify-between"><span>{{ $t('Balance/Change') }}</span><span>TZS {{ number_format(abs($this->grandTotal() - $this->paidTotal()), 2) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Subtotal') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->subtotal()) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Discount') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->discountTotal()) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Tax/VAT') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->taxTotal()) }}</span></div>
+                    <div class="flex justify-between text-lg font-black"><span>{{ $t('Grand Total') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t('Paid') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->paidTotal()) }}</span></div>
+                    @if ($this->paidTotal() >= $this->grandTotal())
+                        <div class="flex justify-between"><span>{{ $t('Change') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->paidTotal() - $this->grandTotal()) }}</span></div>
+                    @else
+                        <div class="flex justify-between"><span>{{ $t('Balance') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal() - $this->paidTotal()) }}</span></div>
+                    @endif
                 </div>
 
                 <div class="space-y-2">
@@ -587,7 +723,7 @@ $completeSale = function (InventoryService $inventory) {
                             </select>
                             <span data-money-field wire:ignore class="block min-w-0">
                                 <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                                <input type="hidden" data-money-value value="{{ $payment['amount'] ?? '' }}" wire:model.live="payments.{{ $index }}.amount">
+                                <input type="hidden" data-money-value data-money-manual-flag="payment_amount_manually_edited" value="{{ $payment['amount'] ?? '' }}" wire:model.live="payments.{{ $index }}.amount">
                             </span>
                             <button wire:click="removePayment({{ $index }})" type="button" class="rounded-lg border border-slate-200 px-2 text-xs font-bold dark:border-slate-700">X</button>
                         </div>
@@ -605,7 +741,7 @@ $completeSale = function (InventoryService $inventory) {
     <div class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 xl:hidden">
         <button wire:click="completeSale" class="flex w-full items-center justify-between rounded-xl bg-build-orange px-4 py-3 font-black text-white">
             <span>{{ $t('Checkout') }}</span>
-            <span>TZS {{ number_format($this->grandTotal(), 2) }}</span>
+            <span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span>
         </button>
     </div>
 
@@ -623,27 +759,29 @@ $completeSale = function (InventoryService $inventory) {
         </div>
     </x-modal>
 
-    <x-modal name="credit-limit-warning" maxWidth="lg">
+    <x-modal name="unassigned-credit-warning" maxWidth="2xl">
         <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-            <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t('Credit Limit Warning') }}</h2>
-            <p class="mt-1 text-sm font-bold text-red-600 dark:text-red-300">{{ $t('This customer has exceeded the approved credit limit.') }}</p>
+            <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t('Customer Not Selected') }}</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('This sale will be recorded as unassigned credit. It may be assigned to the correct customer later.') }}</p>
         </div>
         <div class="px-5 py-5">
-            <dl class="grid gap-3 text-sm sm:grid-cols-2">
-                <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5"><dt class="text-slate-500">{{ $t('Customer Name') }}</dt><dd class="mt-1 font-black">{{ $credit_limit_warning['customer_name'] ?? '-' }}</dd></div>
-                <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5"><dt class="text-slate-500">{{ $t('Current Outstanding Balance') }}</dt><dd class="mt-1 font-black">TZS {{ number_format((float) ($credit_limit_warning['current_balance'] ?? 0), 2) }}</dd></div>
-                <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5"><dt class="text-slate-500">{{ $t('Credit Limit') }}</dt><dd class="mt-1 font-black">TZS {{ number_format((float) ($credit_limit_warning['credit_limit'] ?? 0), 2) }}</dd></div>
-                <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5"><dt class="text-slate-500">{{ $t('Amount of Current Sale') }}</dt><dd class="mt-1 font-black">TZS {{ number_format((float) ($credit_limit_warning['current_sale_amount'] ?? 0), 2) }}</dd></div>
-                <div class="rounded-lg bg-red-50 p-3 text-red-700 dark:bg-red-500/10 dark:text-red-200 sm:col-span-2"><dt>{{ $t('Outstanding Balance After Sale') }}</dt><dd class="mt-1 font-black">TZS {{ number_format((float) ($credit_limit_warning['balance_after_sale'] ?? 0), 2) }}</dd></div>
-            </dl>
-            @unless ($this->canOverrideCreditLimit())
-                <p class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">{{ $t('You are not authorized to override the customer credit limit.') }}</p>
-            @endunless
-            <div class="mt-5 flex justify-end gap-2">
-                <button type="button" wire:click="cancelCreditLimitWarning" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Cancel Sale') }}</button>
-                @if ($this->canOverrideCreditLimit())
-                    <button type="button" wire:click="continueCreditLimitSale" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t('Continue Anyway') }}</button>
-                @endif
+            <div class="grid gap-3 sm:grid-cols-2">
+                <x-form-input label="Customer Name" name="temporary_customer_name" wire:model="temporary_customer_name" />
+                <x-form-input label="Phone Number" name="temporary_customer_phone" wire:model="temporary_customer_phone" />
+                <x-form-input label="Site or Project Name" name="project_name" wire:model="project_name" />
+                <x-form-input label="Vehicle Number" name="vehicle_number" wire:model="vehicle_number" />
+                <x-form-input label="Expected Payment Date" name="expected_payment_date" type="date" wire:model="expected_payment_date" />
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 sm:col-span-2">
+                    {{ $t('Notes') }}
+                    <textarea wire:model="credit_notes" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
+                    @error('credit_notes') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                </label>
+            </div>
+            <div class="mt-5 flex flex-wrap justify-end gap-2">
+                <button type="button" wire:click="selectCustomerFromWarning" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Select Customer') }}</button>
+                <button type="button" wire:click="quickAddCustomerFromWarning" class="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-black text-cyan-700 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">{{ $t('Quick Add Customer') }}</button>
+                <button type="button" wire:click="continueWithoutCustomer" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t('Continue Without Customer') }}</button>
+                <button type="button" wire:click="cancelUnassignedCreditWarning" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Cancel') }}</button>
             </div>
         </div>
     </x-modal>
@@ -660,7 +798,7 @@ $completeSale = function (InventoryService $inventory) {
         <form wire:submit="saveQuickCustomer" class="max-h-[calc(100vh-9rem)] overflow-y-auto px-5 py-5">
             <div class="grid gap-4 md:grid-cols-2">
                 <x-form-input label="Customer Name" name="quick_customer_name" wire:model="quick_customer_name" required />
-                <x-form-input label="Phone" name="quick_customer_phone" wire:model="quick_customer_phone" required />
+                <x-form-input label="Phone" name="quick_customer_phone" wire:model="quick_customer_phone" />
                 <x-form-input label="Email" name="quick_customer_email" type="email" wire:model="quick_customer_email" />
 
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
@@ -683,7 +821,6 @@ $completeSale = function (InventoryService $inventory) {
                     district-name="quick_customer_district"
                 />
 
-                <x-money-input label="Credit Limit" name="quick_customer_credit_limit" wire:model="quick_customer_credit_limit" required />
                 <x-money-input label="Opening Balance" name="quick_customer_opening_balance" wire:model="quick_customer_opening_balance" required />
 
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">

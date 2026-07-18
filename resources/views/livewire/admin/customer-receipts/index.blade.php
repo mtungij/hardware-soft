@@ -39,7 +39,7 @@ $receipts = computed(function () {
                     <td class="px-4 py-3 font-bold">{{ $receipt->customer?->name }}</td>
                     <td class="px-4 py-3">{{ $receipt->sale?->sale_number ?: 'General' }}</td>
                     <td class="px-4 py-3">{{ $receipt->reference_number ?: '-' }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $receipt->amount, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($receipt->amount) }}</td>
                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-black {{ $receipt->status === 'approved' ? 'bg-emerald-100 text-emerald-700' : ($receipt->status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700') }}">{{ str($receipt->status)->title() }}</span></td>
                     <td class="px-4 py-3"><a href="{{ route('admin.customer-receipts.show', $receipt) }}" wire:navigate class="text-sm font-black text-build-orange">Review</a></td>
                 </tr>

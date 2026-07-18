@@ -37,7 +37,7 @@ $approve = function (AccountingService $accounting) {
         'customer_id' => $this->receipt->customer_id,
         'type' => 'receipt_approved',
         'title' => 'Risiti Yako Imethibitishwa',
-        'message' => 'Risiti yako ya malipo ya TZS '.number_format((float) $this->receipt->amount, 2).' imethibitishwa.',
+        'message' => 'Risiti yako ya malipo ya TZS '.\App\Support\NumberFormatter::money($this->receipt->amount).' imethibitishwa.',
         'notifiable_type' => CustomerReceipt::class,
         'notifiable_id' => $this->receipt->id,
     ]);
@@ -70,7 +70,7 @@ $reject = function () {
             <dl class="grid gap-4 sm:grid-cols-2">
                 <div><dt class="text-xs font-black uppercase text-slate-400">Customer</dt><dd class="font-bold">{{ $receipt->customer?->name }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Sale</dt><dd class="font-bold">{{ $receipt->sale?->sale_number ?: 'General payment' }}</dd></div>
-                <div><dt class="text-xs font-black uppercase text-slate-400">Amount</dt><dd class="font-bold">TZS {{ number_format((float) $receipt->amount, 2) }}</dd></div>
+                <div><dt class="text-xs font-black uppercase text-slate-400">Amount</dt><dd class="font-bold">TZS {{ \App\Support\NumberFormatter::money($receipt->amount) }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Method</dt><dd class="font-bold">{{ str($receipt->payment_method)->replace('_', ' ')->title() }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Reference</dt><dd class="font-bold">{{ $receipt->reference_number ?: '-' }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Status</dt><dd class="font-bold">{{ str($receipt->status)->title() }}</dd></div>

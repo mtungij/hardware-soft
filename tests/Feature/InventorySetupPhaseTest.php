@@ -428,7 +428,7 @@ test('non admin sees but cannot update selling price when saving direct stock in
         ->set('quantity', '2')
         ->set('cost_price', '1000')
         ->set('selling_price', '88888')
-        ->assertSee('TZS '.number_format($originalSellingPrice, 2))
+        ->assertSee('TZS '.\App\Support\NumberFormatter::money($originalSellingPrice))
         ->set('reason', 'Manual Entry')
         ->call('save');
 

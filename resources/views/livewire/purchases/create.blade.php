@@ -236,7 +236,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                                         ? $inventory->getProductStock($product->id, $storeLocation->id, $stockBranchId)
                                                         : 0;
                                                 @endphp
-                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->name }} - Store Qty: {{ number_format($storeQty, 2) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
+                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->name }} - Store Qty: {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
                                             @endforeach
                                         @endif
                                     </select>
@@ -260,11 +260,11 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                         </span>
                                     @else
                                         <div class="w-36 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                                            TZS {{ number_format((float) $sellingPriceValue, 2) }}
+                                            TZS {{ \App\Support\NumberFormatter::money($sellingPriceValue) }}
                                         </div>
                                     @endif
                                 </td>
-                                <td class="px-3 py-3 font-black">TZS {{ number_format((float) ($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0), 2) }}</td>
+                                <td class="px-3 py-3 font-black">TZS {{ \App\Support\NumberFormatter::money(($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0)) }}</td>
                                 <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
                             </tr>
                         @endforeach
@@ -281,8 +281,8 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
             <div class="rounded-xl bg-slate-50 p-4 text-right dark:bg-white/5">
                 @php $total = $this->totalAmount(); @endphp
                 <p class="text-sm text-slate-500">Grand Total</p>
-                <p class="text-2xl font-black">TZS {{ number_format($total, 2) }}</p>
-                <p class="text-sm text-slate-500">Balance: TZS {{ number_format(max(0, $total - (float) $paid_amount), 2) }}</p>
+                <p class="text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($total) }}</p>
+                <p class="text-sm text-slate-500">Balance: TZS {{ \App\Support\NumberFormatter::money(max(0, $total - (float) $paid_amount)) }}</p>
             </div>
 
             <div class="flex flex-wrap gap-2">

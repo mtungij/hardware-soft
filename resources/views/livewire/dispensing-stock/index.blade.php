@@ -72,8 +72,8 @@ state(['search' => '', 'categoryFilter' => '', 'statusFilter' => '']);
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->sku }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
                     <td class="px-4 py-3">{{ $product->unit?->short_name }}</td>
-                    <td class="px-4 py-3 font-black">{{ number_format($row['quantity'], 2) }}</td>
-                    <td class="px-4 py-3">{{ number_format((float) $product->reorder_level, 2) }}</td>
+                    <td class="px-4 py-3 font-black">{{ \App\Support\NumberFormatter::quantity($row['quantity']) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($product->reorder_level) }}</td>
                     <td class="px-4 py-3">{{ $row['lastTransfer'] ? \Illuminate\Support\Carbon::parse($row['lastTransfer'])->format('d M Y') : '-' }}</td>
                     <td class="px-4 py-3"><span class="{{ $row['status'] === 'in_stock' ? 'badge-success' : ($row['status'] === 'low_stock' ? 'badge-warning' : 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300') }}">{{ str($row['status'])->replace('_', ' ')->title() }}</span></td>
                 </tr>

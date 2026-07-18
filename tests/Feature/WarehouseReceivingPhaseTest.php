@@ -219,8 +219,8 @@ test('store stock report displays stock by all active locations and grouped view
         ->assertSee('Stock by Location')
         ->assertSee('Paint Store Test')
         ->assertSee('Cement Store Test')
-        ->assertSee('25.00')
-        ->assertSee('40.00')
+        ->assertSee('25')
+        ->assertSee('40')
         ->set('groupedView', true)
         ->assertSee('Total');
 });

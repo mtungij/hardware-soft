@@ -47,8 +47,8 @@ mount(function (GoodsReceivingNote $receipt) {
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Received By</dt><dd>{{ $receipt->receiver?->name }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Posted By</dt><dd>{{ $receipt->postedBy?->name ?? '-' }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Status</dt><dd><span class="{{ $receipt->status === 'posted' ? 'badge-success' : ($receipt->status === 'cancelled' ? 'rounded-full bg-red-100 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ ucfirst($receipt->status ?? 'posted') }}</span></dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-slate-500">Total Quantity</dt><dd class="font-black">{{ number_format((float) $totalQuantity, 2) }}</dd></div>
-                <div class="flex justify-between gap-4"><dt class="text-slate-500">Total Cost</dt><dd class="font-black">TZS {{ number_format($totalCost, 2) }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Total Quantity</dt><dd class="font-black">{{ \App\Support\NumberFormatter::quantity($totalQuantity) }}</dd></div>
+                <div class="flex justify-between gap-4"><dt class="text-slate-500">Total Cost</dt><dd class="font-black">TZS {{ \App\Support\NumberFormatter::money($totalCost) }}</dd></div>
                 <div class="flex justify-between gap-4"><dt class="text-slate-500">Locations</dt><dd>{{ $locations->join(', ') ?: '-' }}</dd></div>
             </dl>
         </x-card>
@@ -59,11 +59,11 @@ mount(function (GoodsReceivingNote $receipt) {
                     <tr>
                         <td class="px-4 py-3 font-black">{{ $item->product?->name }}</td>
                         <td class="px-4 py-3 font-mono">{{ $item->product?->sku }}</td>
-                        <td class="px-4 py-3">{{ number_format((float) $item->ordered_quantity, 2) }} {{ $item->product?->unit?->short_name }}</td>
-                        <td class="px-4 py-3">{{ number_format((float) $item->previously_received_quantity, 2) }}</td>
-                        <td class="px-4 py-3 font-bold">{{ number_format((float) $item->received_quantity, 2) }}</td>
-                        <td class="px-4 py-3">TZS {{ number_format((float) ($item->unit_cost ?: $item->cost_price), 2) }}</td>
-                        <td class="px-4 py-3">TZS {{ number_format((float) ($item->total_cost ?: ((float) $item->received_quantity * (float) $item->cost_price)), 2) }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ $item->product?->unit?->short_name }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->previously_received_quantity) }}</td>
+                        <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money(($item->unit_cost ?: $item->cost_price)) }}</td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money(($item->total_cost ?: ((float) $item->received_quantity * (float) $item->cost_price))) }}</td>
                         <td class="px-4 py-3">{{ $item->stockLocation ? InventorySettings::stockLocationLabel($item->stockLocation) : '-' }}</td>
                         <td class="px-4 py-3">{{ $item->batch_number ?: '-' }}</td>
                         <td class="px-4 py-3">{{ $item->expiry_date?->format('d M Y') ?? '-' }}</td>

@@ -270,6 +270,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('reports/purchases', 'reports.purchases')->middleware('warehouse.enabled')->name('reports.purchases');
         Volt::route('reports/expenses', 'reports.expenses')->name('reports.expenses');
         Volt::route('reports/customers', 'reports.customers')->name('reports.customers');
+        Volt::route('reports/customer-payments', 'reports.customer-payments')->name('reports.customer-payments');
         Volt::route('reports/suppliers', 'reports.suppliers')->middleware('warehouse.enabled')->name('reports.suppliers');
         Volt::route('reports/stock-valuation', 'reports.stock-valuation')->name('reports.stock-valuation');
         Volt::route('reports/profit-loss', 'reports.profit-loss')->name('reports.profit-loss');

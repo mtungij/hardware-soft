@@ -50,6 +50,7 @@ class CategorySeeder extends Seeder
                         'name' => $name,
                         'description' => "{$name} construction materials",
                         'status' => 'active',
+                        'allow_fractional_sales' => $code === 'PIP',
                     ]
                 );
             }

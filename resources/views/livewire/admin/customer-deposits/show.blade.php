@@ -32,7 +32,7 @@ $approve = function () {
         'customer_id' => $this->deposit->customer_id,
         'type' => 'deposit_approved',
         'title' => 'Amana Yako Imethibitishwa',
-        'message' => 'Amana yako ya TZS '.number_format((float) $this->deposit->amount, 2).' imethibitishwa.',
+        'message' => 'Amana yako ya TZS '.\App\Support\NumberFormatter::money($this->deposit->amount).' imethibitishwa.',
         'notifiable_type' => CustomerDeposit::class,
         'notifiable_id' => $this->deposit->id,
     ]);
@@ -64,8 +64,8 @@ $reject = function () {
         <x-card title="Deposit Details" class="lg:col-span-2">
             <dl class="grid gap-4 sm:grid-cols-2">
                 <div><dt class="text-xs font-black uppercase text-slate-400">Customer</dt><dd class="font-bold">{{ $deposit->customer?->name }}</dd></div>
-                <div><dt class="text-xs font-black uppercase text-slate-400">Amount</dt><dd class="font-bold">TZS {{ number_format((float) $deposit->amount, 2) }}</dd></div>
-                <div><dt class="text-xs font-black uppercase text-slate-400">Balance</dt><dd class="font-bold">TZS {{ number_format((float) $deposit->balance_amount, 2) }}</dd></div>
+                <div><dt class="text-xs font-black uppercase text-slate-400">Amount</dt><dd class="font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->amount) }}</dd></div>
+                <div><dt class="text-xs font-black uppercase text-slate-400">Balance</dt><dd class="font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->balance_amount) }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Method</dt><dd class="font-bold">{{ str($deposit->payment_method)->replace('_', ' ')->title() }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Reference</dt><dd class="font-bold">{{ $deposit->reference_number ?: '-' }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Status</dt><dd class="font-bold">{{ str($deposit->status)->title() }}</dd></div>

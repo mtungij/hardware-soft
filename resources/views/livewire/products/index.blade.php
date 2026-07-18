@@ -252,9 +252,9 @@ $deleteConfirmedProduct = function () {
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->barcode ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
                     <td class="px-4 py-3">{{ $product->unit?->short_name }}</td>
-                    <td class="px-4 py-3">TZS {{ number_format((float) $product->buying_price, 2) }}</td>
-                    <td class="px-4 py-3 font-bold">TZS {{ number_format((float) $product->selling_price, 2) }}</td>
-                    <td class="px-4 py-3">{{ number_format((float) $product->reorder_level, 2) }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($product->buying_price) }}</td>
+                    <td class="px-4 py-3 font-bold">TZS {{ \App\Support\NumberFormatter::money($product->selling_price) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($product->reorder_level) }}</td>
                     <td class="px-4 py-3"><span class="{{ $product->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($product->status) }}</span></td>
                     <td class="px-4 py-3">
                         @if ($this->canManage())

@@ -23,6 +23,7 @@ state([
     'code' => '',
     'description' => '',
     'status' => 'active',
+    'allow_fractional_sales' => false,
 ]);
 
 rules(fn () => [
@@ -31,6 +32,7 @@ rules(fn () => [
     'code' => ['required', 'string', 'max:50', Rule::unique('categories', 'code')->ignore($this->editingId)],
     'description' => ['nullable', 'string', 'max:1000'],
     'status' => ['required', 'in:active,inactive'],
+    'allow_fractional_sales' => ['boolean'],
 ]);
 
 $canManage = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin']);
@@ -38,6 +40,7 @@ $canManage = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin']);
 $resetForm = function () {
     $this->reset(['editingId', 'branch_id', 'name', 'code', 'description']);
     $this->status = 'active';
+    $this->allow_fractional_sales = false;
 };
 
 $editCategory = function (int $categoryId) {
@@ -51,6 +54,7 @@ $editCategory = function (int $categoryId) {
     $this->code = $category->code;
     $this->description = $category->description;
     $this->status = $category->status;
+    $this->allow_fractional_sales = (bool) $category->allow_fractional_sales;
 };
 
 $save = function () {
@@ -124,6 +128,11 @@ $deleteCategory = function (int $categoryId) {
                         </select>
                     </label>
 
+                    <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-800">
+                        <input type="checkbox" wire:model="allow_fractional_sales" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
+                        Allow Fractional Sales
+                    </label>
+
                     <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                         Description
                         <textarea wire:model="description" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
@@ -164,13 +173,14 @@ $deleteCategory = function (int $categoryId) {
                     ->paginate(10);
             @endphp
 
-            <x-table :headers="['Name', 'Code', 'Branch', 'Products', 'Status', 'Actions']">
+            <x-table :headers="['Name', 'Code', 'Branch', 'Products', 'Fractional Sales', 'Status', 'Actions']">
                 @forelse ($categories as $category)
                     <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                         <td class="px-4 py-3"><p class="font-black">{{ $category->name }}</p><p class="text-xs text-slate-500">{{ $category->description }}</p></td>
                         <td class="px-4 py-3 font-mono text-xs">{{ $category->code }}</td>
                         <td class="px-4 py-3">{{ $category->branch?->name ?? 'Global' }}</td>
                         <td class="px-4 py-3">{{ $category->products_count }}</td>
+                        <td class="px-4 py-3"><span class="{{ $category->allow_fractional_sales ? 'badge-success' : 'badge-warning' }}">{{ $category->allow_fractional_sales ? 'Allowed' : 'Off' }}</span></td>
                         <td class="px-4 py-3"><span class="{{ $category->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($category->status) }}</span></td>
                         <td class="px-4 py-3">
                             @if ($this->canManage())
@@ -185,7 +195,7 @@ $deleteCategory = function (int $categoryId) {
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No categories found.</td></tr>
+                    <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No categories found.</td></tr>
                 @endforelse
             </x-table>
 

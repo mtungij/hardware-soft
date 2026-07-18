@@ -63,7 +63,7 @@
                                     <input type="hidden" data-money-value value="{{ $sellingPriceValue }}" wire:model="items.{{ $index }}.selling_price">
                                 </span>
                             </td>
-                            <td class="px-3 py-3 font-black">TZS {{ number_format((float) ($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0), 2) }}</td>
+                            <td class="px-3 py-3 font-black">TZS {{ \App\Support\NumberFormatter::money(($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0)) }}</td>
                             <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
                         </tr>
                     @endforeach
@@ -80,8 +80,8 @@
         @php $total = $this->totalAmount(); @endphp
         <div class="rounded-xl bg-slate-50 p-4 text-right dark:bg-white/5">
             <p class="text-sm text-slate-500">Grand Total</p>
-            <p class="text-2xl font-black">TZS {{ number_format($total, 2) }}</p>
-            <p class="text-sm text-slate-500">Balance: TZS {{ number_format(max(0, $total - (float) $paid_amount), 2) }}</p>
+            <p class="text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($total) }}</p>
+            <p class="text-sm text-slate-500">Balance: TZS {{ \App\Support\NumberFormatter::money(max(0, $total - (float) $paid_amount)) }}</p>
         </div>
 
         <div class="flex flex-wrap gap-2">

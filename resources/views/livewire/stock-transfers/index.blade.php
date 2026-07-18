@@ -115,7 +115,7 @@ $cancelTransfer = function (int $transferId) {
                     <td class="px-4 py-3">{{ $transfer->fromLocation?->name }}</td>
                     <td class="px-4 py-3">{{ $transfer->toLocation?->name }}</td>
                     <td class="px-4 py-3">{{ $transfer->items_count }}</td>
-                    <td class="px-4 py-3">{{ number_format((float) $transfer->items_sum_quantity, 2) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($transfer->items_sum_quantity) }}</td>
                     <td class="px-4 py-3">{{ $transfer->createdBy?->name }}</td>
                     <td class="px-4 py-3"><span class="{{ $transfer->status === 'completed' ? 'badge-success' : ($transfer->status === 'cancelled' ? 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ ucfirst($transfer->status) }}</span></td>
                     <td class="px-4 py-3">

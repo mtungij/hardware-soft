@@ -192,6 +192,10 @@ const initializeMoneyInputs = () => {
             value.value = normalized;
             value.dispatchEvent(new Event('input', { bubbles: true }));
 
+            if (value.dataset.moneyManualFlag && component?.$wire) {
+                component.$wire.set(value.dataset.moneyManualFlag, true, true);
+            }
+
             setLivewireValue(component, model, normalized);
         });
 

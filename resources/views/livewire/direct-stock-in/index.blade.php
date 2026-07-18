@@ -215,7 +215,7 @@ $save = function (InventoryService $inventory) {
                         <label class="block text-sm font-bold">
                             Selling Price
                             <div class="mt-1 min-h-10 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-                                {{ filled($sellingPriceValue) ? 'TZS '.number_format((float) $sellingPriceValue, 2) : 'Select product' }}
+                                {{ filled($sellingPriceValue) ? 'TZS '.\App\Support\NumberFormatter::money($sellingPriceValue) : 'Select product' }}
                             </div>
                         </label>
                     @endif
@@ -264,8 +264,8 @@ $save = function (InventoryService $inventory) {
                         <td class="px-4 py-3">{{ $movement->movement_date?->format('d M Y') }}</td>
                         <td class="px-4 py-3 font-bold">{{ $movement->product?->name }}</td>
                         <td class="px-4 py-3">{{ $movement->stockLocation?->name }}</td>
-                        <td class="px-4 py-3 font-bold">{{ number_format((float) $movement->quantity, 2) }}</td>
-                        <td class="px-4 py-3">TZS {{ number_format((float) $movement->unit_cost, 2) }}</td>
+                        <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($movement->quantity) }}</td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>
                         <td class="px-4 py-3">{{ str($movement->notes)->before(' - ') }}</td>
                         <td class="px-4 py-3">{{ $movement->creator?->name }}</td>
                     </tr>

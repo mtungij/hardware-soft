@@ -44,9 +44,9 @@ $paymentStatusLabel = fn (string $status) => [
                 <tr>
                     <td class="px-4 py-3">{{ $sale->sale_date?->format('M d, Y') }}</td>
                     <td class="px-4 py-3 font-bold">{{ $sale->sale_number }}</td>
-                    <td class="px-4 py-3 text-right">TZS {{ number_format((float) $sale->total_amount, 2) }}</td>
-                    <td class="px-4 py-3 text-right">TZS {{ number_format((float) $sale->paid_amount, 2) }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $sale->balance_amount, 2) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</td>
                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-black {{ $sale->payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200' : ($sale->payment_status === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200' : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-200') }}">{{ $this->paymentStatusLabel($sale->payment_status) }}</span></td>
                     <td class="px-4 py-3 text-right"><a href="{{ route('customer.debts.show', $sale) }}" wire:navigate class="text-sm font-black text-build-orange">{{ __('messages.debts.view') }}</a></td>
                 </tr>

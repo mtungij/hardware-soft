@@ -82,7 +82,7 @@ $deleteSupplier = function (int $supplierId) {
                     <td class="px-4 py-3"><p>{{ $supplier->contact_person ?? '-' }}</p><p class="text-xs text-slate-500">{{ $supplier->phone }}</p></td>
                     <td class="px-4 py-3">{{ $supplier->region ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $supplier->branch?->name ?? 'Global' }}</td>
-                    <td class="px-4 py-3">TZS {{ number_format((float) $supplier->opening_balance, 2) }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($supplier->opening_balance) }}</td>
                     <td class="px-4 py-3"><span class="{{ $supplier->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($supplier->status) }}</span></td>
                     <td class="px-4 py-3">
                         @if ($this->canManage())

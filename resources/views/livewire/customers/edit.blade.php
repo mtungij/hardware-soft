@@ -20,12 +20,13 @@ state([
     'region' => '',
     'district' => '',
     'customer_type' => 'cash',
-    'credit_limit' => '0',
     'opening_balance' => '0',
     'status' => 'active',
 ]);
 
 mount(function (Customer $customer) {
+    abort_if($customer->is_system_customer, 403);
+
     $this->customer = $customer;
     $this->branch_id = (string) $customer->branch_id;
     $this->name = $customer->name;
@@ -35,7 +36,6 @@ mount(function (Customer $customer) {
     $this->region = $customer->region;
     $this->district = $customer->district;
     $this->customer_type = $customer->customer_type;
-    $this->credit_limit = (string) $customer->credit_limit;
     $this->opening_balance = (string) $customer->opening_balance;
     $this->status = $customer->status;
 });
@@ -49,7 +49,6 @@ rules([
     'region' => ['nullable', 'string', 'max:255'],
     'district' => ['nullable', 'string', 'max:255'],
     'customer_type' => ['required', 'in:cash,credit,contractor,wholesale'],
-    'credit_limit' => ['required', 'numeric', 'min:0'],
     'opening_balance' => ['required', 'numeric', 'min:0'],
     'status' => ['required', 'in:active,inactive'],
 ]);
@@ -61,6 +60,7 @@ $updatedRegion = function () {
 $save = function () {
     $validated = $this->validate();
     $validated['branch_id'] = $validated['branch_id'] ?: null;
+    $validated['credit_limit'] = 0;
 
     $this->customer->update($validated);
 
@@ -71,7 +71,7 @@ $save = function () {
 ?>
 
 <div>
-    <x-page-header title="Edit Customer" description="Update customer contact, type, credit limit, and status." :breadcrumbs="['Dashboard' => route('dashboard'), 'Customers' => route('customers.index'), 'Edit' => null]" />
+    <x-page-header title="Edit Customer" description="Update customer contact, type, opening balance, and status." :breadcrumbs="['Dashboard' => route('dashboard'), 'Customers' => route('customers.index'), 'Edit' => null]" />
 
     <x-card>
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
@@ -79,7 +79,6 @@ $save = function () {
             <x-form-input label="Phone" name="phone" wire:model="phone" required />
             <x-form-input label="Email" name="email" type="email" wire:model="email" />
             <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
-            <x-money-input label="Credit Limit" name="credit_limit" wire:model="credit_limit" required />
             <x-money-input label="Opening Balance" name="opening_balance" wire:model="opening_balance" required />
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">

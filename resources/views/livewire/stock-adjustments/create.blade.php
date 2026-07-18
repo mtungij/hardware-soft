@@ -221,9 +221,9 @@ $save = function (InventoryService $inventory) {
 
                             <div class="text-sm"><span class="block font-bold text-slate-500">SKU</span><span class="mt-2 block">{{ $product?->sku ?? '-' }}</span></div>
                             <div class="text-sm"><span class="block font-bold text-slate-500">Unit</span><span class="mt-2 block">{{ $product?->unit?->short_name ?? '-' }}</span></div>
-                            <div class="text-sm"><span class="block font-bold text-slate-500">System Quantity</span><span class="mt-2 block font-black">{{ number_format($system, 2) }}</span></div>
+                            <div class="text-sm"><span class="block font-bold text-slate-500">System Quantity</span><span class="mt-2 block font-black">{{ \App\Support\NumberFormatter::quantity($system) }}</span></div>
                             <x-form-input label="Physical Quantity" name="lines.{{ $index }}.physical_quantity" type="number" step="0.01" wire:model.live="lines.{{ $index }}.physical_quantity" required />
-                            <div class="text-sm"><span class="block font-bold text-slate-500">Difference</span><span class="mt-2 block font-black {{ $difference < 0 ? 'text-red-600' : ($difference > 0 ? 'text-emerald-600' : 'text-slate-500') }}">{{ number_format($difference, 2) }}</span><span class="text-xs">{{ $direction }}</span></div>
+                            <div class="text-sm"><span class="block font-bold text-slate-500">Difference</span><span class="mt-2 block font-black {{ $difference < 0 ? 'text-red-600' : ($difference > 0 ? 'text-emerald-600' : 'text-slate-500') }}">{{ \App\Support\NumberFormatter::quantity($difference) }}</span><span class="text-xs">{{ $direction }}</span></div>
                         </div>
                         <div class="mt-3 grid gap-3 md:grid-cols-[1fr_2fr_auto]">
                             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Reason
@@ -246,8 +246,8 @@ $save = function (InventoryService $inventory) {
 
             <div class="grid gap-4 rounded-xl border border-slate-200 p-4 text-sm dark:border-slate-800 md:grid-cols-4">
                 <div><span class="text-slate-500">Total Products</span><p class="text-xl font-black">{{ count($lines) }}</p></div>
-                <div><span class="text-slate-500">Total Increase</span><p class="text-xl font-black text-emerald-600">{{ number_format($lineSummaries->filter(fn ($value) => $value > 0)->sum(), 2) }}</p></div>
-                <div><span class="text-slate-500">Total Decrease</span><p class="text-xl font-black text-red-600">{{ number_format(abs($lineSummaries->filter(fn ($value) => $value < 0)->sum()), 2) }}</p></div>
+                <div><span class="text-slate-500">Total Increase</span><p class="text-xl font-black text-emerald-600">{{ \App\Support\NumberFormatter::quantity($lineSummaries->filter(fn ($value) => $value > 0)->sum()) }}</p></div>
+                <div><span class="text-slate-500">Total Decrease</span><p class="text-xl font-black text-red-600">{{ \App\Support\NumberFormatter::quantity(abs($lineSummaries->filter(fn ($value) => $value < 0)->sum())) }}</p></div>
                 <div><span class="text-slate-500">Selected Location</span><p class="text-xl font-black">{{ $selectedLocation?->name ?? 'Not selected' }}</p></div>
             </div>
 

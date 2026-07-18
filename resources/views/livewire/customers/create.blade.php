@@ -25,7 +25,6 @@ state([
     'region' => '',
     'district' => '',
     'customer_type' => 'cash',
-    'credit_limit' => '0',
     'opening_balance' => '0',
     'status' => 'active',
 ]);
@@ -39,7 +38,6 @@ rules([
     'region' => ['nullable', 'string', 'max:255'],
     'district' => ['nullable', 'string', 'max:255'],
     'customer_type' => ['required', 'in:cash,credit,contractor,wholesale'],
-    'credit_limit' => ['required', 'numeric', 'min:0'],
     'opening_balance' => ['required', 'numeric', 'min:0'],
     'status' => ['required', 'in:active,inactive'],
 ]);
@@ -86,6 +84,7 @@ $configureMailer = function (?Setting $settings): ?string {
 $save = function () {
     $validated = $this->validate();
     $validated['branch_id'] = $validated['branch_id'] ?: null;
+    $validated['credit_limit'] = 0;
     $password = $this->temporaryPassword();
     $settings = Setting::query()->first();
     $company = Company::current();
@@ -138,7 +137,6 @@ $save = function () {
             <x-form-input label="Phone" name="phone" wire:model="phone" required />
             <x-form-input label="Email" name="email" type="email" wire:model="email" required />
             <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
-            <x-money-input label="Credit Limit" name="credit_limit" wire:model="credit_limit" required />
             <x-money-input label="Opening Balance" name="opening_balance" wire:model="opening_balance" required />
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">

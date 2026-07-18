@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\CashbookSession;
 use App\Models\Category;
 use App\Models\Customer;
+use App\Models\CustomerPayment;
 use App\Models\Expense;
 use App\Models\Product;
 use App\Models\Purchase;
@@ -19,6 +20,7 @@ use App\Models\StockTransfer;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Support\NumberFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -61,7 +63,12 @@ class ReportExportService
 
     public function formatCurrency(float|int|string|null $value): string
     {
-        return 'TZS '.number_format((float) $value, 2);
+        return 'TZS '.NumberFormatter::money($value);
+    }
+
+    public function formatQuantity(float|int|string|null $value): string
+    {
+        return NumberFormatter::quantity($value);
     }
 
     public function formatDate($value): string
@@ -89,6 +96,7 @@ class ReportExportService
             'tables.sales-items' => $this->salesItems($request, $branchId, $from, $to, $search),
             'reports.purchases', 'tables.purchases' => $this->purchases($request, $branchId, $from, $to, $search),
             'reports.expenses', 'tables.expenses' => $this->expenses($request, $branchId, $from, $to, $search),
+            'reports.customer-payments', 'tables.customer-payments' => $this->customerPayments($request, $branchId, $from, $to),
             'reports.customers', 'tables.customers' => $this->customers($request, $branchId, $search),
             'reports.suppliers', 'tables.suppliers' => $this->suppliers($request, $branchId, $search),
             'reports.stock-valuation', 'tables.inventory-summary' => $this->stockValuation($branchId),
@@ -202,8 +210,8 @@ class ReportExportService
             $row = [
                 $invoice['sale']?->sale_number,
                 $invoice['customer'],
-                $invoice['items']->map(fn ($item) => $item->product?->name.' x '.number_format((float) $item->quantity, 2).' '.$item->product?->unit?->short_name)->join("\n"),
-                number_format((float) $invoice['total_quantity'], 2),
+                $invoice['items']->map(fn ($item) => $item->product?->name.' x '.$this->formatQuantity($item->quantity).' '.$item->product?->unit?->short_name)->join("\n"),
+                $this->formatQuantity($invoice['total_quantity']),
             ];
 
             if ($canViewProfit) {
@@ -244,15 +252,65 @@ class ReportExportService
 
     private function expenses(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $rows = Expense::with(['category', 'branch', 'paidBy'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('expense_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('expense_date', '<=', $to))->when($search, fn ($q) => $q->where('description', 'like', "%{$search}%"))->latest()->get();
+        $rows = Expense::with(['category', 'branch', 'paidBy'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($from, fn ($q) => $q->whereDate('expense_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('expense_date', '<=', $to))
+            ->when($search, fn ($q) => $q->where(fn ($query) => $query
+                ->where('reference_number', 'like', "%{$search}%")
+                ->orWhere('notes', 'like', "%{$search}%")
+                ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('name', 'like', "%{$search}%"))))
+            ->latest()
+            ->get();
         return ['Expense Report', ['Date', 'Category', 'Branch', 'Method', 'Paid By', 'Amount'], $rows->map(fn ($expense) => [$this->formatDate($expense->expense_date), $expense->category?->name, $expense->branch?->name, str($expense->payment_method)->replace('_', ' ')->title(), $expense->paidBy?->name, $this->formatCurrency($expense->amount)])->all(), ['Total Expenses' => $this->formatCurrency($rows->sum('amount'))]];
+    }
+
+    private function customerPayments(Request $request, ?int $branchId, ?string $from, ?string $to): array
+    {
+        $customerId = $request->integer('customer_id') ?: null;
+        $method = $request->string('payment_method')->toString();
+        $receivedBy = $request->integer('received_by') ?: null;
+
+        $rows = CustomerPayment::with(['customer', 'branch', 'receivedBy'])
+            ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
+            ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
+            ->when($method, fn ($q) => $q->where('payment_method', $method))
+            ->when($receivedBy, fn ($q) => $q->where('received_by', $receivedBy))
+            ->when($from, fn ($q) => $q->whereDate('payment_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('payment_date', '<=', $to))
+            ->latest('payment_date')
+            ->get();
+
+        return [
+            'Customer Payment Report',
+            ['Date', 'Time', 'Receipt Number', 'Customer', 'Phone', 'Amount', 'Method', 'Reference', 'Branch', 'Received By', 'Notes'],
+            $rows->map(fn ($payment) => [
+                $this->formatDate($payment->payment_date),
+                $payment->created_at?->format('H:i'),
+                $payment->receipt_number ?: 'PAY-'.$payment->id,
+                $payment->customer?->name,
+                $payment->customer?->phone,
+                $this->formatCurrency($payment->amount),
+                str($payment->payment_method)->replace('_', ' ')->title(),
+                $payment->reference_number,
+                $payment->branch?->name,
+                $payment->receivedBy?->name,
+                $payment->notes,
+            ])->all(),
+            [
+                'Cash Payments' => $this->formatCurrency($rows->where('payment_method', 'cash')->sum('amount')),
+                'Mobile Money Payments' => $this->formatCurrency($rows->where('payment_method', 'mobile_money')->sum('amount')),
+                'Bank Payments' => $this->formatCurrency($rows->where('payment_method', 'bank')->sum('amount')),
+                'Total Payments' => $this->formatCurrency($rows->sum('amount')),
+            ],
+        ];
     }
 
     private function customers(Request $request, ?int $branchId, string $search): array
     {
         $accounting = app(AccountingService::class);
-        $rows = Customer::with('branch')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($request->string('typeFilter')->toString(), fn ($q, $type) => $q->where('customer_type', $type))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))->latest()->get();
-        return ['Customer Balance Report', ['Customer', 'Phone', 'Type', 'Branch', 'Credit Limit', 'Outstanding'], $rows->map(fn ($customer) => [$customer->name, $customer->phone, $customer->customer_type, $customer->branch?->name, $this->formatCurrency($customer->credit_limit), $this->formatCurrency($accounting->customerBalance($customer))])->all(), []];
+        $rows = Customer::with('branch')->where(fn ($query) => $query->where('is_system_customer', false)->orWhereNull('is_system_customer'))->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($request->string('typeFilter')->toString(), fn ($q, $type) => $q->where('customer_type', $type))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))->latest()->get();
+        return ['Customer Balance Report', ['Customer', 'Phone', 'Type', 'Branch', 'Outstanding'], $rows->map(fn ($customer) => [$customer->name, $customer->phone, $customer->customer_type, $customer->branch?->name, $this->formatCurrency($accounting->customerBalance($customer))])->all(), []];
     }
 
     private function suppliers(Request $request, ?int $branchId, string $search): array
@@ -368,14 +426,14 @@ class ReportExportService
                 $row->unit_name,
                 $row->location_name,
                 str($row->location_type)->replace('_', ' ')->title()->toString(),
-                number_format((float) $row->quantity, 2),
+                $this->formatQuantity($row->quantity),
                 $this->formatCurrency($row->average_cost),
                 $this->formatCurrency($row->stock_value),
-                number_format((float) $row->reorder_level, 2),
+                $this->formatQuantity($row->reorder_level),
                 str($row->stock_status)->replace('_', ' ')->title()->toString(),
             ])->all(),
             [
-                'Total Quantity' => number_format((float) $rows->sum('quantity'), 2),
+                'Total Quantity' => $this->formatQuantity($rows->sum('quantity')),
                 'Total Stock Value' => $this->formatCurrency($rows->sum('stock_value')),
                 'Active Locations' => count($allowedLocationIds),
             ],

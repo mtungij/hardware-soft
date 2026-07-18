@@ -45,9 +45,7 @@ class CustomerCommunicationService
                 $query->whereIn('branch_id', array_filter($filters['branch_ids'] ?? []));
             })
             ->when($visibilityType === 'vip_customers', function (Builder $query) {
-                $query->where(fn (Builder $vip) => $vip
-                    ->whereIn('customer_type', ['contractor', 'wholesale'])
-                    ->orWhere('credit_limit', '>=', 1000000));
+                $query->whereIn('customer_type', ['contractor', 'wholesale']);
             })
             ->with(['portalAccounts' => fn ($query) => $query->where('status', 'active')])
             ->orderBy('name')

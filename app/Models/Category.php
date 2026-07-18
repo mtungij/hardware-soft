@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['company_id', 'branch_id', 'name', 'code', 'description', 'status'])]
+#[Fillable(['company_id', 'branch_id', 'name', 'code', 'description', 'status', 'allow_fractional_sales'])]
 class Category extends Model
 {
     use HasCompany, HasFactory;
@@ -22,5 +22,12 @@ class Category extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'allow_fractional_sales' => 'boolean',
+        ];
     }
 }

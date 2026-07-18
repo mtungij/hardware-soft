@@ -11,7 +11,7 @@ layout('layouts.app');
 state(['sale' => null]);
 
 mount(function (Sale $sale) {
-    $this->sale = $sale->load(['branch', 'customer', 'createdBy', 'cancelledBy', 'items.product', 'items.stockLocation', 'payments.receivedBy']);
+    $this->sale = $sale->load(['branch', 'customer', 'createdBy', 'cancelledBy', 'items.product', 'items.stockLocation', 'items.sellingUnit', 'items.baseUnit', 'payments.receivedBy']);
 });
 
 ?>
@@ -43,11 +43,11 @@ mount(function (Sale $sale) {
 
         <x-card title="Totals" class="lg:col-span-2">
             <div class="grid gap-4 sm:grid-cols-5">
-                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Subtotal</p><p class="text-lg font-black">TZS {{ number_format((float) $sale->subtotal, 2) }}</p></div>
-                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Discount</p><p class="text-lg font-black">TZS {{ number_format((float) $sale->discount_amount, 2) }}</p></div>
-                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Tax</p><p class="text-lg font-black">TZS {{ number_format((float) $sale->tax_amount, 2) }}</p></div>
-                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Paid</p><p class="text-lg font-black">TZS {{ number_format((float) $sale->paid_amount, 2) }}</p></div>
-                <div class="rounded-lg bg-navy-900 p-4 text-white"><p class="text-xs text-slate-300">Balance</p><p class="text-lg font-black">TZS {{ number_format((float) $sale->balance_amount, 2) }}</p></div>
+                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Subtotal</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->subtotal) }}</p></div>
+                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Discount</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</p></div>
+                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Tax</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->tax_amount) }}</p></div>
+                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Paid</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</p></div>
+                <div class="rounded-lg bg-navy-900 p-4 text-white"><p class="text-xs text-slate-300">Balance</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</p></div>
             </div>
         </x-card>
     </div>
@@ -60,22 +60,33 @@ mount(function (Sale $sale) {
                     <th class="px-4 py-3 text-left">Stock Source</th>
                     <th class="px-4 py-3 text-left">Sale Type</th>
                     <th class="px-4 py-3 text-right">Qty</th>
+                    <th class="px-4 py-3 text-right">Base Qty</th>
                     <th class="px-4 py-3 text-right">Price</th>
-                    <th class="px-4 py-3 text-right">Discount</th>
+                    <th class="px-4 py-3 text-right">Discount/Unit</th>
+                    <th class="px-4 py-3 text-right">Net Unit</th>
+                    <th class="px-4 py-3 text-right">Line Discount</th>
                     <th class="px-4 py-3 text-right">Tax</th>
                     <th class="px-4 py-3 text-right">Total</th>
                 </tr>
             </x-slot:head>
             @foreach ($sale->items as $item)
+                @php
+                    $discountPerUnit = (float) ($item->discount_per_unit ?? 0);
+                    $netUnitPrice = (float) ($item->net_unit_price ?? ((float) $item->unit_price - $discountPerUnit));
+                    $lineDiscount = (float) ($item->discount_total ?? $item->discount_amount);
+                @endphp
                 <tr class="border-t border-slate-100 dark:border-slate-800">
                     <td class="px-4 py-3 font-bold">{{ $item->product?->name }}</td>
                     <td class="px-4 py-3">{{ $item->sold_from_label ?: ($item->stockLocation ? \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) : '-') }}</td>
                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $item->sale_type === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item->sale_type ?? 'retail')->title() }}</span></td>
-                    <td class="px-4 py-3 text-right">{{ number_format((float) $item->quantity, 2) }}</td>
-                    <td class="px-4 py-3 text-right">TZS {{ number_format((float) $item->unit_price, 2) }}</td>
-                    <td class="px-4 py-3 text-right">TZS {{ number_format((float) $item->discount_amount, 2) }}</td>
-                    <td class="px-4 py-3 text-right">TZS {{ number_format((float) $item->tax_amount, 2) }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $item->line_total, 2) }}</td>
+                    <td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->quantity) }} {{ $item->sellingUnit?->short_name }}</td>
+                    <td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->base_quantity ?: $item->quantity) }} {{ $item->baseUnit?->short_name }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($item->unit_price) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($discountPerUnit) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($netUnitPrice) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($lineDiscount) }}</td>
+                    <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($item->tax_amount) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($item->line_total) }}</td>
                 </tr>
             @endforeach
         </x-table>
@@ -98,7 +109,7 @@ mount(function (Sale $sale) {
                     <td class="px-4 py-3">{{ str($payment->payment_method)->replace('_', ' ')->title() }}</td>
                     <td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $payment->receivedBy?->name }}</td>
-                    <td class="px-4 py-3 text-right font-bold">TZS {{ number_format((float) $payment->amount, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td>
                 </tr>
             @endforeach
         </x-table>

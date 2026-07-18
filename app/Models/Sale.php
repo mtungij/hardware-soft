@@ -15,6 +15,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'company_id',
     'stock_location_id',
     'customer_id',
+    'credit_customer_unassigned',
+    'credit_assignment_status',
+    'temporary_customer_name',
+    'temporary_customer_phone',
+    'project_name',
+    'vehicle_number',
+    'expected_payment_date',
+    'credit_notes',
+    'credit_assigned_by',
+    'credit_assigned_at',
+    'credit_assignment_notes',
     'sale_number',
     'sale_date',
     'sale_type',
@@ -108,10 +119,18 @@ class Sale extends Model
         return $this->hasMany(SalePayment::class);
     }
 
+    public function customerPaymentAllocations(): HasMany
+    {
+        return $this->hasMany(CustomerPaymentAllocation::class);
+    }
+
     protected function casts(): array
     {
         return [
             'sale_date' => 'date',
+            'credit_customer_unassigned' => 'boolean',
+            'expected_payment_date' => 'date',
+            'credit_assigned_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
