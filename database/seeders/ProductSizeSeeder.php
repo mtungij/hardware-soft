@@ -23,6 +23,7 @@ class ProductSizeSeeder extends Seeder
             ['1 ⁴ᵐᵐ', '1 ⁴ᵐᵐ', 'One inch, 4mm thickness'],
             ['1¼', '1¼', 'One and quarter inch'],
             ['1½', '1½', 'One and half inch'],
+            ['1.5mm', '1.5mm', '1.5mm thickness'],
             ['1½ ³ᵐᵐ', '1½ ³ᵐᵐ', 'One and half inch, 3mm thickness'],
             ['1½ ⁴ᵐᵐ', '1½ ⁴ᵐᵐ', 'One and half inch, 4mm thickness'],
             ['1½ ⁶ᵐᵐ', '1½ ⁶ᵐᵐ', 'One and half inch, 6mm thickness'],
