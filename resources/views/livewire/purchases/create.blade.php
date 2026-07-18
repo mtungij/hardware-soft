@@ -213,7 +213,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                         @foreach ($items as $index => $item)
                             @php
                                 $selectedProduct = filled($item['product_id'] ?? null)
-                                    ? Product::query()->find($item['product_id'])
+                                    ? Product::query()->with('size')->find($item['product_id'])
                                     : null;
                                 $sellingPriceValue = filled($item['selling_price'] ?? null)
                                     ? $item['selling_price']
@@ -230,13 +230,13 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                     >
                                         <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                         @if (filled($supplier_id))
-                                            @foreach (Product::with('unit')->where('status', 'active')->orderBy('name')->get() as $product)
+                                            @foreach (Product::with(['unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
                                                 @php
                                                     $storeQty = $storeLocation
                                                         ? $inventory->getProductStock($product->id, $storeLocation->id, $stockBranchId)
                                                         : 0;
                                                 @endphp
-                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->name }} - Store Qty: {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
+                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->displayNameWithSize() }} - Store Qty: {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
                                             @endforeach
                                         @endif
                                     </select>

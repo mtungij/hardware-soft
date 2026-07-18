@@ -810,7 +810,7 @@ $recentTransactions = computed(function (): Collection {
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
                                 <img class="h-10 w-10 rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
-                                <span class="font-bold">{{ $product->name }}</span>
+                                <span class="font-bold">{{ $product->displayNameWithSize() }}</span>
                             </div>
                         </td>
                         <td class="px-4 py-3">{{ $product->sku }}</td>
@@ -846,7 +846,7 @@ $recentTransactions = computed(function (): Collection {
             <x-table :headers="['Product', 'Qty Sold', 'Wholesale Total']">
                 @forelse ($topWholesaleProducts as $row)
                     <tr>
-                        <td class="px-4 py-3 font-bold">{{ $row->product?->name }}</td>
+                        <td class="px-4 py-3 font-bold">{{ $row->product?->displayNameWithSize() }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatQuantity($row->quantity_sold) }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatMoney($row->wholesale_total) }}</td>
                     </tr>
@@ -874,7 +874,7 @@ $recentTransactions = computed(function (): Collection {
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
                                 <img class="h-10 w-10 rounded-lg object-cover" src="{{ $row->product?->image ? asset('storage/'.$row->product->image) : 'https://ui-avatars.com/api/?name='.urlencode($row->product?->name ?? 'Product').'&background=0d2e50&color=fff' }}" alt="{{ $row->product?->name }}">
-                                <span class="font-bold">{{ $row->product?->name }}</span>
+                                <span class="font-bold">{{ $row->product?->displayNameWithSize() }}</span>
                             </div>
                         </td>
                         <td class="px-4 py-3">{{ $row->product?->sku }}</td>

@@ -141,7 +141,7 @@ class ReportExportService
         $paymentLabel = fn (string $method): string => $tr('method_'.$method);
 
         $rows = SaleItem::query()
-            ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'product.unit', 'product.category', 'stockLocation'])
+            ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'product.unit', 'product.category', 'product.size', 'stockLocation'])
             ->whereHas('sale', function ($query) use ($request, $branchId, $from, $to) {
                 $query->where('status', 'completed')
                     ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
@@ -156,7 +156,7 @@ class ReportExportService
             ->when($request->integer('product_id'), fn ($query, $id) => $query->where('product_id', $id))
             ->when($request->integer('category_id'), fn ($query, $id) => $query->whereHas('product', fn ($productQuery) => $productQuery->where('category_id', $id)))
             ->when($search, fn ($query) => $query->where(fn ($nested) => $nested
-                ->whereHas('product', fn ($productQuery) => $productQuery->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"))
+                ->whereHas('product', fn ($productQuery) => $productQuery->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%")))
                 ->orWhereHas('sale', fn ($saleQuery) => $saleQuery
                     ->where('sale_number', 'like', "%{$search}%")
                     ->orWhereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', "%{$search}%"))
@@ -210,7 +210,7 @@ class ReportExportService
             $row = [
                 $invoice['sale']?->sale_number,
                 $invoice['customer'],
-                $invoice['items']->map(fn ($item) => $item->product?->name.' x '.$this->formatQuantity($item->quantity).' '.$item->product?->unit?->short_name)->join("\n"),
+                $invoice['items']->map(fn ($item) => $item->product?->displayNameWithSize().' x '.$this->formatQuantity($item->quantity).' '.$item->product?->unit?->short_name)->join("\n"),
                 $this->formatQuantity($invoice['total_quantity']),
             ];
 
@@ -322,8 +322,8 @@ class ReportExportService
 
     private function products(Request $request, ?int $branchId, string $search): array
     {
-        $rows = Product::with(['category', 'unit', 'branch'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('categoryFilter'), fn ($q, $id) => $q->where('category_id', $id))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%"))->orderBy('name')->get();
-        return ['Products', ['Product', 'SKU', 'Category', 'Unit', 'Buying Price', 'Retail Price', 'Wholesale Price', 'Status'], $rows->map(fn ($p) => [$p->name, $p->sku, $p->category?->name, $p->unit?->short_name, $this->formatCurrency($p->buying_price), $this->formatCurrency($p->selling_price), $this->formatCurrency($p->wholesale_price), ucfirst($p->status)])->all(), []];
+        $rows = Product::with(['category', 'unit', 'branch', 'size'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('categoryFilter'), fn ($q, $id) => $q->where('category_id', $id))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%")))->orderBy('name')->get();
+        return ['Products', ['Product', 'Size', 'SKU', 'Category', 'Unit', 'Buying Price', 'Retail Price', 'Wholesale Price', 'Status'], $rows->map(fn ($p) => [$p->displayName(), $p->sizeLabel() ?: '-', $p->sku, $p->category?->name, $p->unit?->short_name, $this->formatCurrency($p->buying_price), $this->formatCurrency($p->selling_price), $this->formatCurrency($p->wholesale_price), ucfirst($p->status)])->all(), []];
     }
 
     private function storeStock(Request $request, ?int $branchId, string $search): array
@@ -372,6 +372,7 @@ class ReportExportService
             ->crossJoin('stock_locations')
             ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
             ->leftJoin('units', 'units.id', '=', 'products.unit_id')
+            ->leftJoin('product_sizes', 'product_sizes.id', '=', 'products.product_size_id')
             ->leftJoinSub($stockSubquery, 'stock_totals', function ($join) {
                 $join->on('stock_totals.product_id', '=', 'products.id')
                     ->on('stock_totals.stock_location_id', '=', 'stock_locations.id')
@@ -396,9 +397,11 @@ class ReportExportService
             ->when($search, fn ($query) => $query->where(fn ($nested) => $nested
                 ->where('products.name', 'like', "%{$search}%")
                 ->orWhere('products.sku', 'like', "%{$search}%")
-                ->orWhere('products.barcode', 'like', "%{$search}%")))
+                ->orWhere('products.barcode', 'like', "%{$search}%")
+                ->orWhere('product_sizes.name', 'like', "%{$search}%")
+                ->orWhere('product_sizes.symbol', 'like', "%{$search}%")))
             ->select([
-                'products.name as product_name',
+                DB::raw("CASE WHEN product_sizes.symbol IS NULL OR product_sizes.symbol = '' THEN products.name ELSE CONCAT(products.name, ' - ', product_sizes.symbol) END as product_name"),
                 'products.sku',
                 'categories.name as category_name',
                 'units.short_name as unit_name',
@@ -470,8 +473,8 @@ class ReportExportService
 
     private function stockMovements(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $rows = StockMovement::with(['product', 'stockLocation', 'createdBy'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('stock_location_id'), fn ($q, $id) => $q->where('stock_location_id', $id))->when($from, fn ($q) => $q->whereDate('movement_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('movement_date', '<=', $to))->when($search, fn ($q) => $q->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%")))->latest()->get();
-        return ['Stock Movement Report', ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Cost', 'Created By'], $rows->map(fn ($m) => [$this->formatDate($m->movement_date), $m->product?->name, $m->stockLocation?->name, $m->movement_type, $m->quantity, $this->formatCurrency($m->unit_cost), $m->createdBy?->name])->all(), []];
+        $rows = StockMovement::with(['product.size', 'stockLocation', 'createdBy'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('stock_location_id'), fn ($q, $id) => $q->where('stock_location_id', $id))->when($from, fn ($q) => $q->whereDate('movement_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('movement_date', '<=', $to))->when($search, fn ($q) => $q->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))->latest()->get();
+        return ['Stock Movement Report', ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Cost', 'Created By'], $rows->map(fn ($m) => [$this->formatDate($m->movement_date), $m->product?->displayNameWithSize(), $m->stockLocation?->name, $m->movement_type, $m->quantity, $this->formatCurrency($m->unit_cost), $m->createdBy?->name])->all(), []];
     }
 
     private function stockTransfers(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array

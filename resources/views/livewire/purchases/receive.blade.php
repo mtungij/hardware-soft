@@ -311,7 +311,12 @@ $postReceipt = function (InventoryService $inventory) {
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach ($purchase->items as $item)
                             <tr class="align-top">
-                                <td class="px-3 py-3 font-black">{{ $item->product?->name }}</td>
+                                <td class="px-3 py-3 font-black">
+                                    {{ $item->product?->displayName() }}
+                                    @if ($item->product?->sizeLabel())
+                                        <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->product->sizeLabel() }}</p>
+                                    @endif
+                                </td>
                                 <td class="px-3 py-3 font-mono">{{ $item->product?->sku }}</td>
                                 <td class="px-3 py-3">{{ $item->product?->unit?->short_name }}</td>
                                 <td class="px-3 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>

@@ -25,8 +25,8 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
         <div class="mb-4 grid gap-3 md:grid-cols-5">
             <select wire:model.live="productFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">All products</option>
-                @foreach (Product::orderBy('name')->get() as $product)
-                    <option value="{{ $product->id }}">{{ $product->name }}</option>
+                @foreach (Product::with('size')->orderBy('name')->get() as $product)
+                    <option value="{{ $product->id }}">{{ $product->displayNameWithSize() }}</option>
                 @endforeach
             </select>
             <select wire:model.live="locationFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -61,7 +61,7 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
             @forelse ($movements as $movement)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">{{ $movement->movement_date->format('d M Y') }}</td>
-                    <td class="px-4 py-3 font-bold">{{ $movement->product?->name }}</td>
+                    <td class="px-4 py-3 font-bold">{{ $movement->product?->displayNameWithSize() }}</td>
                     <td class="px-4 py-3">{{ $movement->stockLocation?->name }}</td>
                     <td class="px-4 py-3"><span class="badge-info">{{ $movement->movement_type }}</span></td>
                     <td class="px-4 py-3 text-emerald-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::POSITIVE_TYPES, true) ? \App\Support\NumberFormatter::quantity($movement->quantity) : '-' }}</td>

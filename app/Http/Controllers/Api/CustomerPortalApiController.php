@@ -230,7 +230,8 @@ class CustomerPortalApiController extends Controller
 
         if ($withProducts) {
             $payload['products'] = $sale->items->map(fn ($item) => [
-                'name' => $item->product?->name,
+                'name' => $item->product?->displayName(),
+                'size' => $item->product?->sizeLabel(),
                 'sku' => $item->product?->sku,
                 'quantity' => (float) $item->quantity,
                 'unit_price' => (float) $item->unit_price,

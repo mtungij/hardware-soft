@@ -46,7 +46,7 @@ class FinancialReportService
         $rows = [];
 
         foreach (StockLocation::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->with('branch')->get() as $location) {
-            foreach (Product::query()->with('category')->get() as $product) {
+            foreach (Product::query()->with(['category', 'size'])->get() as $product) {
                 $quantity = $inventory->getProductStock($product->id, $location->id, $location->branch_id);
                 if ($quantity <= 0) {
                     continue;
@@ -56,7 +56,7 @@ class FinancialReportService
                 $rows[] = [
                     'branch' => $location->branch?->name,
                     'location' => $location->name,
-                    'product' => $product->name,
+                    'product' => $product->displayNameWithSize(),
                     'category' => $product->category?->name,
                     'quantity' => $quantity,
                     'average_cost' => $averageCost,

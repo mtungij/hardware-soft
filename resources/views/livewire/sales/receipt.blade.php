@@ -48,9 +48,12 @@ mount(function (Sale $sale) {
                 @endphp
                 <div>
                     <div class="flex justify-between gap-3">
-                        <span>{{ $item->product?->name }}</span>
+                        <span>{{ $item->product?->displayName() }}</span>
                         <span>{{ \App\Support\NumberFormatter::money($item->line_total) }}</span>
                     </div>
+                    @if ($item->product?->sizeLabel())
+                        <p class="text-xs">Size: {{ $item->product->sizeLabel() }}</p>
+                    @endif
                     <p class="text-xs">Sale Type: {{ str($item->sale_type ?? 'retail')->title() }}</p>
                     <p class="text-xs">Sehemu ya Stock: {{ $item->sold_from_label ?: ($item->stockLocation ? \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) : '-') }}</p>
                     <p class="text-xs">Selling Quantity: {{ \App\Support\NumberFormatter::quantity($item->quantity) }} {{ $item->sellingUnit?->short_name }} x {{ \App\Support\NumberFormatter::money($item->unit_price) }}</p>

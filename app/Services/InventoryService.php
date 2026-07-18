@@ -237,10 +237,10 @@ class InventoryService
             $preparedItems = [];
 
             foreach ($cart as $row) {
-                $product = Product::query()->with('category')->whereKey($row['product_id'] ?? null)->lockForUpdate()->firstOrFail();
+                $product = Product::query()->with(["category", "size"])->whereKey($row['product_id'] ?? null)->lockForUpdate()->firstOrFail();
 
                 if ($product->status !== 'active') {
-                    throw ValidationException::withMessages(['cart' => "{$product->name} is inactive."]);
+                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' is inactive.']);
                 }
 
                 $quantity = (float) ($row['quantity'] ?? 0);
@@ -259,34 +259,34 @@ class InventoryService
                 }
 
                 if (! $allowsFractionalSale && abs($quantity - round($quantity)) > 0.0001) {
-                    throw ValidationException::withMessages(['cart' => "{$product->name} must be sold in whole quantities."]);
+                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' must be sold in whole quantities.']);
                 }
 
                 if ($quantity < $minimumSaleQuantity) {
-                    throw ValidationException::withMessages(['cart' => "{$product->name} minimum sale quantity is {$minimumSaleQuantity}."]);
+                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' minimum sale quantity is '.$minimumSaleQuantity.'.']);
                 }
 
                 if ($quantityStep > 0) {
                     $steps = ($quantity - $minimumSaleQuantity) / $quantityStep;
 
                     if (abs($steps - round($steps)) > 0.0001) {
-                        throw ValidationException::withMessages(['cart' => "{$product->name} quantity must follow the configured step of {$quantityStep}."]);
+                        throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' quantity must follow the configured step of '.$quantityStep.'.']);
                     }
                 }
 
                 if ($baseQuantity <= 0) {
-                    throw ValidationException::withMessages(['cart' => "{$product->name} converted base quantity must be greater than zero."]);
+                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' converted base quantity must be greater than zero.']);
                 }
 
                 if ($saleType === 'wholesale' && blank($product->wholesale_price)) {
-                    throw ValidationException::withMessages(['cart' => "{$product->name} does not have a wholesale price."]);
+                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' does not have a wholesale price.']);
                 }
 
                 $baseUnitCost = (float) $product->buying_price;
                 $sellingUnitCost = $baseUnitCost / $conversionFactor;
 
                 if ($unitPrice < $sellingUnitCost) {
-                    throw ValidationException::withMessages(['cart' => "{$product->name} price cannot be below buying price."]);
+                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' price cannot be below buying price.']);
                 }
 
                 if ($discountPerUnit < 0) {
@@ -307,7 +307,7 @@ class InventoryService
                 $availableSellingQuantity = $available * $conversionFactor;
 
                 if ($baseQuantity > $available) {
-                    throw ValidationException::withMessages(['cart' => "{$product->name} quantity exceeds available stock."]);
+                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' quantity exceeds available stock.']);
                 }
 
                 $lineTotal = $netTotal + $itemTax;
@@ -777,7 +777,7 @@ class InventoryService
                 $product = Product::query()->whereKey($productId)->firstOrFail();
 
                 if ((int) $product->company_id !== (int) $location->company_id) {
-                    throw ValidationException::withMessages(['lines' => "{$product->name} does not belong to this company."]);
+                    throw ValidationException::withMessages(['lines' => $product->displayNameWithSize().' does not belong to this company.']);
                 }
 
                 $systemQuantity = $this->getProductStock($product->id, $location->id, (int) $header['branch_id']);
@@ -990,7 +990,7 @@ class InventoryService
 
                 if ((float) $item->quantity > $available) {
                     throw ValidationException::withMessages([
-                        'quantity' => "{$item->product?->name} transfer quantity exceeds available stock.",
+                        'quantity' => $item->product?->displayNameWithSize().' transfer quantity exceeds available stock.',
                     ]);
                 }
             }

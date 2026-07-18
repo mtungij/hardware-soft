@@ -201,7 +201,7 @@ $save = function (InventoryService $inventory) {
             <div class="space-y-3">
                 @foreach ($lines as $index => $line)
                     @php
-                        $product = filled($line['product_id'] ?? '') ? Product::with('unit')->find($line['product_id']) : null;
+                        $product = filled($line['product_id'] ?? '') ? Product::with(['unit', 'size'])->find($line['product_id']) : null;
                         $system = (float) ($line['system_quantity'] ?? 0);
                         $physical = is_numeric($line['physical_quantity'] ?? null) ? (float) $line['physical_quantity'] : $system;
                         $difference = $physical - $system;

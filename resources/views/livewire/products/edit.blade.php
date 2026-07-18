@@ -3,6 +3,7 @@
 use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductSize;
 use App\Models\Unit;
 use Illuminate\Validation\Rule;
 
@@ -17,6 +18,8 @@ state([
     'branch_id' => '',
     'category_id' => '',
     'unit_id' => '',
+    'product_size_id' => '',
+    'product_size_search' => '',
     'selling_unit_id' => '',
     'name' => '',
     'sku' => '',
@@ -41,6 +44,7 @@ mount(function (Product $product) {
     $this->branch_id = (string) $product->branch_id;
     $this->category_id = (string) $product->category_id;
     $this->unit_id = (string) $product->unit_id;
+    $this->product_size_id = (string) $product->product_size_id;
     $this->selling_unit_id = (string) ($product->selling_unit_id ?: $product->unit_id);
     $this->name = $product->name;
     $this->sku = $product->sku;
@@ -70,6 +74,7 @@ $rules = fn () => [
     'branch_id' => ['nullable', 'exists:branches,id'],
     'category_id' => ['required', 'exists:categories,id'],
     'unit_id' => ['required', 'exists:units,id'],
+    'product_size_id' => ['nullable', 'exists:product_sizes,id'],
     'selling_unit_id' => ['nullable', 'exists:units,id'],
     'name' => ['required', 'string', 'max:255'],
     'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($this->product->id)],
@@ -94,6 +99,7 @@ $save = function () {
     $usesFractionalConfiguration = (bool) $validated['allow_fractional_sale'] || $this->selectedCategoryAllowsFractional();
 
     $validated['branch_id'] = $validated['branch_id'] ?: null;
+    $validated['product_size_id'] = $validated['product_size_id'] ?: null;
     $validated['sku'] = $validated['sku'] ?: null;
     $validated['barcode'] = $validated['barcode'] ?: null;
     $validated['wholesale_price'] = $validated['wholesale_price'] === '' ? null : $validated['wholesale_price'];
@@ -156,6 +162,18 @@ $save = function () {
                     @endforeach
                 </select>
                 @error('unit_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+            </label>
+
+            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                Product Size
+                <input wire:model.live.debounce.300ms="product_size_search" class="mt-1 block w-full rounded-t-lg border border-b-0 border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search size, e.g. 2 × 4">
+                <select wire:model="product_size_id" class="block w-full rounded-b-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <option value="">No size</option>
+                    @foreach (ProductSize::query()->where(fn ($query) => $query->where('status', 'active')->orWhereKey($product_size_id))->when($product_size_search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$product_size_search}%")->orWhere('symbol', 'like', "%{$product_size_search}%")))->orderBy('symbol')->limit(50)->get() as $size)
+                        <option value="{{ $size->id }}">{{ $size->label() }}</option>
+                    @endforeach
+                </select>
+                @error('product_size_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">

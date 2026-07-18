@@ -139,6 +139,7 @@ $locationBadge = function (?string $type): string {
             ->crossJoin('stock_locations')
             ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
             ->leftJoin('units', 'units.id', '=', 'products.unit_id')
+            ->leftJoin('product_sizes', 'product_sizes.id', '=', 'products.product_size_id')
             ->leftJoin('branches', 'branches.id', '=', 'stock_locations.branch_id')
             ->leftJoinSub($stockSubquery, 'stock_totals', function ($join) {
                 $join->on('stock_totals.product_id', '=', 'products.id')
@@ -164,10 +165,12 @@ $locationBadge = function (?string $type): string {
             ->when($search, fn ($query) => $query->where(fn ($nested) => $nested
                 ->where('products.name', 'like', "%{$search}%")
                 ->orWhere('products.sku', 'like', "%{$search}%")
-                ->orWhere('products.barcode', 'like', "%{$search}%")))
+                ->orWhere('products.barcode', 'like', "%{$search}%")
+                ->orWhere('product_sizes.name', 'like', "%{$search}%")
+                ->orWhere('product_sizes.symbol', 'like', "%{$search}%")))
             ->select([
                 'products.id as product_id',
-                'products.name as product_name',
+                DB::raw("CASE WHEN product_sizes.symbol IS NULL OR product_sizes.symbol = '' THEN products.name ELSE CONCAT(products.name, ' - ', product_sizes.symbol) END as product_name"),
                 'products.sku',
                 'products.barcode',
                 'products.brand',

@@ -244,6 +244,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper,Cashier,Accountant')->group(function () {
         Volt::route('categories', 'categories.index')->name('categories.index');
+        Volt::route('product-sizes', 'product-sizes.index')->name('product-sizes.index');
         Volt::route('units', 'units.index')->name('units.index');
         Volt::route('products', 'products.index')->name('products.index');
         Volt::route('suppliers', 'suppliers.index')->middleware('warehouse.enabled')->name('suppliers.index');

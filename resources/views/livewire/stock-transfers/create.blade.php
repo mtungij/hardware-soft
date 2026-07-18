@@ -177,15 +177,15 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
             <x-table :headers="['Product', 'Available Source', 'Unit', 'Transfer Qty', 'Notes', '']">
                 @foreach ($items as $index => $item)
                     @php
-                        $product = $item['product_id'] ? Product::with('unit')->find($item['product_id']) : null;
+                        $product = $item['product_id'] ? Product::with(['unit', 'size'])->find($item['product_id']) : null;
                         $available = $this->availableQuantity($item['product_id']);
                     @endphp
                     <tr>
                         <td class="px-4 py-3">
                             <select wire:model.live="items.{{ $index }}.product_id" class="w-72 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                 <option value="">Select product</option>
-                                @foreach (Product::where('status', 'active')->orderBy('name')->get() as $productOption)
-                                    <option value="{{ $productOption->id }}">{{ $productOption->name }} / {{ $productOption->sku }}</option>
+                                @foreach (Product::with('size')->where('status', 'active')->orderBy('name')->get() as $productOption)
+                                    <option value="{{ $productOption->id }}">{{ $productOption->displayNameWithSize() }} / {{ $productOption->sku }}</option>
                                 @endforeach
                             </select>
                         </td>

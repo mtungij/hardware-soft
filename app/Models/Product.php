@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'company_id',
     'category_id',
     'unit_id',
+    'product_size_id',
     'selling_unit_id',
     'name',
     'sku',
@@ -51,6 +52,11 @@ class Product extends Model
         return $this->belongsTo(Unit::class);
     }
 
+    public function size(): BelongsTo
+    {
+        return $this->belongsTo(ProductSize::class, 'product_size_id');
+    }
+
     public function sellingUnit(): BelongsTo
     {
         return $this->belongsTo(Unit::class, 'selling_unit_id');
@@ -85,6 +91,21 @@ class Product extends Model
     {
         return (bool) $this->allow_fractional_sale
             || (bool) $this->category?->allow_fractional_sales;
+    }
+
+    public function sizeLabel(): ?string
+    {
+        return $this->size?->label();
+    }
+
+    public function displayName(): string
+    {
+        return $this->name;
+    }
+
+    public function displayNameWithSize(): string
+    {
+        return trim($this->displayName().($this->sizeLabel() ? ' - '.$this->sizeLabel() : ''));
     }
 
     protected function casts(): array

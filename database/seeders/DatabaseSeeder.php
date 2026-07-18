@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             StockLocationSeeder::class,
             HardwareCategorySeeder::class,
             HardwareUnitSeeder::class,
+            ProductSizeSeeder::class,
             HardwareProductSeeder::class,
             ExpenseCategorySeeder::class,
         ]);

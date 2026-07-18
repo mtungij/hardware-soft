@@ -68,7 +68,12 @@
         <tbody>
             @foreach ($purchase->items as $item)
                 <tr>
-                    <td>{{ $item->product?->name }}</td>
+                    <td>
+                        {{ $item->product?->displayName() }}
+                        @if ($item->product?->sizeLabel())
+                            <br><small>Size: {{ $item->product->sizeLabel() }}</small>
+                        @endif
+                    </td>
                     <td>{{ $item->product?->sku }}</td>
                     <td class="right">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
                     <td>{{ $item->product?->unit?->short_name }}</td>

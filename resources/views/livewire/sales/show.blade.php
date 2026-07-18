@@ -76,7 +76,12 @@ mount(function (Sale $sale) {
                     $lineDiscount = (float) ($item->discount_total ?? $item->discount_amount);
                 @endphp
                 <tr class="border-t border-slate-100 dark:border-slate-800">
-                    <td class="px-4 py-3 font-bold">{{ $item->product?->name }}</td>
+                    <td class="px-4 py-3 font-bold">
+                        {{ $item->product?->displayName() }}
+                        @if ($item->product?->sizeLabel())
+                            <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->product->sizeLabel() }}</p>
+                        @endif
+                    </td>
                     <td class="px-4 py-3">{{ $item->sold_from_label ?: ($item->stockLocation ? \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) : '-') }}</td>
                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $item->sale_type === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item->sale_type ?? 'retail')->title() }}</span></td>
                     <td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->quantity) }} {{ $item->sellingUnit?->short_name }}</td>

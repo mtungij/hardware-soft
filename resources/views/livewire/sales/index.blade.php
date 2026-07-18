@@ -76,7 +76,7 @@ mount(function () {
 
         $itemQuery = function () use ($search, $sale_type, $stock_location_id, $customer_id, $product_id, $category_id, $cashier_id, $branch_id, $payment_method, $date_from, $date_to) {
             return SaleItem::query()
-                ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'sale.branch', 'product.unit', 'product.category', 'stockLocation'])
+                ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'sale.branch', 'product.unit', 'product.category', 'product.size', 'stockLocation'])
                 ->whereHas('sale', function ($query) use ($customer_id, $cashier_id, $branch_id, $payment_method, $date_from, $date_to) {
                     $query->where('status', 'completed')
                         ->when($customer_id, fn ($q) => $q->where('customer_id', $customer_id))
@@ -152,8 +152,8 @@ mount(function () {
             </select>
             <select wire:model.live="product_id" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">{{ $t('all_products') }}</option>
-                @foreach (Product::orderBy('name')->get() as $product)
-                    <option value="{{ $product->id }}">{{ $product->name }} / {{ $product->sku }}</option>
+                @foreach (Product::with('size')->orderBy('name')->get() as $product)
+                    <option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / {{ $product->sku }}</option>
                 @endforeach
             </select>
             <select wire:model.live="category_id" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -277,12 +277,12 @@ mount(function () {
                                 <td class="px-3 py-3">
                                     <div class="space-y-1">
                                         @foreach ($visibleItems as $item)
-                                            <p>{{ $item->product?->name }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
+                                            <p>{{ $item->product?->displayNameWithSize() }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
                                         @endforeach
                                         @if ($hiddenCount > 0)
                                             <div x-show="productInvoice === {{ $sale?->id ?? 0 }}" class="space-y-1" style="display: none;">
                                                 @foreach ($row['items']->skip(5) as $item)
-                                                    <p>{{ $item->product?->name }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
+                                                    <p>{{ $item->product?->displayNameWithSize() }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
                                                 @endforeach
                                             </div>
                                             <button type="button" x-on:click="productInvoice = productInvoice === {{ $sale?->id ?? 0 }} ? null : {{ $sale?->id ?? 0 }}" class="text-xs font-black text-cyan-600">
@@ -354,7 +354,7 @@ mount(function () {
                                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                                                 @foreach ($row['items'] as $item)
                                                     <tr>
-                                                        <td class="px-3 py-2 font-bold">{{ $item->product?->name }}</td>
+                                                        <td class="px-3 py-2 font-bold">{{ $item->product?->displayNameWithSize() }}</td>
                                                         <td class="px-3 py-2 font-mono">{{ $item->product?->sku }}</td>
                                                         <td class="px-3 py-2 text-right">{{ $quantity($item->quantity) }}</td>
                                                         <td class="px-3 py-2">{{ $item->product?->unit?->short_name }}</td>
@@ -386,7 +386,7 @@ mount(function () {
             @php
                 $groupRows = match ($view) {
                     'product' => $summaryItems->groupBy('product_id')->map(fn ($items) => [
-                        'label' => $items->first()->product?->name,
+                        'label' => $items->first()->product?->displayNameWithSize(),
                         'sub' => $items->first()->product?->sku,
                         'quantity' => $items->sum('quantity'),
                         'cost' => $items->sum(fn ($item) => $lineCost($item)),

@@ -181,8 +181,8 @@ $save = function (InventoryService $inventory) {
                         class="hidden"
                     >
                         <option value="" @selected(blank($product_id))>Select product</option>
-                        @foreach (Product::where('status', 'active')->orderBy('name')->get() as $product)
-                            <option value="{{ $product->id }}" @selected((string) $product_id === (string) $product->id)>{{ $product->name }} / {{ $product->sku }}</option>
+                        @foreach (Product::with('size')->where('status', 'active')->orderBy('name')->get() as $product)
+                            <option value="{{ $product->id }}" @selected((string) $product_id === (string) $product->id)>{{ $product->displayNameWithSize() }} / {{ $product->sku }}</option>
                         @endforeach
                     </select>
                     @error('product_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
@@ -262,7 +262,7 @@ $save = function (InventoryService $inventory) {
                 @forelse ($movements as $movement)
                     <tr>
                         <td class="px-4 py-3">{{ $movement->movement_date?->format('d M Y') }}</td>
-                        <td class="px-4 py-3 font-bold">{{ $movement->product?->name }}</td>
+                        <td class="px-4 py-3 font-bold">{{ $movement->product?->displayNameWithSize() }}</td>
                         <td class="px-4 py-3">{{ $movement->stockLocation?->name }}</td>
                         <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($movement->quantity) }}</td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>

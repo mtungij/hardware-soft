@@ -30,7 +30,7 @@
                     @foreach ($items as $index => $item)
                         @php
                             $selectedProduct = filled($item['product_id'] ?? null)
-                                ? \App\Models\Product::query()->find($item['product_id'])
+                                ? \App\Models\Product::query()->with('size')->find($item['product_id'])
                                 : null;
                             $sellingPriceValue = filled($item['selling_price'] ?? null)
                                 ? $item['selling_price']
@@ -41,8 +41,8 @@
                                 <select wire:model.live="items.{{ $index }}.product_id" wire:change="syncProductSellingPrice({{ $index }})" @disabled(blank($supplier_id)) class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-900">
                                     <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                     @if (filled($supplier_id))
-                                        @foreach (\App\Models\Product::where('status', 'active')->orderBy('name')->get() as $product)
-                                            <option value="{{ $product->id }}">{{ $product->name }} / {{ $product->sku }}</option>
+                                        @foreach (\App\Models\Product::with('size')->where('status', 'active')->orderBy('name')->get() as $product)
+                                            <option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / {{ $product->sku }}</option>
                                         @endforeach
                                     @endif
                                 </select>

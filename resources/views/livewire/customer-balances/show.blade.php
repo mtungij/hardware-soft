@@ -92,7 +92,7 @@ $setTab = fn (string $tab) => $this->activeTab = $tab;
                     'sort' => $sale->sale_date?->toDateString().' '.$sale->created_at?->format('H:i:s'),
                     'type' => 'Credit Sale',
                     'reference' => $sale->sale_number,
-                    'description' => $sale->items->map(fn ($item) => $item->product?->name.' x '.$quantity($item->quantity).' '.$unitLabel($item))->join(', '),
+                    'description' => $sale->items->map(fn ($item) => $item->product?->displayNameWithSize().' x '.$quantity($item->quantity).' '.$unitLabel($item))->join(', '),
                     'debit' => (float) $sale->total_amount,
                     'credit' => 0,
                     'model' => $sale,
@@ -160,7 +160,7 @@ $setTab = fn (string $tab) => $this->activeTab = $tab;
             <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
             <select wire:model.live="transaction_type" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Transactions</option><option value="credit_sale">Credit Sale</option><option value="payment">Payment</option><option value="return">Return</option><option value="adjustment">Adjustment</option></select>
             <input wire:model.live.debounce.300ms="sale_number" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" placeholder="Sale number">
-            <select wire:model.live="product_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Products</option>@foreach (Product::orderBy('name')->get() as $product)<option value="{{ $product->id }}">{{ $product->name }}</option>@endforeach</select>
+            <select wire:model.live="product_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Products</option>@foreach (Product::with('size')->orderBy('name')->get() as $product)<option value="{{ $product->id }}">{{ $product->displayNameWithSize() }}</option>@endforeach</select>
             <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Methods</option><option value="cash">Cash</option><option value="mobile_money">Mobile Money</option><option value="bank">Bank</option></select>
         </div>
     </x-card>

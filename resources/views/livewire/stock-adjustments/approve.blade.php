@@ -33,7 +33,7 @@ $reject = function (int $adjustmentId) {
                 <tr>
                     <td class="px-4 py-3 font-bold">{{ $adjustment->reference_number ?: 'ADJ-'.$adjustment->id }}</td>
                     <td class="px-4 py-3">{{ $adjustment->adjustment_date?->format('d M Y') ?? $adjustment->created_at?->format('d M Y') }}</td>
-                    <td class="px-4 py-3 font-bold">{{ $adjustment->lines_count > 1 ? $adjustment->lines_count.' products' : $adjustment->product?->name }}</td>
+                    <td class="px-4 py-3 font-bold">{{ $adjustment->lines_count > 1 ? $adjustment->lines_count.' products' : $adjustment->product?->displayNameWithSize() }}</td>
                     <td class="px-4 py-3">{{ $adjustment->stockLocation?->name }}</td>
                     <td class="px-4 py-3">{{ str($adjustment->adjustment_type)->replace('_', ' ')->title() }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($adjustment->quantity) }}</td>

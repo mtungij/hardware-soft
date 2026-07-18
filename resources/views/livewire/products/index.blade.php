@@ -3,6 +3,7 @@
 use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductSize;
 use App\Models\Unit;
 use Illuminate\Validation\Rule;
 use Livewire\WithPagination;
@@ -27,6 +28,7 @@ state([
     'branch_id' => '',
     'category_id' => '',
     'unit_id' => '',
+    'product_size_id' => '',
     'name' => '',
     'sku' => '',
     'barcode' => '',
@@ -58,6 +60,7 @@ $resetProductForm = function () {
         'branch_id',
         'category_id',
         'unit_id',
+        'product_size_id',
         'name',
         'sku',
         'barcode',
@@ -91,6 +94,7 @@ $openEditProduct = function (int $productId) {
     $this->branch_id = (string) $product->branch_id;
     $this->category_id = (string) $product->category_id;
     $this->unit_id = (string) $product->unit_id;
+    $this->product_size_id = (string) $product->product_size_id;
     $this->name = $product->name;
     $this->sku = $product->sku;
     $this->barcode = $product->barcode;
@@ -115,6 +119,7 @@ $saveProduct = function () {
         'branch_id' => ['nullable', 'exists:branches,id'],
         'category_id' => ['required', 'exists:categories,id'],
         'unit_id' => ['required', 'exists:units,id'],
+        'product_size_id' => ['nullable', 'exists:product_sizes,id'],
         'name' => ['required', 'string', 'max:255'],
         'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($this->editing_product_id)],
         'barcode' => ['nullable', 'string', 'max:100', Rule::unique('products', 'barcode')->ignore($this->editing_product_id)],
@@ -130,6 +135,7 @@ $saveProduct = function () {
     ]);
 
     $validated['branch_id'] = $validated['branch_id'] ?: null;
+    $validated['product_size_id'] = $validated['product_size_id'] ?: null;
     $validated['sku'] = $validated['sku'] ?: null;
     $validated['barcode'] = $validated['barcode'] ?: null;
     $validated['wholesale_price'] = $validated['wholesale_price'] === '' ? null : $validated['wholesale_price'];
@@ -221,12 +227,13 @@ $deleteConfirmedProduct = function () {
 
         @php
             $products = Product::query()
-                ->with(['branch', 'category', 'unit'])
+                ->with(['branch', 'category', 'unit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('sku', 'like', "%{$search}%")
                     ->orWhere('barcode', 'like', "%{$search}%")
-                    ->orWhere('brand', 'like', "%{$search}%")))
+                    ->orWhere('brand', 'like', "%{$search}%")
+                    ->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))
                 ->when($statusFilter, fn ($query) => $query->where('status', $statusFilter))
                 ->when($branchFilter, fn ($query) => $query->where('branch_id', $branchFilter))
                 ->when($categoryFilter, fn ($query) => $query->where('category_id', $categoryFilter))
@@ -236,18 +243,19 @@ $deleteConfirmedProduct = function () {
                 ->paginate(10);
         @endphp
 
-        <x-table data-tour="products-list" :headers="['Product', 'SKU', 'Barcode', 'Category', 'Unit', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions']">
+        <x-table data-tour="products-list" :headers="['Product', 'Size', 'SKU', 'Barcode', 'Category', 'Unit', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions']">
             @forelse ($products as $product)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">
                         <div class="flex min-w-56 items-center gap-3">
                             <img class="h-11 w-11 rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
                             <div>
-                                <p class="font-black">{{ $product->name }}</p>
+                                <p class="font-black">{{ $product->displayName() }}</p>
                                 <p class="text-xs text-slate-500">{{ $product->brand ?? 'No brand' }} {{ $product->model_size ? '/ '.$product->model_size : '' }}</p>
                             </div>
                         </div>
                     </td>
+                    <td class="px-4 py-3 font-bold">{{ $product->sizeLabel() ?: '-' }}</td>
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->sku ?: '-' }}</td>
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->barcode ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
@@ -274,7 +282,7 @@ $deleteConfirmedProduct = function () {
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No products found.</td></tr>
+                <tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">No products found.</td></tr>
             @endforelse
         </x-table>
 
@@ -308,6 +316,13 @@ $deleteConfirmedProduct = function () {
                         <option value="">Select unit</option>
                         @foreach (Unit::where('status', 'active')->orderBy('name')->get() as $unit)
                             <option value="{{ $unit->id }}">{{ $unit->name }} / {{ $unit->short_name }}</option>
+                        @endforeach
+                    </x-form-select>
+
+                    <x-form-select label="Product Size" name="product_size_id" wire:model="product_size_id">
+                        <option value="">No size</option>
+                        @foreach (ProductSize::where('status', 'active')->orderBy('symbol')->get() as $size)
+                            <option value="{{ $size->id }}">{{ $size->label() }}</option>
                         @endforeach
                     </x-form-select>
 

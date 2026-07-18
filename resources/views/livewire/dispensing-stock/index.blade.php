@@ -41,7 +41,7 @@ state(['search' => '', 'categoryFilter' => '', 'statusFilter' => '']);
             $branchId = auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id');
             $location = StockLocation::where('branch_id', $branchId)->where('type', 'dispensing')->first();
             $inventory = app(InventoryService::class);
-            $rows = Product::with(['category', 'unit'])
+            $rows = Product::with(['category', 'unit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))
                 ->when($categoryFilter, fn ($query) => $query->where('category_id', $categoryFilter))
                 ->orderBy('name')
@@ -66,7 +66,7 @@ state(['search' => '', 'categoryFilter' => '', 'statusFilter' => '']);
                     <td class="px-4 py-3">
                         <div class="flex items-center gap-3">
                             <img class="h-10 w-10 rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
-                            <span class="font-black">{{ $product->name }}</span>
+                            <span class="font-black">{{ $product->displayNameWithSize() }}</span>
                         </div>
                     </td>
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->sku }}</td>

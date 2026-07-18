@@ -47,7 +47,7 @@ mount(function () {
             $store = StockLocation::where('branch_id', $branchId)->where('type', 'store')->first();
             $dispensing = StockLocation::where('branch_id', $branchId)->where('type', 'dispensing')->first();
             $inventory = app(InventoryService::class);
-            $rows = Product::with(['category', 'unit'])
+            $rows = Product::with(['category', 'unit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))
                 ->when($categoryFilter, fn ($query) => $query->where('category_id', $categoryFilter))
                 ->orderBy('name')
@@ -66,7 +66,7 @@ mount(function () {
             @forelse ($rows as $row)
                 @php $product = $row['product']; @endphp
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
-                    <td class="px-4 py-3 font-black">{{ $product->name }}</td>
+                    <td class="px-4 py-3 font-black">{{ $product->displayNameWithSize() }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
                     <td class="px-4 py-3">{{ $product->unit?->short_name }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($row['storeQty']) }}</td>

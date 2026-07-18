@@ -208,7 +208,7 @@ $availableQuantity = function (int $productId) {
         return 0;
     }
 
-    $product = Product::query()->with('category')->find($productId);
+    $product = Product::query()->with(['category', 'size'])->find($productId);
     $baseStock = app(InventoryService::class)->getProductStock($productId, $location->id, (int) $this->branch_id);
 
     return $product && $product->supportsFractionalSales()
@@ -251,7 +251,7 @@ $addProduct = function (int $productId) {
         return;
     }
 
-    $product = Product::query()->with(['category', 'unit', 'sellingUnit'])->findOrFail($productId);
+    $product = Product::query()->with(['category', 'unit', 'sellingUnit', 'size'])->findOrFail($productId);
     $available = $this->availableQuantity($productId);
     $supportsFractionalSales = $product->supportsFractionalSales();
 
@@ -281,7 +281,8 @@ $addProduct = function (int $productId) {
 
     $this->cart[] = [
         'product_id' => $product->id,
-        'name' => $product->name,
+        'name' => $product->displayName(),
+        'size' => $product->sizeLabel(),
         'sku' => $product->sku,
         'sale_type' => $this->sale_type,
         'quantity' => $supportsFractionalSales
@@ -538,9 +539,9 @@ $completeSale = function (InventoryService $inventory) {
 
             @php
                 $products = $locationReady
-                    ? Product::with(['category', 'unit', 'sellingUnit'])
+                    ? Product::with(['category', 'unit', 'sellingUnit', 'size'])
                         ->where('status', 'active')
-                        ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhere('barcode', 'like', "%{$search}%")))
+                        ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhere('barcode', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))
                         ->orderBy('name')
                         ->take(24)
                         ->get()
@@ -568,7 +569,10 @@ $completeSale = function (InventoryService $inventory) {
                     @endphp
                     <button type="button" wire:click="addProduct({{ $product->id }})" class="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-navy-900" @disabled(! $locationReady)>
                         <img class="h-24 w-full rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
-                        <p class="mt-3 font-black">{{ $product->name }}</p>
+                        <p class="mt-3 font-black">{{ $product->displayName() }}</p>
+                        @if ($product->sizeLabel())
+                            <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ $t('Size') }}: {{ $product->sizeLabel() }}</p>
+                        @endif
                         <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $sellingUnitLabel }}</p>
                         <div class="mt-2 flex items-start justify-between gap-3 text-sm">
                             <span class="font-bold text-build-orange">TZS {{ \App\Support\NumberFormatter::money($displayPrice) }}</span>
@@ -643,6 +647,9 @@ $completeSale = function (InventoryService $inventory) {
                         <div class="flex items-start justify-between gap-3">
                             <div>
                                 <p class="font-bold">{{ $item['name'] }}</p>
+                                @if (! empty($item['size']))
+                                    <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ $t('Size') }}: {{ $item['size'] }}</p>
+                                @endif
                                 <p class="text-xs text-slate-500">{{ $item['sku'] }} / {{ $sellingUnitLabel }}</p>
                                 <div class="mt-1 flex flex-wrap gap-1.5">
                                     <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-black {{ ($item['sale_type'] ?? 'retail') === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item['sale_type'] ?? 'retail')->title() }}</span>

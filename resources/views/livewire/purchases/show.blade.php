@@ -69,7 +69,12 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
             <x-table :headers="['Product', 'Ordered', 'Received', 'Remaining', 'Cost', 'Selling', 'Total']">
                 @foreach ($purchase->items as $item)
                     <tr>
-                        <td class="px-4 py-3 font-bold">{{ $item->product?->name }}</td>
+                        <td class="px-4 py-3 font-bold">
+                            {{ $item->product?->displayName() }}
+                            @if ($item->product?->sizeLabel())
+                                <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->product->sizeLabel() }}</p>
+                            @endif
+                        </td>
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ $item->product?->unit?->short_name }}</td>
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
                         <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($item->remainingQuantity()) }}</td>

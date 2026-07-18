@@ -43,7 +43,7 @@ mount(function (StockTransfer $stockTransfer) {
             <x-table :headers="['Product', 'SKU', 'Unit', 'Quantity', 'Notes']">
                 @foreach ($stockTransfer->items as $item)
                     <tr>
-                        <td class="px-4 py-3 font-black">{{ $item->product?->name }}</td>
+                        <td class="px-4 py-3 font-black">{{ $item->product?->displayNameWithSize() }}</td>
                         <td class="px-4 py-3 font-mono text-xs">{{ $item->product?->sku }}</td>
                         <td class="px-4 py-3">{{ $item->product?->unit?->short_name }}</td>
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->quantity) }}</td>
@@ -66,7 +66,7 @@ mount(function (StockTransfer $stockTransfer) {
             @forelse ($movements as $movement)
                 <tr>
                     <td class="px-4 py-3">{{ $movement->movement_date->format('d M Y') }}</td>
-                    <td class="px-4 py-3">{{ $movement->product?->name }}</td>
+                    <td class="px-4 py-3">{{ $movement->product?->displayNameWithSize() }}</td>
                     <td class="px-4 py-3">{{ $movement->stockLocation?->name }}</td>
                     <td class="px-4 py-3">{{ $movement->movement_type }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($movement->quantity) }}</td>
