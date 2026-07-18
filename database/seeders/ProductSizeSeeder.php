@@ -18,6 +18,7 @@ class ProductSizeSeeder extends Seeder
             ['½ × ½', '½ × ½', 'Half inch by half inch'],
             ['1 × 1', '1 × 1', 'One inch by one inch'],
             ['1¼ × 1¼', '1¼ × 1¼', 'One and quarter inch by one and quarter inch'],
+            ['1½ × 1', '1½ × 1', 'One and half inch by one inch'],
             ['1½ × 1½', '1½ × 1½', 'One and half inch by one and half inch'],
             ['2 × 2', '2 × 2', 'Two inch by two inch'],
             ['2 × 3', '2 × 3', 'Two inch by three inch'],
