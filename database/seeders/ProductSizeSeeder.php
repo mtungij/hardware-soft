@@ -23,7 +23,7 @@ class ProductSizeSeeder extends Seeder
             ['2 × 2', '2 × 2', 'Two inch by two inch'],
             ['2 × 3', '2 × 3', 'Two inch by three inch'],
             ['2 × 4 (2mm)', '2 × 4 (2mm)', 'Two inch by four inch, 2mm thickness'],
-            ['2½ × 2½', '2½ × 2½', 'Two and half inch by two and half inch'],
+            ['1½ × 2½', '1½ × 2½', 'One and half inch by two and half inch'],
             ['3 × 3', '3 × 3', 'Three inch by three inch'],
             ['4 × 4 (3mm)', '4 × 4 (3mm)', 'Four inch by four inch, 3mm thickness'],
             ['6 × 6 (3mm)', '6 × 6 (3mm)', 'Six inch by six inch, 3mm thickness'],
