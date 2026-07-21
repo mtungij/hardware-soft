@@ -122,6 +122,9 @@ $locationBadge = function (?string $type): string {
         $stockExpression = "SUM(CASE WHEN stock_movements.quantity_in <> 0 OR stock_movements.quantity_out <> 0 THEN stock_movements.quantity_in - stock_movements.quantity_out WHEN stock_movements.movement_type IN ('sale_out','transfer_out','adjustment_out','damage_out','purchase_receipt_reversal') THEN -stock_movements.quantity ELSE stock_movements.quantity END)";
         $costNumerator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)";
         $costDenominator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)";
+        $productNameExpression = DB::connection()->getDriverName() === 'sqlite'
+            ? "products.name || ' - ' || product_sizes.symbol"
+            : "CONCAT(products.name, ' - ', product_sizes.symbol)";
 
         $stockSubquery = StockMovement::query()
             ->select([
@@ -170,7 +173,7 @@ $locationBadge = function (?string $type): string {
                 ->orWhere('product_sizes.symbol', 'like', "%{$search}%")))
             ->select([
                 'products.id as product_id',
-                DB::raw("CASE WHEN product_sizes.symbol IS NULL OR product_sizes.symbol = '' THEN products.name ELSE CONCAT(products.name, ' - ', product_sizes.symbol) END as product_name"),
+                DB::raw("CASE WHEN product_sizes.symbol IS NULL OR product_sizes.symbol = '' THEN products.name ELSE {$productNameExpression} END as product_name"),
                 'products.sku',
                 'products.barcode',
                 'products.brand',

@@ -1,7 +1,9 @@
 <?php
 
 use App\Models\Branch;
+use App\Models\Product;
 use App\Models\User;
+use App\Services\PdfExportService;
 use Database\Seeders\DatabaseSeeder;
 use Livewire\Volt\Volt;
 
@@ -73,6 +75,31 @@ test('super admin can download pdf and excel exports', function () {
 
     $this->actingAs($admin)
         ->get(route('exports.download', ['export' => 'tables.users', 'format' => 'pdf']))
+        ->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+});
+
+test('products pdf uses serial numbers cyan styling and uppercase product names', function () {
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    $firstProduct = Product::query()->orderBy('name')->firstOrFail();
+
+    $pdf = Mockery::mock(PdfExportService::class);
+    $pdf->shouldReceive('generatePdf')
+        ->once()
+        ->with('Products', Mockery::on(function (array $payload) use ($firstProduct): bool {
+            expect($payload['headers'][0])->toBe('S/N')
+                ->and($payload['rows'][0][0])->toBe(1)
+                ->and($payload['rows'][0][1])->toBe(mb_strtoupper($firstProduct->displayName()))
+                ->and($payload['table_theme'])->toBe('cyan');
+
+            return true;
+        }))
+        ->andReturn('%PDF');
+
+    $this->app->instance(PdfExportService::class, $pdf);
+
+    $this->actingAs($admin)
+        ->get(route('exports.download', ['export' => 'tables.products', 'format' => 'pdf']))
         ->assertOk()
         ->assertHeader('Content-Type', 'application/pdf');
 });

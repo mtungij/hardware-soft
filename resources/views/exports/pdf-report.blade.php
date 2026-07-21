@@ -12,6 +12,9 @@
         table.data { width: 100%; border-collapse: collapse; margin-top: 12px; }
         table.data th { background: #f3f4f6; color: #111827; font-weight: 700; border: 1px solid #d1d5db; padding: 6px; text-align: left; }
         table.data td { border: 1px solid #e5e7eb; padding: 5px; }
+        table.data.cyan th { background: #0891b2; color: #ffffff; border-color: #0e7490; }
+        table.data.cyan td { border-color: #a5f3fc; }
+        table.data.cyan tbody tr:nth-child(even) td { background: #ecfeff; }
         .totals { margin-top: 12px; width: 40%; border-collapse: collapse; }
         .totals td { border: 1px solid #e5e7eb; padding: 6px; }
         .signature { margin-top: 36px; width: 100%; }
@@ -55,7 +58,7 @@
         </table>
     </div>
 
-    <table class="data">
+    <table class="data{{ ($table_theme ?? null) === 'cyan' ? ' cyan' : '' }}">
         <thead>
             <tr>
                 @foreach ($headers as $heading)

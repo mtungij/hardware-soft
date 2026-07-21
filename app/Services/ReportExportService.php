@@ -53,6 +53,19 @@ class ReportExportService
 
     public function generatePdf(string $reportTitle, array $data, array $filters = []): string
     {
+        if (($data['export_key'] ?? null) === 'tables.products') {
+            $data['headers'] = ['S/N', ...$data['headers']];
+            $data['rows'] = collect($data['rows'])
+                ->values()
+                ->map(fn (array $row, int $index) => [
+                    $index + 1,
+                    mb_strtoupper((string) ($row[0] ?? '')),
+                    ...array_slice($row, 1),
+                ])
+                ->all();
+            $data['table_theme'] = 'cyan';
+        }
+
         return app(PdfExportService::class)->generatePdf($reportTitle, ['filters' => $filters, ...$data]);
     }
 
@@ -81,7 +94,10 @@ class ReportExportService
         $header = $this->getCompanyHeader($request);
         [$title, $headers, $rows, $totals] = $this->rows($key, $request);
 
-        return compact('title', 'header', 'headers', 'rows', 'totals') + ['filters' => $request->query()];
+        return compact('title', 'header', 'headers', 'rows', 'totals') + [
+            'filters' => $request->query(),
+            'export_key' => $key,
+        ];
     }
 
     private function rows(string $key, Request $request): array
@@ -355,6 +371,9 @@ class ReportExportService
         $stockExpression = "SUM(CASE WHEN stock_movements.quantity_in <> 0 OR stock_movements.quantity_out <> 0 THEN stock_movements.quantity_in - stock_movements.quantity_out WHEN stock_movements.movement_type IN ('sale_out','transfer_out','adjustment_out','damage_out','purchase_receipt_reversal') THEN -stock_movements.quantity ELSE stock_movements.quantity END)";
         $costNumerator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)";
         $costDenominator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)";
+        $productNameExpression = DB::connection()->getDriverName() === 'sqlite'
+            ? "products.name || ' - ' || product_sizes.symbol"
+            : "CONCAT(products.name, ' - ', product_sizes.symbol)";
 
         $stockSubquery = StockMovement::query()
             ->select([
@@ -401,7 +420,7 @@ class ReportExportService
                 ->orWhere('product_sizes.name', 'like', "%{$search}%")
                 ->orWhere('product_sizes.symbol', 'like', "%{$search}%")))
             ->select([
-                DB::raw("CASE WHEN product_sizes.symbol IS NULL OR product_sizes.symbol = '' THEN products.name ELSE CONCAT(products.name, ' - ', product_sizes.symbol) END as product_name"),
+                DB::raw("CASE WHEN product_sizes.symbol IS NULL OR product_sizes.symbol = '' THEN products.name ELSE {$productNameExpression} END as product_name"),
                 'products.sku',
                 'categories.name as category_name',
                 'units.short_name as unit_name',
