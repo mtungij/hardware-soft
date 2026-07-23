@@ -75,12 +75,34 @@ class InventoryService
 
     public function getProductStock(int $productId, int $stockLocationId, int $branchId): float
     {
-        return (float) StockMovement::query()
-            ->where('product_id', $productId)
+        return $this->getProductStocks([$productId], $stockLocationId, $branchId)[$productId] ?? 0;
+    }
+
+    /**
+     * @param  array<int, int>  $productIds
+     * @return array<int, float>
+     */
+    public function getProductStocks(array $productIds, int $stockLocationId, int $branchId): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        $negativeTypePlaceholders = implode(',', array_fill(0, count(StockMovement::NEGATIVE_TYPES), '?'));
+
+        return StockMovement::query()
+            ->whereIn('product_id', $productIds)
             ->where('stock_location_id', $stockLocationId)
             ->where('branch_id', $branchId)
-            ->get()
-            ->sum(fn (StockMovement $movement) => $movement->signedQuantity());
+            ->select('product_id')
+            ->selectRaw(
+                "SUM(CASE WHEN quantity_in <> 0 OR quantity_out <> 0 THEN quantity_in - quantity_out WHEN movement_type IN ({$negativeTypePlaceholders}) THEN -quantity ELSE quantity END) as available_quantity",
+                StockMovement::NEGATIVE_TYPES,
+            )
+            ->groupBy('product_id')
+            ->pluck('available_quantity', 'product_id')
+            ->map(fn ($quantity) => (float) $quantity)
+            ->all();
     }
 
     public function getProductTotalStock(int $productId, int $branchId): float

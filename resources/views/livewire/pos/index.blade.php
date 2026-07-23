@@ -131,12 +131,16 @@ $updatedSaleType = function () {
         if ($unitPrice === '') {
             $this->cart[$index]['unit_price'] = '0';
             $this->cart[$index]['tax_amount'] = '0';
+            $this->dispatch('money-input-updated', model: "cart.{$index}.unit_price", value: '0');
+            $this->dispatch('money-input-updated', model: "cart.{$index}.tax_amount", value: '0');
             continue;
         }
 
         $this->cart[$index]['sale_type'] = $this->sale_type;
         $this->cart[$index]['unit_price'] = $unitPrice;
         $this->cart[$index]['tax_amount'] = $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0';
+        $this->dispatch('money-input-updated', model: "cart.{$index}.unit_price", value: $this->cart[$index]['unit_price']);
+        $this->dispatch('money-input-updated', model: "cart.{$index}.tax_amount", value: $this->cart[$index]['tax_amount']);
     }
 
     $this->syncDefaultPaymentAmount();
@@ -202,20 +206,6 @@ $saveQuickCustomer = function () {
     session()->flash('success', \App\Support\UiText::translate('Customer created and selected.'));
 };
 
-$availableQuantity = function (int $productId) {
-    $location = $this->currentSaleLocation();
-    if (! $location) {
-        return 0;
-    }
-
-    $product = Product::query()->with(['category', 'size'])->find($productId);
-    $baseStock = app(InventoryService::class)->getProductStock($productId, $location->id, (int) $this->branch_id);
-
-    return $product && $product->supportsFractionalSales()
-        ? $baseStock * (float) ($product->conversion_factor ?: 1)
-        : $baseStock;
-};
-
 $syncDefaultPaymentAmount = function () {
     if (! isset($this->payments[0]) || count($this->payments) !== 1) {
         return;
@@ -252,8 +242,15 @@ $addProduct = function (int $productId) {
     }
 
     $product = Product::query()->with(['category', 'unit', 'sellingUnit', 'size'])->findOrFail($productId);
-    $available = $this->availableQuantity($productId);
     $supportsFractionalSales = $product->supportsFractionalSales();
+    $baseStock = app(InventoryService::class)->getProductStock(
+        $productId,
+        (int) $this->currentSaleLocation()->id,
+        (int) $this->branch_id,
+    );
+    $available = $supportsFractionalSales
+        ? $baseStock * (float) ($product->conversion_factor ?: 1)
+        : $baseStock;
 
     if ($available <= 0) {
         $this->addError('cart', \App\Support\UiText::translate('Product is out of stock in selected source.'));
@@ -546,6 +543,22 @@ $completeSale = function (InventoryService $inventory) {
                         ->take(24)
                         ->get()
                     : collect();
+                $stockProductIds = $products->pluck('id')
+                    ->merge(collect($cart)->pluck('product_id'))
+                    ->filter()
+                    ->unique()
+                    ->map(fn ($id) => (int) $id)
+                    ->values()
+                    ->all();
+                $stockByProduct = $locationReady
+                    ? app(InventoryService::class)->getProductStocks(
+                        $stockProductIds,
+                        (int) $selectedSaleLocation->id,
+                        (int) $branch_id,
+                    )
+                    : [];
+                $availableStock = fn (int $productId, float $conversionFactor = 1): float =>
+                    ($stockByProduct[$productId] ?? 0) * $conversionFactor;
                 $stockLabel = InventorySettings::warehouseEnabled() ? $t('Stock') : $t('Available Stock');
             @endphp
             @unless ($locationReady)
@@ -556,7 +569,6 @@ $completeSale = function (InventoryService $inventory) {
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 @foreach ($products as $product)
                     @php
-                        $available = $this->availableQuantity($product->id);
                         $displayPrice = $sale_type === 'wholesale' ? $product->wholesale_price : $product->selling_price;
                         $supportsFractionalSales = $product->supportsFractionalSales();
                         $sellingUnitLabel = $supportsFractionalSales
@@ -564,6 +576,7 @@ $completeSale = function (InventoryService $inventory) {
                             : $product->unit?->short_name;
                         $baseUnitLabel = $product->unit?->short_name;
                         $conversionFactor = $supportsFractionalSales ? max(0.0001, (float) ($product->conversion_factor ?: 1)) : 1;
+                        $available = $availableStock($product->id, $conversionFactor);
                         $baseAvailable = $available / $conversionFactor;
                         $showsBaseStock = $supportsFractionalSales && $baseUnitLabel && ($sellingUnitLabel !== $baseUnitLabel || abs($conversionFactor - 1) > 0.0001);
                     @endphp
@@ -638,7 +651,7 @@ $completeSale = function (InventoryService $inventory) {
                         $isFractionalSale = (bool) ($item['allow_fractional_sale'] ?? false);
                         $conversionFactor = $isFractionalSale ? max(0.0001, (float) ($item['conversion_factor'] ?? 1)) : 1;
                         $baseQuantity = $quantity / $conversionFactor;
-                        $availableSellingQuantity = $this->availableQuantity((int) ($item['product_id'] ?? 0));
+                        $availableSellingQuantity = $availableStock((int) ($item['product_id'] ?? 0), $conversionFactor);
                         $availableBaseQuantity = $availableSellingQuantity / $conversionFactor;
                         $quantityStep = (string) ($item['quantity_step'] ?? 1);
                         $minimumQuantity = (string) ($item['minimum_sale_quantity'] ?? 1);
@@ -663,27 +676,27 @@ $completeSale = function (InventoryService $inventory) {
                         <div class="mt-3 grid gap-2 sm:grid-cols-4">
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Qty') }} ({{ $sellingUnitLabel ?: '-' }})
-                                <input wire:model.live="cart.{{ $index }}.quantity" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
+                                <input wire:model.live.debounce.75ms="cart.{{ $index }}.quantity" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
                             </label>
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Unit Price') }}
-                                <span data-money-field wire:ignore class="mt-1 block min-w-0">
+                                <span data-money-field wire:ignore wire:key="pos-unit-price-{{ $item['product_id'] }}" class="mt-1 block min-w-0">
                                     <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
-                                    <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.unit_price">
+                                    <input type="hidden" data-money-value value="{{ $item['unit_price'] ?? '' }}" wire:model.live="cart.{{ $index }}.unit_price">
                                 </span>
                             </label>
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Discount') }}
                                 <span data-money-field wire:ignore class="mt-1 block min-w-0">
                                     <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
-                                    <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.discount_amount">
+                                    <input type="hidden" data-money-value value="{{ $item['discount_amount'] ?? '' }}" wire:model.live="cart.{{ $index }}.discount_amount">
                                 </span>
                             </label>
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('VAT') }}
                                 <span data-money-field wire:ignore class="mt-1 block min-w-0">
                                     <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
-                                    <input type="hidden" data-money-value wire:model.live="cart.{{ $index }}.tax_amount">
+                                    <input type="hidden" data-money-value value="{{ $item['tax_amount'] ?? '' }}" wire:model.live="cart.{{ $index }}.tax_amount">
                                 </span>
                             </label>
                         </div>
