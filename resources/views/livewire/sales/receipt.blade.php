@@ -31,7 +31,7 @@ mount(function (Sale $sale) {
 
 <div>
     @php
-        $paperSize = request()->query('paper') === '58' ? '58' : '80';
+        $paperSize = request()->query('paper') === '80' ? '80' : '58';
         $isOutstanding = (float) $sale->balance_amount > 0 || $sale->payment_status !== 'paid';
         $customerName = $sale->temporary_customer_name ?: $sale->customer?->name ?: 'Walk-in Customer';
         $company = $sale->company;
@@ -47,50 +47,106 @@ mount(function (Sale $sale) {
         $tinNumber = $company?->tin_number ?: $settings?->tin_number;
         $vatNumber = $company?->vrn_number ?: $settings?->vrn_number;
         $logoPath = $company?->logo ?: $settings?->company_logo;
+        $requestOrigin = request()->getSchemeAndHttpHost();
         $logoUrl = $logoPath
-            ? (\Illuminate\Support\Str::startsWith($logoPath, ['http://', 'https://', '//', '/'])
+            ? (\Illuminate\Support\Str::startsWith($logoPath, ['http://', 'https://'])
                 ? $logoPath
-                : (\Illuminate\Support\Str::startsWith($logoPath, ['storage/', 'images/', 'assets/'])
-                    ? asset(ltrim($logoPath, '/'))
-                    : asset('storage/'.ltrim($logoPath, '/'))))
+                : (\Illuminate\Support\Str::startsWith($logoPath, '//')
+                    ? request()->getScheme().':'.$logoPath
+                    : (\Illuminate\Support\Str::startsWith($logoPath, '/')
+                        ? $requestOrigin.$logoPath
+                        : (\Illuminate\Support\Str::startsWith($logoPath, ['storage/', 'images/', 'assets/'])
+                            ? $requestOrigin.'/'.ltrim($logoPath, '/')
+                            : $requestOrigin.'/storage/'.ltrim($logoPath, '/')))))
             : null;
         $receiptTitle = 'SALES RECEIPT';
         $footerMessage = $settings?->receipt_footer_message;
     @endphp
 
     <style>
-        .customer-receipt {
+        html,
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .receipt-paper {
             --receipt-width: 72mm;
-            --receipt-padding: 3mm;
             box-sizing: border-box;
             position: static;
             width: var(--receipt-width);
+            max-width: var(--receipt-width);
             height: auto;
             min-height: 0;
-            padding: var(--receipt-padding);
+            margin: 0 auto;
+            padding: 1.5mm 1mm;
+            color: #000;
+            background: #fff;
+            font-family: "Courier New", Courier, monospace;
             font-size: 11px;
             line-height: 1.35;
+            font-weight: 500;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
-        .customer-receipt[data-paper-size="58"] {
-            --receipt-width: 52mm;
-            --receipt-padding: 2mm;
-            font-size: 10px;
+        .receipt-paper[data-paper-size="58"] {
+            --receipt-width: 48mm;
+            font-size: 10.5px;
         }
 
         .receipt-logo {
-            display: block;
+            display: block !important;
             width: auto;
-            max-width: 180px;
+            max-width: 28mm;
             height: auto;
-            max-height: 80px;
-            margin: 0 auto 2mm;
+            max-height: 16mm;
+            margin: 0 auto 1.5mm;
             object-fit: contain;
         }
 
-        .customer-receipt[data-paper-size="58"] .receipt-logo {
-            max-width: 120px;
-            max-height: 60px;
+        .company-name {
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .receipt-title {
+            font-size: 12.5px;
+            font-weight: 700;
+        }
+
+        .product-name,
+        .receipt-header,
+        .receipt-summary {
+            font-weight: 600;
+        }
+
+        .item-values,
+        .summary-row {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 4px;
+        }
+
+        .item-values span:last-child,
+        .summary-row span:last-child {
+            flex-shrink: 0;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .summary-total {
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .receipt-paper .receipt-header,
+        .receipt-paper .receipt-item,
+        .receipt-paper .receipt-title,
+        .receipt-paper .summary-total,
+        .receipt-paper .receipt-footer {
+            border-color: #000 !important;
         }
 
         .receipt-item,
@@ -111,6 +167,7 @@ mount(function (Sale $sale) {
 
         @media print {
             @page {
+                size: {{ $paperSize }}mm auto;
                 margin: 0;
             }
 
@@ -119,9 +176,10 @@ mount(function (Sale $sale) {
                 width: auto;
                 height: auto;
                 min-height: 0;
-                margin: 0;
-                padding: 0;
-                background: #fff;
+                margin: 0 !important;
+                padding: 0 !important;
+                color: #000 !important;
+                background: #fff !important;
             }
 
             #customer-receipt {
@@ -130,39 +188,41 @@ mount(function (Sale $sale) {
                 display: block;
                 height: auto;
                 min-height: 0;
-                margin: 0;
+                margin: 0 auto;
+                padding: 1.5mm 1mm;
+                color: #000 !important;
+                background: #fff !important;
                 border: 0;
                 border-radius: 0;
                 box-shadow: none;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
+            #customer-receipt *,
+            #customer-receipt img {
+                color: #000 !important;
+                visibility: visible !important;
+            }
+
+            .no-print,
             .receipt-no-print {
                 display: none !important;
             }
         }
     </style>
 
-    <div class="receipt-no-print">
-        <x-page-header title="Receipt" :description="$sale->sale_number" :breadcrumbs="['Dashboard' => route('dashboard'), 'Sales' => route('sales.index'), 'Receipt' => null]">
-            <div class="flex flex-wrap gap-2">
-                <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 58]) }}" class="{{ $paperSize === '58' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 dark:border-slate-700' }} rounded-lg px-3 py-2 text-sm font-bold">58mm</a>
-                <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 80]) }}" class="{{ $paperSize === '80' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 dark:border-slate-700' }} rounded-lg px-3 py-2 text-sm font-bold">80mm</a>
-                <button type="button" onclick="printCustomerReceipt()" class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Print Receipt</button>
-            </div>
-        </x-page-header>
-    </div>
-
     <div
         id="customer-receipt"
         data-paper-size="{{ $paperSize }}"
-        class="customer-receipt mx-auto bg-white font-mono text-slate-950 shadow-soft"
+        class="receipt-paper customer-receipt shadow-soft"
     >
         <div class="receipt-header text-center">
             @if ($logoUrl)
                 <img src="{{ $logoUrl }}" alt="{{ $companyName }} logo" class="receipt-logo">
             @endif
             @if ($companyName)
-                <p class="text-[1.45em] font-black uppercase leading-tight">{{ $companyName }}</p>
+                <p class="company-name uppercase leading-tight">{{ $companyName }}</p>
             @endif
             @if ($companyTagline)
                 <p class="mt-0.5 font-semibold">{{ $companyTagline }}</p>
@@ -188,7 +248,7 @@ mount(function (Sale $sale) {
             @if ($showTaxIdentifiers && $vatNumber)
                 <p>VAT: {{ $vatNumber }}</p>
             @endif
-            <p class="mt-[2mm] border-y border-dashed border-slate-500 py-1 text-[1.15em] font-black tracking-wide">{{ $receiptTitle }}</p>
+            <p class="receipt-title mt-[2mm] border-y border-dashed py-1 tracking-wide">{{ $receiptTitle }}</p>
         </div>
 
         <div class="receipt-header my-[2mm] border-b border-dashed border-slate-500 pb-[2mm] text-left">
@@ -208,13 +268,13 @@ mount(function (Sale $sale) {
                         ?: $item->product?->unit?->short_name;
                 @endphp
                 <div class="receipt-item border-b border-dashed border-slate-400 py-[2mm]">
-                    <p class="font-bold">
+                    <p class="product-name">
                         {{ $item->product?->displayName() }}
                         @if ($item->sizeLabel())
                             {{ $item->sizeLabel() }}
                         @endif
                     </p>
-                    <div class="mt-0.5 flex items-baseline justify-between gap-2">
+                    <div class="item-values mt-0.5">
                         <span>
                             {{ \App\Support\NumberFormatter::quantity($item->quantity) }}
                             {{ $sellingUnit }}
@@ -230,19 +290,19 @@ mount(function (Sale $sale) {
         </div>
 
         <div class="receipt-summary py-[2mm]">
-            <div class="flex justify-between gap-2"><span>Subtotal</span><span>{{ \App\Support\NumberFormatter::money($sale->subtotal) }}</span></div>
+            <div class="summary-row"><span>Subtotal</span><span>{{ \App\Support\NumberFormatter::money($sale->subtotal) }}</span></div>
             @if ((float) $sale->discount_amount > 0)
-                <div class="flex justify-between gap-2"><span>Discount</span><span>-{{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</span></div>
+                <div class="summary-row"><span>Discount</span><span>-{{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</span></div>
             @endif
             @if ((float) $sale->tax_amount > 0)
-                <div class="flex justify-between gap-2"><span>Tax/VAT</span><span>{{ \App\Support\NumberFormatter::money($sale->tax_amount) }}</span></div>
+                <div class="summary-row"><span>Tax/VAT</span><span>{{ \App\Support\NumberFormatter::money($sale->tax_amount) }}</span></div>
             @endif
-            <div class="my-1 flex justify-between gap-2 border-y border-slate-500 py-1 text-[1.1em] font-black"><span>TOTAL</span><span>{{ \App\Support\NumberFormatter::money($sale->total_amount) }}</span></div>
-            <div class="flex justify-between gap-2"><span>Paid</span><span>{{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</span></div>
+            <div class="summary-row summary-total my-1 border-y py-1"><span>TOTAL</span><span>{{ \App\Support\NumberFormatter::money($sale->total_amount) }}</span></div>
+            <div class="summary-row"><span>Paid</span><span>{{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</span></div>
             @if ($isOutstanding)
-                <div class="flex justify-between gap-2 font-bold"><span>Outstanding</span><span>{{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</span></div>
+                <div class="summary-row font-bold"><span>Outstanding</span><span>{{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</span></div>
             @else
-                <div class="flex justify-between gap-2"><span>Change</span><span>{{ \App\Support\NumberFormatter::money($sale->change_amount) }}</span></div>
+                <div class="summary-row"><span>Change</span><span>{{ \App\Support\NumberFormatter::money($sale->change_amount) }}</span></div>
             @endif
         </div>
 
@@ -251,14 +311,41 @@ mount(function (Sale $sale) {
         @endif
     </div>
 
+    <div class="no-print receipt-no-print">
+        <x-page-header title="Receipt" :description="$sale->sale_number" :breadcrumbs="['Dashboard' => route('dashboard'), 'Sales' => route('sales.index'), 'Receipt' => null]">
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 58]) }}" class="{{ $paperSize === '58' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 dark:border-slate-700' }} rounded-lg px-3 py-2 text-sm font-bold">58mm</a>
+                <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 80]) }}" class="{{ $paperSize === '80' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 dark:border-slate-700' }} rounded-lg px-3 py-2 text-sm font-bold">80mm</a>
+                <button type="button" onclick="printCustomerReceipt()" class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Print Receipt</button>
+            </div>
+        </x-page-header>
+        <div class="mx-auto mb-6 max-w-lg rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm">
+            <p class="font-bold text-slate-900">Recommended thermal printer settings</p>
+            <p>Paper: {{ $paperSize }}mm · Margins: None · Scale: 100% · Browser headers/footers: Off</p>
+        </div>
+    </div>
+
     <script>
         window.printCustomerReceipt = async function () {
             const receipt = document.getElementById('customer-receipt');
-            const images = receipt ? Array.from(receipt.querySelectorAll('img')) : [];
+            const images = receipt ? Array.from(receipt.querySelectorAll('img')) : Array.of();
 
             await Promise.all(images.map((image) => new Promise((resolve) => {
-                const finish = () => {
-                    if (! image.naturalWidth) {
+                let settled = false;
+                const finish = async () => {
+                    if (settled) {
+                        return;
+                    }
+
+                    settled = true;
+
+                    if (image.naturalWidth) {
+                        try {
+                            await image.decode();
+                        } catch (error) {
+                            // A loaded image may not implement decode on older browsers.
+                        }
+                    } else {
                         image.remove();
                     }
 

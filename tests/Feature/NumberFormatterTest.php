@@ -6,7 +6,10 @@ test('money values display without decimal places', function () {
     expect(NumberFormatter::money(1000.00))->toBe('1,000')
         ->and(NumberFormatter::money(58000.00))->toBe('58,000')
         ->and(NumberFormatter::money(0.00))->toBe('0')
-        ->and(NumberFormatter::money(2500000.00))->toBe('2,500,000');
+        ->and(NumberFormatter::money(2500000.00))->toBe('2,500,000')
+        ->and(NumberFormatter::money('28,000.50'))->toBe('28,001')
+        ->and(NumberFormatter::money(''))->toBe('0')
+        ->and(NumberFormatter::money(null))->toBe('0');
 });
 
 test('quantity values display without unnecessary trailing zeros', function () {

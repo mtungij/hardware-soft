@@ -58,7 +58,7 @@ test('purchase create keeps selected product after supplier is selected', functi
         ->set('supplier_id', (string) $supplier->id)
         ->call('selectProduct', 0, (string) $product->id)
         ->assertSet('items.0.product_id', (string) $product->id)
-        ->assertSet('items.0.selling_price', (string) $product->selling_price);
+        ->assertSet('items.0.selling_price', (float) $product->selling_price);
 });
 
 test('super admin can update product selling price from purchase create', function () {

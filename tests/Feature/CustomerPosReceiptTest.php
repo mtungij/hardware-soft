@@ -171,18 +171,24 @@ test('internal sale details preserve stock and conversion information', function
 test('receipt offers compact printable 58mm and 80mm paper layouts', function () {
     $sale = makeCustomerReceiptSale($this->branch, $this->admin);
 
+    $this->get(route('sales.receipt', $sale))
+        ->assertOk()
+        ->assertSee('data-paper-size="58"', false);
+
     $this->get(route('sales.receipt', ['sale' => $sale, 'paper' => 58]))
         ->assertOk()
         ->assertSee('data-paper-size="58"', false)
-        ->assertSee('--receipt-width: 52mm', false)
-        ->assertSee('max-width: 120px', false)
+        ->assertSee('--receipt-width: 48mm', false)
+        ->assertSee('size: 58mm auto', false)
+        ->assertSee('max-width: 28mm', false)
+        ->assertSee('max-height: 16mm', false)
         ->assertSee('page-break-inside: avoid', false);
 
     $this->get(route('sales.receipt', ['sale' => $sale, 'paper' => 80]))
         ->assertOk()
         ->assertSee('data-paper-size="80"', false)
         ->assertSee('--receipt-width: 72mm', false)
-        ->assertSee('max-width: 180px', false)
+        ->assertSee('size: 80mm auto', false)
         ->assertSee('window.print()', false);
 });
 
@@ -217,7 +223,7 @@ test('receipt header displays configured company branding in business identity o
     $sale = makeCustomerReceiptSale($this->branch, $this->admin);
 
     $component = Volt::test('sales.receipt', ['sale' => $sale])
-        ->assertSee('storage/company-logos/kariakoo.png', false)
+        ->assertSee('/storage/company-logos/kariakoo.png', false)
         ->assertSee('Kariakoo Hardware')
         ->assertSee('Building Solutions')
         ->assertSee('+255 629 364 847')
@@ -283,6 +289,7 @@ test('printed receipt stays in normal flow waits for its logo and prints the foo
         ->assertSee('position: static', false)
         ->assertSee('height: auto', false)
         ->assertSee('image.complete', false)
+        ->assertSee('await image.decode()', false)
         ->assertSee("image.addEventListener('load'", false)
         ->assertSee("image.addEventListener('error'", false)
         ->assertSee('await Promise.all', false)
@@ -295,6 +302,33 @@ test('printed receipt stays in normal flow waits for its logo and prints the foo
 
     expect(substr_count($html, 'Huduma bora kila siku.'))->toBe(1)
         ->and(strpos($html, 'receipt-summary'))->toBeLessThan(strpos($html, 'receipt-footer'));
+});
+
+test('58mm print DOM starts with the receipt and uses compact high-contrast thermal alignment', function () {
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin);
+
+    $component = Volt::test('sales.receipt', ['sale' => $sale])
+        ->assertSee('margin: 0 !important', false)
+        ->assertSee('padding: 0 !important', false)
+        ->assertSee('font-family: "Courier New", Courier, monospace', false)
+        ->assertSee('color: #000 !important', false)
+        ->assertSee('-webkit-print-color-adjust: exact', false)
+        ->assertSee('.item-values,', false)
+        ->assertSee('.summary-row', false)
+        ->assertSee('gap: 4px', false)
+        ->assertSee('white-space: nowrap', false)
+        ->assertSee('.no-print,', false)
+        ->assertSee('display: none !important', false)
+        ->assertDontSee('100vh', false)
+        ->assertDontSee('position: fixed', false)
+        ->assertDontSee('position: absolute', false);
+
+    $html = $component->html();
+
+    expect(strpos($html, 'id="customer-receipt"'))->toBeLessThan(strpos($html, 'class="no-print receipt-no-print"'))
+        ->and(strpos($html, 'class="receipt-paper'))->toBeLessThan(strpos($html, 'class="receipt-header'))
+        ->and(strpos($html, 'class="product-name'))->toBeLessThan(strpos($html, 'class="item-values'))
+        ->and(strpos($html, '<div class="receipt-summary'))->toBeLessThan(strpos($html, 'class="no-print receipt-no-print"'));
 });
 
 test('sale company identity wins over a stale hardcoded settings name', function () {

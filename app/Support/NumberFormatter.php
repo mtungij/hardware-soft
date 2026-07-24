@@ -18,7 +18,12 @@ final class NumberFormatter
 
     private static function normalize(float|int|string|null $value): float
     {
-        $number = (float) ($value ?? 0);
+        if ($value === null || trim((string) $value) === '') {
+            return 0.0;
+        }
+
+        $normalized = str_replace([',', ' ', "\u{00A0}"], '', (string) $value);
+        $number = is_numeric($normalized) ? (float) $normalized : 0.0;
 
         return abs($number) < 0.0000001 ? 0.0 : $number;
     }

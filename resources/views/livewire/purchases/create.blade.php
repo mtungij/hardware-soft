@@ -22,15 +22,80 @@ state([
     'invoice_number' => '',
     'reference_number' => '',
     'notes' => '',
-    'paid_amount' => '0',
+    'paid_amount' => 0.0,
+    'subtotal' => 0.0,
+    'grand_total' => 0.0,
+    'balance_amount' => 0.0,
+    'recalculating' => false,
     'items' => [],
 ]);
+
+$toNumber = function (mixed $value): float {
+    if ($value === null || trim((string) $value) === '') {
+        return 0.0;
+    }
+
+    $normalized = str_replace([',', ' ', "\u{00A0}"], '', (string) $value);
+
+    return is_numeric($normalized) ? (float) $normalized : 0.0;
+};
+
+$newItem = fn (): array => [
+    'product_id' => '',
+    'ordered_quantity' => 1.0,
+    'received_quantity' => 0.0,
+    'cost_price' => 0.0,
+    'selling_price' => 0.0,
+    'discount' => 0.0,
+    'tax' => 0.0,
+    'line_total' => 0.0,
+];
+
+$recalculateTotals = function (): void {
+    if ($this->recalculating) {
+        return;
+    }
+
+    $this->recalculating = true;
+    $subtotal = 0.0;
+    $grandTotal = 0.0;
+
+    foreach ($this->items as $index => $item) {
+        $quantity = $this->toNumber($item['ordered_quantity'] ?? $item['ordered_qty'] ?? 0);
+        $receivedQuantity = $this->toNumber($item['received_quantity'] ?? $item['received_qty'] ?? 0);
+        $costPrice = $this->toNumber($item['cost_price'] ?? $item['unit_cost'] ?? 0);
+        $sellingPrice = $this->toNumber($item['selling_price'] ?? 0);
+        $discount = $this->toNumber($item['discount'] ?? 0);
+        $tax = $this->toNumber($item['tax'] ?? 0);
+        $grossTotal = $quantity * $costPrice;
+        $lineTotal = max(0.0, $grossTotal - $discount + $tax);
+
+        $this->items[$index]['ordered_quantity'] = $quantity;
+        $this->items[$index]['received_quantity'] = $receivedQuantity;
+        $this->items[$index]['cost_price'] = $costPrice;
+        $this->items[$index]['selling_price'] = $sellingPrice;
+        $this->items[$index]['discount'] = $discount;
+        $this->items[$index]['tax'] = $tax;
+        $this->items[$index]['line_total'] = $lineTotal;
+
+        $subtotal += $grossTotal;
+        $grandTotal += $lineTotal;
+    }
+
+    $paidAmount = $this->toNumber($this->paid_amount);
+    $this->paid_amount = $paidAmount;
+    $this->subtotal = $subtotal;
+    $this->grand_total = $grandTotal;
+    $this->balance_amount = max(0.0, $grandTotal - $paidAmount);
+    $this->recalculating = false;
+};
 
 mount(function (InventoryService $inventory) {
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
     $this->purchase_date = now()->toDateString();
     $this->reference_number = $inventory->generatePurchaseReference();
-    $this->items = [['product_id' => '', 'ordered_quantity' => '1', 'cost_price' => '0', 'selling_price' => '', 'line_total' => 0]];
+    $this->items = [$this->newItem()];
+    $this->recalculateTotals();
 });
 
 $addItem = function () {
@@ -40,12 +105,14 @@ $addItem = function () {
         return;
     }
 
-    $this->items[] = ['product_id' => '', 'ordered_quantity' => '1', 'cost_price' => '0', 'selling_price' => '', 'line_total' => 0];
+    $this->items[] = $this->newItem();
+    $this->recalculateTotals();
 };
 
 $removeItem = function (int $index) {
     unset($this->items[$index]);
     $this->items = array_values($this->items);
+    $this->recalculateTotals();
 };
 
 $selectProduct = function (int $index, string $productId) {
@@ -54,23 +121,30 @@ $selectProduct = function (int $index, string $productId) {
     }
 
     $product = $productId ? Product::query()->find($productId) : null;
-    $costPrice = $product ? (string) $product->buying_price : '0';
-    $sellingPrice = $product ? (string) $product->selling_price : '';
+    $costPrice = $this->toNumber($product?->buying_price);
+    $sellingPrice = $this->toNumber($product?->selling_price);
 
     $this->items[$index]['product_id'] = $product ? (string) $product->id : '';
     $this->items[$index]['cost_price'] = $costPrice;
     $this->items[$index]['selling_price'] = $sellingPrice;
+    $this->recalculateTotals();
     $this->dispatch('money-input-updated', model: "items.{$index}.cost_price", value: $costPrice);
     $this->dispatch('money-input-updated', model: "items.{$index}.selling_price", value: $sellingPrice);
 };
 
-$totalAmount = function () {
-    return collect($this->items)->sum(fn ($item) => (float) ($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0));
+$updatedItems = function (): void {
+    $this->recalculateTotals();
+};
+
+$updatedPaidAmount = function (): void {
+    $this->recalculateTotals();
 };
 
 $canUpdateSellingPrice = fn (): bool => auth()->user()?->hasAnyRole(['Super Admin', 'Admin']) ?? false;
 
 $savePurchase = function (string $status, bool $sendEmail = false) {
+    $this->recalculateTotals();
+
     $validated = $this->validate([
         'branch_id' => ['required', 'exists:branches,id'],
         'supplier_id' => ['required', 'exists:suppliers,id'],
@@ -79,16 +153,23 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         'reference_number' => ['required', 'string', 'max:255', 'unique:purchases,reference_number'],
         'notes' => ['nullable', 'string', 'max:1000'],
         'paid_amount' => ['required', 'numeric', 'min:0'],
+        'subtotal' => ['required', 'numeric', 'min:0'],
+        'grand_total' => ['required', 'numeric', 'min:0'],
+        'balance_amount' => ['required', 'numeric', 'min:0'],
         'items' => ['required', 'array', 'min:1'],
         'items.*.product_id' => ['required', 'exists:products,id'],
-        'items.*.ordered_quantity' => ['required', 'numeric', 'gt:0'],
+        'items.*.ordered_quantity' => ['required', 'numeric', 'min:0.01'],
+        'items.*.received_quantity' => ['required', 'numeric', 'min:0'],
         'items.*.cost_price' => ['required', 'numeric', 'min:0'],
         'items.*.selling_price' => ['nullable', 'numeric', 'min:0'],
+        'items.*.discount' => ['required', 'numeric', 'min:0'],
+        'items.*.tax' => ['required', 'numeric', 'min:0'],
+        'items.*.line_total' => ['required', 'numeric', 'min:0'],
     ]);
 
     foreach ($validated['items'] as $index => $item) {
         $product = Product::query()->with(['purchaseUnit.measurementType', 'unit'])->findOrFail($item['product_id']);
-        $quantity = (float) $item['ordered_quantity'];
+        $quantity = $this->toNumber($item['ordered_quantity']);
 
         if (! $product->acceptsPurchaseQuantity($quantity)) {
             throw ValidationException::withMessages([
@@ -97,16 +178,16 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         }
     }
 
-    $total = $this->totalAmount();
+    $total = $this->toNumber($validated['grand_total']);
 
-    if ((float) $validated['paid_amount'] > $total) {
+    if ($this->toNumber($validated['paid_amount']) > $total) {
         throw ValidationException::withMessages(['paid_amount' => 'Paid amount cannot exceed total amount.']);
     }
 
     $canUpdateSellingPrice = $this->canUpdateSellingPrice();
 
     $purchase = DB::transaction(function () use ($validated, $status, $total, $canUpdateSellingPrice) {
-        $paid = (float) $validated['paid_amount'];
+        $paid = $this->toNumber($validated['paid_amount']);
         $balance = max(0, $total - $paid);
 
         $purchase = Purchase::create([
@@ -126,11 +207,13 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
 
         foreach ($validated['items'] as $item) {
             $product = Product::query()->findOrFail($item['product_id']);
-            $quantity = (float) $item['ordered_quantity'];
-            $cost = (float) $item['cost_price'];
+            $quantity = $this->toNumber($item['ordered_quantity']);
+            $cost = $this->toNumber($item['cost_price']);
+            $sellingPriceValue = $this->toNumber($item['selling_price']);
+            $lineTotal = $this->toNumber($item['line_total']);
             $sellingPrice = $canUpdateSellingPrice
-                ? ($item['selling_price'] ?: null)
-                : (string) $product->selling_price;
+                ? $sellingPriceValue
+                : $this->toNumber($product->selling_price);
 
             $purchase->items()->create([
                 'product_id' => $item['product_id'],
@@ -142,11 +225,11 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                 'received_quantity' => 0,
                 'cost_price' => $cost,
                 'selling_price' => $sellingPrice,
-                'line_total' => $quantity * $cost,
+                'line_total' => $lineTotal,
             ]);
 
-            if ($canUpdateSellingPrice && $item['selling_price'] !== '' && $item['selling_price'] !== null) {
-                $product->update(['selling_price' => $item['selling_price']]);
+            if ($canUpdateSellingPrice) {
+                $product->update(['selling_price' => $sellingPriceValue]);
             }
         }
 
@@ -230,9 +313,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                 $selectedProduct = filled($item['product_id'] ?? null)
                                     ? Product::query()->with('size')->find($item['product_id'])
                                     : null;
-                                $sellingPriceValue = filled($item['selling_price'] ?? null)
-                                    ? $item['selling_price']
-                                    : ($selectedProduct?->selling_price ?? '');
+                                $sellingPriceValue = $item['selling_price'] ?? 0;
                             @endphp
                             <tr>
                                 <td class="relative z-30 px-3 py-3" wire:key="purchase-product-cell-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}">
@@ -284,7 +365,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                         </div>
                                     @endif
                                 </td>
-                                <td class="px-3 py-3 font-black">TZS {{ \App\Support\NumberFormatter::money(($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0)) }}</td>
+                                <td class="px-3 py-3 font-black">TZS {{ number_format($item['line_total'] ?? 0, 2) }}</td>
                                 <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
                             </tr>
                         @endforeach
@@ -299,10 +380,11 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
             </label>
 
             <div class="rounded-xl bg-slate-50 p-4 text-right dark:bg-white/5">
-                @php $total = $this->totalAmount(); @endphp
+                <p class="text-sm text-slate-500">Subtotal</p>
+                <p class="text-lg font-bold">TZS {{ number_format($subtotal, 2) }}</p>
                 <p class="text-sm text-slate-500">Grand Total</p>
-                <p class="text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($total) }}</p>
-                <p class="text-sm text-slate-500">Balance: TZS {{ \App\Support\NumberFormatter::money(max(0, $total - (float) $paid_amount)) }}</p>
+                <p class="text-2xl font-black">TZS {{ number_format($grand_total, 2) }}</p>
+                <p class="text-sm text-slate-500">Balance: TZS {{ number_format($balance_amount, 2) }}</p>
             </div>
 
             <div class="flex flex-wrap gap-2">
