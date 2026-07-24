@@ -18,11 +18,15 @@ state([
     'company' => null,
     'company_name' => '',
     'business_type' => '',
+    'tagline' => '',
     'tin_number' => '',
     'vrn_number' => '',
+    'show_tax_identifiers_on_receipt' => false,
     'phone' => '',
+    'alternate_phone' => '',
     'whatsapp_number' => '',
     'email' => '',
+    'website' => '',
     'address' => '',
     'region' => '',
     'district' => '',
@@ -41,11 +45,15 @@ mount(function () {
 
     $this->company_name = $this->company?->company_name ?: $setting?->company_name ?: '';
     $this->business_type = $this->company?->business_type ?: $setting?->business_type ?: 'Hardware Store';
+    $this->tagline = $this->company?->tagline ?: $setting?->company_tagline ?: '';
     $this->tin_number = $this->company?->tin_number ?: $setting?->tin_number ?: '';
     $this->vrn_number = $this->company?->vrn_number ?: $setting?->vrn_number ?: '';
+    $this->show_tax_identifiers_on_receipt = (bool) ($this->company?->show_tax_identifiers_on_receipt ?? $setting?->show_tax_identifiers_on_receipt ?? false);
     $this->phone = $this->company?->phone ?: $setting?->company_phone ?: '';
+    $this->alternate_phone = $this->company?->alternate_phone ?: $setting?->alternate_phone ?: '';
     $this->whatsapp_number = $this->company?->whatsapp_number ?: $setting?->whatsapp_number ?: '';
     $this->email = $this->company?->email ?: $setting?->company_email ?: '';
+    $this->website = $this->company?->website ?: $setting?->company_website ?: '';
     $this->address = $this->company?->address ?: $setting?->company_address ?: '';
     $this->region = $this->company?->region ?: $setting?->region ?: '';
     $this->district = $this->company?->district ?: $setting?->district ?: '';
@@ -60,11 +68,15 @@ mount(function () {
 rules([
     'company_name' => ['required', 'string', 'max:255'],
     'business_type' => ['required', 'string', 'max:255'],
+    'tagline' => ['nullable', 'string', 'max:255'],
     'tin_number' => ['nullable', 'string', 'max:100'],
     'vrn_number' => ['nullable', 'string', 'max:100'],
+    'show_tax_identifiers_on_receipt' => ['boolean'],
     'phone' => ['required', 'string', 'max:30'],
+    'alternate_phone' => ['nullable', 'string', 'max:30'],
     'whatsapp_number' => ['required', 'string', 'max:30'],
     'email' => ['nullable', 'email', 'max:255'],
+    'website' => ['nullable', 'string', 'max:255'],
     'address' => ['nullable', 'string', 'max:1000'],
     'region' => ['nullable', 'string', 'max:100'],
     'district' => ['nullable', 'string', 'max:100'],
@@ -97,11 +109,15 @@ $save = function () {
     $company->fill([
         'company_name' => $data['company_name'],
         'business_type' => $data['business_type'],
+        'tagline' => $data['tagline'] ?: null,
         'tin_number' => $data['tin_number'] ?: null,
         'vrn_number' => $data['vrn_number'] ?: null,
+        'show_tax_identifiers_on_receipt' => $data['show_tax_identifiers_on_receipt'],
         'phone' => $data['phone'],
+        'alternate_phone' => $data['alternate_phone'] ?: null,
         'whatsapp_number' => $data['whatsapp_number'],
         'email' => $data['email'] ?: null,
+        'website' => $data['website'] ?: null,
         'address' => $data['address'] ?: null,
         'region' => $data['region'] ?: null,
         'district' => $data['district'] ?: null,
@@ -117,12 +133,16 @@ $save = function () {
     $setting->fill([
         'company_name' => $company->company_name,
         'business_type' => $company->business_type,
+        'company_tagline' => $company->tagline,
         'tin_number' => $company->tin_number,
         'vrn_number' => $company->vrn_number,
+        'show_tax_identifiers_on_receipt' => $company->show_tax_identifiers_on_receipt,
         'company_logo' => $company->logo,
         'company_phone' => $company->phone,
+        'alternate_phone' => $company->alternate_phone,
         'whatsapp_number' => $company->whatsapp_number,
         'company_email' => $company->email,
+        'company_website' => $company->website,
         'company_address' => $company->address,
         'region' => $company->region,
         'district' => $company->district,
@@ -170,11 +190,18 @@ $removeLogo = function () {
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
             <x-form-input label="Company Name" name="company_name" wire:model="company_name" required />
             <x-form-input label="Business Type" name="business_type" wire:model="business_type" required />
+            <x-form-input label="Receipt Tagline" name="tagline" wire:model="tagline" />
             <x-form-input label="TIN Number" name="tin_number" wire:model="tin_number" />
-            <x-form-input label="VRN Number" name="vrn_number" wire:model="vrn_number" />
+            <x-form-input label="VRN / VAT Number" name="vrn_number" wire:model="vrn_number" />
             <x-form-input label="Phone Number" name="phone" wire:model="phone" required />
+            <x-form-input label="Alternate Phone Number" name="alternate_phone" wire:model="alternate_phone" />
             <x-form-input label="WhatsApp Number" name="whatsapp_number" wire:model="whatsapp_number" required />
             <x-form-input label="Email Address" name="email" wire:model="email" type="email" />
+            <x-form-input label="Website" name="website" wire:model="website" placeholder="www.example.co.tz" />
+            <label class="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 dark:border-slate-700 dark:text-slate-200">
+                <input type="checkbox" wire:model="show_tax_identifiers_on_receipt" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
+                Show TIN and VAT number on customer receipts
+            </label>
             <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
             <x-form-input label="Country" name="country" wire:model="country" required />
             <x-form-input label="Default Currency" name="currency" wire:model="currency" required />

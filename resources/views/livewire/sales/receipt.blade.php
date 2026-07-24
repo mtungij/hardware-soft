@@ -31,6 +31,15 @@ mount(function (Sale $sale) {
         $paperSize = request()->query('paper') === '58' ? '58' : '80';
         $isOutstanding = (float) $sale->balance_amount > 0 || $sale->payment_status !== 'paid';
         $customerName = $sale->temporary_customer_name ?: $sale->customer?->name ?: 'Walk-in Customer';
+        $alternatePhone = $settings?->alternate_phone ?: $settings?->whatsapp_number;
+        $alternatePhone = $alternatePhone !== $settings?->company_phone ? $alternatePhone : null;
+        $logoPath = $settings?->company_logo;
+        $logoUrl = $logoPath
+            ? (\Illuminate\Support\Str::startsWith($logoPath, ['http://', 'https://', '/'])
+                ? $logoPath
+                : asset('storage/'.ltrim($logoPath, '/')))
+            : null;
+        $receiptTitle = 'SALES RECEIPT';
     @endphp
 
     <style>
@@ -48,6 +57,21 @@ mount(function (Sale $sale) {
             --receipt-width: 52mm;
             --receipt-padding: 2mm;
             font-size: 10px;
+        }
+
+        .receipt-logo {
+            display: block;
+            width: auto;
+            max-width: 180px;
+            height: auto;
+            max-height: 80px;
+            margin: 0 auto 2mm;
+            object-fit: contain;
+        }
+
+        .customer-receipt[data-paper-size="58"] .receipt-logo {
+            max-width: 120px;
+            max-height: 60px;
         }
 
         .receipt-item,
@@ -103,9 +127,20 @@ mount(function (Sale $sale) {
         class="customer-receipt mx-auto bg-white font-mono text-slate-950 shadow-soft"
     >
         <div class="receipt-header text-center">
-            <p class="text-[1.35em] font-black">{{ $settings?->company_name ?? 'Hardex POS' }}</p>
+            @if ($logoUrl)
+                <img src="{{ $logoUrl }}" alt="{{ $settings?->company_name }} logo" class="receipt-logo">
+            @endif
+            @if ($settings?->company_name)
+                <p class="text-[1.45em] font-black uppercase leading-tight">{{ $settings->company_name }}</p>
+            @endif
+            @if ($settings?->company_tagline)
+                <p class="mt-0.5 font-semibold">{{ $settings->company_tagline }}</p>
+            @endif
             @if ($settings?->company_phone)
-                <p>{{ $settings->company_phone }}</p>
+                <p class="mt-1">{{ $settings->company_phone }}</p>
+            @endif
+            @if ($alternatePhone)
+                <p>{{ $alternatePhone }}</p>
             @endif
             @if ($settings?->company_email)
                 <p class="break-all">{{ $settings->company_email }}</p>
@@ -113,11 +148,21 @@ mount(function (Sale $sale) {
             @if ($settings?->company_address)
                 <p>{{ $settings->company_address }}</p>
             @endif
+            @if ($settings?->company_website)
+                <p class="break-all">{{ $settings->company_website }}</p>
+            @endif
+            @if ($settings?->show_tax_identifiers_on_receipt && $settings?->tin_number)
+                <p>TIN: {{ $settings->tin_number }}</p>
+            @endif
+            @if ($settings?->show_tax_identifiers_on_receipt && $settings?->vrn_number)
+                <p>VAT: {{ $settings->vrn_number }}</p>
+            @endif
+            <p class="mt-[2mm] border-y border-dashed border-slate-500 py-1 text-[1.15em] font-black tracking-wide">{{ $receiptTitle }}</p>
         </div>
 
-        <div class="receipt-header my-[3mm] border-y border-dashed border-slate-500 py-[2mm]">
+        <div class="receipt-header my-[2mm] border-b border-dashed border-slate-500 pb-[2mm] text-left">
             <p><span class="font-bold">Receipt:</span> {{ $sale->sale_number }}</p>
-            <p><span class="font-bold">Date:</span> {{ $sale->created_at?->format('M d, Y H:i') }}</p>
+            <p><span class="font-bold">Date:</span> {{ $sale->created_at?->format('d M Y H:i') }}</p>
             <p><span class="font-bold">Cashier:</span> {{ $sale->soldBy?->name ?: $sale->createdBy?->name }}</p>
             <p><span class="font-bold">Customer:</span> {{ $customerName }}</p>
             <p><span class="font-bold">Sale Type:</span> {{ $sale->saleTypeLabel() }}</p>

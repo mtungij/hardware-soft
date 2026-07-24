@@ -1,10 +1,12 @@
 <?php
 
 use App\Models\Branch;
+use App\Models\Company;
 use App\Models\MeasurementType;
 use App\Models\Product;
 use App\Models\ProductSize;
 use App\Models\Sale;
+use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\Unit;
 use App\Models\User;
@@ -172,13 +174,98 @@ test('receipt offers compact printable 58mm and 80mm paper layouts', function ()
         ->assertOk()
         ->assertSee('data-paper-size="58"', false)
         ->assertSee('--receipt-width: 52mm', false)
+        ->assertSee('max-width: 120px', false)
         ->assertSee('page-break-inside: avoid', false);
 
     $this->get(route('sales.receipt', ['sale' => $sale, 'paper' => 80]))
         ->assertOk()
         ->assertSee('data-paper-size="80"', false)
         ->assertSee('--receipt-width: 72mm', false)
+        ->assertSee('max-width: 180px', false)
         ->assertSee('window.print()', false);
+});
+
+test('receipt header displays configured company branding in business identity order', function () {
+    Setting::query()->firstOrFail()->update([
+        'company_name' => 'Kariakoo Hardware',
+        'company_tagline' => 'Building Solutions',
+        'company_logo' => 'company-logos/kariakoo.png',
+        'company_phone' => '+255 629 364 847',
+        'alternate_phone' => '+255 754 123 456',
+        'company_email' => 'sales@kariakoo.example',
+        'company_address' => 'Mbeya - Ilomba',
+        'company_website' => 'www.kariakoohardware.co.tz',
+        'tin_number' => 'TIN-12345',
+        'vrn_number' => 'VAT-67890',
+        'show_tax_identifiers_on_receipt' => true,
+    ]);
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin);
+
+    $component = Volt::test('sales.receipt', ['sale' => $sale])
+        ->assertSee('storage/company-logos/kariakoo.png', false)
+        ->assertSee('Kariakoo Hardware')
+        ->assertSee('Building Solutions')
+        ->assertSee('+255 629 364 847')
+        ->assertSee('+255 754 123 456')
+        ->assertSee('sales@kariakoo.example')
+        ->assertSee('Mbeya - Ilomba')
+        ->assertSee('www.kariakoohardware.co.tz')
+        ->assertSee('TIN: TIN-12345')
+        ->assertSee('VAT: VAT-67890')
+        ->assertSee('SALES RECEIPT');
+
+    $html = $component->html();
+
+    expect(strpos($html, 'company-logos/kariakoo.png'))->toBeLessThan(strpos($html, 'Kariakoo Hardware'))
+        ->and(strpos($html, 'Kariakoo Hardware'))->toBeLessThan(strpos($html, 'Building Solutions'))
+        ->and(strpos($html, 'Building Solutions'))->toBeLessThan(strpos($html, '+255 629 364 847'))
+        ->and(strpos($html, 'VAT: VAT-67890'))->toBeLessThan(strpos($html, 'SALES RECEIPT'));
+});
+
+test('receipt header omits missing branding fields and disabled tax identifiers without blank placeholders', function () {
+    Setting::query()->firstOrFail()->update([
+        'company_logo' => null,
+        'company_tagline' => null,
+        'alternate_phone' => null,
+        'whatsapp_number' => null,
+        'company_email' => null,
+        'company_address' => null,
+        'company_website' => null,
+        'tin_number' => 'PRIVATE-TIN',
+        'vrn_number' => 'PRIVATE-VAT',
+        'show_tax_identifiers_on_receipt' => false,
+    ]);
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin);
+
+    Volt::test('sales.receipt', ['sale' => $sale])
+        ->assertSee('SALES RECEIPT')
+        ->assertDontSee('<img', false)
+        ->assertDontSee('PRIVATE-TIN')
+        ->assertDontSee('PRIVATE-VAT')
+        ->assertDontSee('TIN:')
+        ->assertDontSee('VAT:');
+});
+
+test('company settings save receipt branding fields for the current business', function () {
+    Volt::test('settings.company')
+        ->set('tagline', 'Professional Building Supplies')
+        ->set('alternate_phone', '+255 700 111 222')
+        ->set('website', 'www.hardex.example')
+        ->set('show_tax_identifiers_on_receipt', true)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $company = Company::query()->findOrFail($this->admin->company_id);
+    $settings = Setting::query()->firstOrFail();
+
+    expect($company->tagline)->toBe('Professional Building Supplies')
+        ->and($company->alternate_phone)->toBe('+255 700 111 222')
+        ->and($company->website)->toBe('www.hardex.example')
+        ->and($company->show_tax_identifiers_on_receipt)->toBeTrue()
+        ->and($settings->company_tagline)->toBe('Professional Building Supplies')
+        ->and($settings->alternate_phone)->toBe('+255 700 111 222')
+        ->and($settings->company_website)->toBe('www.hardex.example')
+        ->and($settings->show_tax_identifiers_on_receipt)->toBeTrue();
 });
 
 function makeCustomerReceiptSale(Branch $branch, User $user, array $saleOverrides = [], array $itemOverrides = []): Sale

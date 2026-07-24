@@ -12,11 +12,15 @@ use Illuminate\Support\Facades\Schema;
 #[Fillable([
     'company_name',
     'business_type',
+    'tagline',
     'tin_number',
     'vrn_number',
+    'show_tax_identifiers_on_receipt',
     'phone',
+    'alternate_phone',
     'whatsapp_number',
     'email',
+    'website',
     'address',
     'region',
     'district',
@@ -30,6 +34,13 @@ use Illuminate\Support\Facades\Schema;
 class Company extends Model
 {
     use HasFactory;
+
+    protected function casts(): array
+    {
+        return [
+            'show_tax_identifiers_on_receipt' => 'boolean',
+        ];
+    }
 
     public static function current(): ?self
     {
