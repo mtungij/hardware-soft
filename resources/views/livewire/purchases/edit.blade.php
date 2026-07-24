@@ -81,12 +81,12 @@ $savePurchase = function (string $status) {
     ]);
 
     foreach ($validated['items'] as $index => $item) {
-        $product = Product::query()->with('measurementType')->findOrFail($item['product_id']);
+        $product = Product::query()->with(['purchaseUnit.measurementType', 'unit'])->findOrFail($item['product_id']);
         $quantity = (float) $item['ordered_quantity'];
 
         if (! $product->acceptsPurchaseQuantity($quantity)) {
             throw ValidationException::withMessages([
-                "items.{$index}.ordered_quantity" => $product->displayNameWithSize().' must be purchased in whole '.$product->unit?->short_name.' quantities.',
+                "items.{$index}.ordered_quantity" => $product->displayNameWithSize().' must be purchased in whole '.($product->purchaseUnit?->short_name ?: $product->unit?->short_name).' quantities.',
             ]);
         }
     }
@@ -121,6 +121,9 @@ $savePurchase = function (string $status) {
             $cost = (float) $item['cost_price'];
             $this->purchase->items()->create([
                 'product_id' => $item['product_id'],
+                'purchase_unit_id' => $product->purchase_unit_id ?: $product->unit_id,
+                'stock_unit_id' => $product->unit_id,
+                'purchase_conversion_factor' => $product->purchaseConversionFactor(),
                 'product_size_id' => $product->product_size_id,
                 'ordered_quantity' => $quantity,
                 'received_quantity' => 0,

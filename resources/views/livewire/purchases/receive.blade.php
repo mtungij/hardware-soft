@@ -28,7 +28,7 @@ state([
 mount(function (Purchase $purchase, InventoryService $inventory) {
     abort_if($purchase->status === 'cancelled' || $purchase->status === 'received', 403);
 
-    $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'items.product.unit']);
+    $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'items.product', 'items.purchaseUnit.measurementType', 'items.stockUnit']);
     $this->purchase_id = $purchase->id;
     $this->grn_number = $inventory->generateGrnNumber();
     $this->received_date = now()->toDateString();
@@ -316,11 +316,12 @@ $postReceipt = function (InventoryService $inventory) {
                         <tr>
                             <th class="px-3 py-3">Product</th>
                             <th class="px-3 py-3">SKU</th>
-                            <th class="px-3 py-3">Unit</th>
+                            <th class="px-3 py-3">Purchase Unit</th>
                             <th class="px-3 py-3 text-right">Ordered Quantity</th>
                             <th class="px-3 py-3 text-right">Previously Received</th>
                             <th class="px-3 py-3 text-right">Remaining Quantity</th>
-                            <th class="px-3 py-3">Quantity to Receive</th>
+                            <th class="px-3 py-3">Received Quantity</th>
+                            <th class="px-3 py-3">Stock Increase</th>
                             <th class="px-3 py-3">Unit Cost</th>
                             <th class="px-3 py-3">Receive Into Location</th>
                             @if ($showBatchColumn)
@@ -344,13 +345,17 @@ $postReceipt = function (InventoryService $inventory) {
                                     @endif
                                 </td>
                                 <td class="px-3 py-3 font-mono">{{ $item->product?->sku }}</td>
-                                <td class="px-3 py-3">{{ $item->product?->unit?->short_name }}</td>
+                                <td class="px-3 py-3">{{ $item->purchaseUnit?->short_name }}</td>
                                 <td class="px-3 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
                                 <td class="px-3 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
                                 <td class="px-3 py-3 text-right font-bold">{{ \App\Support\NumberFormatter::quantity($item->remainingQuantity()) }}</td>
                                 <td class="px-3 py-3">
-                                    <input wire:model.live="lines.{{ $item->id }}.quantity" type="number" step="0.01" max="{{ $item->remainingQuantity() }}" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                    <input wire:model.live="lines.{{ $item->id }}.quantity" type="number" step="{{ $item->purchaseUnit?->measurementType?->code === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" max="{{ $item->remainingQuantity() }}" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                     @error("lines.{$item->id}.quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                                </td>
+                                <td class="px-3 py-3 font-bold">
+                                    {{ \App\Support\NumberFormatter::quantity($item->stockQuantity((float) ($lines[$item->id]['quantity'] ?? 0))) }}
+                                    {{ $item->stockUnit?->short_name }}
                                 </td>
                                 <td class="px-3 py-3">
                                     <input wire:model="lines.{{ $item->id }}.unit_cost" type="number" step="0.01" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">

@@ -13,7 +13,7 @@ layout('layouts.app');
 state(['purchase' => null]);
 
 mount(function (Purchase $purchase) {
-    $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product.unit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
+    $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product', 'items.purchaseUnit', 'items.stockUnit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
 });
 
 $canSendEmail = fn () => auth()->user()->can('send purchase emails');
@@ -24,7 +24,7 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
 
     try {
         $service->send($this->purchase, auth()->id());
-        $this->purchase = $this->purchase->refresh()->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product.unit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
+        $this->purchase = $this->purchase->refresh()->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product', 'items.purchaseUnit', 'items.stockUnit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
         session()->flash('success', 'Purchase Order email sent successfully.');
     } catch (ValidationException $exception) {
         session()->flash('error', $exception->validator->errors()->first());
@@ -66,7 +66,7 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
         </x-card>
 
         <x-card title="Purchase Items" class="xl:col-span-2">
-            <x-table :headers="['Product', 'Ordered', 'Received', 'Remaining', 'Cost', 'Selling', 'Total']">
+            <x-table :headers="['Product', 'Purchase Unit', 'Ordered', 'Received', 'Remaining', 'Unit Cost', 'Selling', 'Total']">
                 @foreach ($purchase->items as $item)
                     <tr>
                         <td class="px-4 py-3 font-bold">
@@ -75,10 +75,11 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
                                 <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->sizeLabel() }}</p>
                             @endif
                         </td>
-                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ $item->product?->unit?->short_name }}</td>
+                        <td class="px-4 py-3">{{ $item->purchaseUnit?->short_name }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
                         <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($item->remainingQuantity()) }}</td>
-                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }}</td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }} / {{ $item->purchaseUnit?->short_name }}</td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->selling_price) }}</td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->line_total) }}</td>
                     </tr>

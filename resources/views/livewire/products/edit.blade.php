@@ -20,6 +20,8 @@ state([
     'branch_id' => '',
     'category_id' => '',
     'measurement_type_id' => '',
+    'purchase_unit_id' => '',
+    'purchase_conversion_factor' => '1',
     'unit_id' => '',
     'product_size_id' => '',
     'product_size_search' => '',
@@ -51,6 +53,8 @@ mount(function (Product $product) {
     $this->branch_id = (string) $product->branch_id;
     $this->category_id = (string) $product->category_id;
     $this->measurement_type_id = (string) $product->measurement_type_id;
+    $this->purchase_unit_id = (string) ($product->purchase_unit_id ?: $product->unit_id);
+    $this->purchase_conversion_factor = (string) ($product->purchase_conversion_factor ?: 1);
     $this->unit_id = (string) $product->unit_id;
     $this->product_size_id = (string) $product->product_size_id;
     $this->uses_product_size = (bool) $product->uses_product_size || filled($product->product_size_id);
@@ -87,6 +91,21 @@ $showsFractionalConfiguration = fn () => filled($this->measurement_type_id) && !
 $requiresUnitConversion = fn () => filled($this->unit_id)
     && filled($this->selling_unit_id)
     && (string) $this->unit_id !== (string) $this->selling_unit_id;
+$requiresPurchaseConversion = fn () => filled($this->purchase_unit_id)
+    && filled($this->unit_id)
+    && (string) $this->purchase_unit_id !== (string) $this->unit_id;
+$purchaseUnits = function () {
+    $units = ProductMeasurementOptions::purchaseUnits(
+        (string) $this->measurementCode(),
+        filled($this->purchase_unit_id) ? (int) $this->purchase_unit_id : null,
+    );
+
+    if ($this->product?->purchase_unit_id && ! $units->contains('id', $this->product->purchase_unit_id)) {
+        $units->push(Unit::find($this->product->purchase_unit_id));
+    }
+
+    return $units->filter()->sortBy('name')->values();
+};
 $keepsLegacyAssignedUnits = fn () => (string) $this->measurement_type_id === (string) $this->product?->measurement_type_id;
 $baseUnits = function () {
     $units = ProductMeasurementOptions::baseUnits(
@@ -160,10 +179,24 @@ $updatedMeasurementTypeId = function () {
 };
 
 $updatedUnitId = function () {
+    if (! filled($this->purchase_unit_id)) {
+        $this->purchase_unit_id = $this->unit_id;
+    }
+    if (! $this->requiresPurchaseConversion()) {
+        $this->purchase_conversion_factor = '1';
+    }
     if (! $this->requiresUnitConversion()) {
         $this->conversion_factor = '1';
     } elseif ((string) $this->conversion_factor === '1') {
         $this->conversion_factor = '';
+    }
+};
+
+$updatedPurchaseUnitId = function () {
+    if (! $this->requiresPurchaseConversion()) {
+        $this->purchase_conversion_factor = '1';
+    } elseif ((string) $this->purchase_conversion_factor === '1') {
+        $this->purchase_conversion_factor = '';
     }
 };
 
@@ -187,6 +220,12 @@ $rules = fn () => [
     'branch_id' => ['nullable', 'exists:branches,id'],
     'category_id' => ['required', 'exists:categories,id'],
     'measurement_type_id' => ['required', 'exists:measurement_types,id'],
+    'purchase_unit_id' => [
+        'required',
+        'exists:units,id',
+        Rule::in($this->purchaseUnits()->pluck('id')->map(fn ($id) => (int) $id)->all()),
+    ],
+    'purchase_conversion_factor' => [$this->requiresPurchaseConversion() ? 'required' : 'nullable', 'numeric', 'gt:0'],
     'unit_id' => [
         'required',
         'exists:units,id',
@@ -240,6 +279,9 @@ $save = function () {
     $validated['wholesale_price'] = $validated['wholesale_price'] === '' ? null : $validated['wholesale_price'];
 
     $validated['selling_unit_id'] = $validated['selling_unit_id'] ?: $validated['unit_id'];
+    $validated['purchase_conversion_factor'] = $this->requiresPurchaseConversion()
+        ? $validated['purchase_conversion_factor']
+        : 1;
 
     if (! $this->isCount()) {
         $validated['conversion_factor'] = $this->requiresUnitConversion() ? $validated['conversion_factor'] : 1;
@@ -299,6 +341,17 @@ $save = function () {
                 @error('measurement_type_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 
+            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                Purchase Unit
+                <select wire:model.live="purchase_unit_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <option value="">Select purchase unit</option>
+                    @foreach ($this->purchaseUnits() as $unit)
+                        <option value="{{ $unit->id }}">{{ $unit->name }} / {{ $unit->short_name }}</option>
+                    @endforeach
+                </select>
+                @error('purchase_unit_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+            </label>
+
             <label wire:key="base-unit-{{ $measurement_type_id ?: 'none' }}" class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Base Stock Unit
                 <select wire:model.live="unit_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -309,6 +362,17 @@ $save = function () {
                 </select>
                 @error('unit_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
+
+            @if ($this->requiresPurchaseConversion())
+                @php
+                    $purchaseUnit = Unit::find($purchase_unit_id);
+                    $stockUnit = Unit::find($unit_id);
+                @endphp
+                <div>
+                    <x-form-input label="Purchase to Stock Factor" name="purchase_conversion_factor" type="number" step="0.0001" wire:model="purchase_conversion_factor" required />
+                    <p class="mt-1 text-xs font-semibold text-slate-500">1 {{ $purchaseUnit?->short_name }} = [factor] {{ $stockUnit?->short_name }}</p>
+                </div>
+            @endif
 
             <label wire:key="selling-unit-{{ $measurement_type_id ?: 'none' }}" class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Selling Unit

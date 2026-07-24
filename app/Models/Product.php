@@ -14,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'company_id',
     'category_id',
     'measurement_type_id',
+    'purchase_unit_id',
+    'purchase_conversion_factor',
     'unit_id',
     'product_size_id',
     'uses_product_size',
@@ -41,6 +43,17 @@ class Product extends Model
 {
     use HasCompany, HasFactory;
 
+    protected static function booted(): void
+    {
+        static::creating(function (Product $product): void {
+            $product->purchase_unit_id ??= $product->unit_id;
+
+            if ((int) $product->purchase_unit_id === (int) $product->unit_id) {
+                $product->purchase_conversion_factor = 1;
+            }
+        });
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
@@ -59,6 +72,11 @@ class Product extends Model
     public function unit(): BelongsTo
     {
         return $this->belongsTo(Unit::class);
+    }
+
+    public function purchaseUnit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class, 'purchase_unit_id');
     }
 
     public function size(): BelongsTo
@@ -134,6 +152,40 @@ class Product extends Model
             : 1.0;
     }
 
+    public function usesPurchaseConversion(): bool
+    {
+        return $this->purchase_unit_id
+            && $this->unit_id
+            && (int) $this->purchase_unit_id !== (int) $this->unit_id;
+    }
+
+    public function purchaseConversionFactor(): float
+    {
+        return $this->usesPurchaseConversion()
+            ? max(0.0001, (float) ($this->purchase_conversion_factor ?: 1))
+            : 1.0;
+    }
+
+    public function stockQuantityForPurchase(float $purchaseQuantity): float
+    {
+        return round($purchaseQuantity * $this->purchaseConversionFactor(), 4);
+    }
+
+    public function acceptsPurchaseQuantity(float $quantity): bool
+    {
+        $this->loadMissing(['purchaseUnit.measurementType', 'unit.measurementType']);
+
+        return $quantity > 0
+            && (($this->purchaseUnit?->measurementType?->code ?? $this->unit?->measurementType?->code ?? $this->measurementCode()) !== MeasurementType::COUNT
+                || $this->quantityIsWhole($quantity));
+    }
+
+    public function acceptsStockQuantity(float $quantity): bool
+    {
+        return $quantity > 0
+            && ($this->measurementCode() !== MeasurementType::COUNT || $this->quantityIsWhole($quantity));
+    }
+
     public function baseQuantityForSale(float $sellingQuantity): float
     {
         return round($sellingQuantity / $this->saleConversionFactor(), 4);
@@ -142,12 +194,6 @@ class Product extends Model
     public function quantityIsWhole(float $quantity): bool
     {
         return abs($quantity - round($quantity)) <= 0.0001;
-    }
-
-    public function acceptsPurchaseQuantity(float $quantity): bool
-    {
-        return $quantity > 0
-            && ($this->measurementCode() !== MeasurementType::COUNT || $this->quantityIsWhole($quantity));
     }
 
     public function quantityFollowsStep(float $quantity): bool
@@ -194,6 +240,7 @@ class Product extends Model
             'selling_price' => 'decimal:2',
             'wholesale_price' => 'decimal:2',
             'conversion_factor' => 'decimal:4',
+            'purchase_conversion_factor' => 'decimal:4',
             'allow_fractional_sale' => 'boolean',
             'minimum_sale_quantity' => 'decimal:4',
             'quantity_step' => 'decimal:4',

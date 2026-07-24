@@ -12,6 +12,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'purchase_id',
     'company_id',
     'product_id',
+    'purchase_unit_id',
+    'stock_unit_id',
+    'purchase_conversion_factor',
     'product_size_id',
     'ordered_quantity',
     'received_quantity',
@@ -31,6 +34,42 @@ class PurchaseItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function purchaseUnit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class, 'purchase_unit_id');
+    }
+
+    public function stockUnit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class, 'stock_unit_id');
+    }
+
+    public function purchaseFactor(): float
+    {
+        if ($this->purchase_unit_id === null && $this->product) {
+            return $this->product->purchaseConversionFactor();
+        }
+
+        return max(0.0001, (float) ($this->purchase_conversion_factor ?: 1));
+    }
+
+    public function stockQuantity(float $purchaseQuantity): float
+    {
+        return round($purchaseQuantity * $this->purchaseFactor(), 4);
+    }
+
+    public function acceptsPurchaseQuantity(float $quantity): bool
+    {
+        $this->loadMissing(['purchaseUnit.measurementType', 'product.unit.measurementType']);
+
+        return $quantity > 0
+            && (($this->purchaseUnit?->measurementType?->code
+                    ?? $this->product?->purchaseUnit?->measurementType?->code
+                    ?? $this->product?->unit?->measurementType?->code
+                    ?? $this->product?->measurementCode()) !== MeasurementType::COUNT
+                || $this->product?->quantityIsWhole($quantity));
     }
 
     public function productSize(): BelongsTo
@@ -61,6 +100,7 @@ class PurchaseItem extends Model
             'cost_price' => 'decimal:2',
             'selling_price' => 'decimal:2',
             'line_total' => 'decimal:2',
+            'purchase_conversion_factor' => 'decimal:4',
         ];
     }
 }

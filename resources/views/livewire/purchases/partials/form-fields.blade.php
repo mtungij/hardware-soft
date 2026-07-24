@@ -25,12 +25,12 @@
 
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-                <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Qty</th><th>Cost</th><th>Selling Price</th><th>Line Total</th><th></th></tr></thead>
+                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Purchase Unit</th><th>Ordered Qty</th><th>Unit Cost</th><th>Selling Price</th><th>Line Total</th><th></th></tr></thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                     @foreach ($items as $index => $item)
                         @php
                             $selectedProduct = filled($item['product_id'] ?? null)
-                                ? \App\Models\Product::query()->with(['measurementType', 'unit', 'size'])->find($item['product_id'])
+                                ? \App\Models\Product::query()->with(['purchaseUnit.measurementType', 'unit', 'size'])->find($item['product_id'])
                                 : null;
                             $sellingPriceValue = filled($item['selling_price'] ?? null)
                                 ? $item['selling_price']
@@ -41,8 +41,8 @@
                                 <select wire:model.live="items.{{ $index }}.product_id" wire:change="syncProductSellingPrice({{ $index }})" @disabled(blank($supplier_id)) class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-900">
                                     <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                     @if (filled($supplier_id))
-                                        @foreach (\App\Models\Product::with(['measurementType', 'unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
-                                            <option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / {{ $product->measurementType?->name ?? str($product->measurementCode())->title() }} / {{ $product->sku }}</option>
+                                        @foreach (\App\Models\Product::with(['purchaseUnit', 'unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
+                                            <option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / Purchase: {{ $product->purchaseUnit?->short_name ?: $product->unit?->short_name }} / {{ $product->sku }}</option>
                                         @endforeach
                                     @endif
                                 </select>
@@ -50,9 +50,10 @@
                                     <span class="mt-1 block text-xs font-semibold text-amber-600">Select supplier before choosing products.</span>
                                 @endif
                             </td>
+                            <td class="px-3 py-3 font-bold">{{ $selectedProduct?->purchaseUnit?->short_name ?: $selectedProduct?->unit?->short_name ?: '-' }}</td>
                             <td class="px-3 py-3">
-                                <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedProduct?->measurementCode() === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->unit?->short_name }} / {{ $selectedProduct->measurementType?->name ?? str($selectedProduct->measurementCode())->title() }}</span>@endif
+                                <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedProduct?->purchaseUnit?->measurementType?->code === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->purchaseUnit?->short_name ?: $selectedProduct->unit?->short_name }}</span>@endif
                                 @error("items.{$index}.ordered_quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                             </td>
                             <td class="px-3 py-3">

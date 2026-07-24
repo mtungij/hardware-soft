@@ -76,8 +76,8 @@
                     </td>
                     <td>{{ $item->product?->sku }}</td>
                     <td class="right">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
-                    <td>{{ $item->product?->unit?->short_name }}</td>
-                    <td class="right">{{ \App\Support\NumberFormatter::money($item->cost_price) }}</td>
+                    <td>{{ $item->purchaseUnit?->short_name }}</td>
+                    <td class="right">{{ \App\Support\NumberFormatter::money($item->cost_price) }} / {{ $item->purchaseUnit?->short_name }}</td>
                     <td class="right">{{ \App\Support\NumberFormatter::money($item->line_total) }}</td>
                 </tr>
             @endforeach

@@ -160,7 +160,7 @@ class ReportExportService
         $paymentLabel = fn (string $method): string => $tr('method_'.$method);
 
         $rows = SaleItem::query()
-            ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'product.unit', 'product.category', 'product.size', 'stockLocation'])
+            ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'product.unit', 'product.category', 'product.size', 'sellingUnit', 'stockLocation'])
             ->whereHas('sale', function ($query) use ($request, $branchId, $from, $to) {
                 $query->where('status', 'completed')
                     ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
@@ -229,7 +229,7 @@ class ReportExportService
             $row = [
                 $invoice['sale']?->sale_number,
                 $invoice['customer'],
-                $invoice['items']->map(fn ($item) => $item->productDisplayNameWithSize().' x '.$this->formatQuantity($item->quantity).' '.$item->product?->unit?->short_name)->join("\n"),
+                $invoice['items']->map(fn ($item) => $item->productDisplayNameWithSize().' x '.$this->formatQuantity($item->quantity).' '.($item->sellingUnit?->short_name ?: $item->product?->sellingUnit?->short_name))->join("\n"),
                 $this->formatQuantity($invoice['total_quantity']),
             ];
 
@@ -265,9 +265,9 @@ class ReportExportService
 
     private function purchases(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $rows = Purchase::with('supplier')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('purchase_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('purchase_date', '<=', $to))->when($search, fn ($q) => $q->where('reference_number', 'like', "%{$search}%")->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%")))->latest()->get();
+        $rows = Purchase::with(['supplier', 'items.purchaseUnit'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('purchase_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('purchase_date', '<=', $to))->when($search, fn ($q) => $q->where('reference_number', 'like', "%{$search}%")->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%")))->latest()->get();
 
-        return ['Purchase Report', ['Date', 'Reference', 'Supplier', 'Status', 'Total', 'Paid', 'Balance'], $rows->map(fn ($purchase) => [$this->formatDate($purchase->purchase_date), $purchase->reference_number, $purchase->supplier?->name, ucfirst($purchase->status), $this->formatCurrency($purchase->total_amount), $this->formatCurrency($purchase->paid_amount), $this->formatCurrency($purchase->balance_amount)])->all(), ['Total Purchases' => $this->formatCurrency($rows->sum('total_amount'))]];
+        return ['Purchase Report', ['Date', 'Reference', 'Supplier', 'Purchase Units', 'Status', 'Total', 'Paid', 'Balance'], $rows->map(fn ($purchase) => [$this->formatDate($purchase->purchase_date), $purchase->reference_number, $purchase->supplier?->name, $purchase->items->pluck('purchaseUnit.short_name')->filter()->unique()->join(', '), ucfirst($purchase->status), $this->formatCurrency($purchase->total_amount), $this->formatCurrency($purchase->paid_amount), $this->formatCurrency($purchase->balance_amount)])->all(), ['Total Purchases' => $this->formatCurrency($rows->sum('total_amount'))]];
     }
 
     private function expenses(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array

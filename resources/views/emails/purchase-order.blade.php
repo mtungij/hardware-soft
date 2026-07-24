@@ -20,7 +20,7 @@ Please find attached the official purchase order from **{{ $settings?->company_n
 | Product | SKU | Qty | Unit | Cost | Total |
 | --- | --- | ---: | --- | ---: | ---: |
 @foreach ($purchase->items as $item)
-| {{ $item->productDisplayNameWithSize() }} | {{ $item->product?->sku }} | {{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} | {{ $item->product?->unit?->short_name }} | {{ \App\Support\NumberFormatter::money($item->cost_price) }} | {{ \App\Support\NumberFormatter::money($item->line_total) }} |
+| {{ $item->productDisplayNameWithSize() }} | {{ $item->product?->sku }} | {{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} | {{ $item->purchaseUnit?->short_name }} | {{ \App\Support\NumberFormatter::money($item->cost_price) }} / {{ $item->purchaseUnit?->short_name }} | {{ \App\Support\NumberFormatter::money($item->line_total) }} |
 @endforeach
 @endcomponent
 

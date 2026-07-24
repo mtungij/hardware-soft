@@ -87,12 +87,12 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
     ]);
 
     foreach ($validated['items'] as $index => $item) {
-        $product = Product::query()->with('measurementType')->findOrFail($item['product_id']);
+        $product = Product::query()->with(['purchaseUnit.measurementType', 'unit'])->findOrFail($item['product_id']);
         $quantity = (float) $item['ordered_quantity'];
 
         if (! $product->acceptsPurchaseQuantity($quantity)) {
             throw ValidationException::withMessages([
-                "items.{$index}.ordered_quantity" => $product->displayNameWithSize().' must be purchased in whole '.$product->unit?->short_name.' quantities.',
+                "items.{$index}.ordered_quantity" => $product->displayNameWithSize().' must be purchased in whole '.($product->purchaseUnit?->short_name ?: $product->unit?->short_name).' quantities.',
             ]);
         }
     }
@@ -134,6 +134,9 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
 
             $purchase->items()->create([
                 'product_id' => $item['product_id'],
+                'purchase_unit_id' => $product->purchase_unit_id ?: $product->unit_id,
+                'stock_unit_id' => $product->unit_id,
+                'purchase_conversion_factor' => $product->purchaseConversionFactor(),
                 'product_size_id' => $product->product_size_id,
                 'ordered_quantity' => $quantity,
                 'received_quantity' => 0,
@@ -220,7 +223,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
 
             <div class="relative z-20 overflow-x-auto pb-4 transition-[padding] focus-within:pb-96">
                 <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Qty</th><th>Cost</th><th>Selling Price</th><th>Line Total</th><th></th></tr></thead>
+                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Purchase Unit</th><th>Ordered Qty</th><th>Unit Cost</th><th>Selling Price</th><th>Line Total</th><th></th></tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach ($items as $index => $item)
                             @php
@@ -242,13 +245,13 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                     >
                                         <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                         @if (filled($supplier_id))
-                                    @foreach (Product::with(['measurementType', 'unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
+                                    @foreach (Product::with(['purchaseUnit', 'unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
                                                 @php
                                                     $storeQty = $storeLocation
                                                         ? $inventory->getProductStock($product->id, $storeLocation->id, $stockBranchId)
                                                         : 0;
                                                 @endphp
-                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->displayNameWithSize() }} - {{ $product->measurementType?->name ?? str($product->measurementCode())->title() }} - Store Qty: {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
+                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->displayNameWithSize() }} - Purchase: {{ $product->purchaseUnit?->short_name ?: $product->unit?->short_name }} - Store Qty: {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
                                             @endforeach
                                         @endif
                                     </select>
@@ -257,9 +260,10 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                     @endif
                                     @error("items.{$index}.product_id") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
+                                <td class="px-3 py-3 font-bold">{{ $selectedProduct?->purchaseUnit?->short_name ?: $selectedProduct?->unit?->short_name ?: '-' }}</td>
                                 <td class="px-3 py-3">
-                                    <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedProduct?->measurementCode() === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                    @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->unit?->short_name }} / {{ $selectedProduct->measurementType?->name ?? str($selectedProduct->measurementCode())->title() }}</span>@endif
+                                    <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedProduct?->purchaseUnit?->measurementType?->code === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                    @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->purchaseUnit?->short_name ?: $selectedProduct->unit?->short_name }}</span>@endif
                                     @error("items.{$index}.ordered_quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
                                 <td class="px-3 py-3">

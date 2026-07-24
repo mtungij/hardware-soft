@@ -227,7 +227,7 @@ $deleteConfirmedProduct = function () {
 
         @php
             $products = Product::query()
-                ->with(['branch', 'category', 'measurementType', 'unit', 'size'])
+                ->with(['branch', 'category', 'measurementType', 'purchaseUnit', 'unit', 'sellingUnit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('sku', 'like', "%{$search}%")
@@ -246,7 +246,7 @@ $deleteConfirmedProduct = function () {
             if ($hasProductSizes) {
                 $productHeaders[] = 'Size';
             }
-            array_push($productHeaders, 'SKU', 'Barcode', 'Category', 'Unit', 'Stock', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions');
+            array_push($productHeaders, 'SKU', 'Barcode', 'Category', 'Purchase Unit', 'Stock Unit', 'Selling Unit', 'Stock', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions');
         @endphp
 
         <x-table data-tour="products-list" :headers="$productHeaders">
@@ -268,7 +268,9 @@ $deleteConfirmedProduct = function () {
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->sku ?: '-' }}</td>
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->barcode ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
+                    <td class="px-4 py-3">{{ $product->purchaseUnit?->short_name }}</td>
                     <td class="px-4 py-3">{{ $product->unit?->short_name }}</td>
+                    <td class="px-4 py-3">{{ $product->sellingUnit?->short_name }}</td>
                     <td class="px-4 py-3 font-bold">
                         {{ \App\Support\NumberFormatter::quantity(app(\App\Services\InventoryService::class)->getProductTotalStock($product->id, (int) ($product->branch_id ?: auth()->user()->branch_id ?: \App\Models\Branch::where('code', 'MAIN')->value('id')))) }}
                     </td>

@@ -37,6 +37,38 @@ class ProductMeasurementOptions
     }
 
     /**
+     * Purchase packaging may intentionally differ from the product measurement type.
+     *
+     * @return Collection<int, Unit>
+     */
+    public static function purchaseUnits(string $measurementCode, ?int $includeUnitId = null): Collection
+    {
+        return Unit::query()
+            ->with('measurementType')
+            ->where(function ($query) use ($includeUnitId): void {
+                $query->where('status', 'active');
+
+                if ($includeUnitId) {
+                    $query->orWhere('id', $includeUnitId);
+                }
+            })
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Unit $unit): bool => $unit->id === $includeUnitId
+                || $unit->measurementType?->code === MeasurementType::COUNT
+                || self::unitIsAllowed($unit, $measurementCode))
+            ->values();
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    public static function purchaseUnitIds(string $measurementCode, ?int $includeUnitId = null): array
+    {
+        return self::purchaseUnits($measurementCode, $includeUnitId)->pluck('id')->map(fn ($id): int => (int) $id)->all();
+    }
+
+    /**
      * @return Collection<int, Unit>
      */
     public static function sellingUnits(string $measurementCode, ?int $includeUnitId = null): Collection
@@ -67,7 +99,7 @@ class ProductMeasurementOptions
     }
 
     /**
-     * @return array{unit_id: ?int, selling_unit_id: ?int, allow_fractional_sale: bool, minimum_sale_quantity: string, quantity_step: string, conversion_factor: string}
+     * @return array{unit_id: ?int, purchase_unit_id: ?int, selling_unit_id: ?int, allow_fractional_sale: bool, minimum_sale_quantity: string, quantity_step: string, conversion_factor: string, purchase_conversion_factor: string}
      */
     public static function defaults(string $measurementCode): array
     {
@@ -82,11 +114,13 @@ class ProductMeasurementOptions
 
         return [
             'unit_id' => self::findUnitId($baseAliases),
+            'purchase_unit_id' => self::findUnitId($baseAliases),
             'selling_unit_id' => self::findUnitId($sellingAliases),
             'allow_fractional_sale' => $fractional,
             'minimum_sale_quantity' => $minimum,
             'quantity_step' => $step,
             'conversion_factor' => $conversion,
+            'purchase_conversion_factor' => '1',
         ];
     }
 

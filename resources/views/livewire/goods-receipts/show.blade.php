@@ -17,7 +17,9 @@ mount(function (GoodsReceivingNote $receipt) {
         'purchase.supplier',
         'receiver',
         'postedBy',
-        'items.product.unit',
+        'items.product',
+        'items.purchaseUnit',
+        'items.stockUnit',
         'items.stockLocation',
     ]);
 });
@@ -54,7 +56,7 @@ mount(function (GoodsReceivingNote $receipt) {
         </x-card>
 
         <x-card title="Received Products" class="xl:col-span-2">
-            <x-table :headers="['Product', 'SKU', 'Ordered', 'Previous', 'Received Now', 'Unit Cost', 'Total Cost', 'Receiving Location', 'Batch', 'Expiry']">
+            <x-table :headers="['Product', 'SKU', 'Ordered', 'Previous', 'Received Now / Stock Increase', 'Unit Cost', 'Total Cost', 'Receiving Location', 'Batch', 'Expiry']">
                 @foreach ($receipt->items as $item)
                     <tr>
                         <td class="px-4 py-3 font-black">
@@ -64,10 +66,13 @@ mount(function (GoodsReceivingNote $receipt) {
                             @endif
                         </td>
                         <td class="px-4 py-3 font-mono">{{ $item->product?->sku }}</td>
-                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ $item->product?->unit?->short_name }}</td>
-                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->previously_received_quantity) }}</td>
-                        <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
-                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money(($item->unit_cost ?: $item->cost_price)) }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ $item->purchaseUnit?->short_name }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->previously_received_quantity) }} {{ $item->purchaseUnit?->short_name }}</td>
+                        <td class="px-4 py-3 font-bold">
+                            {{ \App\Support\NumberFormatter::quantity($item->received_quantity) }} {{ $item->purchaseUnit?->short_name }}
+                            <span class="block text-xs text-slate-500">Stock +{{ \App\Support\NumberFormatter::quantity($item->stock_quantity) }} {{ $item->stockUnit?->short_name }}</span>
+                        </td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money(($item->unit_cost ?: $item->cost_price)) }} / {{ $item->purchaseUnit?->short_name }}</td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money(($item->total_cost ?: ((float) $item->received_quantity * (float) $item->cost_price))) }}</td>
                         <td class="px-4 py-3">{{ $item->stockLocation ? InventorySettings::stockLocationLabel($item->stockLocation) : '-' }}</td>
                         <td class="px-4 py-3">{{ $item->batch_number ?: '-' }}</td>

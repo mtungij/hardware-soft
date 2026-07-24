@@ -117,7 +117,7 @@ class PurchaseOrderEmailService
 
     public function pdfBinary(Purchase $purchase): string
     {
-        $purchase->loadMissing(['supplier', 'branch', 'items.product.unit']);
+        $purchase->loadMissing(['supplier', 'branch', 'items.product', 'items.purchaseUnit']);
         $settings = $this->settings();
         $html = view('pdf.purchase-order', compact('purchase', 'settings'))->render();
 

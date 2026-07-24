@@ -74,7 +74,7 @@ class FinancialReportService
     public function purchases(?int $branchId, string $from, string $to)
     {
         return Purchase::query()
-            ->with(['branch', 'supplier'])
+            ->with(['branch', 'supplier', 'items.purchaseUnit'])
             ->whereBetween('purchase_date', [$from, $to])
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
             ->latest()

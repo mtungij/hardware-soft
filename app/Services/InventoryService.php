@@ -192,7 +192,7 @@ class InventoryService
                 throw ValidationException::withMessages(['quantity' => 'Quantity must be greater than zero.']);
             }
 
-            if (! $product->acceptsPurchaseQuantity($quantity)) {
+            if (! $product->acceptsStockQuantity($quantity)) {
                 throw ValidationException::withMessages(['quantity' => $product->displayNameWithSize().' must use a whole base quantity.']);
             }
 
@@ -579,7 +579,7 @@ class InventoryService
             }
 
             $items = PurchaseItem::query()
-                ->with('product')
+                ->with(['product.purchaseUnit.measurementType', 'purchaseUnit', 'stockUnit'])
                 ->where('purchase_id', $purchase->id)
                 ->lockForUpdate()
                 ->get();
@@ -597,9 +597,9 @@ class InventoryService
 
                 $item->loadMissing('product.measurementType');
 
-                if (! $item->product->acceptsPurchaseQuantity($quantity)) {
+                if (! $item->acceptsPurchaseQuantity($quantity)) {
                     throw ValidationException::withMessages([
-                        "lines.{$item->id}.quantity" => $item->product->displayNameWithSize().' must use a whole base quantity.',
+                        "lines.{$item->id}.quantity" => $item->product->displayNameWithSize().' must use a whole purchase-unit quantity.',
                     ]);
                 }
 
@@ -705,15 +705,20 @@ class InventoryService
                 $location = $line['location'];
                 $quantity = (float) $line['quantity'];
                 $unitCost = (float) $line['unit_cost'];
+                $stockQuantity = $item->stockQuantity($quantity);
+                $stockUnitCost = round($unitCost / $item->purchaseFactor(), 4);
 
                 $grnItem = $grn->items()->create([
                     'branch_id' => $purchase->branch_id,
                     'purchase_item_id' => $item->id,
                     'product_id' => $item->product_id,
+                    'purchase_unit_id' => $item->purchase_unit_id ?: $item->product?->purchase_unit_id ?: $item->product?->unit_id,
+                    'stock_unit_id' => $item->stock_unit_id ?: $item->product?->unit_id,
                     'stock_location_id' => $location->id,
                     'ordered_quantity' => $item->ordered_quantity,
                     'previously_received_quantity' => $line['previously_received'],
                     'received_quantity' => $quantity,
+                    'stock_quantity' => $stockQuantity,
                     'cost_price' => $unitCost,
                     'unit_cost' => $unitCost,
                     'total_cost' => $quantity * $unitCost,
@@ -728,10 +733,10 @@ class InventoryService
                         'product_id' => $item->product_id,
                         'stock_location_id' => $location->id,
                         'movement_type' => 'purchase_receipt',
-                        'quantity' => $quantity,
-                        'quantity_in' => $quantity,
+                        'quantity' => $stockQuantity,
+                        'quantity_in' => $stockQuantity,
                         'quantity_out' => 0,
-                        'unit_cost' => $unitCost,
+                        'unit_cost' => $stockUnitCost,
                         'unit_price' => $item->selling_price,
                         'reference_type' => GoodsReceivingNote::class,
                         'reference_id' => $grn->id,
