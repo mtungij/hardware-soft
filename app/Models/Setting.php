@@ -30,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'currency',
     'timezone',
     'language',
-    'receipt_footer_text',
+    'receipt_footer_message',
     'tax_enabled',
     'enable_warehouse',
     'allow_direct_stock_in',

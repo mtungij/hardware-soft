@@ -20,7 +20,7 @@ class SettingSeeder extends Seeder
                 'company_email' => 'info@buildmart.test',
                 'company_address' => 'Hardex Head Office, Dar es Salaam',
                 'currency' => 'TZS',
-                'receipt_footer_text' => 'Thank you for shopping with Hardex POS.',
+                'receipt_footer_message' => null,
                 'tax_enabled' => true,
                 'default_branch_id' => $branch?->id,
                 'theme_color' => '#f97316',

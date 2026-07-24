@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use App\Http\Middleware\EnsureCustomerApiAccountIsActive;
 use App\Http\Middleware\EnsureCustomerAccountIsActive;
+use App\Http\Middleware\EnsureCanUpdateCompanySettings;
 use App\Http\Middleware\EnsureWarehouseEnabled;
 use App\Http\Middleware\EnsureUserHasRole;
 use App\Http\Middleware\SetCustomerPortalLocale;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'role.any' => EnsureUserHasRole::class,
+            'company-settings.update' => EnsureCanUpdateCompanySettings::class,
             'warehouse.enabled' => EnsureWarehouseEnabled::class,
             'customer.active' => EnsureCustomerAccountIsActive::class,
             'customer.api.active' => EnsureCustomerApiAccountIsActive::class,

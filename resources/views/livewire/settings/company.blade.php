@@ -37,11 +37,24 @@ state([
     'currency' => 'TZS',
     'timezone' => 'Africa/Dar_es_Salaam',
     'language' => 'sw',
+    'receipt_footer_message' => '',
 ]);
 
+$authorizeCompanySettings = function (): void {
+    $user = auth()->user();
+    $authorized = $user && (
+        $user->hasAnyRole(['Super Admin', 'Admin'])
+        || $user->can('company-settings.update')
+    );
+
+    abort_unless($authorized, 403);
+};
+
 mount(function () {
+    $this->authorizeCompanySettings();
     $this->company = Company::current();
-    $setting = Setting::query()->first();
+    $companyId = $this->company?->id ?: auth()->user()?->company_id;
+    $setting = Setting::withoutGlobalScopes()->where('company_id', $companyId)->first();
 
     $this->company_name = $this->company?->company_name ?: $setting?->company_name ?: '';
     $this->business_type = $this->company?->business_type ?: $setting?->business_type ?: 'Hardware Store';
@@ -63,6 +76,7 @@ mount(function () {
     $this->currency = $this->company?->currency ?: $setting?->currency ?: 'TZS';
     $this->timezone = $this->company?->timezone ?: $setting?->timezone ?: 'Africa/Dar_es_Salaam';
     $this->language = $this->company?->language ?: $setting?->language ?: 'sw';
+    $this->receipt_footer_message = $setting?->receipt_footer_message ?: '';
 });
 
 rules([
@@ -86,6 +100,7 @@ rules([
     'currency' => ['required', 'string', 'max:10'],
     'timezone' => ['required', 'string', 'max:100'],
     'language' => ['required', 'in:sw,en'],
+    'receipt_footer_message' => ['nullable', 'string', 'max:500'],
 ]);
 
 $updatedRegion = function () {
@@ -93,6 +108,7 @@ $updatedRegion = function () {
 };
 
 $save = function () {
+    $this->authorizeCompanySettings();
     $data = $this->validate();
     $logoPath = $this->logo;
 
@@ -105,7 +121,7 @@ $save = function () {
         }
     }
 
-    $company = Company::query()->first() ?: new Company();
+    $company = $this->company ?: Company::current() ?: new Company();
     $company->fill([
         'company_name' => $data['company_name'],
         'business_type' => $data['business_type'],
@@ -129,7 +145,9 @@ $save = function () {
         'language' => $data['language'],
     ])->save();
 
-    $setting = Setting::query()->first() ?: new Setting();
+    $setting = Setting::withoutGlobalScopes()
+        ->where('company_id', $company->id)
+        ->first() ?: new Setting(['company_id' => $company->id]);
     $setting->fill([
         'company_name' => $company->company_name,
         'business_type' => $company->business_type,
@@ -151,6 +169,9 @@ $save = function () {
         'currency' => $company->currency,
         'timezone' => $company->timezone,
         'language' => $company->language,
+        'receipt_footer_message' => filled($data['receipt_footer_message'])
+            ? $data['receipt_footer_message']
+            : null,
     ])->save();
 
     $this->company = $company;
@@ -162,6 +183,8 @@ $save = function () {
 };
 
 $removeLogo = function () {
+    $this->authorizeCompanySettings();
+
     if ($this->logo && Storage::disk('public')->exists($this->logo)) {
         Storage::disk('public')->delete($this->logo);
     }
@@ -173,7 +196,10 @@ $removeLogo = function () {
         $this->company->update(['logo' => null]);
     }
 
-    Setting::query()->first()?->update(['company_logo' => null]);
+    Setting::withoutGlobalScopes()
+        ->where('company_id', $this->company?->id)
+        ->first()
+        ?->update(['company_logo' => null]);
     session()->flash('success', 'Company logo removed.');
 };
 
@@ -238,6 +264,18 @@ $removeLogo = function () {
 
             <div class="md:col-span-2"><x-form-textarea label="Physical Address" name="address" wire:model="address" rows="3" /></div>
             <div class="md:col-span-2"><x-form-textarea label="Business Description" name="description" wire:model="description" rows="3" /></div>
+            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">
+                Receipt Footer Message
+                <textarea
+                    wire:model="receipt_footer_message"
+                    maxlength="500"
+                    rows="4"
+                    class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                    placeholder="Enter the message printed below customer receipt totals"
+                ></textarea>
+                <span class="mt-1 block text-xs font-medium text-slate-500">Optional, maximum 500 characters. Line breaks are preserved on receipts.</span>
+                @error('receipt_footer_message') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+            </label>
 
             <div class="md:col-span-2">
                 <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white" wire:loading.attr="disabled">

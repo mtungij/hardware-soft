@@ -12,6 +12,7 @@ use App\Models\Unit;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
 use Livewire\Volt\Volt;
+use Spatie\Permission\Models\Permission;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
@@ -186,17 +187,31 @@ test('receipt offers compact printable 58mm and 80mm paper layouts', function ()
 });
 
 test('receipt header displays configured company branding in business identity order', function () {
-    Setting::query()->firstOrFail()->update([
+    $branding = [
         'company_name' => 'Kariakoo Hardware',
-        'company_tagline' => 'Building Solutions',
-        'company_logo' => 'company-logos/kariakoo.png',
-        'company_phone' => '+255 629 364 847',
+        'tagline' => 'Building Solutions',
+        'logo' => 'company-logos/kariakoo.png',
+        'phone' => '+255 629 364 847',
         'alternate_phone' => '+255 754 123 456',
-        'company_email' => 'sales@kariakoo.example',
-        'company_address' => 'Mbeya - Ilomba',
-        'company_website' => 'www.kariakoohardware.co.tz',
+        'email' => 'sales@kariakoo.example',
+        'address' => 'Mbeya - Ilomba',
+        'website' => 'www.kariakoohardware.co.tz',
         'tin_number' => 'TIN-12345',
         'vrn_number' => 'VAT-67890',
+        'show_tax_identifiers_on_receipt' => true,
+    ];
+    Company::query()->findOrFail($this->admin->company_id)->update($branding);
+    Setting::query()->firstOrFail()->update([
+        'company_name' => $branding['company_name'],
+        'company_tagline' => $branding['tagline'],
+        'company_logo' => $branding['logo'],
+        'company_phone' => $branding['phone'],
+        'alternate_phone' => $branding['alternate_phone'],
+        'company_email' => $branding['email'],
+        'company_address' => $branding['address'],
+        'company_website' => $branding['website'],
+        'tin_number' => $branding['tin_number'],
+        'vrn_number' => $branding['vrn_number'],
         'show_tax_identifiers_on_receipt' => true,
     ]);
     $sale = makeCustomerReceiptSale($this->branch, $this->admin);
@@ -223,6 +238,18 @@ test('receipt header displays configured company branding in business identity o
 });
 
 test('receipt header omits missing branding fields and disabled tax identifiers without blank placeholders', function () {
+    Company::query()->findOrFail($this->admin->company_id)->update([
+        'logo' => null,
+        'tagline' => null,
+        'alternate_phone' => null,
+        'whatsapp_number' => '',
+        'email' => null,
+        'address' => null,
+        'website' => null,
+        'tin_number' => 'PRIVATE-TIN',
+        'vrn_number' => 'PRIVATE-VAT',
+        'show_tax_identifiers_on_receipt' => false,
+    ]);
     Setting::query()->firstOrFail()->update([
         'company_logo' => null,
         'company_tagline' => null,
@@ -246,6 +273,47 @@ test('receipt header omits missing branding fields and disabled tax identifiers 
         ->assertDontSee('VAT:');
 });
 
+test('printed receipt stays in normal flow waits for its logo and prints the footer once at the end', function () {
+    Setting::query()->firstOrFail()->update([
+        'receipt_footer_message' => 'Huduma bora kila siku.',
+    ]);
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin);
+
+    $component = Volt::test('sales.receipt', ['sale' => $sale])
+        ->assertSee('position: static', false)
+        ->assertSee('height: auto', false)
+        ->assertSee('image.complete', false)
+        ->assertSee("image.addEventListener('load'", false)
+        ->assertSee("image.addEventListener('error'", false)
+        ->assertSee('await Promise.all', false)
+        ->assertSee('printCustomerReceipt()', false)
+        ->assertDontSee('position: absolute', false)
+        ->assertDontSee('position: fixed', false)
+        ->assertDontSee('bottom: 0', false);
+
+    $html = $component->html();
+
+    expect(substr_count($html, 'Huduma bora kila siku.'))->toBe(1)
+        ->and(strpos($html, 'receipt-summary'))->toBeLessThan(strpos($html, 'receipt-footer'));
+});
+
+test('sale company identity wins over a stale hardcoded settings name', function () {
+    Company::query()->findOrFail($this->admin->company_id)->update([
+        'company_name' => 'Current Business Limited',
+        'phone' => '+255 765 432 100',
+    ]);
+    Setting::query()->firstOrFail()->update([
+        'company_name' => 'HARDEX POS',
+        'company_phone' => '+255 700 000 000',
+    ]);
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin);
+
+    Volt::test('sales.receipt', ['sale' => $sale])
+        ->assertSee('Current Business Limited')
+        ->assertSee('+255 765 432 100')
+        ->assertDontSee('HARDEX POS');
+});
+
 test('company settings save receipt branding fields for the current business', function () {
     Volt::test('settings.company')
         ->set('tagline', 'Professional Building Supplies')
@@ -266,6 +334,121 @@ test('company settings save receipt branding fields for the current business', f
         ->and($settings->alternate_phone)->toBe('+255 700 111 222')
         ->and($settings->company_website)->toBe('www.hardex.example')
         ->and($settings->show_tax_identifiers_on_receipt)->toBeTrue();
+});
+
+test('admin can update the company receipt footer', function () {
+    $admin = User::factory()->create([
+        'company_id' => $this->branch->company_id,
+        'branch_id' => $this->branch->id,
+        'status' => 'active',
+    ]);
+    $admin->assignRole('Admin');
+    $this->actingAs($admin);
+
+    Volt::test('settings.company')
+        ->set('receipt_footer_message', 'Huduma bora kwa wateja wetu.')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(Setting::query()->where('company_id', $admin->company_id)->value('receipt_footer_message'))
+        ->toBe('Huduma bora kwa wateja wetu.');
+});
+
+test('super admin can update the company receipt footer', function () {
+    Volt::test('settings.company')
+        ->set('receipt_footer_message', "Tunathamini biashara yako.\nKaribu tena.")
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(Setting::withoutGlobalScopes()->where('company_id', $this->admin->company_id)->value('receipt_footer_message'))
+        ->toBe("Tunathamini biashara yako.\nKaribu tena.");
+});
+
+test('cashiers and store keepers cannot edit the company receipt footer', function (string $role) {
+    $user = User::factory()->create([
+        'company_id' => $this->branch->company_id,
+        'branch_id' => $this->branch->id,
+        'status' => 'active',
+    ]);
+    $user->assignRole($role);
+    $this->actingAs($user);
+
+    $this->get(route('settings.company'))->assertForbidden();
+
+    Volt::test('settings.company')->assertForbidden();
+})->with(['Cashier', 'Store Keeper']);
+
+test('a delegated user with company settings permission can update the footer', function () {
+    $manager = User::factory()->create([
+        'company_id' => $this->branch->company_id,
+        'branch_id' => $this->branch->id,
+        'status' => 'active',
+    ]);
+    $manager->assignRole('Manager');
+    $manager->givePermissionTo(Permission::findByName('company-settings.update'));
+    $this->actingAs($manager);
+
+    $this->get(route('settings.company'))->assertOk();
+
+    Volt::test('settings.company')
+        ->set('receipt_footer_message', 'Ujumbe wa ruhusa maalum.')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(Setting::query()->where('company_id', $manager->company_id)->value('receipt_footer_message'))
+        ->toBe('Ujumbe wa ruhusa maalum.');
+});
+
+test('configured footer is escaped appears once and remains after payment totals', function () {
+    Setting::query()->firstOrFail()->update([
+        'receipt_footer_message' => "<script>alert('unsafe')</script>\nKaribu salama.",
+    ]);
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin);
+
+    $component = Volt::test('sales.receipt', ['sale' => $sale])
+        ->assertSee('&lt;script&gt;alert(&#039;unsafe&#039;)&lt;/script&gt;', false)
+        ->assertSee('Karibu salama.')
+        ->assertDontSee("<script>alert('unsafe')</script>", false);
+
+    $html = $component->html();
+
+    expect(substr_count($html, 'Karibu salama.'))->toBe(1)
+        ->and(strpos($html, 'receipt-summary'))->toBeLessThan(strpos($html, 'receipt-footer'))
+        ->and(strpos($html, 'Paid'))->toBeLessThan(strpos($html, 'Karibu salama.'));
+});
+
+test('empty footer omits the footer section and has no hardcoded fallback', function () {
+    Setting::query()->firstOrFail()->update(['receipt_footer_message' => null]);
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin);
+
+    Volt::test('sales.receipt', ['sale' => $sale])
+        ->assertDontSee('class="receipt-footer', false)
+        ->assertDontSee('Thank you for shopping with us.')
+        ->assertDontSee('Asante kwa kununua nasi');
+});
+
+test('receipt footer is isolated to the sale company', function () {
+    Setting::withoutGlobalScopes()
+        ->where('company_id', $this->branch->company_id)
+        ->firstOrFail()
+        ->update(['receipt_footer_message' => 'Company A private footer.']);
+
+    $companyB = Company::query()->create([
+        'company_name' => 'Company B Hardware',
+        'business_type' => 'Hardware Store',
+        'phone' => '+255 700 222 222',
+        'whatsapp_number' => '+255 700 222 222',
+    ]);
+    Setting::withoutGlobalScopes()->create([
+        'company_id' => $companyB->id,
+        'company_name' => 'Company B Hardware',
+        'receipt_footer_message' => 'Company B confidential footer.',
+    ]);
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin);
+
+    Volt::test('sales.receipt', ['sale' => $sale])
+        ->assertSee('Company A private footer.')
+        ->assertDontSee('Company B confidential footer.');
 });
 
 function makeCustomerReceiptSale(Branch $branch, User $user, array $saleOverrides = [], array $itemOverrides = []): Sale

@@ -24,7 +24,6 @@ state([
     'company_email' => '',
     'company_address' => '',
     'currency' => 'TZS',
-    'receipt_footer_text' => '',
     'tax_enabled' => false,
     'default_branch_id' => '',
     'theme_color' => '#f97316',
@@ -39,7 +38,6 @@ mount(function () {
     $this->company_email = $this->setting->company_email;
     $this->company_address = $this->setting->company_address;
     $this->currency = $this->setting->currency;
-    $this->receipt_footer_text = $this->setting->receipt_footer_text;
     $this->tax_enabled = $this->setting->tax_enabled;
     $this->default_branch_id = (string) $this->setting->default_branch_id;
     $this->theme_color = $this->setting->theme_color;
@@ -53,7 +51,6 @@ rules([
     'company_email' => ['nullable', 'email', 'max:255'],
     'company_address' => ['nullable', 'string', 'max:1000'],
     'currency' => ['required', 'string', 'max:10'],
-    'receipt_footer_text' => ['nullable', 'string', 'max:1000'],
     'tax_enabled' => ['boolean'],
     'default_branch_id' => ['nullable', 'exists:branches,id'],
     'theme_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
@@ -180,12 +177,6 @@ $removeLogo = function () {
                 Company Address
                 <textarea wire:model="company_address" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
                 @error('company_address') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
-            </label>
-
-            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">
-                Receipt Footer Text
-                <textarea wire:model="receipt_footer_text" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
-                @error('receipt_footer_text') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 
             <div class="md:col-span-2">

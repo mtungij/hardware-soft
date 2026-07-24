@@ -211,7 +211,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Volt::route('roles', 'roles.index')->name('roles.index');
         Volt::route('settings', 'settings.index')->name('settings.index');
-        Volt::route('settings/company', 'settings.company')->name('settings.company');
         Volt::route('settings/inventory', 'settings.inventory')->name('settings.inventory');
 
         Volt::route('products/create', 'products.create')->name('products.create');
@@ -226,6 +225,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('stock-transfers/{stockTransfer}/edit', 'stock-transfers.edit')->middleware('warehouse.enabled')->name('stock-transfers.edit');
         Volt::route('sales/{sale}/cancel', 'sales.cancel')->name('sales.cancel');
     });
+
+    Volt::route('settings/company', 'settings.company')
+        ->middleware('company-settings.update')
+        ->name('settings.company');
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper')->group(function () {
         Volt::route('purchases/create', 'purchases.create')->middleware('warehouse.enabled')->name('purchases.create');

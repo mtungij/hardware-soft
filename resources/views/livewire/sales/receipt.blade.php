@@ -7,13 +7,14 @@ use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
-layout('layouts.app');
+layout('layouts.print');
 
 state(['sale' => null, 'settings' => null]);
 
 mount(function (Sale $sale) {
     $this->sale = $sale->load([
         'customer',
+        'company',
         'createdBy',
         'soldBy',
         'items.product.sellingUnit',
@@ -21,7 +22,9 @@ mount(function (Sale $sale) {
         'items.sellingUnit',
         'payments',
     ]);
-    $this->settings = Setting::first();
+    $this->settings = Setting::withoutGlobalScopes()
+        ->where('company_id', $sale->company_id)
+        ->first();
 });
 
 ?>
@@ -31,15 +34,28 @@ mount(function (Sale $sale) {
         $paperSize = request()->query('paper') === '58' ? '58' : '80';
         $isOutstanding = (float) $sale->balance_amount > 0 || $sale->payment_status !== 'paid';
         $customerName = $sale->temporary_customer_name ?: $sale->customer?->name ?: 'Walk-in Customer';
-        $alternatePhone = $settings?->alternate_phone ?: $settings?->whatsapp_number;
-        $alternatePhone = $alternatePhone !== $settings?->company_phone ? $alternatePhone : null;
-        $logoPath = $settings?->company_logo;
+        $company = $sale->company;
+        $companyName = $company?->company_name ?: $settings?->company_name ?: config('app.name');
+        $companyTagline = $company?->tagline ?: $settings?->company_tagline;
+        $companyPhone = $company?->phone ?: $settings?->company_phone;
+        $alternatePhone = $company?->alternate_phone ?: $settings?->alternate_phone ?: $company?->whatsapp_number ?: $settings?->whatsapp_number;
+        $alternatePhone = $alternatePhone !== $companyPhone ? $alternatePhone : null;
+        $companyEmail = $company?->email ?: $settings?->company_email;
+        $companyAddress = $company?->address ?: $settings?->company_address;
+        $companyWebsite = $company?->website ?: $settings?->company_website;
+        $showTaxIdentifiers = (bool) ($company?->show_tax_identifiers_on_receipt ?? $settings?->show_tax_identifiers_on_receipt);
+        $tinNumber = $company?->tin_number ?: $settings?->tin_number;
+        $vatNumber = $company?->vrn_number ?: $settings?->vrn_number;
+        $logoPath = $company?->logo ?: $settings?->company_logo;
         $logoUrl = $logoPath
-            ? (\Illuminate\Support\Str::startsWith($logoPath, ['http://', 'https://', '/'])
+            ? (\Illuminate\Support\Str::startsWith($logoPath, ['http://', 'https://', '//', '/'])
                 ? $logoPath
-                : asset('storage/'.ltrim($logoPath, '/')))
+                : (\Illuminate\Support\Str::startsWith($logoPath, ['storage/', 'images/', 'assets/'])
+                    ? asset(ltrim($logoPath, '/'))
+                    : asset('storage/'.ltrim($logoPath, '/'))))
             : null;
         $receiptTitle = 'SALES RECEIPT';
+        $footerMessage = $settings?->receipt_footer_message;
     @endphp
 
     <style>
@@ -47,7 +63,10 @@ mount(function (Sale $sale) {
             --receipt-width: 72mm;
             --receipt-padding: 3mm;
             box-sizing: border-box;
+            position: static;
             width: var(--receipt-width);
+            height: auto;
+            min-height: 0;
             padding: var(--receipt-padding);
             font-size: 11px;
             line-height: 1.35;
@@ -75,11 +94,19 @@ mount(function (Sale $sale) {
         }
 
         .receipt-item,
+        .receipt-body,
         .receipt-summary,
         .receipt-header,
         .receipt-footer {
+            position: static;
+            float: none;
             break-inside: avoid;
             page-break-inside: avoid;
+        }
+
+        .receipt-footer {
+            margin-top: 10px;
+            text-align: center;
         }
 
         @media print {
@@ -87,18 +114,22 @@ mount(function (Sale $sale) {
                 margin: 0;
             }
 
-            body * {
-                visibility: hidden !important;
-            }
-
-            #customer-receipt,
-            #customer-receipt * {
-                visibility: visible !important;
+            html,
+            body {
+                width: auto;
+                height: auto;
+                min-height: 0;
+                margin: 0;
+                padding: 0;
+                background: #fff;
             }
 
             #customer-receipt {
-                position: absolute;
-                inset: 0 auto auto 0;
+                position: static;
+                float: none;
+                display: block;
+                height: auto;
+                min-height: 0;
                 margin: 0;
                 border: 0;
                 border-radius: 0;
@@ -116,7 +147,7 @@ mount(function (Sale $sale) {
             <div class="flex flex-wrap gap-2">
                 <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 58]) }}" class="{{ $paperSize === '58' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 dark:border-slate-700' }} rounded-lg px-3 py-2 text-sm font-bold">58mm</a>
                 <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 80]) }}" class="{{ $paperSize === '80' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 dark:border-slate-700' }} rounded-lg px-3 py-2 text-sm font-bold">80mm</a>
-                <button onclick="window.print()" class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Print Receipt</button>
+                <button type="button" onclick="printCustomerReceipt()" class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Print Receipt</button>
             </div>
         </x-page-header>
     </div>
@@ -128,34 +159,34 @@ mount(function (Sale $sale) {
     >
         <div class="receipt-header text-center">
             @if ($logoUrl)
-                <img src="{{ $logoUrl }}" alt="{{ $settings?->company_name }} logo" class="receipt-logo">
+                <img src="{{ $logoUrl }}" alt="{{ $companyName }} logo" class="receipt-logo">
             @endif
-            @if ($settings?->company_name)
-                <p class="text-[1.45em] font-black uppercase leading-tight">{{ $settings->company_name }}</p>
+            @if ($companyName)
+                <p class="text-[1.45em] font-black uppercase leading-tight">{{ $companyName }}</p>
             @endif
-            @if ($settings?->company_tagline)
-                <p class="mt-0.5 font-semibold">{{ $settings->company_tagline }}</p>
+            @if ($companyTagline)
+                <p class="mt-0.5 font-semibold">{{ $companyTagline }}</p>
             @endif
-            @if ($settings?->company_phone)
-                <p class="mt-1">{{ $settings->company_phone }}</p>
+            @if ($companyPhone)
+                <p class="mt-1">{{ $companyPhone }}</p>
             @endif
             @if ($alternatePhone)
                 <p>{{ $alternatePhone }}</p>
             @endif
-            @if ($settings?->company_email)
-                <p class="break-all">{{ $settings->company_email }}</p>
+            @if ($companyEmail)
+                <p class="break-all">{{ $companyEmail }}</p>
             @endif
-            @if ($settings?->company_address)
-                <p>{{ $settings->company_address }}</p>
+            @if ($companyAddress)
+                <p>{{ $companyAddress }}</p>
             @endif
-            @if ($settings?->company_website)
-                <p class="break-all">{{ $settings->company_website }}</p>
+            @if ($companyWebsite)
+                <p class="break-all">{{ $companyWebsite }}</p>
             @endif
-            @if ($settings?->show_tax_identifiers_on_receipt && $settings?->tin_number)
-                <p>TIN: {{ $settings->tin_number }}</p>
+            @if ($showTaxIdentifiers && $tinNumber)
+                <p>TIN: {{ $tinNumber }}</p>
             @endif
-            @if ($settings?->show_tax_identifiers_on_receipt && $settings?->vrn_number)
-                <p>VAT: {{ $settings->vrn_number }}</p>
+            @if ($showTaxIdentifiers && $vatNumber)
+                <p>VAT: {{ $vatNumber }}</p>
             @endif
             <p class="mt-[2mm] border-y border-dashed border-slate-500 py-1 text-[1.15em] font-black tracking-wide">{{ $receiptTitle }}</p>
         </div>
@@ -168,7 +199,7 @@ mount(function (Sale $sale) {
             <p><span class="font-bold">Sale Type:</span> {{ $sale->saleTypeLabel() }}</p>
         </div>
 
-        <div>
+        <div class="receipt-body">
             @foreach ($sale->items as $item)
                 @php
                     $discountPerUnit = (float) ($item->discount_per_unit ?? 0);
@@ -215,8 +246,36 @@ mount(function (Sale $sale) {
             @endif
         </div>
 
-        <div class="receipt-footer border-t border-dashed border-slate-500 pt-[2mm] text-center text-[0.9em]">
-            <p>{{ $settings?->receipt_footer_text ?? 'Thank you for shopping with us.' }}</p>
-        </div>
+        @if (filled($footerMessage))
+            <div class="receipt-footer whitespace-pre-line border-t border-dashed border-slate-500 pt-[2mm] text-center text-[0.9em]">{{ $footerMessage }}</div>
+        @endif
     </div>
+
+    <script>
+        window.printCustomerReceipt = async function () {
+            const receipt = document.getElementById('customer-receipt');
+            const images = receipt ? Array.from(receipt.querySelectorAll('img')) : [];
+
+            await Promise.all(images.map((image) => new Promise((resolve) => {
+                const finish = () => {
+                    if (! image.naturalWidth) {
+                        image.remove();
+                    }
+
+                    resolve();
+                };
+
+                if (image.complete) {
+                    finish();
+                    return;
+                }
+
+                image.addEventListener('load', finish, { once: true });
+                image.addEventListener('error', finish, { once: true });
+                window.setTimeout(finish, 5000);
+            })));
+
+            window.print();
+        };
+    </script>
 </div>

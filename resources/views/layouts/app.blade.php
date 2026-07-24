@@ -116,7 +116,7 @@
                     ['label' => __('messages.staff.nav.customer_accounts'), 'route' => 'admin.customer-accounts.index', 'icon' => 'customer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.customer_notifications'), 'route' => 'admin.customer-notifications.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.settings'), 'route' => 'settings.index', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
-                    ['label' => __('messages.staff.nav.company_settings'), 'route' => 'settings.company', 'icon' => 'branch', 'roles' => ['Super Admin', 'Admin']],
+                    ['label' => __('messages.staff.nav.company_settings'), 'route' => 'settings.company', 'icon' => 'branch', 'roles' => ['Super Admin', 'Admin'], 'permission' => 'company-settings.update'],
                     ['label' => __('messages.staff.nav.inventory_settings'), 'route' => 'settings.inventory', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.email_settings'), 'route' => 'email-settings.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager']],
                     ['label' => __('messages.staff.nav.email_logs'), 'route' => 'purchase-email-logs.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager'], 'show' => $warehouseEnabled],
@@ -185,7 +185,14 @@
                 <nav class="flex-1 overflow-y-auto px-2 py-3">
                     @foreach ($navigationGroups as $group)
                         @php
-                            $visibleItems = collect($group['items'])->filter(fn ($item) => ($item['show'] ?? true) && (blank($item['roles']) || $user?->hasAnyRole($item['roles'])));
+                            $visibleItems = collect($group['items'])->filter(function ($item) use ($user) {
+                                $hasAccessRule = filled($item['roles'] ?? null) || filled($item['permission'] ?? null);
+                                $hasRoleAccess = filled($item['roles'] ?? null) && $user?->hasAnyRole($item['roles']);
+                                $hasPermissionAccess = filled($item['permission'] ?? null) && $user?->can($item['permission']);
+
+                                return ($item['show'] ?? true)
+                                    && (! $hasAccessRule || $hasRoleAccess || $hasPermissionAccess);
+                            });
                         @endphp
                         @if ($visibleItems->isNotEmpty())
                             @if ($visibleItems->count() === 1)
