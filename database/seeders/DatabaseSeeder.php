@@ -11,6 +11,7 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $this->call(MeasurementTypeSeeder::class);
         $this->call([
             BranchSeeder::class,
             RolePermissionSeeder::class,

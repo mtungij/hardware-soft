@@ -241,16 +241,15 @@ $addProduct = function (int $productId) {
         return;
     }
 
-    $product = Product::query()->with(['category', 'unit', 'sellingUnit', 'size'])->findOrFail($productId);
-    $supportsFractionalSales = $product->supportsFractionalSales();
+    $product = Product::query()->with(['category', 'measurementType', 'unit', 'sellingUnit', 'size'])->findOrFail($productId);
+    $supportsFractionalSales = $product->allowsDecimalQuantities();
+    $conversionFactor = $product->saleConversionFactor();
     $baseStock = app(InventoryService::class)->getProductStock(
         $productId,
         (int) $this->currentSaleLocation()->id,
         (int) $this->branch_id,
     );
-    $available = $supportsFractionalSales
-        ? $baseStock * (float) ($product->conversion_factor ?: 1)
-        : $baseStock;
+    $available = $baseStock * $conversionFactor;
 
     if ($available <= 0) {
         $this->addError('cart', \App\Support\UiText::translate('Product is out of stock in selected source.'));
@@ -288,9 +287,10 @@ $addProduct = function (int $productId) {
         'unit_price' => $unitPrice,
         'discount_amount' => '0',
         'tax_amount' => $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0',
-        'selling_unit' => $supportsFractionalSales ? ($product->sellingUnit?->short_name ?: $product->unit?->short_name) : $product->unit?->short_name,
+        'selling_unit' => $product->sellingUnit?->short_name ?: $product->unit?->short_name,
         'base_unit' => $product->unit?->short_name,
-        'conversion_factor' => $supportsFractionalSales ? (string) ($product->conversion_factor ?: 1) : '1',
+        'conversion_factor' => (string) $conversionFactor,
+        'measurement_type' => $product->measurementType?->name ?? str($product->measurementCode())->title()->toString(),
         'allow_fractional_sale' => $supportsFractionalSales,
         'minimum_sale_quantity' => $supportsFractionalSales ? (string) ($product->minimum_sale_quantity ?: 1) : '1',
         'quantity_step' => $supportsFractionalSales ? (string) ($product->quantity_step ?: 1) : '1',
@@ -536,7 +536,7 @@ $completeSale = function (InventoryService $inventory) {
 
             @php
                 $products = $locationReady
-                    ? Product::with(['category', 'unit', 'sellingUnit', 'size'])
+                    ? Product::with(['category', 'measurementType', 'unit', 'sellingUnit', 'size'])
                         ->where('status', 'active')
                         ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhere('barcode', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))
                         ->orderBy('name')
@@ -570,15 +570,13 @@ $completeSale = function (InventoryService $inventory) {
                 @foreach ($products as $product)
                     @php
                         $displayPrice = $sale_type === 'wholesale' ? $product->wholesale_price : $product->selling_price;
-                        $supportsFractionalSales = $product->supportsFractionalSales();
-                        $sellingUnitLabel = $supportsFractionalSales
-                            ? ($product->sellingUnit?->short_name ?: $product->unit?->short_name)
-                            : $product->unit?->short_name;
+                        $supportsFractionalSales = $product->allowsDecimalQuantities();
+                        $sellingUnitLabel = $product->sellingUnit?->short_name ?: $product->unit?->short_name;
                         $baseUnitLabel = $product->unit?->short_name;
-                        $conversionFactor = $supportsFractionalSales ? max(0.0001, (float) ($product->conversion_factor ?: 1)) : 1;
+                        $conversionFactor = $product->saleConversionFactor();
                         $available = $availableStock($product->id, $conversionFactor);
                         $baseAvailable = $available / $conversionFactor;
-                        $showsBaseStock = $supportsFractionalSales && $baseUnitLabel && ($sellingUnitLabel !== $baseUnitLabel || abs($conversionFactor - 1) > 0.0001);
+                        $showsBaseStock = $product->usesUnitConversion() && $baseUnitLabel && ($sellingUnitLabel !== $baseUnitLabel || abs($conversionFactor - 1) > 0.0001);
                     @endphp
                     <button type="button" wire:click="addProduct({{ $product->id }})" class="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-navy-900" @disabled(! $locationReady)>
                         <img class="h-24 w-full rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
@@ -587,6 +585,7 @@ $completeSale = function (InventoryService $inventory) {
                             <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ $t('Size') }}: {{ $product->sizeLabel() }}</p>
                         @endif
                         <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $sellingUnitLabel }}</p>
+                        <p class="text-[11px] font-bold text-slate-500">{{ $product->measurementType?->name ?? str($product->measurementCode())->title() }}</p>
                         <div class="mt-2 flex items-start justify-between gap-3 text-sm">
                             <span class="font-bold text-build-orange">TZS {{ \App\Support\NumberFormatter::money($displayPrice) }}</span>
                             <span class="text-right text-slate-500">
@@ -649,7 +648,7 @@ $completeSale = function (InventoryService $inventory) {
                         $sellingUnitLabel = $item['selling_unit'] ?? '';
                         $baseUnitLabel = $item['base_unit'] ?? '';
                         $isFractionalSale = (bool) ($item['allow_fractional_sale'] ?? false);
-                        $conversionFactor = $isFractionalSale ? max(0.0001, (float) ($item['conversion_factor'] ?? 1)) : 1;
+                        $conversionFactor = max(0.0001, (float) ($item['conversion_factor'] ?? 1));
                         $baseQuantity = $quantity / $conversionFactor;
                         $availableSellingQuantity = $availableStock((int) ($item['product_id'] ?? 0), $conversionFactor);
                         $availableBaseQuantity = $availableSellingQuantity / $conversionFactor;
@@ -664,6 +663,7 @@ $completeSale = function (InventoryService $inventory) {
                                     <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ $t('Size') }}: {{ $item['size'] }}</p>
                                 @endif
                                 <p class="text-xs text-slate-500">{{ $item['sku'] }} / {{ $sellingUnitLabel }}</p>
+                                <p class="text-[11px] font-bold text-slate-500">{{ $item['measurement_type'] ?? 'Count' }}</p>
                                 <div class="mt-1 flex flex-wrap gap-1.5">
                                     <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-black {{ ($item['sale_type'] ?? 'retail') === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item['sale_type'] ?? 'retail')->title() }}</span>
                                     @if ($isFractionalSale)
@@ -702,7 +702,7 @@ $completeSale = function (InventoryService $inventory) {
                         </div>
 
                         <div class="mt-2 grid gap-1 text-xs text-slate-500 dark:text-slate-400">
-                            @if ($isFractionalSale)
+                            @if ($isFractionalSale || abs($conversionFactor - 1) > 0.0001)
                                 <div class="flex justify-between"><span>{{ $t('Available Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span></div>
                                 @if ($baseUnitLabel && ($baseUnitLabel !== $sellingUnitLabel || abs($conversionFactor - 1) > 0.0001))
                                     <div class="flex justify-between"><span>{{ $t('Available Base Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableBaseQuantity) }} {{ $baseUnitLabel }}</span></div>

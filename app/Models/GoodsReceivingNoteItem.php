@@ -49,6 +49,11 @@ class GoodsReceivingNoteItem extends Model
         return $this->belongsTo(StockLocation::class);
     }
 
+    public function sizeLabel(): ?string
+    {
+        return $this->purchaseItem?->sizeLabel() ?? $this->product?->sizeLabel();
+    }
+
     protected function casts(): array
     {
         return [

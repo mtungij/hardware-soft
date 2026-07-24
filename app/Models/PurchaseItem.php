@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'purchase_id',
     'company_id',
     'product_id',
+    'product_size_id',
     'ordered_quantity',
     'received_quantity',
     'cost_price',
@@ -30,6 +31,21 @@ class PurchaseItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function productSize(): BelongsTo
+    {
+        return $this->belongsTo(ProductSize::class);
+    }
+
+    public function sizeLabel(): ?string
+    {
+        return $this->productSize?->label() ?? $this->product?->sizeLabel();
+    }
+
+    public function productDisplayNameWithSize(): string
+    {
+        return trim(($this->product?->displayName() ?? '').($this->sizeLabel() ? ' - '.$this->sizeLabel() : ''));
     }
 
     public function remainingQuantity(): float

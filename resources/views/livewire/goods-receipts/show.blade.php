@@ -59,8 +59,8 @@ mount(function (GoodsReceivingNote $receipt) {
                     <tr>
                         <td class="px-4 py-3 font-black">
                             {{ $item->product?->displayName() }}
-                            @if ($item->product?->sizeLabel())
-                                <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->product->sizeLabel() }}</p>
+                            @if ($item->sizeLabel())
+                                <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->sizeLabel() }}</p>
                             @endif
                         </td>
                         <td class="px-4 py-3 font-mono">{{ $item->product?->sku }}</td>

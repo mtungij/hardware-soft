@@ -70,8 +70,8 @@
                 <tr>
                     <td>
                         {{ $item->product?->displayName() }}
-                        @if ($item->product?->sizeLabel())
-                            <br><small>Size: {{ $item->product->sizeLabel() }}</small>
+                        @if ($item->sizeLabel())
+                            <br><small>Size: {{ $item->sizeLabel() }}</small>
                         @endif
                     </td>
                     <td>{{ $item->product?->sku }}</td>

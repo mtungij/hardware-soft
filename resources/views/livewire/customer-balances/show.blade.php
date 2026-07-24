@@ -92,7 +92,7 @@ $setTab = fn (string $tab) => $this->activeTab = $tab;
                     'sort' => $sale->sale_date?->toDateString().' '.$sale->created_at?->format('H:i:s'),
                     'type' => 'Credit Sale',
                     'reference' => $sale->sale_number,
-                    'description' => $sale->items->map(fn ($item) => $item->product?->displayNameWithSize().' x '.$quantity($item->quantity).' '.$unitLabel($item))->join(', '),
+                    'description' => $sale->items->map(fn ($item) => $item->productDisplayNameWithSize().' x '.$quantity($item->quantity).' '.$unitLabel($item))->join(', '),
                     'debit' => (float) $sale->total_amount,
                     'credit' => 0,
                     'model' => $sale,

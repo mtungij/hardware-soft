@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Models\GoodsReceivingNote;
 use App\Models\Product;
 use App\Models\Purchase;
@@ -12,8 +13,11 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
+use App\Models\User;
 use App\Support\InventorySettings;
+use App\Support\UiText;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class InventoryService
@@ -188,6 +192,10 @@ class InventoryService
                 throw ValidationException::withMessages(['quantity' => 'Quantity must be greater than zero.']);
             }
 
+            if (! $product->acceptsPurchaseQuantity($quantity)) {
+                throw ValidationException::withMessages(['quantity' => $product->displayNameWithSize().' must use a whole base quantity.']);
+            }
+
             if ($location->status !== 'active') {
                 throw ValidationException::withMessages(['stock_location_id' => 'Stock location must be active.']);
             }
@@ -246,7 +254,7 @@ class InventoryService
 
             if ($containsCredit && ! $customerId) {
                 if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true)) {
-                    throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
+                    throw ValidationException::withMessages(['customer_id' => UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
                 }
 
                 $customerId = app(UnassignedCreditCustomerService::class)->forLocation($location)->id;
@@ -259,7 +267,7 @@ class InventoryService
             $preparedItems = [];
 
             foreach ($cart as $row) {
-                $product = Product::query()->with(["category", "size"])->whereKey($row['product_id'] ?? null)->lockForUpdate()->firstOrFail();
+                $product = Product::query()->with(['category', 'measurementType', 'size'])->whereKey($row['product_id'] ?? null)->lockForUpdate()->firstOrFail();
 
                 if ($product->status !== 'active') {
                     throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' is inactive.']);
@@ -270,17 +278,17 @@ class InventoryService
                 $unitPrice = (float) ($saleType === 'wholesale' ? $product->wholesale_price : $product->selling_price);
                 $discountPerUnit = (float) ($row['discount_per_unit'] ?? $row['discount_amount'] ?? 0);
                 $taxPerUnit = (float) ($row['tax_amount'] ?? 0);
-                $allowsFractionalSale = $product->supportsFractionalSales();
-                $conversionFactor = $allowsFractionalSale ? max(0.0001, (float) ($product->conversion_factor ?: 1)) : 1.0;
-                $baseQuantity = round($quantity / $conversionFactor, 4);
-                $minimumSaleQuantity = $allowsFractionalSale ? (float) ($product->minimum_sale_quantity ?: 1) : 1.0;
-                $quantityStep = $allowsFractionalSale ? (float) ($product->quantity_step ?: 1) : 1.0;
+                $allowsDecimalQuantity = $product->allowsDecimalQuantities();
+                $conversionFactor = $product->saleConversionFactor();
+                $baseQuantity = $product->baseQuantityForSale($quantity);
+                $minimumSaleQuantity = $allowsDecimalQuantity ? (float) ($product->minimum_sale_quantity ?: 1) : 1.0;
+                $quantityStep = $allowsDecimalQuantity ? (float) ($product->quantity_step ?: 1) : 1.0;
 
                 if ($quantity <= 0) {
                     throw ValidationException::withMessages(['cart' => 'Quantity must be greater than zero.']);
                 }
 
-                if (! $allowsFractionalSale && abs($quantity - round($quantity)) > 0.0001) {
+                if (! $allowsDecimalQuantity && ! $product->quantityIsWhole($quantity)) {
                     throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' must be sold in whole quantities.']);
                 }
 
@@ -316,7 +324,7 @@ class InventoryService
                 }
 
                 if ($discountPerUnit >= $unitPrice && $unitPrice > 0) {
-                    throw ValidationException::withMessages(['cart' => \App\Support\UiText::translate('The discount per unit must be less than the unit price.')]);
+                    throw ValidationException::withMessages(['cart' => UiText::translate('The discount per unit must be less than the unit price.')]);
                 }
 
                 $gross = $quantity * $unitPrice;
@@ -342,7 +350,7 @@ class InventoryService
                     'sale_type' => $saleType,
                     'quantity' => $quantity,
                     'base_quantity' => $baseQuantity,
-                    'selling_unit_id' => $allowsFractionalSale ? ($product->selling_unit_id ?: $product->unit_id) : $product->unit_id,
+                    'selling_unit_id' => $product->selling_unit_id ?: $product->unit_id,
                     'base_unit_id' => $product->unit_id,
                     'conversion_factor' => $conversionFactor,
                     'unit_price' => $unitPrice,
@@ -378,11 +386,11 @@ class InventoryService
                 }
 
                 if ($paid + $creditAmount < $total) {
-                    throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('Credit amount must cover the outstanding sale balance.')]);
+                    throw ValidationException::withMessages(['payments' => UiText::translate('Credit amount must cover the outstanding sale balance.')]);
                 }
 
                 if ($paid + $creditAmount > $total) {
-                    throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('Paid amount cannot exceed total for credit sales.')]);
+                    throw ValidationException::withMessages(['payments' => UiText::translate('Paid amount cannot exceed total for credit sales.')]);
                 }
             }
 
@@ -423,6 +431,7 @@ class InventoryService
             foreach ($preparedItems as $item) {
                 $saleItem = $sale->items()->create([
                     'product_id' => $item['product']->id,
+                    'product_size_id' => $item['product']->product_size_id,
                     'stock_location_id' => $location->id,
                     'sold_from_label' => InventorySettings::stockLocationLabel($location),
                     'sale_type' => $item['sale_type'],
@@ -479,7 +488,7 @@ class InventoryService
             }
 
             if ($containsCredit && $customerId && $balance > 0) {
-                \App\Models\Customer::whereKey($customerId)->increment('balance_amount', $balance);
+                Customer::whereKey($customerId)->increment('balance_amount', $balance);
             }
 
             return $sale->refresh();
@@ -517,7 +526,7 @@ class InventoryService
             }
 
             if ($sale->customer_id && (float) $sale->balance_amount > 0) {
-                \App\Models\Customer::whereKey($sale->customer_id)->decrement('balance_amount', (float) $sale->balance_amount);
+                Customer::whereKey($sale->customer_id)->decrement('balance_amount', (float) $sale->balance_amount);
             }
 
             $sale->update([
@@ -530,7 +539,7 @@ class InventoryService
         });
     }
 
-    public function canUserReceiveIntoLocation(?\App\Models\User $user, StockLocation $location): bool
+    public function canUserReceiveIntoLocation(?User $user, StockLocation $location): bool
     {
         if (! $location->isActive() || ! $location->can_receive_stock) {
             return false;
@@ -570,6 +579,7 @@ class InventoryService
             }
 
             $items = PurchaseItem::query()
+                ->with('product')
                 ->where('purchase_id', $purchase->id)
                 ->lockForUpdate()
                 ->get();
@@ -584,6 +594,52 @@ class InventoryService
                 if ($quantity <= 0) {
                     continue;
                 }
+
+                $item->loadMissing('product.measurementType');
+
+                if (! $item->product->acceptsPurchaseQuantity($quantity)) {
+                    throw ValidationException::withMessages([
+                        "lines.{$item->id}.quantity" => $item->product->displayNameWithSize().' must use a whole base quantity.',
+                    ]);
+                }
+
+                $product = $item->product;
+                $batchNumber = filled($line['batch_number'] ?? null)
+                    ? trim((string) $line['batch_number'])
+                    : null;
+                $expiryDate = filled($line['expiry_date'] ?? null)
+                    ? (string) $line['expiry_date']
+                    : null;
+
+                $traceabilityValidator = Validator::make(
+                    ['batch_number' => $batchNumber, 'expiry_date' => $expiryDate],
+                    [
+                        'batch_number' => $product->tracks_batch
+                            ? ['required', 'string', 'max:255']
+                            : ['nullable'],
+                        'expiry_date' => $product->tracks_expiry
+                            ? ['required', 'date', 'after_or_equal:'.$receivedDate]
+                            : ['nullable'],
+                    ],
+                    [
+                        'batch_number.required' => $product->displayNameWithSize().' requires a Batch Number.',
+                        'expiry_date.required' => $product->displayNameWithSize().' requires an Expiry Date.',
+                        'expiry_date.after_or_equal' => $product->displayNameWithSize().' Expiry Date cannot be earlier than the receiving date.',
+                    ],
+                );
+
+                if ($traceabilityValidator->fails()) {
+                    $messages = [];
+
+                    foreach ($traceabilityValidator->errors()->messages() as $field => $fieldMessages) {
+                        $messages["lines.{$item->id}.{$field}"] = $fieldMessages;
+                    }
+
+                    throw ValidationException::withMessages($messages);
+                }
+
+                $batchNumber = ($product->tracks_batch || $product->tracks_expiry) ? $batchNumber : null;
+                $expiryDate = $product->tracks_expiry ? $expiryDate : null;
 
                 $previouslyReceived = (float) $item->received_quantity;
                 $remaining = max(0, (float) $item->ordered_quantity - $previouslyReceived);
@@ -614,8 +670,8 @@ class InventoryService
                     'remaining' => $remaining,
                     'location' => $location,
                     'unit_cost' => $unitCost,
-                    'batch_number' => $line['batch_number'] ?? null,
-                    'expiry_date' => $line['expiry_date'] ?? null,
+                    'batch_number' => $batchNumber,
+                    'expiry_date' => $expiryDate,
                     'notes' => $line['notes'] ?? null,
                 ];
             }
@@ -754,7 +810,7 @@ class InventoryService
         });
     }
 
-    public function canUserAdjustLocation(?\App\Models\User $user, StockLocation $location): bool
+    public function canUserAdjustLocation(?User $user, StockLocation $location): bool
     {
         if (! $user || ! $location->isActive()) {
             return false;
@@ -830,7 +886,7 @@ class InventoryService
             }
 
             $firstMovementLine = collect($prepared)->first(fn (array $line) => (float) $line['difference'] !== 0.0);
-            $approvalRequired = (bool) (\App\Support\InventorySettings::current()->stock_adjustment_approval_required ?? true);
+            $approvalRequired = (bool) (InventorySettings::current()->stock_adjustment_approval_required ?? true);
 
             $adjustment = StockAdjustment::create([
                 'company_id' => $location->company_id,
@@ -961,7 +1017,7 @@ class InventoryService
                 throw ValidationException::withMessages(['to_location_id' => 'Destination location is not allowed to receive stock.']);
             }
 
-            $user = \App\Models\User::query()->find($completedBy);
+            $user = User::query()->find($completedBy);
             if ($user?->stockLocations()->exists()) {
                 $canTransferSource = $user->stockLocations()
                     ->where('stock_locations.id', $fromLocation->id)

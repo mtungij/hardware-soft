@@ -195,7 +195,7 @@ $deleteConfirmedProduct = function () {
     >
         <x-export-actions export="tables.products" :params="compact('search', 'statusFilter', 'branchFilter', 'categoryFilter', 'created_from', 'created_to')" />
         @if ($this->canManage())
-            <button type="button" data-tour="add-product" wire:click="openCreateProduct" class="erp-btn-primary">Create Product</button>
+            <a href="{{ route('products.create') }}" wire:navigate data-tour="add-product" class="erp-btn-primary">Create Product</a>
         @endif
     </x-page-header>
 
@@ -227,7 +227,7 @@ $deleteConfirmedProduct = function () {
 
         @php
             $products = Product::query()
-                ->with(['branch', 'category', 'unit', 'size'])
+                ->with(['branch', 'category', 'measurementType', 'unit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('sku', 'like', "%{$search}%")
@@ -241,9 +241,15 @@ $deleteConfirmedProduct = function () {
                 ->when($created_to, fn ($query) => $query->whereDate('created_at', '<=', $created_to))
                 ->latest()
                 ->paginate(10);
+            $hasProductSizes = $products->getCollection()->contains(fn (Product $product) => filled($product->sizeLabel()));
+            $productHeaders = ['Product', 'Measurement Type'];
+            if ($hasProductSizes) {
+                $productHeaders[] = 'Size';
+            }
+            array_push($productHeaders, 'SKU', 'Barcode', 'Category', 'Unit', 'Stock', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions');
         @endphp
 
-        <x-table data-tour="products-list" :headers="['Product', 'Size', 'SKU', 'Barcode', 'Category', 'Unit', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions']">
+        <x-table data-tour="products-list" :headers="$productHeaders">
             @forelse ($products as $product)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">
@@ -255,11 +261,17 @@ $deleteConfirmedProduct = function () {
                             </div>
                         </div>
                     </td>
-                    <td class="px-4 py-3 font-bold">{{ $product->sizeLabel() ?: '-' }}</td>
+                    <td class="px-4 py-3 font-bold">{{ $product->measurementType?->name ?? str($product->measurementCode())->title() }}</td>
+                    @if ($hasProductSizes)
+                        <td class="px-4 py-3 font-bold">{{ $product->sizeLabel() ?: '-' }}</td>
+                    @endif
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->sku ?: '-' }}</td>
                     <td class="px-4 py-3 font-mono text-xs">{{ $product->barcode ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
                     <td class="px-4 py-3">{{ $product->unit?->short_name }}</td>
+                    <td class="px-4 py-3 font-bold">
+                        {{ \App\Support\NumberFormatter::quantity(app(\App\Services\InventoryService::class)->getProductTotalStock($product->id, (int) ($product->branch_id ?: auth()->user()->branch_id ?: \App\Models\Branch::where('code', 'MAIN')->value('id')))) }}
+                    </td>
                     <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($product->buying_price) }}</td>
                     <td class="px-4 py-3 font-bold">TZS {{ \App\Support\NumberFormatter::money($product->selling_price) }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($product->reorder_level) }}</td>
@@ -271,7 +283,7 @@ $deleteConfirmedProduct = function () {
                                     Actions
                                 </button>
                                 <div class="hs-dropdown-menu z-[90] mt-2 hidden min-w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
-                                    <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="openEditProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">Edit</button>
+                                    <a href="{{ route('products.edit', $product) }}" wire:navigate class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">Edit</a>
                                     <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="toggleStatus({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">{{ $product->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
                                     <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="confirmDeleteProduct({{ $product->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">Delete</button>
                                 </div>
@@ -282,7 +294,7 @@ $deleteConfirmedProduct = function () {
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">No products found.</td></tr>
+                <tr><td colspan="13" class="px-4 py-8 text-center text-slate-500">No products found.</td></tr>
             @endforelse
         </x-table>
 

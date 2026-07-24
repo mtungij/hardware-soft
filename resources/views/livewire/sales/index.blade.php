@@ -277,12 +277,12 @@ mount(function () {
                                 <td class="px-3 py-3">
                                     <div class="space-y-1">
                                         @foreach ($visibleItems as $item)
-                                            <p>{{ $item->product?->displayNameWithSize() }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
+                                            <p>{{ $item->productDisplayNameWithSize() }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
                                         @endforeach
                                         @if ($hiddenCount > 0)
                                             <div x-show="productInvoice === {{ $sale?->id ?? 0 }}" class="space-y-1" style="display: none;">
                                                 @foreach ($row['items']->skip(5) as $item)
-                                                    <p>{{ $item->product?->displayNameWithSize() }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
+                                                    <p>{{ $item->productDisplayNameWithSize() }} x {{ $quantity($item->quantity) }} {{ $item->product?->unit?->short_name }}</p>
                                                 @endforeach
                                             </div>
                                             <button type="button" x-on:click="productInvoice = productInvoice === {{ $sale?->id ?? 0 }} ? null : {{ $sale?->id ?? 0 }}" class="text-xs font-black text-cyan-600">
@@ -354,7 +354,7 @@ mount(function () {
                                             <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                                                 @foreach ($row['items'] as $item)
                                                     <tr>
-                                                        <td class="px-3 py-2 font-bold">{{ $item->product?->displayNameWithSize() }}</td>
+                                                        <td class="px-3 py-2 font-bold">{{ $item->productDisplayNameWithSize() }}</td>
                                                         <td class="px-3 py-2 font-mono">{{ $item->product?->sku }}</td>
                                                         <td class="px-3 py-2 text-right">{{ $quantity($item->quantity) }}</td>
                                                         <td class="px-3 py-2">{{ $item->product?->unit?->short_name }}</td>

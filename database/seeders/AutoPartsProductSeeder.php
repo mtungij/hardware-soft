@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Company;
+use App\Models\MeasurementType;
 use App\Models\Product;
 use App\Models\Unit;
 use Illuminate\Database\Seeder;
@@ -18,11 +19,12 @@ class AutoPartsProductSeeder extends Seeder
 
     public function run(): void
     {
+        $measurementType = MeasurementType::query()->where('code', MeasurementType::COUNT)->firstOrFail();
         $products = [
             ['Oil Filter Toyota', 'AP-FLT-OIL-TY', 'FLT', 'pcs', 'Toyota', 'Oil filter', 8500, 13000, 12],
             ['Air Filter Nissan', 'AP-FLT-AIR-NS', 'FLT', 'pcs', 'Nissan', 'Air filter', 12000, 18000, 10],
             ['Front Brake Pads', 'AP-BRK-PAD-FR', 'BRK', 'set', null, 'Front set', 38000, 55000, 6],
-            ['Engine Oil 5W-30 4L', 'AP-OIL-5W30-4L', 'OIL', 'ltr', null, '5W-30 4L', 52000, 70000, 8],
+            ['Engine Oil 5W-30 4L', 'AP-OIL-5W30-4L', 'OIL', 'L', null, '5W-30 4L', 52000, 70000, 8],
             ['N70 Car Battery', 'AP-BAT-N70', 'BAT', 'pcs', null, 'N70', 185000, 240000, 3],
             ['Tyre 195/65R15', 'AP-TYR-1956515', 'TYR', 'tyre', null, '195/65R15', 145000, 195000, 4],
             ['Wheel Bearing Kit', 'AP-BRG-WHL-KIT', 'BRG', 'set', null, 'Wheel kit', 28000, 42000, 6],
@@ -48,7 +50,9 @@ class AutoPartsProductSeeder extends Seeder
                     [
                         'branch_id' => $branch->id,
                         'category_id' => $category->id,
+                        'measurement_type_id' => $measurementType->id,
                         'unit_id' => $unit->id,
+                        'selling_unit_id' => $unit->id,
                         'name' => $name,
                         'barcode' => null,
                         'brand' => $brand,

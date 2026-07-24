@@ -158,7 +158,7 @@ $openConfirmation = function () {
 $validateReceiving = function () {
     $locationIds = $this->availableReceivingLocations()->pluck('id')->map(fn ($id) => (string) $id)->all();
 
-    $this->validate([
+    $rules = [
         'grn_number' => ['required', 'string', 'max:255', Rule::unique('goods_receiving_notes', 'grn_number')],
         'received_date' => ['required', 'date'],
         'supplier_delivery_note_number' => ['nullable', 'string', 'max:255'],
@@ -169,12 +169,31 @@ $validateReceiving = function () {
         'lines.*.quantity' => ['nullable', 'numeric', 'min:0'],
         'lines.*.unit_cost' => ['required', 'numeric', 'min:0'],
         'lines.*.stock_location_id' => ['required', Rule::in($locationIds)],
-        'lines.*.batch_number' => ['nullable', 'string', 'max:255'],
-        'lines.*.expiry_date' => ['nullable', 'date'],
         'lines.*.notes' => ['nullable', 'string', 'max:1000'],
+    ];
+
+    $purchase = Purchase::query()->with('items.product')->findOrFail($this->purchase_id);
+
+    foreach ($purchase->items as $item) {
+        $isReceivingLine = (float) ($this->lines[$item->id]['quantity'] ?? 0) > 0;
+        $rules["lines.{$item->id}.batch_number"] = $item->product?->tracks_batch && $isReceivingLine
+            ? ['required', 'string', 'max:255']
+            : (($item->product?->tracks_expiry)
+                ? ['nullable', 'string', 'max:255']
+                : ['nullable']);
+        $rules["lines.{$item->id}.expiry_date"] = $item->product?->tracks_expiry && $isReceivingLine
+            ? ['required', 'date', 'after_or_equal:received_date']
+            : (($item->product?->tracks_expiry)
+                ? ['nullable', 'date', 'after_or_equal:received_date']
+                : ['nullable']);
+    }
+
+    $this->validate($rules, [
+        'lines.*.batch_number.required' => 'Batch Number is required for this product.',
+        'lines.*.expiry_date.required' => 'Expiry Date is required for this product.',
+        'lines.*.expiry_date.after_or_equal' => 'Expiry Date cannot be earlier than the receiving date.',
     ]);
 
-    $purchase = Purchase::query()->with('items')->findOrFail($this->purchase_id);
     $hasQuantity = false;
 
     foreach ($purchase->items as $item) {
@@ -242,6 +261,8 @@ $postReceipt = function (InventoryService $inventory) {
         $totalOrdered = $purchase->items->sum('ordered_quantity');
         $totalReceived = $purchase->items->sum('received_quantity');
         $totalRemaining = $purchase->items->sum(fn ($item) => $item->remainingQuantity());
+        $showBatchColumn = $purchase->items->contains(fn ($item) => (bool) ($item->product?->tracks_batch || $item->product?->tracks_expiry));
+        $showExpiryColumn = $purchase->items->contains(fn ($item) => (bool) $item->product?->tracks_expiry);
     @endphp
 
     <x-page-header title="Receive Purchase Order" description="Pokea bidhaa za manunuzi kwenye eneo sahihi la stock." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Receive' => null]">
@@ -290,7 +311,7 @@ $postReceipt = function (InventoryService $inventory) {
             @error('lines') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
 
             <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-                <table class="min-w-[1320px] w-full text-sm">
+                <table class="{{ $showBatchColumn || $showExpiryColumn ? 'min-w-[1320px]' : 'min-w-[1040px]' }} w-full text-sm">
                     <thead class="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 dark:bg-slate-800">
                         <tr>
                             <th class="px-3 py-3">Product</th>
@@ -302,19 +323,24 @@ $postReceipt = function (InventoryService $inventory) {
                             <th class="px-3 py-3">Quantity to Receive</th>
                             <th class="px-3 py-3">Unit Cost</th>
                             <th class="px-3 py-3">Receive Into Location</th>
-                            <th class="px-3 py-3">Batch Number</th>
-                            <th class="px-3 py-3">Expiry Date</th>
+                            @if ($showBatchColumn)
+                                <th class="px-3 py-3">Batch Number</th>
+                            @endif
+                            @if ($showExpiryColumn)
+                                <th class="px-3 py-3">Expiry Date</th>
+                            @endif
                             <th class="px-3 py-3">Line Notes</th>
                             <th class="px-3 py-3">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach ($purchase->items as $item)
+                            @php($isReceivingLine = (float) ($lines[$item->id]['quantity'] ?? 0) > 0)
                             <tr class="align-top">
                                 <td class="px-3 py-3 font-black">
                                     {{ $item->product?->displayName() }}
-                                    @if ($item->product?->sizeLabel())
-                                        <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->product->sizeLabel() }}</p>
+                                    @if ($item->sizeLabel())
+                                        <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->sizeLabel() }}</p>
                                     @endif
                                 </td>
                                 <td class="px-3 py-3 font-mono">{{ $item->product?->sku }}</td>
@@ -338,8 +364,32 @@ $postReceipt = function (InventoryService $inventory) {
                                     </select>
                                     @error("lines.{$item->id}.stock_location_id") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
-                                <td class="px-3 py-3"><input wire:model="lines.{{ $item->id }}.batch_number" class="w-36 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
-                                <td class="px-3 py-3"><input wire:model="lines.{{ $item->id }}.expiry_date" type="date" class="w-40 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
+                                @if ($showBatchColumn)
+                                    <td class="px-3 py-3">
+                                        @if ($item->product?->tracks_batch || $item->product?->tracks_expiry)
+                                            <input wire:model="lines.{{ $item->id }}.batch_number" @required($item->product?->tracks_batch && $isReceivingLine) class="w-36 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                            @if ($item->product?->tracks_batch)
+                                                <span class="mt-1 block text-xs font-semibold text-slate-500">Required</span>
+                                            @else
+                                                <span class="mt-1 block text-xs font-semibold text-slate-500">Optional</span>
+                                            @endif
+                                            @error("lines.{$item->id}.batch_number") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                                        @else
+                                            <span class="text-xs font-semibold text-slate-400">Not required</span>
+                                        @endif
+                                    </td>
+                                @endif
+                                @if ($showExpiryColumn)
+                                    <td class="px-3 py-3">
+                                        @if ($item->product?->tracks_expiry)
+                                            <input wire:model="lines.{{ $item->id }}.expiry_date" type="date" min="{{ $received_date }}" @required($isReceivingLine) class="w-40 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                            <span class="mt-1 block text-xs font-semibold text-slate-500">Required</span>
+                                            @error("lines.{$item->id}.expiry_date") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                                        @else
+                                            <span class="text-xs font-semibold text-slate-400">Not required</span>
+                                        @endif
+                                    </td>
+                                @endif
                                 <td class="px-3 py-3"><input wire:model="lines.{{ $item->id }}.notes" class="w-48 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
                                 <td class="px-3 py-3"><span class="{{ $item->remainingQuantity() > 0 ? 'badge-warning' : 'badge-success' }}">{{ $item->remainingQuantity() > 0 ? 'Open' : 'Done' }}</span></td>
                             </tr>

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['company_id', 'sale_id', 'product_id', 'stock_location_id', 'selling_unit_id', 'base_unit_id', 'conversion_factor', 'sold_from_label', 'sale_type', 'quantity', 'base_quantity', 'unit_cost', 'unit_price', 'discount_per_unit', 'discount_amount', 'discount_total', 'gross_total', 'net_unit_price', 'net_total', 'tax_amount', 'line_total'])]
+#[Fillable(['company_id', 'sale_id', 'product_id', 'product_size_id', 'stock_location_id', 'selling_unit_id', 'base_unit_id', 'conversion_factor', 'sold_from_label', 'sale_type', 'quantity', 'base_quantity', 'unit_cost', 'unit_price', 'discount_per_unit', 'discount_amount', 'discount_total', 'gross_total', 'net_unit_price', 'net_total', 'tax_amount', 'line_total'])]
 class SaleItem extends Model
 {
     use HasCompany, HasFactory;
@@ -21,6 +21,21 @@ class SaleItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function productSize(): BelongsTo
+    {
+        return $this->belongsTo(ProductSize::class);
+    }
+
+    public function sizeLabel(): ?string
+    {
+        return $this->productSize?->label() ?? $this->product?->sizeLabel();
+    }
+
+    public function productDisplayNameWithSize(): string
+    {
+        return trim(($this->product?->displayName() ?? '').($this->sizeLabel() ? ' - '.$this->sizeLabel() : ''));
     }
 
     public function stockLocation(): BelongsTo

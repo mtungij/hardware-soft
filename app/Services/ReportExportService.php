@@ -14,21 +14,24 @@ use App\Models\PurchaseEmailLog;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SalePayment;
+use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Support\InventorySettings;
 use App\Support\NumberFormatter;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class ReportExportService
 {
     public function getCompanyHeader(Request $request): array
     {
-        $settings = \App\Models\Setting::query()->first();
+        $settings = Setting::query()->first();
         $branchId = $request->integer('branch_id') ?: $request->integer('branchFilter');
         $locationId = $request->integer('stock_location_id');
         $branch = $branchId ? Branch::find($branchId) : null;
@@ -86,7 +89,7 @@ class ReportExportService
 
     public function formatDate($value): string
     {
-        return $value ? \Illuminate\Support\Carbon::parse($value)->format('Y-m-d') : '-';
+        return $value ? Carbon::parse($value)->format('Y-m-d') : '-';
     }
 
     public function build(string $key, Request $request): array
@@ -226,7 +229,7 @@ class ReportExportService
             $row = [
                 $invoice['sale']?->sale_number,
                 $invoice['customer'],
-                $invoice['items']->map(fn ($item) => $item->product?->displayNameWithSize().' x '.$this->formatQuantity($item->quantity).' '.$item->product?->unit?->short_name)->join("\n"),
+                $invoice['items']->map(fn ($item) => $item->productDisplayNameWithSize().' x '.$this->formatQuantity($item->quantity).' '.$item->product?->unit?->short_name)->join("\n"),
                 $this->formatQuantity($invoice['total_quantity']),
             ];
 
@@ -263,6 +266,7 @@ class ReportExportService
     private function purchases(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
         $rows = Purchase::with('supplier')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('purchase_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('purchase_date', '<=', $to))->when($search, fn ($q) => $q->where('reference_number', 'like', "%{$search}%")->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%")))->latest()->get();
+
         return ['Purchase Report', ['Date', 'Reference', 'Supplier', 'Status', 'Total', 'Paid', 'Balance'], $rows->map(fn ($purchase) => [$this->formatDate($purchase->purchase_date), $purchase->reference_number, $purchase->supplier?->name, ucfirst($purchase->status), $this->formatCurrency($purchase->total_amount), $this->formatCurrency($purchase->paid_amount), $this->formatCurrency($purchase->balance_amount)])->all(), ['Total Purchases' => $this->formatCurrency($rows->sum('total_amount'))]];
     }
 
@@ -278,6 +282,7 @@ class ReportExportService
                 ->orWhereHas('category', fn ($categoryQuery) => $categoryQuery->where('name', 'like', "%{$search}%"))))
             ->latest()
             ->get();
+
         return ['Expense Report', ['Date', 'Category', 'Branch', 'Method', 'Paid By', 'Amount'], $rows->map(fn ($expense) => [$this->formatDate($expense->expense_date), $expense->category?->name, $expense->branch?->name, str($expense->payment_method)->replace('_', ' ')->title(), $expense->paidBy?->name, $this->formatCurrency($expense->amount)])->all(), ['Total Expenses' => $this->formatCurrency($rows->sum('amount'))]];
     }
 
@@ -326,6 +331,7 @@ class ReportExportService
     {
         $accounting = app(AccountingService::class);
         $rows = Customer::with('branch')->where(fn ($query) => $query->where('is_system_customer', false)->orWhereNull('is_system_customer'))->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($request->string('typeFilter')->toString(), fn ($q, $type) => $q->where('customer_type', $type))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))->latest()->get();
+
         return ['Customer Balance Report', ['Customer', 'Phone', 'Type', 'Branch', 'Outstanding'], $rows->map(fn ($customer) => [$customer->name, $customer->phone, $customer->customer_type, $customer->branch?->name, $this->formatCurrency($accounting->customerBalance($customer))])->all(), []];
     }
 
@@ -333,13 +339,48 @@ class ReportExportService
     {
         $accounting = app(AccountingService::class);
         $rows = Supplier::with('branch')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))->latest()->get();
+
         return ['Supplier Balance Report', ['Supplier', 'Phone', 'Branch', 'Opening', 'Outstanding'], $rows->map(fn ($supplier) => [$supplier->name, $supplier->phone, $supplier->branch?->name, $this->formatCurrency($supplier->opening_balance), $this->formatCurrency($accounting->supplierBalance($supplier))])->all(), []];
     }
 
     private function products(Request $request, ?int $branchId, string $search): array
     {
-        $rows = Product::with(['category', 'unit', 'branch', 'size'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('categoryFilter'), fn ($q, $id) => $q->where('category_id', $id))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%")))->orderBy('name')->get();
-        return ['Products', ['Product', 'Size', 'SKU', 'Category', 'Unit', 'Buying Price', 'Retail Price', 'Wholesale Price', 'Status'], $rows->map(fn ($p) => [$p->displayName(), $p->sizeLabel() ?: '-', $p->sku, $p->category?->name, $p->unit?->short_name, $this->formatCurrency($p->buying_price), $this->formatCurrency($p->selling_price), $this->formatCurrency($p->wholesale_price), ucfirst($p->status)])->all(), []];
+        $rows = Product::with(['category', 'measurementType', 'unit', 'branch', 'size'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('categoryFilter'), fn ($q, $id) => $q->where('category_id', $id))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%")))->orderBy('name')->get();
+
+        $hasSizes = $rows->contains(fn (Product $product) => filled($product->sizeLabel()));
+        $headers = ['Product', 'Measurement Type'];
+
+        if ($hasSizes) {
+            $headers[] = 'Size';
+        }
+
+        array_push($headers, 'SKU', 'Category', 'Unit', 'Buying Price', 'Retail Price', 'Wholesale Price', 'Status');
+
+        $exportRows = $rows->map(function (Product $product) use ($hasSizes): array {
+            $row = [
+                $product->displayName(),
+                $product->measurementType?->name ?? str($product->measurementCode())->title()->toString(),
+            ];
+
+            if ($hasSizes) {
+                $row[] = $product->sizeLabel() ?: '—';
+            }
+
+            array_push(
+                $row,
+                $product->sku,
+                $product->category?->name,
+                $product->unit?->short_name,
+                $this->formatCurrency($product->buying_price),
+                $this->formatCurrency($product->selling_price),
+                $this->formatCurrency($product->wholesale_price),
+                ucfirst($product->status),
+            );
+
+            return $row;
+        })->all();
+
+        return ['Products', $headers, $exportRows, []];
     }
 
     private function storeStock(Request $request, ?int $branchId, string $search): array
@@ -351,7 +392,7 @@ class ReportExportService
         $brand = $request->string('brand')->toString();
         $companyId = $request->user()?->company_id;
         $user = $request->user();
-        $setting = \App\Support\InventorySettings::current();
+        $setting = InventorySettings::current();
 
         if (($setting->inventory_mode ?? 'multi_location') === 'single_location' && $setting->default_stock_location_id) {
             $locationId = (int) $setting->default_stock_location_id;
@@ -465,18 +506,27 @@ class ReportExportService
     private function categories(Request $request, ?int $branchId, string $search): array
     {
         $rows = Category::with('branch')->withCount('products')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))->latest()->get();
+
         return ['Categories', ['Name', 'Code', 'Branch', 'Products', 'Status'], $rows->map(fn ($c) => [$c->name, $c->code, $c->branch?->name, $c->products_count, ucfirst($c->status)])->all(), []];
     }
 
     private function units(Request $request, ?int $branchId, string $search): array
     {
-        $rows = Unit::with('branch')->withCount('products')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('short_name', 'like', "%{$search}%"))->latest()->get();
-        return ['Units', ['Name', 'Short Name', 'Branch', 'Products', 'Status'], $rows->map(fn ($u) => [$u->name, $u->short_name, $u->branch?->name, $u->products_count, ucfirst($u->status)])->all(), []];
+        $rows = Unit::with('measurementType')
+            ->withCount('products')
+            ->when($request->integer('measurementTypeFilter'), fn ($query, $id) => $query->where('measurement_type_id', $id))
+            ->when($request->string('statusFilter')->toString(), fn ($query, $status) => $query->where('status', $status))
+            ->when($search, fn ($query) => $query->where('name', 'like', "%{$search}%")->orWhere('short_name', 'like', "%{$search}%"))
+            ->latest()
+            ->get();
+
+        return ['Units', ['Name', 'Short Name', 'Measurement Type', 'Description', 'Products', 'Status'], $rows->map(fn ($unit) => [$unit->name, $unit->short_name, $unit->measurementType?->name, $unit->description, $unit->products_count, ucfirst($unit->status)])->all(), []];
     }
 
     private function users(Request $request, string $search): array
     {
         $rows = User::with(['branch', 'company', 'roles'])->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))->latest()->get();
+
         return ['Users', ['Name', 'Email', 'Phone', 'Roles', 'Sales Location', 'Company', 'Branch', 'Status'], $rows->map(fn ($u) => [$u->name, $u->email, $u->phone, $u->roles->pluck('name')->join(', '), $u->sales_location_access, $u->company?->company_name, $u->branch?->name, ucfirst($u->status)])->all(), []];
     }
 
@@ -493,36 +543,42 @@ class ReportExportService
     private function stockMovements(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
         $rows = StockMovement::with(['product.size', 'stockLocation', 'createdBy'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('stock_location_id'), fn ($q, $id) => $q->where('stock_location_id', $id))->when($from, fn ($q) => $q->whereDate('movement_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('movement_date', '<=', $to))->when($search, fn ($q) => $q->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))->latest()->get();
+
         return ['Stock Movement Report', ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Cost', 'Created By'], $rows->map(fn ($m) => [$this->formatDate($m->movement_date), $m->product?->displayNameWithSize(), $m->stockLocation?->name, $m->movement_type, $m->quantity, $this->formatCurrency($m->unit_cost), $m->createdBy?->name])->all(), []];
     }
 
     private function stockTransfers(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
         $rows = StockTransfer::with(['fromLocation', 'toLocation', 'createdBy'])->withCount('items')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('transfer_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('transfer_date', '<=', $to))->when($search, fn ($q) => $q->where('transfer_number', 'like', "%{$search}%"))->latest()->get();
+
         return ['Stock Transfer Report', ['Transfer #', 'Date', 'From', 'To', 'Items', 'Status', 'Created By'], $rows->map(fn ($t) => [$t->transfer_number, $this->formatDate($t->transfer_date), $t->fromLocation?->name, $t->toLocation?->name, $t->items_count, ucfirst($t->status), $t->createdBy?->name])->all(), []];
     }
 
     private function purchaseEmailLogs(Request $request, ?string $from, ?string $to, string $search): array
     {
         $rows = PurchaseEmailLog::with(['purchase.supplier', 'sentBy'])->when($from, fn ($q) => $q->whereDate('created_at', '>=', $from))->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to))->when($search, fn ($q) => $q->where('recipient_email', 'like', "%{$search}%")->orWhere('subject', 'like', "%{$search}%"))->latest()->get();
+
         return ['Purchase Email Report', ['Purchase Number', 'Supplier', 'Recipient', 'Status', 'Sent By', 'Sent Date', 'Error'], $rows->map(fn ($log) => [$log->purchase?->reference_number, $log->purchase?->supplier?->name, $log->recipient_email, ucfirst($log->status), $log->sentBy?->name, $log->sent_at?->format('Y-m-d H:i'), $log->error_message])->all(), []];
     }
 
     private function stockValuation(?int $branchId): array
     {
         $rows = collect(app(FinancialReportService::class)->stockValuation($branchId));
-        return ['Stock Valuation Report', ['Branch', 'Location', 'Product', 'Category', 'Quantity', 'Average Cost', 'Value'], $rows->map(fn ($row) => [$row['branch'], $row['location'], $row['product'], $row['category'], $row['quantity'], $this->formatCurrency($row['average_cost']), $this->formatCurrency($row['value'])])->all(), ['Total Value' => $this->formatCurrency($rows->sum('value'))]];
+
+        return ['Stock Valuation Report', ['Branch', 'Location', 'Product', 'Measurement Type', 'Size', 'Category', 'Unit', 'Stock', 'Average Cost', 'Value'], $rows->map(fn ($row) => [$row['branch'], $row['location'], $row['product'], $row['measurement_type'], $row['size'] ?: '—', $row['category'], $row['unit'], $row['quantity'], $this->formatCurrency($row['average_cost']), $this->formatCurrency($row['value'])])->all(), ['Total Value' => $this->formatCurrency($rows->sum('value'))]];
     }
 
     private function profitLoss(?int $branchId, ?string $from, ?string $to): array
     {
         $report = app(FinancialReportService::class)->profitLoss($branchId, $from ?: now()->startOfMonth()->toDateString(), $to ?: today()->toDateString());
+
         return ['Profit & Loss', ['Metric', 'Amount'], collect($report)->map(fn ($value, $key) => [str($key)->replace('_', ' ')->title()->toString(), $this->formatCurrency($value)])->values()->all(), []];
     }
 
     private function cashbook(?int $branchId, ?string $from, ?string $to): array
     {
         $rows = CashbookSession::with('branch')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('session_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('session_date', '<=', $to))->latest()->get();
+
         return ['Cashbook Report', ['Date', 'Branch', 'Opening', 'Cash In', 'Cash Out', 'Expected', 'Actual', 'Difference'], $rows->map(fn ($s) => [$this->formatDate($s->session_date), $s->branch?->name, $this->formatCurrency($s->opening_cash), $this->formatCurrency($s->cash_in), $this->formatCurrency($s->cash_out), $this->formatCurrency($s->expected_cash), $this->formatCurrency($s->actual_cash), $this->formatCurrency($s->difference)])->all(), []];
     }
 }

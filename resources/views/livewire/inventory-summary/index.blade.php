@@ -47,7 +47,7 @@ mount(function () {
             $store = StockLocation::where('branch_id', $branchId)->where('type', 'store')->first();
             $dispensing = StockLocation::where('branch_id', $branchId)->where('type', 'dispensing')->first();
             $inventory = app(InventoryService::class);
-            $rows = Product::with(['category', 'unit', 'size'])
+            $rows = Product::with(['category', 'measurementType', 'unit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))
                 ->when($categoryFilter, fn ($query) => $query->where('category_id', $categoryFilter))
                 ->orderBy('name')
@@ -62,11 +62,13 @@ mount(function () {
                 ->when($statusFilter, fn ($rows) => $rows->filter(fn ($row) => $row['status'] === $statusFilter)->values());
         @endphp
 
-        <x-table :headers="['Product', 'Category', 'Unit', 'Main Store Qty', 'Dispensing Qty', 'Total Stock', 'Reorder', 'Status']">
+        <x-table :headers="['Product', 'Measurement Type', 'Size', 'Category', 'Unit', 'Main Store Qty', 'Dispensing Qty', 'Total Stock', 'Reorder', 'Status']">
             @forelse ($rows as $row)
                 @php $product = $row['product']; @endphp
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3 font-black">{{ $product->displayNameWithSize() }}</td>
+                    <td class="px-4 py-3">{{ $product->measurementType?->name ?? str($product->measurementCode())->title() }}</td>
+                    <td class="px-4 py-3">{{ $product->sizeLabel() ?: '—' }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
                     <td class="px-4 py-3">{{ $product->unit?->short_name }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($row['storeQty']) }}</td>
@@ -76,7 +78,7 @@ mount(function () {
                     <td class="px-4 py-3"><span class="{{ $row['status'] === 'in_stock' ? 'badge-success' : ($row['status'] === 'low_stock' ? 'badge-warning' : 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300') }}">{{ str($row['status'])->replace('_', ' ')->title() }}</span></td>
                 </tr>
             @empty
-                <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No inventory summary records found.</td></tr>
+                <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No inventory summary records found.</td></tr>
             @endforelse
         </x-table>
     </x-card>

@@ -20,7 +20,7 @@ class AutoPartsUnitSeeder extends Seeder
             ['Piece', 'pcs'],
             ['Set', 'set'],
             ['Pair', 'pair'],
-            ['Litre', 'ltr'],
+            ['Litre', 'L'],
             ['Gallon', 'gal'],
             ['Box', 'box'],
             ['Pack', 'pack'],

@@ -18,6 +18,16 @@ class ProductSize extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function saleItems(): HasMany
+    {
+        return $this->hasMany(SaleItem::class);
+    }
+
+    public function purchaseItems(): HasMany
+    {
+        return $this->hasMany(PurchaseItem::class);
+    }
+
     public function label(): string
     {
         return $this->symbol ?: $this->name;

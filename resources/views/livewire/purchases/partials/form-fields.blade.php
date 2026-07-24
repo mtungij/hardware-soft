@@ -30,7 +30,7 @@
                     @foreach ($items as $index => $item)
                         @php
                             $selectedProduct = filled($item['product_id'] ?? null)
-                                ? \App\Models\Product::query()->with('size')->find($item['product_id'])
+                                ? \App\Models\Product::query()->with(['measurementType', 'unit', 'size'])->find($item['product_id'])
                                 : null;
                             $sellingPriceValue = filled($item['selling_price'] ?? null)
                                 ? $item['selling_price']
@@ -41,8 +41,8 @@
                                 <select wire:model.live="items.{{ $index }}.product_id" wire:change="syncProductSellingPrice({{ $index }})" @disabled(blank($supplier_id)) class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-900">
                                     <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                     @if (filled($supplier_id))
-                                        @foreach (\App\Models\Product::with('size')->where('status', 'active')->orderBy('name')->get() as $product)
-                                            <option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / {{ $product->sku }}</option>
+                                        @foreach (\App\Models\Product::with(['measurementType', 'unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
+                                            <option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / {{ $product->measurementType?->name ?? str($product->measurementCode())->title() }} / {{ $product->sku }}</option>
                                         @endforeach
                                     @endif
                                 </select>
@@ -50,7 +50,11 @@
                                     <span class="mt-1 block text-xs font-semibold text-amber-600">Select supplier before choosing products.</span>
                                 @endif
                             </td>
-                            <td class="px-3 py-3"><input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="0.01" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
+                            <td class="px-3 py-3">
+                                <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedProduct?->measurementCode() === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->unit?->short_name }} / {{ $selectedProduct->measurementType?->name ?? str($selectedProduct->measurementCode())->title() }}</span>@endif
+                                @error("items.{$index}.ordered_quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                            </td>
                             <td class="px-3 py-3">
                                 <span data-money-field wire:ignore class="block w-36">
                                     <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">

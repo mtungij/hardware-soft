@@ -14,7 +14,7 @@ class UnitSeeder extends Seeder
             ['Piece', 'pcs'],
             ['Bag', 'bag'],
             ['Kilogram', 'kg'],
-            ['Litre', 'ltr'],
+            ['Litre', 'L'],
             ['Meter', 'm'],
             ['Box', 'box'],
             ['Roll', 'roll'],

@@ -80,6 +80,17 @@ $savePurchase = function (string $status) {
         'items.*.selling_price' => ['nullable', 'numeric', 'min:0'],
     ]);
 
+    foreach ($validated['items'] as $index => $item) {
+        $product = Product::query()->with('measurementType')->findOrFail($item['product_id']);
+        $quantity = (float) $item['ordered_quantity'];
+
+        if (! $product->acceptsPurchaseQuantity($quantity)) {
+            throw ValidationException::withMessages([
+                "items.{$index}.ordered_quantity" => $product->displayNameWithSize().' must be purchased in whole '.$product->unit?->short_name.' quantities.',
+            ]);
+        }
+    }
+
     $total = $this->totalAmount();
 
     if ((float) $validated['paid_amount'] > $total) {
@@ -105,10 +116,12 @@ $savePurchase = function (string $status) {
         $this->purchase->items()->delete();
 
         foreach ($validated['items'] as $item) {
+            $product = Product::query()->findOrFail($item['product_id']);
             $quantity = (float) $item['ordered_quantity'];
             $cost = (float) $item['cost_price'];
             $this->purchase->items()->create([
                 'product_id' => $item['product_id'],
+                'product_size_id' => $product->product_size_id,
                 'ordered_quantity' => $quantity,
                 'received_quantity' => 0,
                 'cost_price' => $cost,

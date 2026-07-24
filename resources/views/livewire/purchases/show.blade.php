@@ -71,8 +71,8 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
                     <tr>
                         <td class="px-4 py-3 font-bold">
                             {{ $item->product?->displayName() }}
-                            @if ($item->product?->sizeLabel())
-                                <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->product->sizeLabel() }}</p>
+                            @if ($item->sizeLabel())
+                                <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->sizeLabel() }}</p>
                             @endif
                         </td>
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ $item->product?->unit?->short_name }}</td>

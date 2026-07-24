@@ -86,6 +86,17 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         'items.*.selling_price' => ['nullable', 'numeric', 'min:0'],
     ]);
 
+    foreach ($validated['items'] as $index => $item) {
+        $product = Product::query()->with('measurementType')->findOrFail($item['product_id']);
+        $quantity = (float) $item['ordered_quantity'];
+
+        if (! $product->acceptsPurchaseQuantity($quantity)) {
+            throw ValidationException::withMessages([
+                "items.{$index}.ordered_quantity" => $product->displayNameWithSize().' must be purchased in whole '.$product->unit?->short_name.' quantities.',
+            ]);
+        }
+    }
+
     $total = $this->totalAmount();
 
     if ((float) $validated['paid_amount'] > $total) {
@@ -123,6 +134,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
 
             $purchase->items()->create([
                 'product_id' => $item['product_id'],
+                'product_size_id' => $product->product_size_id,
                 'ordered_quantity' => $quantity,
                 'received_quantity' => 0,
                 'cost_price' => $cost,
@@ -230,13 +242,13 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                     >
                                         <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                         @if (filled($supplier_id))
-                                            @foreach (Product::with(['unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
+                                    @foreach (Product::with(['measurementType', 'unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
                                                 @php
                                                     $storeQty = $storeLocation
                                                         ? $inventory->getProductStock($product->id, $storeLocation->id, $stockBranchId)
                                                         : 0;
                                                 @endphp
-                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->displayNameWithSize() }} - Store Qty: {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
+                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->displayNameWithSize() }} - {{ $product->measurementType?->name ?? str($product->measurementCode())->title() }} - Store Qty: {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
                                             @endforeach
                                         @endif
                                     </select>
@@ -245,7 +257,11 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                     @endif
                                     @error("items.{$index}.product_id") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
-                                <td class="px-3 py-3"><input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="0.01" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
+                                <td class="px-3 py-3">
+                                    <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedProduct?->measurementCode() === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                    @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->unit?->short_name }} / {{ $selectedProduct->measurementType?->name ?? str($selectedProduct->measurementCode())->title() }}</span>@endif
+                                    @error("items.{$index}.ordered_quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                                </td>
                                 <td class="px-3 py-3">
                                     <span data-money-field wire:ignore class="block w-36" wire:key="purchase-cost-price-{{ $index }}-{{ $item['product_id'] ?: 'no-product' }}-{{ $item['cost_price'] ?? '0' }}">
                                         <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">

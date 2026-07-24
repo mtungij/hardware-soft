@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['company_id', 'branch_id', 'name', 'code', 'description', 'status', 'allow_fractional_sales'])]
+#[Fillable(['company_id', 'branch_id', 'name', 'code', 'description', 'status', 'allow_fractional_sales', 'supports_product_sizes'])]
 class Category extends Model
 {
     use HasCompany, HasFactory;
@@ -28,6 +28,7 @@ class Category extends Model
     {
         return [
             'allow_fractional_sales' => 'boolean',
+            'supports_product_sizes' => 'boolean',
         ];
     }
 }

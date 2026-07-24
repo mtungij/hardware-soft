@@ -37,7 +37,7 @@ $paymentStatusLabel = fn (string $status) => [
     <x-card :title="__('messages.debts.items')" class="mt-6">
         <x-table :headers="[__('messages.debts.product'), __('messages.debts.quantity'), __('messages.debts.price'), __('messages.table.total')]">
             @foreach ($sale->items as $item)
-                <tr><td class="px-4 py-3 font-bold">{{ $item->product?->displayNameWithSize() }}</td><td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->quantity) }}</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($item->unit_price) }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($item->line_total) }}</td></tr>
+                <tr><td class="px-4 py-3 font-bold">{{ $item->productDisplayNameWithSize() }}</td><td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->quantity) }}</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($item->unit_price) }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($item->line_total) }}</td></tr>
             @endforeach
         </x-table>
     </x-card>

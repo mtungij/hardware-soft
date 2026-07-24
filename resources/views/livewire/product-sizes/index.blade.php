@@ -76,10 +76,10 @@ $toggleStatus = function (int $sizeId) {
 $deleteSize = function (int $sizeId) {
     abort_unless($this->canManage(), 403);
 
-    $size = ProductSize::query()->withCount('products')->findOrFail($sizeId);
+    $size = ProductSize::query()->withCount(['products', 'saleItems', 'purchaseItems'])->findOrFail($sizeId);
 
-    if ($size->products_count > 0) {
-        session()->flash('error', 'Cannot delete a size used by products.');
+    if ($size->products_count > 0 || $size->sale_items_count > 0 || $size->purchase_items_count > 0) {
+        session()->flash('error', 'Cannot delete a size used by products or historical transactions.');
         return;
     }
 

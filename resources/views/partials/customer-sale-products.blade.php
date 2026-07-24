@@ -25,8 +25,8 @@
                     <tr>
                         <td class="px-3 py-2 font-bold">
                             {{ $item->product?->displayName() }}
-                            @if ($item->product?->sizeLabel())
-                                <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->product->sizeLabel() }}</p>
+                            @if ($item->sizeLabel())
+                                <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->sizeLabel() }}</p>
                             @endif
                         </td>
                         <td class="px-3 py-2 font-mono text-xs">{{ $item->product?->sku }}</td>
