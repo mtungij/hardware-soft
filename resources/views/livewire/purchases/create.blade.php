@@ -5,8 +5,10 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\StockLocation;
 use App\Models\Supplier;
+use App\Services\AccountingService;
 use App\Services\InventoryService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 use function Livewire\Volt\layout;
@@ -23,10 +25,14 @@ state([
     'reference_number' => '',
     'notes' => '',
     'paid_amount' => 0.0,
+    'payment_method' => 'cash',
+    'payment_reference_number' => '',
     'subtotal' => 0.0,
     'grand_total' => 0.0,
     'balance_amount' => 0.0,
     'recalculating' => false,
+    'save_status' => 'ordered',
+    'send_purchase_email' => false,
     'items' => [],
 ]);
 
@@ -41,6 +47,7 @@ $toNumber = function (mixed $value): float {
 };
 
 $newItem = fn (): array => [
+    'uuid' => (string) Str::uuid(),
     'product_id' => '',
     'ordered_quantity' => 1.0,
     'received_quantity' => 0.0,
@@ -50,6 +57,24 @@ $newItem = fn (): array => [
     'tax' => 0.0,
     'line_total' => 0.0,
 ];
+
+$normalizeNumericState = function (): void {
+    foreach ($this->items as $index => $item) {
+        if (blank($item['uuid'] ?? null)) {
+            $this->items[$index]['uuid'] = (string) Str::uuid();
+        }
+
+        $this->items[$index]['ordered_quantity'] = $this->toNumber($item['ordered_quantity'] ?? $item['ordered_qty'] ?? 0);
+        $this->items[$index]['received_quantity'] = $this->toNumber($item['received_quantity'] ?? $item['received_qty'] ?? 0);
+        $this->items[$index]['cost_price'] = $this->toNumber($item['cost_price'] ?? $item['unit_cost'] ?? 0);
+        $this->items[$index]['selling_price'] = $this->toNumber($item['selling_price'] ?? 0);
+        $this->items[$index]['discount'] = $this->toNumber($item['discount'] ?? 0);
+        $this->items[$index]['tax'] = $this->toNumber($item['tax'] ?? 0);
+        $this->items[$index]['line_total'] = $this->toNumber($item['line_total'] ?? 0);
+    }
+
+    $this->paid_amount = $this->toNumber($this->paid_amount);
+};
 
 $recalculateTotals = function (): void {
     if ($this->recalculating) {
@@ -62,20 +87,12 @@ $recalculateTotals = function (): void {
 
     foreach ($this->items as $index => $item) {
         $quantity = $this->toNumber($item['ordered_quantity'] ?? $item['ordered_qty'] ?? 0);
-        $receivedQuantity = $this->toNumber($item['received_quantity'] ?? $item['received_qty'] ?? 0);
         $costPrice = $this->toNumber($item['cost_price'] ?? $item['unit_cost'] ?? 0);
-        $sellingPrice = $this->toNumber($item['selling_price'] ?? 0);
         $discount = $this->toNumber($item['discount'] ?? 0);
         $tax = $this->toNumber($item['tax'] ?? 0);
         $grossTotal = $quantity * $costPrice;
         $lineTotal = max(0.0, $grossTotal - $discount + $tax);
 
-        $this->items[$index]['ordered_quantity'] = $quantity;
-        $this->items[$index]['received_quantity'] = $receivedQuantity;
-        $this->items[$index]['cost_price'] = $costPrice;
-        $this->items[$index]['selling_price'] = $sellingPrice;
-        $this->items[$index]['discount'] = $discount;
-        $this->items[$index]['tax'] = $tax;
         $this->items[$index]['line_total'] = $lineTotal;
 
         $subtotal += $grossTotal;
@@ -83,7 +100,6 @@ $recalculateTotals = function (): void {
     }
 
     $paidAmount = $this->toNumber($this->paid_amount);
-    $this->paid_amount = $paidAmount;
     $this->subtotal = $subtotal;
     $this->grand_total = $grandTotal;
     $this->balance_amount = max(0.0, $grandTotal - $paidAmount);
@@ -133,16 +149,19 @@ $selectProduct = function (int $index, string $productId) {
 };
 
 $updatedItems = function (): void {
+    $this->normalizeNumericState();
     $this->recalculateTotals();
 };
 
 $updatedPaidAmount = function (): void {
+    $this->normalizeNumericState();
     $this->recalculateTotals();
 };
 
 $canUpdateSellingPrice = fn (): bool => auth()->user()?->hasAnyRole(['Super Admin', 'Admin']) ?? false;
 
 $savePurchase = function (string $status, bool $sendEmail = false) {
+    $this->normalizeNumericState();
     $this->recalculateTotals();
 
     $validated = $this->validate([
@@ -153,6 +172,8 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         'reference_number' => ['required', 'string', 'max:255', 'unique:purchases,reference_number'],
         'notes' => ['nullable', 'string', 'max:1000'],
         'paid_amount' => ['required', 'numeric', 'min:0'],
+        'payment_method' => ['required', 'in:cash,mobile_money,bank'],
+        'payment_reference_number' => ['nullable', 'string', 'max:255'],
         'subtotal' => ['required', 'numeric', 'min:0'],
         'grand_total' => ['required', 'numeric', 'min:0'],
         'balance_amount' => ['required', 'numeric', 'min:0'],
@@ -181,7 +202,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
     $total = $this->toNumber($validated['grand_total']);
 
     if ($this->toNumber($validated['paid_amount']) > $total) {
-        throw ValidationException::withMessages(['paid_amount' => 'Paid amount cannot exceed total amount.']);
+        throw ValidationException::withMessages(['paid_amount' => 'Paid amount cannot exceed the purchase total.']);
     }
 
     $canUpdateSellingPrice = $this->canUpdateSellingPrice();
@@ -233,6 +254,13 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
             }
         }
 
+        app(AccountingService::class)->recordInitialPurchasePayment($purchase, [
+            'amount' => $paid,
+            'payment_method' => $validated['payment_method'],
+            'reference_number' => $validated['payment_reference_number'] ?: null,
+            'payment_date' => $validated['purchase_date'],
+        ], auth()->id());
+
         return $purchase->refresh();
     });
 
@@ -250,6 +278,10 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
     }
 
     $this->redirectRoute('purchases.index', navigate: true);
+};
+
+$submitPurchase = function () {
+    return $this->savePurchase($this->save_status, $this->send_purchase_email);
 };
 
 ?>
@@ -280,7 +312,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
     @endphp
 
     <x-card>
-        <form class="space-y-6">
+        <form wire:submit="submitPurchase" class="space-y-6">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Supplier
                     <select wire:model.live="supplier_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -301,7 +333,16 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                 <x-form-input label="Purchase Date" name="purchase_date" type="date" wire:model="purchase_date" required />
                 <x-form-input label="Invoice Number" name="invoice_number" wire:model="invoice_number" />
                 <x-form-input label="Reference Number" name="reference_number" wire:model="reference_number" required />
-                <x-money-input label="Paid Amount" name="paid_amount" value="{{ $paid_amount }}" wire:model.live="paid_amount" required />
+                <x-money-input label="Paid Amount" name="paid_amount" value="{{ $paid_amount }}" wire:model.blur="paid_amount" required />
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Payment Method
+                    <select wire:model="payment_method" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                        <option value="cash">Cash</option>
+                        <option value="mobile_money">Mobile Money</option>
+                        <option value="bank">Bank</option>
+                    </select>
+                    @error('payment_method') <span class="text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                </label>
+                <x-form-input label="Payment Reference" name="payment_reference_number" wire:model="payment_reference_number" />
             </div>
 
             <div class="relative z-20 overflow-x-auto pb-4 transition-[padding] focus-within:pb-96">
@@ -310,16 +351,23 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach ($items as $index => $item)
                             @php
+                                $itemKey = $item['uuid'] ?? "legacy-{$index}";
                                 $selectedProduct = filled($item['product_id'] ?? null)
-                                    ? Product::query()->with('size')->find($item['product_id'])
+                                    ? Product::query()->with(['size', 'purchaseUnit.measurementType', 'unit.measurementType'])->find($item['product_id'])
                                     : null;
                                 $sellingPriceValue = $item['selling_price'] ?? 0;
+                                $purchaseMeasurementCode = $selectedProduct?->purchaseUnit?->measurementType?->code
+                                    ?? $selectedProduct?->unit?->measurementType?->code;
+                                $isCountProduct = $purchaseMeasurementCode === \App\Models\MeasurementType::COUNT;
+                                $quantityStep = $isCountProduct
+                                    ? 1
+                                    : max(0.0001, (float) ($selectedProduct?->quantity_step ?: 0.0001));
                             @endphp
-                            <tr>
-                                <td class="relative z-30 px-3 py-3" wire:key="purchase-product-cell-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}">
+                            <tr wire:key="purchase-item-{{ $itemKey }}">
+                                <td class="relative z-30 px-3 py-3">
                                     <select
                                         wire:change="selectProduct({{ $index }}, $event.target.value)"
-                                        wire:key="purchase-product-select-{{ $index }}-{{ $supplier_id ?: 'no-supplier' }}-{{ $branch_id ?: 'no-branch' }}"
+                                        wire:key="purchase-product-select-{{ $itemKey }}"
                                         data-hs-select='@json($productSelectOptions)'
                                         class="hidden"
                                         @disabled(blank($supplier_id))
@@ -343,21 +391,21 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                 </td>
                                 <td class="px-3 py-3 font-bold">{{ $selectedProduct?->purchaseUnit?->short_name ?: $selectedProduct?->unit?->short_name ?: '-' }}</td>
                                 <td class="px-3 py-3">
-                                    <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedProduct?->purchaseUnit?->measurementType?->code === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                    <input wire:model.blur="items.{{ $index }}.ordered_quantity" type="number" min="{{ $quantityStep }}" step="{{ $quantityStep }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                     @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->purchaseUnit?->short_name ?: $selectedProduct->unit?->short_name }}</span>@endif
                                     @error("items.{$index}.ordered_quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
                                 <td class="px-3 py-3">
-                                    <span data-money-field wire:ignore class="block w-36" wire:key="purchase-cost-price-{{ $index }}-{{ $item['product_id'] ?: 'no-product' }}-{{ $item['cost_price'] ?? '0' }}">
+                                    <span data-money-field wire:ignore class="block w-36" wire:key="purchase-cost-price-{{ $itemKey }}">
                                         <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                        <input type="hidden" data-money-value value="{{ $item['cost_price'] ?? '' }}" wire:model.live="items.{{ $index }}.cost_price">
+                                        <input type="hidden" data-money-value value="{{ $item['cost_price'] ?? '' }}" wire:model.blur="items.{{ $index }}.cost_price">
                                     </span>
                                 </td>
-                                <td class="px-3 py-3" wire:key="purchase-selling-price-{{ $index }}-{{ $item['product_id'] ?: 'no-product' }}">
+                                <td class="px-3 py-3">
                                     @if ($canUpdateSellingPrice)
-                                        <span data-money-field wire:ignore class="block w-36">
+                                        <span data-money-field wire:ignore class="block w-36" wire:key="purchase-selling-price-{{ $itemKey }}">
                                             <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                            <input type="hidden" data-money-value value="{{ $sellingPriceValue }}" wire:model="items.{{ $index }}.selling_price">
+                                            <input type="hidden" data-money-value value="{{ $sellingPriceValue }}" wire:model.blur="items.{{ $index }}.selling_price">
                                         </span>
                                     @else
                                         <div class="w-36 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
@@ -365,7 +413,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                                         </div>
                                     @endif
                                 </td>
-                                <td class="px-3 py-3 font-black">TZS {{ number_format($item['line_total'] ?? 0, 2) }}</td>
+                                <td class="px-3 py-3 font-black">TZS {{ \App\Support\NumberFormatter::moneyCompact($item['line_total'] ?? 0) }}</td>
                                 <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
                             </tr>
                         @endforeach
@@ -381,16 +429,18 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
 
             <div class="rounded-xl bg-slate-50 p-4 text-right dark:bg-white/5">
                 <p class="text-sm text-slate-500">Subtotal</p>
-                <p class="text-lg font-bold">TZS {{ number_format($subtotal, 2) }}</p>
+                <p class="text-lg font-bold">TZS {{ \App\Support\NumberFormatter::moneyCompact($subtotal) }}</p>
                 <p class="text-sm text-slate-500">Grand Total</p>
-                <p class="text-2xl font-black">TZS {{ number_format($grand_total, 2) }}</p>
-                <p class="text-sm text-slate-500">Balance: TZS {{ number_format($balance_amount, 2) }}</p>
+                <p class="text-2xl font-black">TZS {{ \App\Support\NumberFormatter::moneyCompact($grand_total) }}</p>
+                <p class="text-sm text-slate-500">Paid</p>
+                <p class="text-lg font-bold">TZS {{ \App\Support\NumberFormatter::moneyCompact($paid_amount) }}</p>
+                <p class="text-sm text-slate-500">Balance: TZS {{ \App\Support\NumberFormatter::moneyCompact($balance_amount) }}</p>
             </div>
 
             <div class="flex flex-wrap gap-2">
-                <button type="button" wire:click="savePurchase('draft')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Save as Draft</button>
-                <button type="button" wire:click="savePurchase('ordered')" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save as Ordered</button>
-                <button type="button" wire:click="savePurchase('ordered', true)" class="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-black text-build-orange dark:border-orange-500/30 dark:bg-orange-500/10">Save & Send PO</button>
+                <button type="submit" x-on:click="$wire.$set('save_status', 'draft', false); $wire.$set('send_purchase_email', false, false)" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Save as Draft</button>
+                <button type="submit" x-on:click="$wire.$set('save_status', 'ordered', false); $wire.$set('send_purchase_email', false, false)" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save as Ordered</button>
+                <button type="submit" x-on:click="$wire.$set('save_status', 'ordered', false); $wire.$set('send_purchase_email', true, false)" class="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-black text-build-orange dark:border-orange-500/30 dark:bg-orange-500/10">Save & Send PO</button>
                 <a href="{{ route('purchases.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
             </div>
         </form>

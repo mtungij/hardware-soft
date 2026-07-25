@@ -9,6 +9,14 @@ final class NumberFormatter
         return number_format(self::normalize($value), 0, '.', ',');
     }
 
+    public static function moneyCompact(float|int|string|null $value): string
+    {
+        $number = self::normalize($value);
+        $decimals = abs($number - round($number)) < 0.0000001 ? 0 : 2;
+
+        return number_format($number, $decimals, '.', ',');
+    }
+
     public static function quantity(float|int|string|null $value, int $maxDecimals = 4): string
     {
         $formatted = number_format(self::normalize($value), $maxDecimals, '.', ',');

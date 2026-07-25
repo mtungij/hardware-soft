@@ -18,3 +18,10 @@ test('quantity values display without unnecessary trailing zeros', function () {
         ->and(NumberFormatter::quantity(2.2500))->toBe('2.25')
         ->and(NumberFormatter::quantity('3.7500'))->toBe('3.75');
 });
+
+test('compact money omits zero decimals without rounding meaningful cents', function () {
+    expect(NumberFormatter::moneyCompact(9500000.00))->toBe('9,500,000')
+        ->and(NumberFormatter::moneyCompact(0.00))->toBe('0')
+        ->and(NumberFormatter::moneyCompact('28,000.50'))->toBe('28,000.50')
+        ->and(NumberFormatter::moneyCompact('42,000.75'))->toBe('42,000.75');
+});

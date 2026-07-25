@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable([
     'branch_id',
@@ -72,6 +73,11 @@ class Purchase extends Model
     public function emailLogs(): HasMany
     {
         return $this->hasMany(PurchaseEmailLog::class);
+    }
+
+    public function initialSupplierPayment(): HasOne
+    {
+        return $this->hasOne(SupplierPayment::class);
     }
 
     public function canBeModified(): bool

@@ -110,13 +110,18 @@ const formatMoneyValue = (value) => {
     return `${formatted}.${decimal}`;
 };
 
-const moneyModelName = (value) => {
-    const modelAttribute = Array.from(value.attributes).find((attribute) => attribute.name.startsWith('wire:model'));
+const moneyModelAttribute = (value) => Array.from(value.attributes)
+    .find((attribute) => attribute.name.startsWith('wire:model'));
 
-    return modelAttribute?.value || null;
+const moneyModelName = (value) => moneyModelAttribute(value)?.value || null;
+
+const moneyCommitsOnBlur = (value) => {
+    const attributeName = moneyModelAttribute(value)?.name || '';
+
+    return attributeName.includes('.blur') || attributeName.includes('.lazy');
 };
 
-const moneyLivewireComponent = (field) => {
+const moneyLivewire = (field) => {
     const root = field.closest('[wire\\:id]');
     const id = root?.getAttribute('wire:id');
 
@@ -135,28 +140,32 @@ const writePath = (source, path, nextValue) => {
     target[last] = nextValue;
 };
 
-const setLivewireValue = (component, model, nextValue) => {
-    if (!component || !model) {
-        return;
+const setLivewireValue = async (wire, model, nextValue) => {
+    if (!wire || !model) {
+        return false;
     }
 
-    if (typeof component.$wire?.$set === 'function') {
-        component.$wire.$set(model, nextValue, true);
+    if (typeof wire.$set === 'function') {
+        await wire.$set(model, nextValue, true);
 
-        return;
+        return true;
     }
 
-    if (typeof component.$wire?.set === 'function') {
-        component.$wire.set(model, nextValue, true);
+    if (typeof wire.set === 'function') {
+        await wire.set(model, nextValue, true);
 
-        return;
+        return true;
     }
 
-    if (component.reactive) {
-        writePath(component.reactive, model, nextValue);
+    const instance = wire.__instance;
+
+    if (instance?.reactive) {
+        writePath(instance.reactive, model, nextValue);
     }
 
-    component.$wire?.$commit?.();
+    await wire.$commit?.();
+
+    return true;
 };
 
 const initializeMoneyInputs = () => {
@@ -179,8 +188,8 @@ const initializeMoneyInputs = () => {
             return;
         }
 
-        const component = moneyLivewireComponent(field);
         const model = moneyModelName(value);
+        const commitsOnBlur = moneyCommitsOnBlur(value);
 
         const syncDisplay = () => {
             display.value = formatMoneyValue(value.value);
@@ -188,19 +197,46 @@ const initializeMoneyInputs = () => {
 
         display.addEventListener('input', () => {
             const normalized = normalizeMoneyValue(display.value);
-            display.value = formatMoneyValue(normalized);
             value.value = normalized;
-            value.dispatchEvent(new Event('input', { bubbles: true }));
 
-            if (value.dataset.moneyManualFlag && component?.$wire) {
-                component.$wire.set(value.dataset.moneyManualFlag, true, true);
+            if (commitsOnBlur) {
+                return;
             }
 
-            setLivewireValue(component, model, normalized);
+            display.value = formatMoneyValue(normalized);
+            value.dispatchEvent(new Event('input', { bubbles: true }));
+            const wire = moneyLivewire(field);
+
+            if (value.dataset.moneyManualFlag && wire) {
+                wire.$set(value.dataset.moneyManualFlag, true, true);
+            }
+
+            setLivewireValue(wire, model, normalized);
         });
 
-        display.addEventListener('focus', syncDisplay);
-        display.addEventListener('blur', syncDisplay);
+        display.addEventListener('focus', () => {
+            display.value = normalizeMoneyValue(value.value);
+        });
+        display.addEventListener('blur', async () => {
+            const normalized = normalizeMoneyValue(display.value);
+            value.value = normalized;
+            value.dispatchEvent(new Event('input', { bubbles: true }));
+            value.dispatchEvent(new Event('change', { bubbles: true }));
+
+            if (commitsOnBlur) {
+                const wire = moneyLivewire(field);
+
+                if (value.dataset.moneyManualFlag && wire) {
+                    await wire.$set(value.dataset.moneyManualFlag, true, true);
+                }
+
+                if (!await setLivewireValue(wire, model, normalized)) {
+                    value.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+                }
+            }
+
+            syncDisplay();
+        });
 
         field.dataset.moneyInitialized = '1';
         syncDisplay();
@@ -220,6 +256,31 @@ const updateMoneyInputDisplay = (model, nextValue) => {
         display.value = formatMoneyValue(value.value);
     });
 };
+
+const synchronizePendingMoneyFields = (form) => {
+    form.querySelectorAll('[data-money-field]').forEach((field) => {
+        const display = field.querySelector('[data-money-display]');
+        const value = field.querySelector('[data-money-value]');
+
+        if (!display || !value || !moneyCommitsOnBlur(value)) {
+            return;
+        }
+
+        value.value = normalizeMoneyValue(display.value);
+        value.dispatchEvent(new Event('input', { bubbles: true }));
+        value.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+};
+
+document.addEventListener('submit', (event) => {
+    const form = event.target;
+
+    if (!form?.matches?.('form')) {
+        return;
+    }
+
+    synchronizePendingMoneyFields(form);
+}, true);
 
 const initializePreline = () => {
     window.HSStaticMethods?.autoInit();
@@ -473,7 +534,6 @@ document.addEventListener('livewire:navigated', initializeMoneyInputs);
 document.addEventListener('DOMContentLoaded', initializeImageCropUploads);
 document.addEventListener('livewire:navigated', initializeImageCropUploads);
 document.addEventListener('livewire:init', () => {
-    initializeMoneyInputs();
     initializePreline();
     initializeImageCropUploads();
     Livewire.hook('morph.updated', initializeMoneyInputs);

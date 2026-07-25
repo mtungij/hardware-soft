@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['company_id', 'branch_id', 'supplier_id', 'amount', 'payment_method', 'reference_number', 'payment_date', 'paid_by', 'notes'])]
+#[Fillable(['company_id', 'branch_id', 'supplier_id', 'purchase_id', 'amount', 'payment_method', 'reference_number', 'payment_date', 'paid_by', 'notes'])]
 class SupplierPayment extends Model
 {
     use HasCompany, HasFactory;
@@ -21,6 +21,11 @@ class SupplierPayment extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function purchase(): BelongsTo
+    {
+        return $this->belongsTo(Purchase::class);
     }
 
     public function paidBy(): BelongsTo

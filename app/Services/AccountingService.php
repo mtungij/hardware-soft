@@ -26,6 +26,36 @@ class AccountingService
             + (float) $supplier->purchases()->where('status', '!=', 'cancelled')->sum('balance_amount');
     }
 
+    public function recordInitialPurchasePayment(Purchase $purchase, array $data, int $paidBy): ?SupplierPayment
+    {
+        $amount = (float) ($data['amount'] ?? 0);
+
+        if ($amount <= 0) {
+            return null;
+        }
+
+        if ($amount > (float) $purchase->total_amount) {
+            throw ValidationException::withMessages([
+                'paid_amount' => 'Paid amount cannot exceed the purchase total.',
+            ]);
+        }
+
+        return SupplierPayment::query()->firstOrCreate(
+            ['purchase_id' => $purchase->id],
+            [
+                'company_id' => $purchase->company_id,
+                'branch_id' => $purchase->branch_id,
+                'supplier_id' => $purchase->supplier_id,
+                'amount' => $amount,
+                'payment_method' => $data['payment_method'] ?? 'cash',
+                'reference_number' => $data['reference_number'] ?? null,
+                'payment_date' => $data['payment_date'] ?? $purchase->purchase_date,
+                'paid_by' => $paidBy,
+                'notes' => 'Initial payment for '.$purchase->reference_number,
+            ],
+        );
+    }
+
     public function receiveCustomerPayment(Customer $customer, array $data, int $receivedBy): CustomerPayment
     {
         return DB::transaction(function () use ($customer, $data, $receivedBy) {
