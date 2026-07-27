@@ -44,6 +44,8 @@ state([
     'credit_notes' => '',
     'auto_payment_amount' => '0',
     'payment_amount_manually_edited' => false,
+    'submission_token' => '',
+    'processing' => false,
 ]);
 
 mount(function (InventoryService $inventory) {
@@ -57,6 +59,7 @@ mount(function (InventoryService $inventory) {
     }
 
     $this->quick_customer_branch_id = $this->branch_id;
+    $this->submission_token = (string) str()->uuid();
 });
 
 $canCreditSale = fn () => auth()->user()->can('create credit sales') || auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
@@ -389,87 +392,129 @@ $quickAddCustomerFromWarning = function () {
     $this->openQuickCustomerModal();
 };
 
+$resetCompletedSale = function () {
+    $this->cart = [];
+    $this->payments = [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']];
+    $this->customer_id = '';
+    $this->sale_type = 'retail';
+    $this->notes = '';
+    $this->temporary_customer_name = '';
+    $this->temporary_customer_phone = '';
+    $this->project_name = '';
+    $this->vehicle_number = '';
+    $this->expected_payment_date = '';
+    $this->credit_notes = '';
+    $this->unassigned_credit_confirmed = false;
+    $this->auto_payment_amount = '0';
+    $this->payment_amount_manually_edited = false;
+    $this->submission_token = (string) str()->uuid();
+};
+
 $completeSale = function (InventoryService $inventory) {
-    $this->validate([
-        'stock_location_id' => ['required', 'exists:stock_locations,id'],
-        'customer_id' => ['nullable', 'exists:customers,id'],
-        'cart' => ['required', 'array', 'min:1'],
-        'cart.*.product_id' => ['required', 'exists:products,id'],
-        'cart.*.sale_type' => ['required', 'in:retail,wholesale'],
-        'cart.*.quantity' => ['required', 'numeric', 'gt:0'],
-        'cart.*.unit_price' => ['required', 'numeric', 'min:0'],
-        'cart.*.discount_amount' => ['required', 'numeric', 'min:0'],
-        'cart.*.tax_amount' => ['required', 'numeric', 'min:0'],
-        'payments' => ['required', 'array', 'min:1'],
-        'payments.*.payment_method' => ['required', 'in:cash,mobile_money,bank,credit'],
-        'payments.*.amount' => ['required', 'numeric', 'min:0'],
-        'temporary_customer_name' => ['nullable', 'string', 'max:255'],
-        'temporary_customer_phone' => ['nullable', 'string', 'max:30'],
-        'project_name' => ['nullable', 'string', 'max:255'],
-        'vehicle_number' => ['nullable', 'string', 'max:255'],
-        'expected_payment_date' => ['nullable', 'date'],
-        'credit_notes' => ['nullable', 'string', 'max:2000'],
-    ]);
-
-    foreach ($this->cart as $item) {
-        $unitPrice = (float) ($item['unit_price'] ?? 0);
-        $discountPerUnit = (float) ($item['discount_amount'] ?? 0);
-
-        if ($unitPrice > 0 && $discountPerUnit >= $unitPrice) {
-            throw ValidationException::withMessages([
-                'cart' => \App\Support\UiText::translate('The discount per unit must be less than the unit price.'),
-            ]);
-        }
-    }
-
-    if (! InventorySettings::warehouseEnabled()) {
-        $this->stock_location_id = (string) $inventory->getDispensingLocation((int) $this->branch_id)->id;
-    }
-
-    if (blank($this->stock_location_id)) {
-        throw ValidationException::withMessages(['stock_location_id' => \App\Support\UiText::translate('Select Selling Location')]);
-    }
-
-    $location = StockLocation::findOrFail($this->stock_location_id);
-    if (! InventorySettings::canUserSellFromLocation(auth()->user(), $location)) {
-        throw ValidationException::withMessages(['stock_location_id' => 'Huna ruhusa ya kuuza kutoka sehemu hii ya stock.']);
-    }
-
-    if (collect($this->payments)->contains(fn ($payment) => $payment['payment_method'] === 'credit') && ! $this->canCreditSale()) {
-        throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('You are not authorized to create credit sales.')]);
-    }
-
-    if ($this->usesCreditPayment() && blank($this->customer_id) && ! $this->unassigned_credit_confirmed) {
-        if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true) || ! $this->canCreateUnassignedCreditSale()) {
-            throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
-        }
-
-        $this->dispatch('open-modal', 'unassigned-credit-warning');
-
+    if ($this->processing) {
         return;
     }
 
-    $sale = $inventory->completeSale(
-        $this->cart,
-        $this->payments,
-        $this->customer_id ? (int) $this->customer_id : null,
-        (int) $this->stock_location_id,
-        (int) $this->branch_id,
-        auth()->id(),
-        $this->notes,
-        false,
-        [
-            'temporary_customer_name' => $this->temporary_customer_name ?: null,
-            'temporary_customer_phone' => $this->temporary_customer_phone ?: null,
-            'project_name' => $this->project_name ?: null,
-            'vehicle_number' => $this->vehicle_number ?: null,
-            'expected_payment_date' => $this->expected_payment_date ?: null,
-            'credit_notes' => $this->credit_notes ?: null,
-        ],
-    );
+    $this->processing = true;
 
-    session()->flash('success', \App\Support\UiText::translate('Sale completed successfully.'));
-    $this->redirectRoute('sales.receipt', $sale, navigate: true);
+    try {
+        $this->validate([
+            'stock_location_id' => ['required', 'exists:stock_locations,id'],
+            'customer_id' => ['nullable', 'exists:customers,id'],
+            'cart' => ['required', 'array', 'min:1'],
+            'cart.*.product_id' => ['required', 'exists:products,id'],
+            'cart.*.sale_type' => ['required', 'in:retail,wholesale'],
+            'cart.*.quantity' => ['required', 'numeric', 'gt:0'],
+            'cart.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'cart.*.discount_amount' => ['required', 'numeric', 'min:0'],
+            'cart.*.tax_amount' => ['required', 'numeric', 'min:0'],
+            'payments' => ['required', 'array', 'min:1'],
+            'payments.*.payment_method' => ['required', 'in:cash,mobile_money,bank,credit'],
+            'payments.*.amount' => ['required', 'numeric', 'min:0'],
+            'temporary_customer_name' => ['nullable', 'string', 'max:255'],
+            'temporary_customer_phone' => ['nullable', 'string', 'max:30'],
+            'project_name' => ['nullable', 'string', 'max:255'],
+            'vehicle_number' => ['nullable', 'string', 'max:255'],
+            'expected_payment_date' => ['nullable', 'date'],
+            'credit_notes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        foreach ($this->cart as $item) {
+            $unitPrice = (float) ($item['unit_price'] ?? 0);
+            $discountPerUnit = (float) ($item['discount_amount'] ?? 0);
+
+            if ($unitPrice > 0 && $discountPerUnit >= $unitPrice) {
+                throw ValidationException::withMessages([
+                    'cart' => \App\Support\UiText::translate('The discount per unit must be less than the unit price.'),
+                ]);
+            }
+        }
+
+        if (! InventorySettings::warehouseEnabled()) {
+            $this->stock_location_id = (string) $inventory->getDispensingLocation((int) $this->branch_id)->id;
+        }
+
+        if (blank($this->stock_location_id)) {
+            throw ValidationException::withMessages(['stock_location_id' => \App\Support\UiText::translate('Select Selling Location')]);
+        }
+
+        $location = StockLocation::findOrFail($this->stock_location_id);
+        if (! InventorySettings::canUserSellFromLocation(auth()->user(), $location)) {
+            throw ValidationException::withMessages(['stock_location_id' => 'Huna ruhusa ya kuuza kutoka sehemu hii ya stock.']);
+        }
+
+        if (collect($this->payments)->contains(fn ($payment) => $payment['payment_method'] === 'credit') && ! $this->canCreditSale()) {
+            throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('You are not authorized to create credit sales.')]);
+        }
+
+        if ($this->usesCreditPayment() && blank($this->customer_id) && ! $this->unassigned_credit_confirmed) {
+            if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true) || ! $this->canCreateUnassignedCreditSale()) {
+                throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
+            }
+
+            $this->dispatch('open-modal', 'unassigned-credit-warning');
+
+            return;
+        }
+
+        $sale = $inventory->completeSale(
+            $this->cart,
+            $this->payments,
+            $this->customer_id ? (int) $this->customer_id : null,
+            (int) $this->stock_location_id,
+            (int) $this->branch_id,
+            auth()->id(),
+            $this->notes,
+            false,
+            [
+                'temporary_customer_name' => $this->temporary_customer_name ?: null,
+                'temporary_customer_phone' => $this->temporary_customer_phone ?: null,
+                'project_name' => $this->project_name ?: null,
+                'vehicle_number' => $this->vehicle_number ?: null,
+                'expected_payment_date' => $this->expected_payment_date ?: null,
+                'credit_notes' => $this->credit_notes ?: null,
+            ],
+            $this->submission_token,
+        );
+
+        $this->resetCompletedSale();
+        $this->redirectRoute('sales.receipt', $sale, navigate: true);
+    } catch (ValidationException $exception) {
+        session()->flash(
+            'error',
+            $exception->validator->errors()->first()
+                ?: 'Mauzo hayajakamilika. Tafadhali rekebisha tatizo lililoonyeshwa.'
+        );
+
+        throw $exception;
+    } catch (\Throwable $exception) {
+        report($exception);
+        $message = 'Mauzo hayajakamilika. '.$exception->getMessage();
+        $this->addError('sale', $message);
+        session()->flash('error', $message);
+    } finally {
+        $this->processing = false;
+    }
 };
 
 ?>
@@ -753,13 +798,31 @@ $completeSale = function (InventoryService $inventory) {
                     <button type="button" wire:click="addPayment" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ $t('Add Payment') }}</button>
                 </div>
 
-                <button wire:click="completeSale" class="w-full rounded-xl bg-build-orange px-4 py-3 font-black text-white shadow-lg shadow-orange-500/20">{{ $t('Complete Sale') }}</button>
+                @error('sale') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+                <button
+                    type="button"
+                    wire:click="completeSale"
+                    wire:loading.attr="disabled"
+                    wire:target="completeSale,continueWithoutCustomer"
+                    @disabled($processing)
+                    class="w-full rounded-xl bg-build-orange px-4 py-3 font-black text-white shadow-lg shadow-orange-500/20 disabled:cursor-wait disabled:opacity-60"
+                >
+                    <span wire:loading.remove wire:target="completeSale,continueWithoutCustomer">{{ $t('Complete Sale') }}</span>
+                    <span wire:loading wire:target="completeSale,continueWithoutCustomer">Processing...</span>
+                </button>
             </div>
         </x-card>
     </div>
 
     <div class="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-2xl backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 xl:hidden">
-        <button wire:click="completeSale" class="flex w-full items-center justify-between rounded-xl bg-build-orange px-4 py-3 font-black text-white">
+        <button
+            type="button"
+            wire:click="completeSale"
+            wire:loading.attr="disabled"
+            wire:target="completeSale,continueWithoutCustomer"
+            @disabled($processing)
+            class="flex w-full items-center justify-between rounded-xl bg-build-orange px-4 py-3 font-black text-white disabled:cursor-wait disabled:opacity-60"
+        >
             <span>{{ $t('Checkout') }}</span>
             <span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span>
         </button>

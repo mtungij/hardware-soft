@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'credit_assigned_at',
     'credit_assignment_notes',
     'sale_number',
+    'idempotency_key',
     'sale_date',
     'sale_type',
     'subtotal',

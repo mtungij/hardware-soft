@@ -29,7 +29,7 @@ mount(function (Sale $sale) {
 
 ?>
 
-<div>
+<div class="receipt-page">
     @php
         $paperSize = request()->query('paper') === '80' ? '80' : '58';
         $isOutstanding = (float) $sale->balance_amount > 0 || $sale->payment_status !== 'paid';
@@ -68,18 +68,54 @@ mount(function (Sale $sale) {
         body {
             margin: 0 !important;
             padding: 0 !important;
+            overflow-x: hidden;
+        }
+
+        .receipt-page {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+            grid-template-areas: "preview actions";
+            align-items: start;
+            gap: 24px;
+            width: 100%;
+            min-height: 100dvh;
+            box-sizing: border-box;
+            padding: 24px;
+            background: #f1f5f9;
+        }
+
+        .receipt-no-print {
+            grid-area: actions;
+            min-width: 0;
+        }
+
+        .receipt-actions {
+            position: sticky;
+            top: 24px;
+            min-width: 0;
+        }
+
+        .receipt-action-card {
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+            border-radius: 18px;
+            background: #fff;
+            box-shadow: 0 18px 45px rgba(15, 23, 42, 0.1);
         }
 
         .receipt-paper {
             --receipt-width: 72mm;
+            --receipt-preview-width: 320px;
+            grid-area: preview;
+            justify-self: center;
             box-sizing: border-box;
             position: static;
-            width: var(--receipt-width);
-            max-width: var(--receipt-width);
+            width: min(100%, var(--receipt-preview-width));
+            max-width: var(--receipt-preview-width);
             height: auto;
             min-height: 0;
-            margin: 0 auto;
-            padding: 1.5mm 1mm;
+            margin: 0;
+            padding: 16px 12px;
             color: #000;
             background: #fff;
             font-family: "Courier New", Courier, monospace;
@@ -92,6 +128,7 @@ mount(function (Sale $sale) {
 
         .receipt-paper[data-paper-size="58"] {
             --receipt-width: 48mm;
+            --receipt-preview-width: 240px;
             font-size: 10.5px;
         }
 
@@ -165,6 +202,21 @@ mount(function (Sale $sale) {
             text-align: center;
         }
 
+        @media (max-width: 767px) {
+            .receipt-page {
+                grid-template-columns: minmax(0, 1fr);
+                grid-template-areas:
+                    "actions"
+                    "preview";
+                gap: 16px;
+                padding: 12px;
+            }
+
+            .receipt-actions {
+                position: static;
+            }
+        }
+
         @media print {
             @page {
                 size: {{ $paperSize }}mm auto;
@@ -182,10 +234,21 @@ mount(function (Sale $sale) {
                 background: #fff !important;
             }
 
+            .receipt-page {
+                display: block;
+                width: auto;
+                min-height: 0;
+                margin: 0;
+                padding: 0;
+                background: #fff;
+            }
+
             #customer-receipt {
                 position: static;
                 float: none;
                 display: block;
+                width: var(--receipt-width);
+                max-width: var(--receipt-width);
                 height: auto;
                 min-height: 0;
                 margin: 0 auto;
@@ -311,21 +374,59 @@ mount(function (Sale $sale) {
         @endif
     </div>
 
-    <div class="no-print receipt-no-print">
-        <x-page-header title="Receipt" :description="$sale->sale_number" :breadcrumbs="['Dashboard' => route('dashboard'), 'Sales' => route('sales.index'), 'Receipt' => null]">
-            <div class="flex flex-wrap gap-2">
-                <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 58]) }}" class="{{ $paperSize === '58' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 dark:border-slate-700' }} rounded-lg px-3 py-2 text-sm font-bold">58mm</a>
-                <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 80]) }}" class="{{ $paperSize === '80' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'border border-slate-200 dark:border-slate-700' }} rounded-lg px-3 py-2 text-sm font-bold">80mm</a>
-                <button type="button" onclick="printCustomerReceipt()" class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Print Receipt</button>
+    <aside class="no-print receipt-no-print" data-receipt-actions>
+        <div class="receipt-actions">
+            <div class="receipt-action-card">
+                <div class="border-b border-slate-200 p-5">
+                    <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">Sale completed</span>
+                    <h1 class="mt-3 text-2xl font-black text-slate-950">Receipt Preview</h1>
+                    <p class="mt-1 text-sm text-slate-500">{{ $sale->sale_number }}</p>
+                </div>
+
+                <div class="space-y-5 p-5">
+                    <fieldset>
+                        <legend class="text-xs font-black uppercase tracking-wide text-slate-500">Receipt width</legend>
+                        <div class="mt-2 grid grid-cols-2 gap-2">
+                            <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 58]) }}" data-paper-selector="58" class="{{ $paperSize === '58' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700' }} rounded-xl border px-3 py-3 text-center text-sm font-black">58mm</a>
+                            <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 80]) }}" data-paper-selector="80" class="{{ $paperSize === '80' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700' }} rounded-xl border px-3 py-3 text-center text-sm font-black">80mm</a>
+                        </div>
+                    </fieldset>
+
+                    <button type="button" onclick="printCustomerReceipt()" class="w-full rounded-xl bg-build-orange px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20">
+                        Print Receipt
+                    </button>
+
+                    <a href="{{ route('sales.receipt.complete', $sale) }}" data-skip-printing class="block w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-black text-slate-800">
+                        Skip Printing / Back to POS
+                    </a>
+
+                    <a href="{{ route('sales.receipt.complete', $sale) }}" data-start-new-sale class="block text-center text-sm font-bold text-build-orange">
+                        Start New Sale
+                    </a>
+
+                    <div class="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600" data-printer-help>
+                        <p class="font-black text-slate-900">Recommended thermal printer settings</p>
+                        <p class="mt-1">Paper: {{ $paperSize }}mm · Margins: None · Scale: 100% · Browser headers/footers: Off</p>
+                        <p class="mt-2">If your browser does not return automatically after printing, use the Back to POS button above.</p>
+                    </div>
+                </div>
             </div>
-        </x-page-header>
-        <div class="mx-auto mb-6 max-w-lg rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm">
-            <p class="font-bold text-slate-900">Recommended thermal printer settings</p>
-            <p>Paper: {{ $paperSize }}mm · Margins: None · Scale: 100% · Browser headers/footers: Off</p>
         </div>
-    </div>
+    </aside>
 
     <script>
+        window.hardexReceiptReturnUrl = @js(route('sales.receipt.complete', $sale));
+        window.hardexReceiptPrintStarted = false;
+
+        window.addEventListener('afterprint', () => {
+            if (! window.hardexReceiptPrintStarted) {
+                return;
+            }
+
+            window.hardexReceiptPrintStarted = false;
+            window.location.assign(window.hardexReceiptReturnUrl);
+        });
+
         window.printCustomerReceipt = async function () {
             const receipt = document.getElementById('customer-receipt');
             const images = receipt ? Array.from(receipt.querySelectorAll('img')) : Array.of();
@@ -362,6 +463,7 @@ mount(function (Sale $sale) {
                 window.setTimeout(finish, 5000);
             })));
 
+            window.hardexReceiptPrintStarted = true;
             window.print();
         };
     </script>

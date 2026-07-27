@@ -30,7 +30,9 @@ mount(function (Purchase $purchase, InventoryService $inventory) {
 
     $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'items.product', 'items.purchaseUnit.measurementType', 'items.stockUnit']);
     $this->purchase_id = $purchase->id;
-    $this->grn_number = $inventory->generateGrnNumber();
+    if (blank($this->grn_number)) {
+        $this->grn_number = $inventory->generateGrnNumber((int) $purchase->company_id);
+    }
     $this->received_date = now()->toDateString();
 
     $defaultLocation = $this->availableReceivingLocations()->first()
@@ -159,7 +161,7 @@ $validateReceiving = function () {
     $locationIds = $this->availableReceivingLocations()->pluck('id')->map(fn ($id) => (string) $id)->all();
 
     $rules = [
-        'grn_number' => ['required', 'string', 'max:255', Rule::unique('goods_receiving_notes', 'grn_number')],
+        'grn_number' => ['required', 'string', 'max:255'],
         'received_date' => ['required', 'date'],
         'supplier_delivery_note_number' => ['nullable', 'string', 'max:255'],
         'supplier_invoice_number' => ['nullable', 'string', 'max:255'],
@@ -225,6 +227,7 @@ $saveDraft = function (InventoryService $inventory) {
     $purchase = Purchase::query()->findOrFail($this->purchase_id);
     $inventory->receivePurchase($purchase, $this->lines, $this->received_date, auth()->id(), $this->notes, [
         'grn_number' => $this->grn_number,
+        'grn_is_system_generated' => true,
         'default_stock_location_id' => (int) $this->default_stock_location_id,
         'supplier_delivery_note_number' => $this->supplier_delivery_note_number ?: null,
         'supplier_invoice_number' => $this->supplier_invoice_number ?: null,
@@ -241,6 +244,7 @@ $postReceipt = function (InventoryService $inventory) {
     $purchase = Purchase::query()->findOrFail($this->purchase_id);
     $inventory->receivePurchase($purchase, $this->lines, $this->received_date, auth()->id(), $this->notes, [
         'grn_number' => $this->grn_number,
+        'grn_is_system_generated' => true,
         'default_stock_location_id' => (int) $this->default_stock_location_id,
         'supplier_delivery_note_number' => $this->supplier_delivery_note_number ?: null,
         'supplier_invoice_number' => $this->supplier_invoice_number ?: null,
@@ -291,7 +295,10 @@ $postReceipt = function (InventoryService $inventory) {
     <x-card class="mt-6">
         <form class="space-y-5">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <x-form-input label="Goods Receipt Number" name="grn_number" wire:model="grn_number" required />
+                <div>
+                    <x-form-input label="Goods Receipt Number" name="grn_number" wire:model="grn_number" readonly required />
+                    <p class="mt-1 text-xs font-semibold text-slate-500">Generated automatically</p>
+                </div>
                 <x-form-input label="Receiving Date" name="received_date" type="date" wire:model="received_date" required />
                 <x-form-input label="Supplier Delivery Note Number" name="supplier_delivery_note_number" wire:model="supplier_delivery_note_number" />
                 <x-form-input label="Supplier Invoice Number" name="supplier_invoice_number" wire:model="supplier_invoice_number" />

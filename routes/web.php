@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CompletePosReceiptController;
 use App\Http\Controllers\CustomerPortal\CustomerFileDownloadController;
 use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\GenericExportController;
@@ -316,6 +317,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('sales', 'sales.index')->name('sales.index');
         Volt::route('sales/{sale}', 'sales.show')->name('sales.show');
         Volt::route('sales/{sale}/receipt', 'sales.receipt')->name('sales.receipt');
+        Route::get('sales/{sale}/receipt/complete', CompletePosReceiptController::class)->name('sales.receipt.complete');
         Volt::route('sales/{sale}/payments', 'sales.payments')->name('sales.payments');
     });
 

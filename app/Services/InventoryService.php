@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\DocumentSequence;
 use App\Models\GoodsReceivingNote;
 use App\Models\Product;
 use App\Models\Purchase;
@@ -16,6 +17,7 @@ use App\Models\StockTransferItem;
 use App\Models\User;
 use App\Support\InventorySettings;
 use App\Support\UiText;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
@@ -158,9 +160,24 @@ class InventoryService
         return 'PO-'.now()->format('Ymd').'-'.str_pad((string) (Purchase::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
     }
 
-    public function generateGrnNumber(): string
+    /**
+     * Return a non-reserved preview. The number is allocated atomically at save time.
+     */
+    public function generateGrnNumber(int $companyId, ?int $year = null): string
     {
-        return 'GRN-'.now()->format('Y').'-'.str_pad((string) (GoodsReceivingNote::whereYear('created_at', now()->year)->count() + 1), 6, '0', STR_PAD_LEFT);
+        $year ??= (int) now()->format('Y');
+        $lastNumber = (int) (DocumentSequence::query()
+            ->where('company_id', $companyId)
+            ->where('document_type', DocumentSequence::GOODS_RECEIPT)
+            ->where('year', $year)
+            ->value('last_number') ?? 0);
+
+        do {
+            $lastNumber++;
+            $grnNumber = $this->formatGrnNumber($year, $lastNumber);
+        } while ($this->grnExists($companyId, $grnNumber));
+
+        return $grnNumber;
     }
 
     public function generateTransferNumber(): string
@@ -227,14 +244,26 @@ class InventoryService
      * @param  array<int, array<string, mixed>>  $cart
      * @param  array<int, array<string, mixed>>  $payments
      */
-    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = []): Sale
+    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = [], ?string $idempotencyKey = null): Sale
     {
-        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails) {
+        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails, $idempotencyKey) {
             if ($cart === []) {
                 throw ValidationException::withMessages(['cart' => 'Cart is required.']);
             }
 
             $location = StockLocation::query()->whereKey($stockLocationId)->lockForUpdate()->firstOrFail();
+            $companyId = (int) $location->company_id;
+
+            if (filled($idempotencyKey)) {
+                $existingSale = Sale::withoutGlobalScopes()
+                    ->where('company_id', $companyId)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
+
+                if ($existingSale) {
+                    return $existingSale;
+                }
+            }
 
             if (! $location->isActive()) {
                 throw ValidationException::withMessages(['stock_source' => 'Cannot sell from an inactive stock location.']);
@@ -400,6 +429,7 @@ class InventoryService
             $saleType = collect($preparedItems)->contains(fn (array $item) => $item['sale_type'] === 'wholesale') ? 'wholesale' : 'retail';
 
             $sale = Sale::create([
+                'company_id' => $companyId,
                 'branch_id' => $branchId,
                 'stock_location_id' => $location->id,
                 'customer_id' => $customerId,
@@ -412,6 +442,7 @@ class InventoryService
                 'expected_payment_date' => $creditCustomerUnassigned ? ($creditDetails['expected_payment_date'] ?? null) : null,
                 'credit_notes' => $creditCustomerUnassigned ? ($creditDetails['credit_notes'] ?? null) : null,
                 'sale_number' => $this->generateSaleNumber(),
+                'idempotency_key' => $idempotencyKey,
                 'sale_date' => now()->toDateString(),
                 'sale_type' => $saleType,
                 'subtotal' => $subtotal,
@@ -567,200 +598,288 @@ class InventoryService
      */
     public function receivePurchase(Purchase $purchase, array $receivedLines, string $receivedDate, int $receivedBy, ?string $notes = null, array $header = []): GoodsReceivingNote
     {
-        return DB::transaction(function () use ($purchase, $receivedLines, $receivedDate, $receivedBy, $notes, $header) {
-            $purchase = Purchase::query()
-                ->with(['items'])
-                ->whereKey($purchase->id)
-                ->lockForUpdate()
-                ->firstOrFail();
+        $systemGeneratedGrn = (bool) ($header['grn_is_system_generated'] ?? blank($header['grn_number'] ?? null));
 
-            if ($purchase->status === 'cancelled') {
-                throw ValidationException::withMessages(['purchase' => 'Cancelled purchases cannot be received.']);
-            }
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            try {
+                return DB::transaction(function () use ($purchase, $receivedLines, $receivedDate, $receivedBy, $notes, $header, $systemGeneratedGrn) {
+                    $purchase = Purchase::query()
+                        ->with(['items'])
+                        ->whereKey($purchase->id)
+                        ->lockForUpdate()
+                        ->firstOrFail();
 
-            $items = PurchaseItem::query()
-                ->with(['product.purchaseUnit.measurementType', 'purchaseUnit', 'stockUnit'])
-                ->where('purchase_id', $purchase->id)
-                ->lockForUpdate()
-                ->get();
+                    if ($purchase->status === 'cancelled') {
+                        throw ValidationException::withMessages(['purchase' => 'Cancelled purchases cannot be received.']);
+                    }
 
-            $receivable = [];
+                    $items = PurchaseItem::query()
+                        ->with(['product.purchaseUnit.measurementType', 'purchaseUnit', 'stockUnit'])
+                        ->where('purchase_id', $purchase->id)
+                        ->lockForUpdate()
+                        ->get();
 
-            foreach ($items as $item) {
-                $rawLine = $receivedLines[$item->id] ?? null;
-                $line = is_array($rawLine) ? $rawLine : ['quantity' => $rawLine];
-                $quantity = (float) ($line['quantity'] ?? 0);
+                    $receivable = [];
 
-                if ($quantity <= 0) {
+                    foreach ($items as $item) {
+                        $rawLine = $receivedLines[$item->id] ?? null;
+                        $line = is_array($rawLine) ? $rawLine : ['quantity' => $rawLine];
+                        $quantity = (float) ($line['quantity'] ?? 0);
+
+                        if ($quantity <= 0) {
+                            continue;
+                        }
+
+                        $item->loadMissing('product.measurementType');
+
+                        if (! $item->acceptsPurchaseQuantity($quantity)) {
+                            throw ValidationException::withMessages([
+                                "lines.{$item->id}.quantity" => $item->product->displayNameWithSize().' must use a whole purchase-unit quantity.',
+                            ]);
+                        }
+
+                        $product = $item->product;
+                        $batchNumber = filled($line['batch_number'] ?? null)
+                            ? trim((string) $line['batch_number'])
+                            : null;
+                        $expiryDate = filled($line['expiry_date'] ?? null)
+                            ? (string) $line['expiry_date']
+                            : null;
+
+                        $traceabilityValidator = Validator::make(
+                            ['batch_number' => $batchNumber, 'expiry_date' => $expiryDate],
+                            [
+                                'batch_number' => $product->tracks_batch
+                                    ? ['required', 'string', 'max:255']
+                                    : ['nullable'],
+                                'expiry_date' => $product->tracks_expiry
+                                    ? ['required', 'date', 'after_or_equal:'.$receivedDate]
+                                    : ['nullable'],
+                            ],
+                            [
+                                'batch_number.required' => $product->displayNameWithSize().' requires a Batch Number.',
+                                'expiry_date.required' => $product->displayNameWithSize().' requires an Expiry Date.',
+                                'expiry_date.after_or_equal' => $product->displayNameWithSize().' Expiry Date cannot be earlier than the receiving date.',
+                            ],
+                        );
+
+                        if ($traceabilityValidator->fails()) {
+                            $messages = [];
+
+                            foreach ($traceabilityValidator->errors()->messages() as $field => $fieldMessages) {
+                                $messages["lines.{$item->id}.{$field}"] = $fieldMessages;
+                            }
+
+                            throw ValidationException::withMessages($messages);
+                        }
+
+                        $batchNumber = ($product->tracks_batch || $product->tracks_expiry) ? $batchNumber : null;
+                        $expiryDate = $product->tracks_expiry ? $expiryDate : null;
+
+                        $previouslyReceived = (float) $item->received_quantity;
+                        $remaining = max(0, (float) $item->ordered_quantity - $previouslyReceived);
+
+                        if ($quantity > $item->remainingQuantity()) {
+                            throw ValidationException::withMessages([
+                                "lines.{$item->id}.quantity" => 'Receiving quantity cannot exceed remaining quantity.',
+                            ]);
+                        }
+
+                        $locationId = (int) ($line['stock_location_id'] ?? $header['default_stock_location_id'] ?? InventorySettings::receivingLocation($purchase->branch_id)->id);
+                        $location = StockLocation::query()->whereKey($locationId)->lockForUpdate()->firstOrFail();
+
+                        if ((int) $location->branch_id !== (int) $purchase->branch_id) {
+                            throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => 'Receiving location does not belong to this purchase branch.']);
+                        }
+
+                        if (! $this->canUserReceiveIntoLocation(auth()->user(), $location)) {
+                            throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => 'You are not allowed to receive stock into this location.']);
+                        }
+
+                        $unitCost = (float) ($line['unit_cost'] ?? $item->cost_price);
+
+                        $receivable[] = [
+                            'item' => $item,
+                            'quantity' => $quantity,
+                            'previously_received' => $previouslyReceived,
+                            'remaining' => $remaining,
+                            'location' => $location,
+                            'unit_cost' => $unitCost,
+                            'batch_number' => $batchNumber,
+                            'expiry_date' => $expiryDate,
+                            'notes' => $line['notes'] ?? null,
+                        ];
+                    }
+
+                    if ($receivable === []) {
+                        throw ValidationException::withMessages(['lines' => 'Enter at least one quantity to receive.']);
+                    }
+
+                    $defaultLocationId = (int) ($header['default_stock_location_id'] ?? $receivable[0]['location']->id);
+                    $companyId = (int) $purchase->company_id;
+                    $grnNumber = $systemGeneratedGrn
+                        ? $this->nextGrnNumber($companyId)
+                        : trim((string) $header['grn_number']);
+
+                    if (! $systemGeneratedGrn && $this->grnExists($companyId, $grnNumber)) {
+                        throw ValidationException::withMessages([
+                            'grn_number' => 'Namba hii ya GRN tayari imetumika. Tafadhali tumia namba nyingine.',
+                        ]);
+                    }
+
+                    $grn = GoodsReceivingNote::create([
+                        'company_id' => $companyId,
+                        'branch_id' => $purchase->branch_id,
+                        'purchase_id' => $purchase->id,
+                        'grn_number' => $grnNumber,
+                        'stock_location_id' => $defaultLocationId,
+                        'default_stock_location_id' => $defaultLocationId,
+                        'received_date' => $receivedDate,
+                        'supplier_delivery_note_number' => $header['supplier_delivery_note_number'] ?? null,
+                        'supplier_invoice_number' => $header['supplier_invoice_number'] ?? null,
+                        'status' => $header['status'] ?? 'posted',
+                        'received_by' => $receivedBy,
+                        'posted_by' => ($header['status'] ?? 'posted') === 'posted' ? $receivedBy : null,
+                        'posted_at' => ($header['status'] ?? 'posted') === 'posted' ? now() : null,
+                        'notes' => $notes,
+                    ]);
+
+                    foreach ($receivable as $line) {
+                        /** @var PurchaseItem $item */
+                        $item = $line['item'];
+                        /** @var StockLocation $location */
+                        $location = $line['location'];
+                        $quantity = (float) $line['quantity'];
+                        $unitCost = (float) $line['unit_cost'];
+                        $stockQuantity = $item->stockQuantity($quantity);
+                        $stockUnitCost = round($unitCost / $item->purchaseFactor(), 4);
+
+                        $grnItem = $grn->items()->create([
+                            'branch_id' => $purchase->branch_id,
+                            'purchase_item_id' => $item->id,
+                            'product_id' => $item->product_id,
+                            'purchase_unit_id' => $item->purchase_unit_id ?: $item->product?->purchase_unit_id ?: $item->product?->unit_id,
+                            'stock_unit_id' => $item->stock_unit_id ?: $item->product?->unit_id,
+                            'stock_location_id' => $location->id,
+                            'ordered_quantity' => $item->ordered_quantity,
+                            'previously_received_quantity' => $line['previously_received'],
+                            'received_quantity' => $quantity,
+                            'stock_quantity' => $stockQuantity,
+                            'cost_price' => $unitCost,
+                            'unit_cost' => $unitCost,
+                            'total_cost' => $quantity * $unitCost,
+                            'batch_number' => $line['batch_number'],
+                            'expiry_date' => $line['expiry_date'],
+                            'notes' => $line['notes'],
+                        ]);
+
+                        if ($grn->status === 'posted') {
+                            StockMovement::create([
+                                'branch_id' => $purchase->branch_id,
+                                'product_id' => $item->product_id,
+                                'stock_location_id' => $location->id,
+                                'movement_type' => 'purchase_receipt',
+                                'quantity' => $stockQuantity,
+                                'quantity_in' => $stockQuantity,
+                                'quantity_out' => 0,
+                                'unit_cost' => $stockUnitCost,
+                                'unit_price' => $item->selling_price,
+                                'reference_type' => GoodsReceivingNote::class,
+                                'reference_id' => $grn->id,
+                                'notes' => "Purchase {$purchase->reference_number} / {$grnItem->id}",
+                                'created_by' => $receivedBy,
+                                'movement_date' => $receivedDate,
+                            ]);
+
+                            $item->increment('received_quantity', $quantity);
+                        }
+                    }
+
+                    $purchase->refresh();
+                    $fullyReceived = $purchase->items()->get()->every(fn (PurchaseItem $item) => (float) $item->received_quantity >= (float) $item->ordered_quantity);
+                    $partiallyReceived = $purchase->items()->where('received_quantity', '>', 0)->exists();
+
+                    $purchase->update([
+                        'status' => $fullyReceived ? 'received' : 'ordered',
+                        'received_by' => $partiallyReceived ? $receivedBy : $purchase->received_by,
+                        'received_at' => $partiallyReceived ? now() : $purchase->received_at,
+                    ]);
+
+                    return $grn->refresh();
+                }, 3);
+            } catch (QueryException $exception) {
+                if (! $this->isGrnUniqueViolation($exception)) {
+                    throw $exception;
+                }
+
+                if ($systemGeneratedGrn && $attempt < 3) {
                     continue;
                 }
 
-                $item->loadMissing('product.measurementType');
-
-                if (! $item->acceptsPurchaseQuantity($quantity)) {
-                    throw ValidationException::withMessages([
-                        "lines.{$item->id}.quantity" => $item->product->displayNameWithSize().' must use a whole purchase-unit quantity.',
-                    ]);
-                }
-
-                $product = $item->product;
-                $batchNumber = filled($line['batch_number'] ?? null)
-                    ? trim((string) $line['batch_number'])
-                    : null;
-                $expiryDate = filled($line['expiry_date'] ?? null)
-                    ? (string) $line['expiry_date']
-                    : null;
-
-                $traceabilityValidator = Validator::make(
-                    ['batch_number' => $batchNumber, 'expiry_date' => $expiryDate],
-                    [
-                        'batch_number' => $product->tracks_batch
-                            ? ['required', 'string', 'max:255']
-                            : ['nullable'],
-                        'expiry_date' => $product->tracks_expiry
-                            ? ['required', 'date', 'after_or_equal:'.$receivedDate]
-                            : ['nullable'],
-                    ],
-                    [
-                        'batch_number.required' => $product->displayNameWithSize().' requires a Batch Number.',
-                        'expiry_date.required' => $product->displayNameWithSize().' requires an Expiry Date.',
-                        'expiry_date.after_or_equal' => $product->displayNameWithSize().' Expiry Date cannot be earlier than the receiving date.',
-                    ],
-                );
-
-                if ($traceabilityValidator->fails()) {
-                    $messages = [];
-
-                    foreach ($traceabilityValidator->errors()->messages() as $field => $fieldMessages) {
-                        $messages["lines.{$item->id}.{$field}"] = $fieldMessages;
-                    }
-
-                    throw ValidationException::withMessages($messages);
-                }
-
-                $batchNumber = ($product->tracks_batch || $product->tracks_expiry) ? $batchNumber : null;
-                $expiryDate = $product->tracks_expiry ? $expiryDate : null;
-
-                $previouslyReceived = (float) $item->received_quantity;
-                $remaining = max(0, (float) $item->ordered_quantity - $previouslyReceived);
-
-                if ($quantity > $item->remainingQuantity()) {
-                    throw ValidationException::withMessages([
-                        "lines.{$item->id}.quantity" => 'Receiving quantity cannot exceed remaining quantity.',
-                    ]);
-                }
-
-                $locationId = (int) ($line['stock_location_id'] ?? $header['default_stock_location_id'] ?? InventorySettings::receivingLocation($purchase->branch_id)->id);
-                $location = StockLocation::query()->whereKey($locationId)->lockForUpdate()->firstOrFail();
-
-                if ((int) $location->branch_id !== (int) $purchase->branch_id) {
-                    throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => 'Receiving location does not belong to this purchase branch.']);
-                }
-
-                if (! $this->canUserReceiveIntoLocation(auth()->user(), $location)) {
-                    throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => 'You are not allowed to receive stock into this location.']);
-                }
-
-                $unitCost = (float) ($line['unit_cost'] ?? $item->cost_price);
-
-                $receivable[] = [
-                    'item' => $item,
-                    'quantity' => $quantity,
-                    'previously_received' => $previouslyReceived,
-                    'remaining' => $remaining,
-                    'location' => $location,
-                    'unit_cost' => $unitCost,
-                    'batch_number' => $batchNumber,
-                    'expiry_date' => $expiryDate,
-                    'notes' => $line['notes'] ?? null,
-                ];
-            }
-
-            if ($receivable === []) {
-                throw ValidationException::withMessages(['lines' => 'Enter at least one quantity to receive.']);
-            }
-
-            $defaultLocationId = (int) ($header['default_stock_location_id'] ?? $receivable[0]['location']->id);
-
-            $grn = GoodsReceivingNote::create([
-                'branch_id' => $purchase->branch_id,
-                'purchase_id' => $purchase->id,
-                'grn_number' => $header['grn_number'] ?? $this->generateGrnNumber(),
-                'stock_location_id' => $defaultLocationId,
-                'default_stock_location_id' => $defaultLocationId,
-                'received_date' => $receivedDate,
-                'supplier_delivery_note_number' => $header['supplier_delivery_note_number'] ?? null,
-                'supplier_invoice_number' => $header['supplier_invoice_number'] ?? null,
-                'status' => $header['status'] ?? 'posted',
-                'received_by' => $receivedBy,
-                'posted_by' => ($header['status'] ?? 'posted') === 'posted' ? $receivedBy : null,
-                'posted_at' => ($header['status'] ?? 'posted') === 'posted' ? now() : null,
-                'notes' => $notes,
-            ]);
-
-            foreach ($receivable as $line) {
-                /** @var PurchaseItem $item */
-                $item = $line['item'];
-                /** @var StockLocation $location */
-                $location = $line['location'];
-                $quantity = (float) $line['quantity'];
-                $unitCost = (float) $line['unit_cost'];
-                $stockQuantity = $item->stockQuantity($quantity);
-                $stockUnitCost = round($unitCost / $item->purchaseFactor(), 4);
-
-                $grnItem = $grn->items()->create([
-                    'branch_id' => $purchase->branch_id,
-                    'purchase_item_id' => $item->id,
-                    'product_id' => $item->product_id,
-                    'purchase_unit_id' => $item->purchase_unit_id ?: $item->product?->purchase_unit_id ?: $item->product?->unit_id,
-                    'stock_unit_id' => $item->stock_unit_id ?: $item->product?->unit_id,
-                    'stock_location_id' => $location->id,
-                    'ordered_quantity' => $item->ordered_quantity,
-                    'previously_received_quantity' => $line['previously_received'],
-                    'received_quantity' => $quantity,
-                    'stock_quantity' => $stockQuantity,
-                    'cost_price' => $unitCost,
-                    'unit_cost' => $unitCost,
-                    'total_cost' => $quantity * $unitCost,
-                    'batch_number' => $line['batch_number'],
-                    'expiry_date' => $line['expiry_date'],
-                    'notes' => $line['notes'],
+                throw ValidationException::withMessages([
+                    'grn_number' => 'Namba hii ya GRN tayari imetumika. Tafadhali tumia namba nyingine.',
                 ]);
-
-                if ($grn->status === 'posted') {
-                    StockMovement::create([
-                        'branch_id' => $purchase->branch_id,
-                        'product_id' => $item->product_id,
-                        'stock_location_id' => $location->id,
-                        'movement_type' => 'purchase_receipt',
-                        'quantity' => $stockQuantity,
-                        'quantity_in' => $stockQuantity,
-                        'quantity_out' => 0,
-                        'unit_cost' => $stockUnitCost,
-                        'unit_price' => $item->selling_price,
-                        'reference_type' => GoodsReceivingNote::class,
-                        'reference_id' => $grn->id,
-                        'notes' => "Purchase {$purchase->reference_number} / {$grnItem->id}",
-                        'created_by' => $receivedBy,
-                        'movement_date' => $receivedDate,
-                    ]);
-
-                    $item->increment('received_quantity', $quantity);
-                }
             }
+        }
 
-            $purchase->refresh();
-            $fullyReceived = $purchase->items()->get()->every(fn (PurchaseItem $item) => (float) $item->received_quantity >= (float) $item->ordered_quantity);
-            $partiallyReceived = $purchase->items()->where('received_quantity', '>', 0)->exists();
+        throw ValidationException::withMessages([
+            'grn_number' => 'Imeshindikana kutengeneza namba ya GRN. Tafadhali jaribu tena.',
+        ]);
+    }
 
-            $purchase->update([
-                'status' => $fullyReceived ? 'received' : 'ordered',
-                'received_by' => $partiallyReceived ? $receivedBy : $purchase->received_by,
-                'received_at' => $partiallyReceived ? now() : $purchase->received_at,
-            ]);
+    private function nextGrnNumber(int $companyId, ?int $year = null): string
+    {
+        $year ??= (int) now()->format('Y');
 
-            return $grn->refresh();
-        });
+        DB::table('document_sequences')->insertOrIgnore([
+            'company_id' => $companyId,
+            'document_type' => DocumentSequence::GOODS_RECEIPT,
+            'year' => $year,
+            'last_number' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $sequence = DocumentSequence::query()
+            ->where('company_id', $companyId)
+            ->where('document_type', DocumentSequence::GOODS_RECEIPT)
+            ->where('year', $year)
+            ->lockForUpdate()
+            ->firstOrFail();
+
+        do {
+            $sequence->last_number++;
+            $grnNumber = $this->formatGrnNumber($year, $sequence->last_number);
+        } while ($this->grnExists($companyId, $grnNumber));
+
+        $sequence->save();
+
+        return $grnNumber;
+    }
+
+    private function formatGrnNumber(int $year, int $number): string
+    {
+        return 'GRN-'.$year.'-'.str_pad((string) $number, 6, '0', STR_PAD_LEFT);
+    }
+
+    private function grnExists(int $companyId, string $grnNumber): bool
+    {
+        return GoodsReceivingNote::withoutGlobalScopes()
+            ->where('company_id', $companyId)
+            ->where('grn_number', $grnNumber)
+            ->exists();
+    }
+
+    private function isGrnUniqueViolation(QueryException $exception): bool
+    {
+        $message = strtolower($exception->getMessage());
+        $isUniqueViolation = in_array((string) $exception->getCode(), ['23000', '23505'], true)
+            || str_contains($message, 'unique constraint');
+
+        return $isUniqueViolation
+            && (str_contains($message, 'goods_receiving_notes_company_grn_unique')
+                || str_contains($message, 'goods_receiving_notes.grn_number')
+                || str_contains($message, 'grn_number'));
     }
 
     public function approveAdjustment(StockAdjustment $adjustment, int $approvedBy): StockAdjustment|StockMovement
