@@ -809,7 +809,7 @@ $recentTransactions = computed(function (): Collection {
                     <tr>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
-                                <img class="h-10 w-10 rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
+                                <img class="h-10 w-10 rounded-lg object-cover" src="{{ $product->image_url }}" alt="{{ $product->name }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/product-placeholder.svg';">
                                 <span class="font-bold">{{ $product->displayNameWithSize() }}</span>
                             </div>
                         </td>
@@ -873,7 +873,7 @@ $recentTransactions = computed(function (): Collection {
                     <tr>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
-                                <img class="h-10 w-10 rounded-lg object-cover" src="{{ $row->product?->image ? asset('storage/'.$row->product->image) : 'https://ui-avatars.com/api/?name='.urlencode($row->product?->name ?? 'Product').'&background=0d2e50&color=fff' }}" alt="{{ $row->product?->name }}">
+                                <img class="h-10 w-10 rounded-lg object-cover" src="{{ $row->product?->image_url ?? '/images/product-placeholder.svg' }}" alt="{{ $row->product?->name ?? __('products.image.no_image') }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/product-placeholder.svg';">
                                 <span class="font-bold">{{ $row->product?->displayNameWithSize() }}</span>
                             </div>
                         </td>

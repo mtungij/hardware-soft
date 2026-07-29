@@ -611,7 +611,7 @@ $completeSale = function (InventoryService $inventory) {
                     {{ $t('Select Selling Location') }}
                 </div>
             @endunless
-            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div class="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 xl:grid-cols-3 xl:gap-4">
                 @foreach ($products as $product)
                     @php
                         $displayPrice = $sale_type === 'wholesale' ? $product->wholesale_price : $product->selling_price;
@@ -623,9 +623,9 @@ $completeSale = function (InventoryService $inventory) {
                         $baseAvailable = $available / $conversionFactor;
                         $showsBaseStock = $product->usesUnitConversion() && $baseUnitLabel && ($sellingUnitLabel !== $baseUnitLabel || abs($conversionFactor - 1) > 0.0001);
                     @endphp
-                    <button type="button" wire:click="addProduct({{ $product->id }})" class="rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-navy-900" @disabled(! $locationReady)>
-                        <img class="h-24 w-full rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
-                        <p class="mt-3 font-black">{{ $product->displayName() }}</p>
+                    <button type="button" wire:key="pos-product-{{ $product->id }}" wire:click="addProduct({{ $product->id }})" class="min-w-0 touch-manipulation rounded-xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-navy-900 sm:p-4" @disabled(! $locationReady)>
+                        <img class="h-20 w-full rounded-lg object-cover sm:h-24 xl:h-28" src="{{ $product->image_url }}" alt="{{ $product->name }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/product-placeholder.svg';">
+                        <p class="mt-2 line-clamp-2 font-black sm:mt-3">{{ $product->displayName() }}</p>
                         @if ($product->sizeLabel())
                             <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ $t('Size') }}: {{ $product->sizeLabel() }}</p>
                         @endif

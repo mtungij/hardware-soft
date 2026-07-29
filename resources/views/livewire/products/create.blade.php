@@ -7,12 +7,16 @@ use App\Models\Product;
 use App\Models\ProductSize;
 use App\Models\Unit;
 use App\Support\ProductMeasurementOptions;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Livewire\WithFileUploads;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\state;
+use function Livewire\Volt\uses;
 
 layout('layouts.app');
+uses([WithFileUploads::class]);
 
 state([
     'branch_id' => '',
@@ -31,6 +35,8 @@ state([
     'brand' => '',
     'model_size' => '',
     'image' => '',
+    'image_upload' => null,
+    'remove_image' => false,
     'buying_price' => '0',
     'selling_price' => '0',
     'wholesale_price' => '',
@@ -153,6 +159,29 @@ $updatedCategoryId = function () {
     }
 };
 
+$updatedImageUpload = function () {
+    $this->remove_image = false;
+    $this->validateOnly('image_upload', $this->rules());
+};
+
+$removeImage = function () {
+    $this->reset('image_upload');
+    $this->remove_image = false;
+    $this->resetErrorBag('image_upload');
+};
+
+$imagePreviewUrl = function (): ?string {
+    if (! $this->image_upload) {
+        return null;
+    }
+
+    try {
+        return $this->image_upload->temporaryUrl();
+    } catch (\Throwable) {
+        return null;
+    }
+};
+
 $rules = fn () => [
     'branch_id' => ['nullable', 'exists:branches,id'],
     'category_id' => ['required', 'exists:categories,id'],
@@ -190,6 +219,8 @@ $rules = fn () => [
     'brand' => ['nullable', 'string', 'max:255'],
     'model_size' => ['nullable', 'string', 'max:255'],
     'image' => ['nullable', 'string', 'max:255'],
+    'image_upload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+    'remove_image' => ['boolean'],
     'buying_price' => ['required', 'numeric', 'min:0'],
     'selling_price' => ['required', 'numeric', 'min:0'],
     'wholesale_price' => ['nullable', 'numeric', 'min:0'],
@@ -206,6 +237,8 @@ $rules = fn () => [
 
 $save = function () {
     $validated = $this->validate($this->rules());
+    $imageUpload = $validated['image_upload'] ?? null;
+    unset($validated['image_upload'], $validated['remove_image']);
     $validated['branch_id'] = $validated['branch_id'] ?: null;
     $validated['uses_product_size'] = (bool) $validated['uses_product_size']
         || $this->isLength()
@@ -234,7 +267,24 @@ $save = function () {
         $validated['quantity_step'] = 1;
     }
 
-    Product::create($validated);
+    $storedPath = null;
+
+    try {
+        DB::transaction(function () use ($validated, $imageUpload, &$storedPath): void {
+            $product = Product::create($validated);
+
+            if ($imageUpload) {
+                $storedPath = app(\App\Services\ProductImageService::class)->store($imageUpload, $product);
+                $product->update(['image_path' => $storedPath]);
+            }
+        });
+    } catch (\Throwable $exception) {
+        if ($storedPath) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($storedPath);
+        }
+
+        throw $exception;
+    }
 
     session()->flash('success', 'Product created successfully.');
     $this->redirectRoute('products.index', navigate: true);
@@ -258,6 +308,8 @@ $save = function () {
             <x-form-input label="Product Name" name="name" wire:model="name" required />
             <x-form-input label="SKU" name="sku" wire:model="sku" />
             <x-form-input label="Barcode" name="barcode" wire:model="barcode" />
+
+            <x-product-image-upload :preview-url="$this->imagePreviewUrl()" />
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Category
@@ -427,7 +479,10 @@ $save = function () {
             @endif
 
             <div class="flex gap-2 md:col-span-2 xl:col-span-3">
-                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save Product</button>
+                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white" wire:loading.attr="disabled" wire:target="save,image_upload">
+                    <span wire:loading.remove wire:target="save">Save Product</span>
+                    <span wire:loading wire:target="save">Saving...</span>
+                </button>
                 <a href="{{ route('products.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
             </div>
         </form>

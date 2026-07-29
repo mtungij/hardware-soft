@@ -254,7 +254,7 @@ $deleteConfirmedProduct = function () {
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">
                         <div class="flex min-w-56 items-center gap-3">
-                            <img class="h-11 w-11 rounded-lg object-cover" src="{{ $product->image ? asset('storage/'.$product->image) : 'https://ui-avatars.com/api/?name='.urlencode($product->name).'&background=f97316&color=fff' }}" alt="{{ $product->name }}">
+                            <img class="h-12 w-12 shrink-0 rounded-lg object-cover" src="{{ $product->image_url }}" alt="{{ $product->name }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/product-placeholder.svg';">
                             <div>
                                 <p class="font-black">{{ $product->displayName() }}</p>
                                 <p class="text-xs text-slate-500">{{ $product->brand ?? 'No brand' }} {{ $product->model_size ? '/ '.$product->model_size : '' }}</p>

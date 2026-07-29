@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-labelledby="title">
+  <title id="title">No product image</title>
+  <rect width="400" height="300" fill="#f1f5f9"/>
+  <path d="M138 105h124v104H138z" fill="#fff" stroke="#cbd5e1" stroke-width="8"/>
+  <path d="m138 132 62 35 62-35M200 167v70" fill="none" stroke="#f97316" stroke-width="8" stroke-linejoin="round"/>
+  <path d="m138 105 62 35 62-35-62-35z" fill="#fed7aa" stroke="#f97316" stroke-width="8" stroke-linejoin="round"/>
+</svg>

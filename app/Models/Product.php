@@ -3,11 +3,13 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
+use App\Services\ProductImageService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 #[Fillable([
     'branch_id',
@@ -26,6 +28,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'brand',
     'model_size',
     'image',
+    'image_path',
     'buying_price',
     'selling_price',
     'wholesale_price',
@@ -51,6 +54,14 @@ class Product extends Model
             if ((int) $product->purchase_unit_id === (int) $product->unit_id) {
                 $product->purchase_conversion_factor = 1;
             }
+        });
+
+        static::deleted(function (Product $product): void {
+            if (method_exists($product, 'isForceDeleting') && ! $product->isForceDeleting()) {
+                return;
+            }
+
+            app(ProductImageService::class)->deleteOwned($product->image_path, $product);
         });
     }
 
@@ -231,6 +242,23 @@ class Product extends Model
     public function displayNameWithSize(): string
     {
         return trim($this->displayName().($this->sizeLabel() ? ' - '.$this->sizeLabel() : ''));
+    }
+
+    public function getImageUrlAttribute(): string
+    {
+        if (
+            app(ProductImageService::class)->isOwnedPath($this->image_path, $this)
+            && Storage::disk('public')->exists($this->image_path)
+        ) {
+            $diskUrl = Storage::disk('public')->url($this->image_path);
+            $relativeUrl = parse_url($diskUrl, PHP_URL_PATH);
+
+            return is_string($relativeUrl) && str_starts_with($relativeUrl, '/')
+                ? $relativeUrl
+                : '/'.ltrim($diskUrl, '/');
+        }
+
+        return '/images/product-placeholder.svg';
     }
 
     protected function casts(): array
