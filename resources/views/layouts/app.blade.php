@@ -57,9 +57,35 @@
                 'branch' => ['M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18', 'M4 22h16', 'M9 6h1', 'M14 6h1', 'M9 10h1', 'M14 10h1', 'M9 14h1', 'M14 14h1'],
                 'settings' => ['M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M19 12h2', 'M3 12h2', 'M12 3v2', 'M12 19v2', 'M17 7l1.4-1.4', 'M5.6 18.4 7 17', 'M17 17l1.4 1.4', 'M5.6 5.6 7 7'],
                 'mail' => ['M4 4h16v16H4z', 'M4 7l8 6 8-6'],
+                'production' => ['M4 20V10l5 3V9l5 3V4h6v16H4Z', 'M8 20v-3', 'M13 20v-3', 'M18 20v-3'],
             ];
             $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
             $directStockInAllowed = \App\Support\InventorySettings::directStockInAllowed();
+            $productionVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && auth()->user()?->can('production.view');
+            $productFamiliesVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && collect(['production.view_product_families', 'production.manage_product_families'])
+                    ->contains(fn ($permission) => auth()->user()?->can($permission));
+            $mouldsVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && collect(['production.view_moulds', 'production.manage_moulds'])
+                    ->contains(fn ($permission) => auth()->user()?->can($permission));
+            $recipesVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && (auth()->user()?->can('production.view_recipes')
+                    || auth()->user()?->can('production.manage_recipes'));
+            $ordersVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && collect(['production.view_orders', 'production.create_orders', 'production.execute_orders', 'production.complete_orders', 'production.cancel_orders'])
+                    ->contains(fn ($permission) => auth()->user()?->can($permission));
+            $curingVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && collect(['production.view_curing', 'production.manage_curing', 'production.release_curing'])
+                    ->contains(fn ($permission) => auth()->user()?->can($permission));
+            $costingVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && collect(['production.view_costing', 'production.manage_costing', 'production.finalize_costing'])
+                    ->contains(fn ($permission) => auth()->user()?->can($permission));
+            $qualityPermissions = ['production.view_quality', 'production.manage_quality_plans', 'production.perform_quality_inspections', 'production.approve_quality', 'production.manage_quality_holds'];
+            $qualityVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && collect($qualityPermissions)->contains(fn ($permission) => auth()->user()?->can($permission));
+            $productionReportsVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
+                && auth()->user()?->can('production.view_reports');
             $navigationGroups = [
                 ['label' => __('messages.staff.nav.dashboard_group'), 'icon' => 'dashboard', 'items' => [['label' => __('messages.staff.nav.dashboard'), 'route' => 'dashboard', 'icon' => 'dashboard', 'roles' => []]]],
                 ['label' => __('messages.staff.nav.inventory'), 'icon' => 'inventory', 'items' => [
@@ -80,6 +106,19 @@
                     ['label' => __('messages.staff.nav.stock_transfers'), 'route' => 'stock-transfers.index', 'icon' => 'transfer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.stock_movements'), 'route' => 'stock-movements.index', 'icon' => 'truck', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant']],
                     ['label' => __('messages.staff.nav.stock_adjustments'), 'route' => 'stock-adjustments.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper']],
+                ]],
+                ['label' => __('production.title'), 'icon' => 'production', 'items' => [
+                    ['label' => __('production.overview'), 'route' => 'production.index', 'icon' => 'summary', 'permission' => 'production.view', 'show' => $productionVisible],
+                    ['label' => __('production.product_families.title'), 'route' => 'production.product-families.index', 'icon' => 'product', 'permissions' => ['production.view_product_families', 'production.manage_product_families'], 'show' => $productFamiliesVisible],
+                    ['label' => __('production.moulds.title'), 'route' => 'production.moulds.index', 'icon' => 'production', 'permissions' => ['production.view_moulds', 'production.manage_moulds'], 'show' => $mouldsVisible],
+                    ['label' => __('production.machines'), 'route' => 'production.machines.index', 'icon' => 'production', 'permission' => 'production.view', 'show' => $productionVisible],
+                    ['label' => __('production.daily_schedule'), 'route' => 'production.schedule.index', 'icon' => 'list', 'permission' => 'production.view', 'show' => $productionVisible],
+                    ['label' => __('production.recipes.title'), 'route' => 'production.recipes.index', 'icon' => 'receipt', 'permissions' => ['production.view_recipes', 'production.manage_recipes'], 'show' => $recipesVisible],
+                    ['label' => __('production.orders.title'), 'route' => 'production.orders.index', 'icon' => 'production', 'permissions' => ['production.view_orders', 'production.create_orders', 'production.execute_orders', 'production.complete_orders', 'production.cancel_orders'], 'show' => $ordersVisible],
+                    ['label' => __('production.curing.title'), 'route' => 'production.curing.index', 'icon' => 'stock', 'permissions' => ['production.view_curing', 'production.manage_curing', 'production.release_curing'], 'show' => $curingVisible],
+                    ['label' => __('production.costing.title'), 'route' => 'production.costing.index', 'icon' => 'money', 'permissions' => ['production.view_costing', 'production.manage_costing', 'production.finalize_costing'], 'show' => $costingVisible],
+                    ['label' => __('production.quality.title'), 'route' => 'production.quality.inspections.index', 'icon' => 'adjust', 'permissions' => $qualityPermissions, 'show' => $qualityVisible],
+                    ['label' => 'Production Reports', 'route' => 'production.reports.index', 'icon' => 'chart', 'permission' => 'production.view_reports', 'show' => $productionReportsVisible],
                 ]],
                 ['label' => __('messages.staff.nav.sales_group'), 'icon' => 'sales', 'items' => [
                     ['label' => __('messages.staff.nav.pos'), 'route' => 'pos.index', 'icon' => 'pos', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Cashier']],
@@ -186,9 +225,10 @@
                     @foreach ($navigationGroups as $group)
                         @php
                             $visibleItems = collect($group['items'])->filter(function ($item) use ($user) {
-                                $hasAccessRule = filled($item['roles'] ?? null) || filled($item['permission'] ?? null);
+                                $hasAccessRule = filled($item['roles'] ?? null) || filled($item['permission'] ?? null) || filled($item['permissions'] ?? null);
                                 $hasRoleAccess = filled($item['roles'] ?? null) && $user?->hasAnyRole($item['roles']);
-                                $hasPermissionAccess = filled($item['permission'] ?? null) && $user?->can($item['permission']);
+                                $hasPermissionAccess = (filled($item['permission'] ?? null) && $user?->can($item['permission']))
+                                    || (filled($item['permissions'] ?? null) && collect($item['permissions'])->contains(fn ($permission) => $user?->can($permission)));
 
                                 return ($item['show'] ?? true)
                                     && (! $hasAccessRule || $hasRoleAccess || $hasPermissionAccess);

@@ -4,6 +4,7 @@ use App\Http\Controllers\CompletePosReceiptController;
 use App\Http\Controllers\CustomerPortal\CustomerFileDownloadController;
 use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\GenericExportController;
+use App\Http\Controllers\ProductionReportExportController;
 use App\Http\Controllers\PurchaseOrderPdfController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -202,6 +203,77 @@ Route::middleware('customer.locale')->group(function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('dashboard', 'dashboard')->name('dashboard');
     Volt::route('help-center', 'help-center.index')->name('help-center.index');
+
+    Route::prefix('production')->middleware('production.access:production.view')->group(function () {
+        Volt::route('/', 'production.overview')->name('production.index');
+        Volt::route('setup-checklist', 'production.setup-checklist')->name('production.setup-checklist');
+        Volt::route('product-families', 'production.product-families.index')
+            ->middleware('production.access:production.view_product_families,production.manage_product_families')
+            ->name('production.product-families.index');
+        Volt::route('moulds', 'production.moulds.index')
+            ->middleware('production.access:production.view_moulds,production.manage_moulds')
+            ->name('production.moulds.index');
+        Volt::route('machines', 'production.machines.index')->name('production.machines.index');
+        Volt::route('schedule', 'production.schedule.index')->name('production.schedule.index');
+    });
+
+    Route::prefix('production/reports')->middleware('production.access:production.view_reports')->group(function () {
+        Volt::route('/', 'production.reports.index')->name('production.reports.index');
+        foreach (array_keys(\App\Services\ProductionReportService::REPORTS) as $report) {
+            Volt::route($report, 'production.reports.report')->defaults('report', $report)
+                ->name('production.reports.'.str_replace('-', '_', $report));
+        }
+        Volt::route('batch-traceability', 'production.reports.batch-traceability')
+            ->middleware('production.access:production.view_batch_traceability')
+            ->name('production.reports.batch_traceability');
+        Route::get('{report}/export/{format}', ProductionReportExportController::class)
+            ->middleware('production.access:production.export_reports')->name('production.reports.export');
+    });
+
+    Route::prefix('production/recipes')
+        ->middleware('production.access:production.view_recipes,production.manage_recipes')
+        ->group(function () {
+            Volt::route('/', 'production.recipes.index')->name('production.recipes.index');
+            Volt::route('create', 'production.recipes.form')->name('production.recipes.create');
+            Volt::route('{recipe}/edit', 'production.recipes.form')->name('production.recipes.edit');
+            Volt::route('{recipe}', 'production.recipes.show')->name('production.recipes.show');
+        });
+
+    Route::prefix('production/orders')
+        ->middleware('production.access:production.view_orders,production.create_orders,production.execute_orders,production.complete_orders,production.cancel_orders')
+        ->group(function () {
+            Volt::route('/', 'production.orders.index')->name('production.orders.index');
+            Volt::route('create', 'production.orders.create')->name('production.orders.create');
+            Volt::route('{order}', 'production.orders.show')->name('production.orders.show');
+            Volt::route('{order}/execute', 'production.orders.execute')->name('production.orders.execute');
+        });
+
+    Route::prefix('production/curing')
+        ->middleware('production.access:production.view_curing,production.manage_curing,production.release_curing')
+        ->group(function () {
+            Volt::route('/', 'production.curing.index')->name('production.curing.index');
+            Volt::route('{batch}', 'production.curing.show')->name('production.curing.show');
+        });
+
+    Route::prefix('production/costing')
+        ->middleware('production.access:production.view_costing,production.manage_costing,production.finalize_costing')
+        ->group(function () {
+            Volt::route('/', 'production.costing.index')->name('production.costing.index');
+            Volt::route('{costing}', 'production.costing.show')->name('production.costing.show');
+        });
+
+    Route::prefix('production/quality')
+        ->middleware('production.access:production.view_quality,production.manage_quality_plans,production.perform_quality_inspections,production.approve_quality,production.manage_quality_holds')
+        ->group(function () {
+            Volt::route('inspections', 'production.quality.inspections.index')->name('production.quality.inspections.index');
+            Volt::route('inspections/create', 'production.quality.inspections.form')->name('production.quality.inspections.create');
+            Volt::route('inspections/{inspection}', 'production.quality.inspections.show')->name('production.quality.inspections.show');
+            Volt::route('plans', 'production.quality.plans.index')->name('production.quality.plans.index');
+            Volt::route('plans/create', 'production.quality.plans.form')->name('production.quality.plans.create');
+            Volt::route('plans/{plan}', 'production.quality.plans.show')->name('production.quality.plans.show');
+            Volt::route('plans/{plan}/edit', 'production.quality.plans.form')->name('production.quality.plans.edit');
+            Volt::route('holds', 'production.quality.holds.index')->name('production.quality.holds.index');
+        });
 
     Route::view('profile', 'profile')->name('profile');
 

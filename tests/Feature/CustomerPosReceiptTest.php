@@ -21,7 +21,7 @@ beforeEach(function () {
     $this->actingAs($this->admin);
 });
 
-test('cash customer receipt contains only customer-facing product and payment details', function () {
+test('cash customer receipt includes customer-facing product payment and source details', function () {
     $piece = Unit::where('short_name', 'pcs')->firstOrFail();
     $size = ProductSize::where('symbol', '2 × 4 (2mm)')->firstOrFail();
     $sale = makeCustomerReceiptSale($this->branch, $this->admin, [
@@ -55,7 +55,7 @@ test('cash customer receipt contains only customer-facing product and payment de
         ->assertDontSee('Stock Source')
         ->assertDontSee('Stock location')
         ->assertDontSee('Sehemu ya Stock')
-        ->assertDontSee('Main Warehouse')
+        ->assertSee('From: Main Warehouse')
         ->assertDontSee('Base Quantity Deducted')
         ->assertDontSee('Selling Quantity')
         ->assertDontSee('Conversion')

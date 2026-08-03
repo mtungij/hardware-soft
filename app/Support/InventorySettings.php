@@ -87,10 +87,14 @@ class InventorySettings
     {
         if ($user) {
             $locations = $user->permittedStockLocations('can_sell', $branchId)
-                ->filter(fn (StockLocation $location) => $location->can_sell && $location->isActive())
+                ->filter(fn (StockLocation $location) => $location->can_sell && $location->is_sellable && $location->isActive())
                 ->values();
 
-            if ($locations->isNotEmpty()) {
+            $hasExplicitAssignments = $user->stockLocations()
+                ->where('stock_locations.branch_id', $branchId)
+                ->exists();
+
+            if ($locations->isNotEmpty() || $hasExplicitAssignments) {
                 return $locations->all();
             }
         }
@@ -114,7 +118,7 @@ class InventorySettings
 
     public static function canUserSellFromLocation(?User $user, StockLocation $location): bool
     {
-        if (! $location->isActive() || ! $location->can_sell) {
+        if (! $location->isActive() || ! $location->can_sell || ! $location->is_sellable) {
             return false;
         }
 

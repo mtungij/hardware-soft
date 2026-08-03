@@ -90,6 +90,16 @@ class Branch extends Model
         return $this->hasMany(CashbookSession::class);
     }
 
+    public function machines(): HasMany
+    {
+        return $this->hasMany(Machine::class);
+    }
+
+    public function productionMachineAssignments(): HasMany
+    {
+        return $this->hasMany(ProductionMachineAssignment::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

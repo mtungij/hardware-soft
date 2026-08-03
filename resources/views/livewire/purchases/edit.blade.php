@@ -4,6 +4,7 @@ use App\Models\Branch;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Supplier;
+use App\Support\CompanyFeatures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -65,6 +66,8 @@ $totalAmount = function () {
 $savePurchase = function (string $status) {
     abort_unless($this->purchase->canBeModified(), 403);
 
+    $historicalProductIds = $this->purchase->items()->pluck('product_id')->map(fn ($id) => (int) $id)->all();
+
     $validated = $this->validate([
         'branch_id' => ['required', 'exists:branches,id'],
         'supplier_id' => ['required', 'exists:suppliers,id'],
@@ -74,7 +77,20 @@ $savePurchase = function (string $status) {
         'notes' => ['nullable', 'string', 'max:1000'],
         'paid_amount' => ['required', 'numeric', 'min:0'],
         'items' => ['required', 'array', 'min:1'],
-        'items.*.product_id' => ['required', 'exists:products,id'],
+        'items.*.product_id' => [
+            'required',
+            Rule::exists('products', 'id')->where(function ($query) use ($historicalProductIds): void {
+                $query->where('company_id', auth()->user()->company_id);
+
+                if (CompanyFeatures::manufacturingEnabled()) {
+                    $query->where(function ($products) use ($historicalProductIds): void {
+                        $products
+                            ->where('inventory_source', Product::INVENTORY_SOURCE_PURCHASED)
+                            ->orWhereIn('id', $historicalProductIds);
+                    });
+                }
+            }),
+        ],
         'items.*.ordered_quantity' => ['required', 'numeric', 'gt:0'],
         'items.*.cost_price' => ['required', 'numeric', 'min:0'],
         'items.*.selling_price' => ['nullable', 'numeric', 'min:0'],

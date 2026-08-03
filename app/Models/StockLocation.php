@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,6 +25,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'can_receive_stock',
     'can_issue_stock',
     'can_sell',
+    'is_sellable',
     'can_transfer',
     'can_transfer_to_dispensing',
     'is_dispensing_location',
@@ -43,8 +45,37 @@ class StockLocation extends Model
         'returns' => 'Returns',
         'damaged' => 'Damaged',
         'transit' => 'Transit',
+        'curing' => 'Curing Yard',
+        'quarantine' => 'Quarantine',
         'other' => 'Other',
     ];
+
+    protected static function booted(): void
+    {
+        $normalize = function (StockLocation $location): void {
+            if (in_array($location->type, ['curing', 'quarantine', 'damaged', 'transit'], true)) {
+                $location->is_sellable = false;
+                $location->can_sell = false;
+            }
+        };
+        static::creating($normalize);
+        static::updating($normalize);
+    }
+
+    public function scopeSellable(Builder $query): Builder
+    {
+        return $query->where('is_sellable', true)->where('can_sell', true);
+    }
+
+    public function scopeNonSellable(Builder $query): Builder
+    {
+        return $query->where('is_sellable', false);
+    }
+
+    public function scopeCuring(Builder $query): Builder
+    {
+        return $query->whereIn('type', ['curing', 'quarantine']);
+    }
 
     public function branch(): BelongsTo
     {
@@ -91,6 +122,7 @@ class StockLocation extends Model
             'can_receive_stock' => 'boolean',
             'can_issue_stock' => 'boolean',
             'can_sell' => 'boolean',
+            'is_sellable' => 'boolean',
             'can_transfer' => 'boolean',
             'can_transfer_to_dispensing' => 'boolean',
             'is_dispensing_location' => 'boolean',

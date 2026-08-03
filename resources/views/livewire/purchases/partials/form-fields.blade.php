@@ -41,7 +41,18 @@
                                 <select wire:model.live="items.{{ $index }}.product_id" wire:change="syncProductSellingPrice({{ $index }})" @disabled(blank($supplier_id)) class="w-64 rounded-lg border border-slate-200 bg-white px-3 py-2 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-900">
                                     <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                     @if (filled($supplier_id))
-                                        @foreach (\App\Models\Product::with(['purchaseUnit', 'unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
+                                        @php
+                                            $historicalProductIds = collect($items)->pluck('product_id')->filter()->map(fn ($id) => (int) $id)->all();
+                                            $purchaseProductsQuery = \App\Models\Product::with(['purchaseUnit', 'unit', 'size'])
+                                                ->where('status', 'active');
+
+                                            if (\App\Support\CompanyFeatures::manufacturingEnabled()) {
+                                                $purchaseProductsQuery->where(fn ($query) => $query
+                                                    ->purchased()
+                                                    ->orWhereIn('id', $historicalProductIds));
+                                            }
+                                        @endphp
+                                        @foreach ($purchaseProductsQuery->orderBy('name')->get() as $product)
                                             <option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / Purchase: {{ $product->purchaseUnit?->short_name ?: $product->unit?->short_name }} / {{ $product->sku }}</option>
                                         @endforeach
                                     @endif

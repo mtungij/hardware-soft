@@ -45,7 +45,7 @@ test('Pos failed checkout keeps cart and does not create or redirect to a receip
 
     $component
         ->call('completeSale')
-        ->assertHasErrors(['cart'])
+        ->assertHasErrors(['cart.0.quantity'])
         ->assertSet('cart', $cart)
         ->assertSet('processing', false)
         ->assertNoRedirect();
@@ -136,6 +136,7 @@ function posReceiptComponent(StockLocation $location, Product $product)
         ->set('stock_location_id', (string) $location->id)
         ->set('cart', [[
             'product_id' => $product->id,
+            'stock_location_id' => $location->id,
             'name' => $product->name,
             'sku' => $product->sku,
             'sale_type' => 'retail',

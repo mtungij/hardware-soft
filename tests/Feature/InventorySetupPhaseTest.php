@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Category;
 use App\Models\Branch;
+use App\Models\Category;
 use App\Models\Company;
 use App\Models\Product;
 use App\Models\Setting;
@@ -9,6 +9,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
+use App\Support\NumberFormatter;
 use Database\Seeders\AutoPartsCategorySeeder;
 use Database\Seeders\AutoPartsProductSeeder;
 use Database\Seeders\AutoPartsUnitSeeder;
@@ -118,7 +119,7 @@ test('direct inventory mode hides warehouse only workflows and keeps direct sale
     $this->actingAs($admin)->get('/reports/purchases')->assertForbidden();
 });
 
-test('pos requires location selection in multi location mode', function () {
+test('pos does not require a preferred location in multi location mode', function () {
     $branch = Branch::firstOrFail();
     enableWarehouseInventoryModeForBranch((int) $branch->id);
     $cashier = User::factory()->create([
@@ -133,8 +134,8 @@ test('pos requires location selection in multi location mode', function () {
 
     Volt::test('pos.index')
         ->assertSet('stock_location_id', '')
-        ->assertSee('Selling From')
-        ->assertSee('Select Selling Location');
+        ->assertSee('Preferred Location')
+        ->assertSeeHtml('wire:model.live.debounce.300ms="search"');
 });
 
 test('single selling location companies auto select the location', function () {
@@ -157,13 +158,14 @@ test('single selling location companies auto select the location', function () {
 
     Volt::test('pos.index')
         ->assertSet('stock_location_id', (string) $store->id)
-        ->assertSee('Unauza kutoka:')
-        ->assertDontSee('Select Selling Location');
+        ->assertSee('Preferred Location:')
+        ->assertSee($store->name);
 });
 
-test('products cannot be added before selecting selling location', function () {
+test('products can be added from an explicit line location without a preferred location', function () {
     $branch = Branch::firstOrFail();
-    enableWarehouseInventoryModeForBranch((int) $branch->id);
+    [$store] = enableWarehouseInventoryModeForBranch((int) $branch->id);
+    $product = Product::firstOrFail();
     $cashier = User::factory()->create([
         'company_id' => $branch->company_id,
         'branch_id' => $branch->id,
@@ -172,15 +174,31 @@ test('products cannot be added before selecting selling location', function () {
     ]);
     $cashier->assignRole('Cashier');
 
+    StockMovement::query()->create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'product_id' => $product->id,
+        'stock_location_id' => $store->id,
+        'movement_type' => 'adjustment_in',
+        'quantity' => 5,
+        'quantity_in' => 5,
+        'quantity_out' => 0,
+        'unit_cost' => $product->buying_price,
+        'unit_price' => $product->selling_price,
+        'created_by' => $cashier->id,
+        'movement_date' => now()->toDateString(),
+    ]);
+
     $this->actingAs($cashier);
 
     Volt::test('pos.index')
-        ->call('addProduct', Product::firstOrFail()->id)
-        ->assertHasErrors(['stock_location_id'])
-        ->assertSet('cart', []);
+        ->assertSet('stock_location_id', '')
+        ->call('addProduct', $product->id, $store->id)
+        ->assertSet('cart.0.product_id', $product->id)
+        ->assertSet('cart.0.stock_location_id', $store->id);
 });
 
-test('changing selling location clears cart after confirmation', function () {
+test('changing preferred selling location preserves per-line cart sources', function () {
     $branch = Branch::firstOrFail();
     [$store, $dispensing] = enableWarehouseInventoryModeForBranch((int) $branch->id);
     $product = Product::firstOrFail();
@@ -198,6 +216,7 @@ test('changing selling location clears cart after confirmation', function () {
         ->set('stock_location_id', (string) $dispensing->id)
         ->set('cart', [[
             'product_id' => $product->id,
+            'stock_location_id' => $dispensing->id,
             'name' => $product->name,
             'sku' => $product->sku,
             'sale_type' => 'retail',
@@ -207,11 +226,8 @@ test('changing selling location clears cart after confirmation', function () {
             'tax_amount' => '0',
         ]])
         ->call('requestStockLocationChange', (string) $store->id)
-        ->assertSet('pending_stock_location_id', (string) $store->id)
-        ->assertDispatched('open-modal')
-        ->call('confirmStockLocationChange')
         ->assertSet('stock_location_id', (string) $store->id)
-        ->assertSet('cart', []);
+        ->assertSet('cart.0.stock_location_id', $dispensing->id);
 });
 
 test('pos blocks sale from unauthorized stock location', function () {
@@ -244,6 +260,7 @@ test('pos blocks sale from unauthorized stock location', function () {
         ->set('stock_location_id', (string) $dispensing->id)
         ->set('cart', [[
             'product_id' => $product->id,
+            'stock_location_id' => $dispensing->id,
             'name' => $product->name,
             'sku' => $product->sku,
             'sale_type' => 'retail',
@@ -254,8 +271,7 @@ test('pos blocks sale from unauthorized stock location', function () {
         ]])
         ->set('payments', [['payment_method' => 'cash', 'amount' => (string) $product->selling_price, 'reference_number' => '']])
         ->call('completeSale')
-        ->assertHasErrors(['stock_location_id'])
-        ->assertSee('Huna ruhusa ya kuuza kutoka sehemu hii ya stock.');
+        ->assertHasErrors(['cart.0.stock_location_id']);
 });
 
 test('default inventory setup seed data exists', function () {
@@ -428,7 +444,7 @@ test('non admin sees but cannot update selling price when saving direct stock in
         ->set('quantity', '2')
         ->set('cost_price', '1000')
         ->set('selling_price', '88888')
-        ->assertSee('TZS '.\App\Support\NumberFormatter::money($originalSellingPrice))
+        ->assertSee('TZS '.NumberFormatter::money($originalSellingPrice))
         ->set('reason', 'Manual Entry')
         ->call('save');
 

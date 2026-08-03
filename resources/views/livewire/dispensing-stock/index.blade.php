@@ -65,7 +65,7 @@ state(['search' => '', 'categoryFilter' => '', 'statusFilter' => '']);
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">
                         <div class="flex items-center gap-3">
-                            <img class="h-10 w-10 rounded-lg object-cover" src="{{ $product->image_url }}" alt="{{ $product->name }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/product-placeholder.svg';">
+                            <x-product-image :product="$product" class="h-10 w-10" />
                             <span class="font-black">{{ $product->displayNameWithSize() }}</span>
                         </div>
                     </td>

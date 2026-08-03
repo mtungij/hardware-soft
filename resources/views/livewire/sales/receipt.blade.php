@@ -20,6 +20,7 @@ mount(function (Sale $sale) {
         'items.product.sellingUnit',
         'items.product.unit',
         'items.sellingUnit',
+        'items.stockLocation',
         'payments',
     ]);
     $this->settings = Setting::withoutGlobalScopes()
@@ -345,6 +346,9 @@ mount(function (Sale $sale) {
                         </span>
                         <span class="shrink-0 font-bold">{{ \App\Support\NumberFormatter::money($item->line_total) }}</span>
                     </div>
+                    @if($item->sold_from_label || $item->stockLocation)
+                        <p class="mt-0.5 text-[0.9em]">From: {{ $item->sold_from_label ?: \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) }}</p>
+                    @endif
                     @if ($discountPerUnit > 0)
                         <p class="mt-0.5 text-[0.9em]">Discount: {{ \App\Support\NumberFormatter::money($discountPerUnit) }} each</p>
                     @endif

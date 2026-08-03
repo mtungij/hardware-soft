@@ -92,7 +92,7 @@ $capabilityDefaultsForType = fn (string $type): array => match ($type) {
         'is_default' => false,
         'is_active' => true,
     ],
-    'returns', 'damaged' => [
+    'returns', 'damaged', 'curing', 'quarantine' => [
         'can_receive_stock' => true,
         'can_issue_stock' => true,
         'can_sell' => false,

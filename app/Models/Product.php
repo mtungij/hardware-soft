@@ -4,12 +4,15 @@ namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
 use App\Services\ProductImageService;
+use App\Support\CompanyFeatures;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 #[Fillable([
     'branch_id',
@@ -29,6 +32,15 @@ use Illuminate\Support\Facades\Storage;
     'model_size',
     'image',
     'image_path',
+    'inventory_source',
+    'product_family_id',
+    'requires_curing',
+    'curing_days_required',
+    'sellable_after_days',
+    'curing_notes',
+    'requires_quality_control',
+    'requires_pre_release_inspection',
+    'quality_notes',
     'buying_price',
     'selling_price',
     'wholesale_price',
@@ -46,6 +58,10 @@ class Product extends Model
 {
     use HasCompany, HasFactory;
 
+    public const INVENTORY_SOURCE_PURCHASED = 'purchased';
+
+    public const INVENTORY_SOURCE_MANUFACTURED = 'manufactured';
+
     protected static function booted(): void
     {
         static::creating(function (Product $product): void {
@@ -54,6 +70,14 @@ class Product extends Model
             if ((int) $product->purchase_unit_id === (int) $product->unit_id) {
                 $product->purchase_conversion_factor = 1;
             }
+
+            $product->normalizeInventorySource();
+            $product->normalizeProductFamily();
+        });
+
+        static::updating(function (Product $product): void {
+            $product->normalizeInventorySource();
+            $product->normalizeProductFamily();
         });
 
         static::deleted(function (Product $product): void {
@@ -68,6 +92,68 @@ class Product extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function scopePurchased(Builder $query): Builder
+    {
+        return $query->where('inventory_source', self::INVENTORY_SOURCE_PURCHASED);
+    }
+
+    public function scopeManufactured(Builder $query): Builder
+    {
+        return $query->where('inventory_source', self::INVENTORY_SOURCE_MANUFACTURED);
+    }
+
+    public function isManufactured(): bool
+    {
+        return $this->inventory_source === self::INVENTORY_SOURCE_MANUFACTURED;
+    }
+
+    public function productionMachineAssignments(): HasMany
+    {
+        return $this->hasMany(ProductionMachineAssignment::class);
+    }
+
+    public function productFamily(): BelongsTo
+    {
+        return $this->belongsTo(ProductFamily::class);
+    }
+
+    public function productionRecipes(): HasMany
+    {
+        return $this->hasMany(ProductionRecipe::class);
+    }
+
+    public function recipeMaterialItems(): HasMany
+    {
+        return $this->hasMany(ProductionRecipeItem::class, 'material_product_id');
+    }
+
+    public function productionOrders(): HasMany
+    {
+        return $this->hasMany(ProductionOrder::class);
+    }
+
+    public function productionCuringBatches(): HasMany
+    {
+        return $this->hasMany(ProductionCuringBatch::class);
+    }
+
+    public function productionQualityPlans(): HasMany
+    {
+        return $this->hasMany(ProductionQualityPlan::class);
+    }
+
+    public function productionQualityInspections(): HasMany
+    {
+        return $this->hasMany(ProductionQualityInspection::class);
+    }
+
+    public function scopePurchasable(Builder $query): Builder
+    {
+        return CompanyFeatures::manufacturingEnabled()
+            ? $query->purchased()
+            : $query;
     }
 
     public function category(): BelongsTo
@@ -261,6 +347,82 @@ class Product extends Model
         return '/images/product-placeholder.svg';
     }
 
+    private function normalizeInventorySource(): void
+    {
+        $company = $this->company_id
+            ? Company::query()->find($this->company_id)
+            : Company::current();
+
+        if (
+            ! $company?->manufacturingEnabled()
+            || ! in_array($this->inventory_source, [
+                self::INVENTORY_SOURCE_PURCHASED,
+                self::INVENTORY_SOURCE_MANUFACTURED,
+            ], true)
+        ) {
+            $this->inventory_source = self::INVENTORY_SOURCE_PURCHASED;
+        }
+
+        if ($this->inventory_source !== self::INVENTORY_SOURCE_MANUFACTURED) {
+            $this->requires_curing = false;
+            $this->curing_days_required = null;
+            $this->sellable_after_days = null;
+            $this->curing_notes = null;
+            $this->requires_quality_control = false;
+            $this->requires_pre_release_inspection = false;
+            $this->quality_notes = null;
+        } elseif ($this->requires_curing) {
+            if ((int) $this->curing_days_required <= 0 || (int) $this->sellable_after_days <= 0) {
+                throw ValidationException::withMessages([
+                    'curing_days_required' => 'Full curing period and minimum sellable age must both be greater than zero.',
+                ]);
+            }
+            if ((int) $this->sellable_after_days > (int) $this->curing_days_required) {
+                throw ValidationException::withMessages([
+                    'sellable_after_days' => 'Minimum sellable age cannot exceed the full curing period.',
+                ]);
+            }
+        } else {
+            $this->curing_days_required = null;
+            $this->sellable_after_days = null;
+            $this->curing_notes = null;
+        }
+
+        if (! $this->requires_quality_control) {
+            $this->requires_pre_release_inspection = false;
+        }
+    }
+
+    private function normalizeProductFamily(): void
+    {
+        if ($this->inventory_source !== self::INVENTORY_SOURCE_MANUFACTURED) {
+            $this->product_family_id = null;
+
+            return;
+        }
+
+        if (! $this->company_id) {
+            return;
+        }
+
+        if (! $this->product_family_id) {
+            $this->product_family_id = ProductFamily::defaultForCompany((int) $this->company_id)?->id;
+
+            return;
+        }
+
+        $belongsToCompany = ProductFamily::query()->withoutGlobalScopes()
+            ->whereKey($this->product_family_id)
+            ->where('company_id', $this->company_id)
+            ->exists();
+
+        if (! $belongsToCompany) {
+            throw ValidationException::withMessages([
+                'product_family_id' => 'The selected product family does not belong to this company.',
+            ]);
+        }
+    }
+
     protected function casts(): array
     {
         return [
@@ -270,6 +432,11 @@ class Product extends Model
             'conversion_factor' => 'decimal:4',
             'purchase_conversion_factor' => 'decimal:4',
             'allow_fractional_sale' => 'boolean',
+            'requires_curing' => 'boolean',
+            'requires_quality_control' => 'boolean',
+            'requires_pre_release_inspection' => 'boolean',
+            'curing_days_required' => 'integer',
+            'sellable_after_days' => 'integer',
             'minimum_sale_quantity' => 'decimal:4',
             'quantity_step' => 'decimal:4',
             'uses_product_size' => 'boolean',

@@ -30,6 +30,7 @@ use Illuminate\Support\Facades\Schema;
     'currency',
     'timezone',
     'language',
+    'manufacturing_enabled',
 ])]
 class Company extends Model
 {
@@ -39,6 +40,7 @@ class Company extends Model
     {
         return [
             'show_tax_identifiers_on_receipt' => 'boolean',
+            'manufacturing_enabled' => 'boolean',
         ];
     }
 
@@ -71,10 +73,60 @@ class Company extends Model
         return $this->hasMany(Branch::class);
     }
 
+    public function machines(): HasMany
+    {
+        return $this->hasMany(Machine::class);
+    }
+
+    public function productFamilies(): HasMany
+    {
+        return $this->hasMany(ProductFamily::class);
+    }
+
+    public function productionMoulds(): HasMany
+    {
+        return $this->hasMany(ProductionMould::class);
+    }
+
+    public function productionMouldInstallations(): HasMany
+    {
+        return $this->hasMany(ProductionMouldInstallation::class);
+    }
+
+    public function productionMachineAssignments(): HasMany
+    {
+        return $this->hasMany(ProductionMachineAssignment::class);
+    }
+
+    public function productionRecipes(): HasMany
+    {
+        return $this->hasMany(ProductionRecipe::class);
+    }
+
+    public function productionOrders(): HasMany
+    {
+        return $this->hasMany(ProductionOrder::class);
+    }
+
+    public function productionCuringBatches(): HasMany
+    {
+        return $this->hasMany(ProductionCuringBatch::class);
+    }
+
+    public function productionOrderCostings(): HasMany
+    {
+        return $this->hasMany(ProductionOrderCosting::class);
+    }
+
     public function whatsappLink(): ?string
     {
         $number = preg_replace('/\D+/', '', (string) $this->whatsapp_number);
 
         return $number ? 'https://wa.me/'.$number : null;
+    }
+
+    public function manufacturingEnabled(): bool
+    {
+        return (bool) ($this->manufacturing_enabled ?? false);
     }
 }

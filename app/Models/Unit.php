@@ -33,4 +33,14 @@ class Unit extends Model
     {
         return $this->belongsTo(MeasurementType::class);
     }
+
+    public function recipeOutputs(): HasMany
+    {
+        return $this->hasMany(ProductionRecipe::class, 'output_unit_id');
+    }
+
+    public function recipeItems(): HasMany
+    {
+        return $this->hasMany(ProductionRecipeItem::class, 'material_unit_id');
+    }
 }

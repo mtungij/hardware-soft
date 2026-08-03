@@ -15,4 +15,9 @@ return [
         'drop_or_browse' => 'Dondosha picha hapa au bofya kuchagua',
         'help' => 'JPG, PNG au WebP, hadi MB 2.',
     ],
+    'inventory_source' => [
+        'label' => 'Chanzo cha Stock',
+        'purchased' => 'Inayonunuliwa',
+        'manufactured' => 'Inayotengenezwa',
+    ],
 ];

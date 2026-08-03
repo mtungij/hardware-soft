@@ -38,6 +38,7 @@ state([
     'timezone' => 'Africa/Dar_es_Salaam',
     'language' => 'sw',
     'receipt_footer_message' => '',
+    'manufacturing_enabled' => false,
 ]);
 
 $authorizeCompanySettings = function (): void {
@@ -77,6 +78,7 @@ mount(function () {
     $this->timezone = $this->company?->timezone ?: $setting?->timezone ?: 'Africa/Dar_es_Salaam';
     $this->language = $this->company?->language ?: $setting?->language ?: 'sw';
     $this->receipt_footer_message = $setting?->receipt_footer_message ?: '';
+    $this->manufacturing_enabled = $this->company?->manufacturingEnabled() ?? false;
 });
 
 rules([
@@ -101,6 +103,7 @@ rules([
     'timezone' => ['required', 'string', 'max:100'],
     'language' => ['required', 'in:sw,en'],
     'receipt_footer_message' => ['nullable', 'string', 'max:500'],
+    'manufacturing_enabled' => ['boolean'],
 ]);
 
 $updatedRegion = function () {
@@ -143,6 +146,7 @@ $save = function () {
         'currency' => $data['currency'],
         'timezone' => $data['timezone'],
         'language' => $data['language'],
+        'manufacturing_enabled' => (bool) $data['manufacturing_enabled'],
     ])->save();
 
     $setting = Setting::withoutGlobalScopes()
@@ -239,6 +243,19 @@ $removeLogo = function () {
                     <option value="sw">Kiswahili</option>
                     <option value="en">English</option>
                 </select>
+            </label>
+
+            <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 md:col-span-2">
+                <span>
+                    <span class="block text-sm font-black text-slate-900 dark:text-white">{{ __('company.manufacturing.title') }}</span>
+                    <span class="mt-1 block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('company.manufacturing.enable') }}</span>
+                    <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">{{ __('company.manufacturing.description') }}</span>
+                </span>
+                <input
+                    type="checkbox"
+                    wire:model="manufacturing_enabled"
+                    class="h-5 w-5 shrink-0 rounded border-slate-300 text-build-orange focus:ring-build-orange"
+                >
             </label>
 
             <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800 md:row-span-2">

@@ -4,14 +4,17 @@ use App\Models\Branch;
 use App\Models\Category;
 use App\Models\MeasurementType;
 use App\Models\Product;
+use App\Models\ProductFamily;
 use App\Models\ProductSize;
 use App\Models\Unit;
+use App\Support\CompanyFeatures;
 use App\Support\ProductMeasurementOptions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\WithFileUploads;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
 
@@ -37,6 +40,16 @@ state([
     'image' => '',
     'image_upload' => null,
     'remove_image' => false,
+    'inventory_source' => Product::INVENTORY_SOURCE_PURCHASED,
+    'product_family_id' => '',
+    'family_defaults_applied' => false,
+    'requires_curing' => false,
+    'curing_days_required' => '',
+    'sellable_after_days' => '',
+    'curing_notes' => '',
+    'requires_quality_control' => false,
+    'requires_pre_release_inspection' => false,
+    'quality_notes' => '',
     'buying_price' => '0',
     'selling_price' => '0',
     'wholesale_price' => '',
@@ -51,6 +64,12 @@ state([
     'status' => 'active',
 ]);
 
+mount(function (): void {
+    if (CompanyFeatures::manufacturingEnabled() && CompanyFeatures::companyId()) {
+        ProductFamily::ensureDefaultsForCompany((int) CompanyFeatures::companyId());
+    }
+});
+
 $measurementCode = fn () => MeasurementType::query()->whereKey($this->measurement_type_id)->value('code');
 $isLength = fn () => $this->measurementCode() === MeasurementType::LENGTH;
 $isCount = fn () => $this->measurementCode() === MeasurementType::COUNT;
@@ -60,6 +79,9 @@ $showsProductSize = fn () => (bool) $this->uses_product_size
     || $this->isLength()
     || $this->categorySupportsProductSizes();
 $showsFractionalConfiguration = fn () => filled($this->measurement_type_id) && ! $this->isCount();
+$manufacturingEnabled = fn () => CompanyFeatures::manufacturingEnabled();
+$showsCuringConfiguration = fn () => $this->manufacturingEnabled()
+    && $this->inventory_source === Product::INVENTORY_SOURCE_MANUFACTURED;
 $requiresUnitConversion = fn () => filled($this->unit_id)
     && filled($this->selling_unit_id)
     && (string) $this->unit_id !== (string) $this->selling_unit_id;
@@ -159,6 +181,46 @@ $updatedCategoryId = function () {
     }
 };
 
+$updatedInventorySource = function () {
+    if (! $this->showsCuringConfiguration()) {
+        $this->product_family_id = '';
+        $this->family_defaults_applied = false;
+        $this->requires_curing = false;
+        $this->curing_days_required = '';
+        $this->sellable_after_days = '';
+        $this->curing_notes = '';
+        $this->requires_quality_control = false;
+        $this->requires_pre_release_inspection = false;
+        $this->quality_notes = '';
+    } else {
+        $this->product_family_id = (string) (ProductFamily::defaultForCompany((int) CompanyFeatures::companyId())?->id ?? '');
+        $this->updatedProductFamilyId();
+    }
+};
+
+$updatedProductFamilyId = function (): void {
+    if (! $this->showsCuringConfiguration() || ! filled($this->product_family_id)) {
+        return;
+    }
+
+    $family = ProductFamily::query()->forCurrentCompany()->active()->findOrFail($this->product_family_id);
+    $defaults = $family->authoringDefaults();
+    $this->requires_curing = (bool) $defaults['requires_curing'];
+    $this->curing_days_required = $defaults['curing_days_required'] !== null ? (string) $defaults['curing_days_required'] : '';
+    $this->sellable_after_days = $defaults['sellable_after_days'] !== null ? (string) $defaults['sellable_after_days'] : '';
+    $this->requires_quality_control = (bool) $defaults['requires_quality_control'];
+    $this->requires_pre_release_inspection = false;
+    if ($defaults['unit_id']) {
+        $this->unit_id = (string) $defaults['unit_id'];
+        $this->purchase_unit_id = (string) $defaults['unit_id'];
+        $this->purchase_conversion_factor = '1';
+    }
+    if ($defaults['selling_unit_id']) {
+        $this->selling_unit_id = (string) $defaults['selling_unit_id'];
+    }
+    $this->family_defaults_applied = true;
+};
+
 $updatedImageUpload = function () {
     $this->remove_image = false;
     $this->validateOnly('image_upload', $this->rules());
@@ -221,6 +283,22 @@ $rules = fn () => [
     'image' => ['nullable', 'string', 'max:255'],
     'image_upload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
     'remove_image' => ['boolean'],
+    'inventory_source' => $this->manufacturingEnabled()
+        ? ['required', Rule::in([Product::INVENTORY_SOURCE_PURCHASED, Product::INVENTORY_SOURCE_MANUFACTURED])]
+        : ['nullable'],
+    'product_family_id' => [
+        $this->showsCuringConfiguration() ? 'required' : 'nullable',
+        Rule::exists('product_families', 'id')->where(fn ($query) => $query
+            ->where('company_id', CompanyFeatures::companyId())->where('active', true)),
+    ],
+    'family_defaults_applied' => ['boolean'],
+    'requires_curing' => ['boolean'],
+    'curing_days_required' => [$this->showsCuringConfiguration() && $this->requires_curing ? 'required' : 'nullable', 'integer', 'min:1', 'max:65535'],
+    'sellable_after_days' => [$this->showsCuringConfiguration() && $this->requires_curing ? 'required' : 'nullable', 'integer', 'min:1', 'max:65535', 'lte:curing_days_required'],
+    'curing_notes' => ['nullable', 'string', 'max:5000'],
+    'requires_quality_control' => ['boolean'],
+    'requires_pre_release_inspection' => ['boolean'],
+    'quality_notes' => ['nullable', 'string', 'max:5000'],
     'buying_price' => ['required', 'numeric', 'min:0'],
     'selling_price' => ['required', 'numeric', 'min:0'],
     'wholesale_price' => ['nullable', 'numeric', 'min:0'],
@@ -239,6 +317,24 @@ $save = function () {
     $validated = $this->validate($this->rules());
     $imageUpload = $validated['image_upload'] ?? null;
     unset($validated['image_upload'], $validated['remove_image']);
+    unset($validated['family_defaults_applied']);
+    $validated['inventory_source'] = $this->manufacturingEnabled()
+        ? $validated['inventory_source']
+        : Product::INVENTORY_SOURCE_PURCHASED;
+    $validated['product_family_id'] = $validated['inventory_source'] === Product::INVENTORY_SOURCE_MANUFACTURED
+        ? $validated['product_family_id']
+        : null;
+    if ($validated['inventory_source'] !== Product::INVENTORY_SOURCE_MANUFACTURED || ! $validated['requires_curing']) {
+        $validated['requires_curing'] = false;
+        $validated['curing_days_required'] = null;
+        $validated['sellable_after_days'] = null;
+        $validated['curing_notes'] = null;
+    }
+    if ($validated['inventory_source'] !== Product::INVENTORY_SOURCE_MANUFACTURED || ! $validated['requires_quality_control']) {
+        $validated['requires_quality_control'] = false;
+        $validated['requires_pre_release_inspection'] = false;
+        $validated['quality_notes'] = null;
+    }
     $validated['branch_id'] = $validated['branch_id'] ?: null;
     $validated['uses_product_size'] = (bool) $validated['uses_product_size']
         || $this->isLength()
@@ -310,6 +406,58 @@ $save = function () {
             <x-form-input label="Barcode" name="barcode" wire:model="barcode" />
 
             <x-product-image-upload :preview-url="$this->imagePreviewUrl()" />
+
+            @if ($this->manufacturingEnabled())
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                    {{ __('products.inventory_source.label') }}
+                    <select wire:model.live="inventory_source" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                        <option value="{{ Product::INVENTORY_SOURCE_PURCHASED }}">{{ __('products.inventory_source.purchased') }}</option>
+                        <option value="{{ Product::INVENTORY_SOURCE_MANUFACTURED }}">{{ __('products.inventory_source.manufactured') }}</option>
+                    </select>
+                    @error('inventory_source') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                </label>
+            @endif
+
+            @if ($this->showsCuringConfiguration())
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60 md:col-span-2 xl:col-span-3">
+                    <label class="block text-sm font-bold text-slate-800 dark:text-slate-200">{{ __('production.product_families.family') }}
+                        <select wire:model.live="product_family_id" class="mt-1 block min-h-11 w-full rounded-lg border border-slate-300 bg-white text-slate-900 focus:border-cyan-500 focus:ring-cyan-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                            <option value="">{{ __('production.product_families.select') }}</option>
+                            @foreach(ProductFamily::query()->forCurrentCompany()->active()->orderBy('name')->get() as $family)<option value="{{ $family->id }}">{{ $family->name }}</option>@endforeach
+                        </select>
+                        @error('product_family_id')<span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span>@enderror
+                    </label>
+                    @if($family_defaults_applied)<p class="mt-2 text-xs font-semibold text-slate-600 dark:text-slate-300">{{ __('production.product_families.defaults_applied') }}</p>@endif
+                </div>
+            @endif
+
+            @if ($this->showsCuringConfiguration())
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10 md:col-span-2 xl:col-span-3">
+                    <label class="flex items-center gap-3 text-sm font-black">
+                        <input type="checkbox" wire:model.live="requires_curing" class="rounded border-slate-300 text-build-orange">
+                        {{ __('production.curing.requires_curing') }}
+                    </label>
+                    @if ($requires_curing)
+                        <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            <x-form-input :label="__('production.curing.sellable_after_days')" name="sellable_after_days" type="number" min="1" wire:model="sellable_after_days" required />
+                            <x-form-input :label="__('production.curing.curing_days_required')" name="curing_days_required" type="number" min="1" wire:model="curing_days_required" required />
+                            <label class="block text-sm font-bold">{{ __('production.curing.notes') }}<textarea wire:model="curing_notes" class="mt-1 block min-h-20 w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"></textarea></label>
+                        </div>
+                    @endif
+                </div>
+            @endif
+
+            @if ($this->showsCuringConfiguration())
+                <div class="rounded-xl border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-500/30 dark:bg-cyan-500/10 md:col-span-2 xl:col-span-3">
+                    <label class="flex items-center gap-3 text-sm font-black"><input type="checkbox" wire:model.live="requires_quality_control" class="rounded border-slate-300 text-build-orange">{{ __('production.quality.requires_quality_control') }}</label>
+                    @if ($requires_quality_control)
+                        <div class="mt-4 grid gap-4 md:grid-cols-2">
+                            <label class="flex items-center gap-3 text-sm font-bold"><input type="checkbox" wire:model="requires_pre_release_inspection" class="rounded border-slate-300 text-build-orange">{{ __('production.quality.requires_pre_release') }}</label>
+                            <label class="block text-sm font-bold">{{ __('production.quality.notes') }}<textarea wire:model="quality_notes" class="mt-1 block min-h-20 w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"></textarea></label>
+                        </div>
+                    @endif
+                </div>
+            @endif
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Category

@@ -809,7 +809,7 @@ $recentTransactions = computed(function (): Collection {
                     <tr>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
-                                <img class="h-10 w-10 rounded-lg object-cover" src="{{ $product->image_url }}" alt="{{ $product->name }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/product-placeholder.svg';">
+                                <x-product-image :product="$product" class="h-10 w-10" />
                                 <span class="font-bold">{{ $product->displayNameWithSize() }}</span>
                             </div>
                         </td>
@@ -873,7 +873,7 @@ $recentTransactions = computed(function (): Collection {
                     <tr>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
-                                <img class="h-10 w-10 rounded-lg object-cover" src="{{ $row->product?->image_url ?? '/images/product-placeholder.svg' }}" alt="{{ $row->product?->name ?? __('products.image.no_image') }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/product-placeholder.svg';">
+                                <x-product-image :product="$row->product" class="h-10 w-10" />
                                 <span class="font-bold">{{ $row->product?->displayNameWithSize() }}</span>
                             </div>
                         </td>

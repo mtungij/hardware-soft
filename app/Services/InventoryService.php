@@ -251,8 +251,9 @@ class InventoryService
                 throw ValidationException::withMessages(['cart' => 'Cart is required.']);
             }
 
-            $location = StockLocation::query()->whereKey($stockLocationId)->lockForUpdate()->firstOrFail();
-            $companyId = (int) $location->company_id;
+            $preferredLocation = StockLocation::query()->whereKey($stockLocationId)->lockForUpdate()->firstOrFail();
+            $companyId = (int) $preferredLocation->company_id;
+            $cashier = User::withoutGlobalScopes()->where('company_id', $companyId)->findOrFail($createdBy);
 
             if (filled($idempotencyKey)) {
                 $existingSale = Sale::withoutGlobalScopes()
@@ -265,16 +266,26 @@ class InventoryService
                 }
             }
 
-            if (! $location->isActive()) {
+            if (! $preferredLocation->isActive()) {
                 throw ValidationException::withMessages(['stock_source' => 'Cannot sell from an inactive stock location.']);
             }
 
-            if (! $location->can_sell) {
+            if (! $preferredLocation->can_sell || ! $preferredLocation->is_sellable) {
                 throw ValidationException::withMessages(['stock_source' => 'Selected stock location is not allowed for sales.']);
             }
 
-            if ((int) $location->branch_id !== $branchId) {
+            if ((int) $preferredLocation->branch_id !== $branchId) {
                 throw ValidationException::withMessages(['stock_source' => 'Selected stock location does not belong to this branch.']);
+            }
+
+            $locationIds = collect($cart)
+                ->map(fn (array $row): int => (int) ($row['stock_location_id'] ?? $preferredLocation->id))
+                ->push($preferredLocation->id)
+                ->unique()->sort()->values();
+            $locations = StockLocation::query()->where('company_id', $companyId)
+                ->whereIn('id', $locationIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            if ($locations->count() !== $locationIds->count()) {
+                throw ValidationException::withMessages(['cart' => 'A selected selling location is outside the current company.']);
             }
 
             $containsCredit = collect($payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
@@ -286,7 +297,7 @@ class InventoryService
                     throw ValidationException::withMessages(['customer_id' => UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
                 }
 
-                $customerId = app(UnassignedCreditCustomerService::class)->forLocation($location)->id;
+                $customerId = app(UnassignedCreditCustomerService::class)->forLocation($preferredLocation)->id;
                 $creditCustomerUnassigned = true;
             }
 
@@ -294,9 +305,25 @@ class InventoryService
             $discount = 0;
             $tax = 0;
             $preparedItems = [];
+            $requestedByLocation = [];
 
-            foreach ($cart as $row) {
-                $product = Product::query()->with(['category', 'measurementType', 'size'])->whereKey($row['product_id'] ?? null)->lockForUpdate()->firstOrFail();
+            foreach ($cart as $index => $row) {
+                $locationId = (int) ($row['stock_location_id'] ?? $preferredLocation->id);
+                /** @var StockLocation|null $location */
+                $location = $locations->get($locationId);
+                if (! $location || ! $location->isActive() || ! $location->can_sell || ! $location->is_sellable
+                    || (int) $location->branch_id !== $branchId) {
+                    throw ValidationException::withMessages(["cart.{$index}.stock_location_id" => 'Select an active, sell-enabled location for this line.']);
+                }
+                if (array_key_exists('stock_location_id', $row) && ! InventorySettings::canUserSellFromLocation($cashier, $location)) {
+                    throw ValidationException::withMessages(["cart.{$index}.stock_location_id" => 'You are not authorised to sell from this location.']);
+                }
+                $product = Product::query()
+                    ->with(['category', 'measurementType', 'size'])
+                    ->where('company_id', $companyId)
+                    ->whereKey($row['product_id'] ?? null)
+                    ->lockForUpdate()
+                    ->firstOrFail();
 
                 if ($product->status !== 'active') {
                     throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' is inactive.']);
@@ -362,11 +389,15 @@ class InventoryService
                 $netUnitPrice = $unitPrice - $discountPerUnit;
                 $netTotal = $quantity * $netUnitPrice;
 
+                StockMovement::query()->where('company_id', $companyId)->where('branch_id', $branchId)
+                    ->where('product_id', $product->id)->where('stock_location_id', $location->id)
+                    ->lockForUpdate()->get();
                 $available = $this->getProductStock($product->id, $location->id, $branchId);
-                $availableSellingQuantity = $available * $conversionFactor;
+                $stockKey = $product->id.':'.$location->id;
+                $requestedByLocation[$stockKey] = ($requestedByLocation[$stockKey] ?? 0) + $baseQuantity;
 
-                if ($baseQuantity > $available) {
-                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' quantity exceeds available stock.']);
+                if ($requestedByLocation[$stockKey] > $available) {
+                    throw ValidationException::withMessages(["cart.{$index}.quantity" => $product->displayNameWithSize().' quantity exceeds available stock at '.InventorySettings::stockLocationLabel($location).'.']);
                 }
 
                 $lineTotal = $netTotal + $itemTax;
@@ -376,6 +407,7 @@ class InventoryService
 
                 $preparedItems[] = [
                     'product' => $product,
+                    'location' => $location,
                     'sale_type' => $saleType,
                     'quantity' => $quantity,
                     'base_quantity' => $baseQuantity,
@@ -431,7 +463,7 @@ class InventoryService
             $sale = Sale::create([
                 'company_id' => $companyId,
                 'branch_id' => $branchId,
-                'stock_location_id' => $location->id,
+                'stock_location_id' => $preferredLocation->id,
                 'customer_id' => $customerId,
                 'credit_customer_unassigned' => $creditCustomerUnassigned,
                 'credit_assignment_status' => $creditCustomerUnassigned ? 'unassigned' : 'assigned',
@@ -460,6 +492,8 @@ class InventoryService
             ]);
 
             foreach ($preparedItems as $item) {
+                /** @var StockLocation $location */
+                $location = $item['location'];
                 $saleItem = $sale->items()->create([
                     'product_id' => $item['product']->id,
                     'product_size_id' => $item['product']->product_size_id,

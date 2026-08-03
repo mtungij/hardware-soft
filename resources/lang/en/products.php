@@ -15,4 +15,9 @@ return [
         'drop_or_browse' => 'Drop image here or click to browse',
         'help' => 'JPG, PNG or WebP, up to 2 MB.',
     ],
+    'inventory_source' => [
+        'label' => 'Inventory Source',
+        'purchased' => 'Purchased',
+        'manufactured' => 'Manufactured',
+    ],
 ];

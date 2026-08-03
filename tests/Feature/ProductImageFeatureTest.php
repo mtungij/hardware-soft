@@ -5,8 +5,10 @@ use App\Models\Company;
 use App\Models\Product;
 use App\Models\StockLocation;
 use App\Models\User;
+use App\Support\ProductAvatar;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Volt\Volt;
@@ -157,14 +159,98 @@ test('products index and pos render lazy product images', function () {
         ->set('search', $product->sku)
         ->assertSee($product->refresh()->image_url, false)
         ->assertSee('loading="lazy"', false)
-        ->assertSee("this.src='/images/product-placeholder.svg'", false);
+        ->assertSee('data-product-image-fallback', false)
+        ->assertSee('this.hidden=true', false);
 
     Volt::test('pos.index')
         ->set('stock_location_id', (string) StockLocation::query()->where('branch_id', $this->admin->branch_id)->firstOrFail()->id)
         ->set('search', $product->sku)
         ->assertSee($product->image_url, false)
         ->assertSee('loading="lazy"', false)
-        ->assertSee("this.src='/images/product-placeholder.svg'", false);
+        ->assertSee('data-product-image-fallback', false)
+        ->assertSee('this.hidden=true', false);
+});
+
+test('product image component renders an actual image above its fallback', function () {
+    $product = Product::query()->firstOrFail();
+    $path = "products/{$product->company_id}/component-image.webp";
+    Storage::disk('public')->put($path, 'browser image bytes');
+    $product->update(['image_path' => $path]);
+
+    $html = Blade::render('<x-product-image :product="$product" class="h-20 w-full sm:h-24 xl:h-28" />', compact('product'));
+
+    expect($html)->toContain('/storage/'.$path)
+        ->toContain('data-product-image-source')
+        ->toContain('data-product-image-fallback')
+        ->toContain('loading="lazy"');
+});
+
+test('product image component renders initials without the generic placeholder', function () {
+    $product = Product::query()->firstOrFail();
+    $product->update(['name' => 'Paving Block 60mm', 'image_path' => null, 'image' => null]);
+
+    $html = Blade::render('<x-product-image :product="$product" class="h-12 w-12" />', compact('product'));
+
+    expect($html)->toContain('data-product-initials="PM"')
+        ->toContain('>PM</span>')
+        ->not->toContain('data-product-image-source')
+        ->not->toContain('/images/product-placeholder.svg');
+});
+
+test('a browser image failure hides the broken image and reveals initials', function () {
+    $product = Product::query()->firstOrFail();
+    $path = "products/{$product->company_id}/broken-in-browser.webp";
+    Storage::disk('public')->put($path, 'not a decodable image');
+    $product->update(['name' => 'Claw Hammer', 'image_path' => $path]);
+
+    $html = Blade::render('<x-product-image :product="$product" class="h-12 w-12" />', compact('product'));
+
+    expect($html)->toContain('data-product-initials="CR"')
+        ->toContain('onerror="this.onerror=null;this.hidden=true;"')
+        ->toContain('data-product-image-fallback');
+});
+
+test('product initials and accent are deterministic and follow naming rules', function () {
+    $examples = [
+        'Ceramic Floor Tiles 40x40' => 'CE',
+        'Claw Hammer' => 'CR',
+        'Electrical Cable 2.5mm Roll' => 'EL',
+        'Paving Block 60mm' => 'PM',
+        'Cement' => 'CT',
+        ' @ ' => 'PR',
+    ];
+
+    foreach ($examples as $name => $initials) {
+        expect(ProductAvatar::for($name, 42)['initials'])->toBe($initials);
+    }
+
+    expect(ProductAvatar::for('Claw Hammer', 42)['classes'])
+        ->toBe(ProductAvatar::for('Renamed Product', 42)['classes'])
+        ->and(ProductAvatar::for('A', 42)['initials'])->toBe('A');
+});
+
+test('pos initials use the first letters of the first and last meaningful words', function () {
+    expect(ProductAvatar::wordInitials('Paving Block 60mm'))->toBe('PB')
+        ->and(ProductAvatar::wordInitials('Ceramic Floor Tiles'))->toBe('CT')
+        ->and(ProductAvatar::wordInitials('Electrical Cable 2.5mm Roll'))->toBe('ER')
+        ->and(ProductAvatar::wordInitials('Heavy Block 6'))->toBe('HB')
+        ->and(ProductAvatar::wordInitials('Gloss Paint 4L'))->toBe('GP')
+        ->and(ProductAvatar::wordInitials('Toyota Oil Filter'))->toBe('TF');
+});
+
+test('pos product avatar preserves premium responsive product card dimensions', function () {
+    $product = Product::query()->firstOrFail();
+    $product->update(['name' => 'Ceramic Floor Tiles 40x40', 'image_path' => null, 'image' => null]);
+
+    Volt::test('pos.index')
+        ->set('search', $product->sku)
+        ->assertSee('data-product-initials="CT"', false)
+        ->assertSee('h-[130px] w-full', false)
+        ->assertSee('bg-[#FF6A00] text-white', false)
+        ->assertSee('text-[56px] font-bold leading-none tracking-[2px]', false)
+        ->assertSee('rounded-[18px]', false)
+        ->assertSee('sm:grid-cols-2 xl:grid-cols-3', false)
+        ->assertDontSee('/images/product-placeholder.svg', false);
 });
 
 test('product forms include gallery and rear camera compatible inputs', function () {

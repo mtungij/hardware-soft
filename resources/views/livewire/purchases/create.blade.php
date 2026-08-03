@@ -7,8 +7,10 @@ use App\Models\StockLocation;
 use App\Models\Supplier;
 use App\Services\AccountingService;
 use App\Services\InventoryService;
+use App\Support\CompanyFeatures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 use function Livewire\Volt\layout;
@@ -136,7 +138,7 @@ $selectProduct = function (int $index, string $productId) {
         return;
     }
 
-    $product = $productId ? Product::query()->find($productId) : null;
+    $product = $productId ? Product::query()->purchasable()->find($productId) : null;
     $costPrice = $this->toNumber($product?->buying_price);
     $sellingPrice = $this->toNumber($product?->selling_price);
 
@@ -178,7 +180,16 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         'grand_total' => ['required', 'numeric', 'min:0'],
         'balance_amount' => ['required', 'numeric', 'min:0'],
         'items' => ['required', 'array', 'min:1'],
-        'items.*.product_id' => ['required', 'exists:products,id'],
+        'items.*.product_id' => [
+            'required',
+            Rule::exists('products', 'id')->where(function ($query): void {
+                $query->where('company_id', auth()->user()->company_id);
+
+                if (CompanyFeatures::manufacturingEnabled()) {
+                    $query->where('inventory_source', Product::INVENTORY_SOURCE_PURCHASED);
+                }
+            }),
+        ],
         'items.*.ordered_quantity' => ['required', 'numeric', 'min:0.01'],
         'items.*.received_quantity' => ['required', 'numeric', 'min:0'],
         'items.*.cost_price' => ['required', 'numeric', 'min:0'],
@@ -374,7 +385,7 @@ $submitPurchase = function () {
                                     >
                                         <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
                                         @if (filled($supplier_id))
-                                    @foreach (Product::with(['purchaseUnit', 'unit', 'size'])->where('status', 'active')->orderBy('name')->get() as $product)
+                                            @foreach (Product::with(['purchaseUnit', 'unit', 'size'])->purchasable()->where('status', 'active')->orderBy('name')->get() as $product)
                                                 @php
                                                     $storeQty = $storeLocation
                                                         ? $inventory->getProductStock($product->id, $storeLocation->id, $stockBranchId)

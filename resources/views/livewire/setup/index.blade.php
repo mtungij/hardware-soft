@@ -2,6 +2,7 @@
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\Machine;
 use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\User;
@@ -12,9 +13,11 @@ use Database\Seeders\HardwareCategorySeeder;
 use Database\Seeders\HardwareProductSeeder;
 use Database\Seeders\HardwareUnitSeeder;
 use Database\Seeders\RolePermissionSeeder;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use Livewire\WithFileUploads;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -47,6 +50,7 @@ state([
     'timezone' => 'Africa/Dar_es_Salaam',
     'language' => 'sw',
     'inventory_stock_mode' => 'warehouse',
+    'manufacturing_enabled' => false,
     'admin_name' => '',
     'admin_phone' => '',
     'admin_email' => '',
@@ -63,6 +67,31 @@ state([
     'branch_manager_name' => '',
     'branch_status' => 'active',
     'branch_is_default' => true,
+    'production_branch' => 'primary',
+    'raw_materials_store_name' => 'Raw Materials Store',
+    'production_area_name' => 'Production Area',
+    'curing_yard_name' => 'Curing Yard',
+    'finished_goods_store_name' => 'Finished Goods Store',
+    'location_sources' => [
+        'raw_materials' => 'recommended',
+        'production_area' => 'recommended',
+        'curing_yard' => 'recommended',
+        'finished_goods' => 'recommended',
+    ],
+    'location_rename_open' => [
+        'raw_materials' => false,
+        'production_area' => false,
+        'curing_yard' => false,
+        'finished_goods' => false,
+    ],
+    'shared_location_confirmed' => false,
+    'machine_section_open' => false,
+    'machine_name' => '',
+    'machine_code' => '',
+    'machine_daily_capacity' => '',
+    'default_sellable_after_days' => '10',
+    'default_curing_days' => '14',
+    'quality_control_preference' => false,
 ]);
 
 $validationRules = fn () => [
@@ -83,6 +112,7 @@ $validationRules = fn () => [
     'timezone' => ['required', 'string', 'max:100'],
     'language' => ['required', 'in:sw,en'],
     'inventory_stock_mode' => ['required', 'in:warehouse,direct'],
+    'manufacturing_enabled' => ['required', 'boolean'],
     'admin_name' => ['required', 'string', 'max:255'],
     'admin_phone' => ['required', 'string', 'max:30'],
     'admin_email' => ['required', 'email', 'max:255', 'unique:users,email'],
@@ -98,6 +128,17 @@ $validationRules = fn () => [
     'branch_manager_name' => ['nullable', 'string', 'max:255'],
     'branch_status' => ['required', 'in:active,inactive'],
     'branch_is_default' => ['boolean'],
+    'production_branch' => [$this->manufacturing_enabled ? 'required' : 'nullable', 'in:primary'],
+    'raw_materials_store_name' => [$this->manufacturing_enabled ? 'required' : 'nullable', 'string', 'max:255'],
+    'production_area_name' => [$this->manufacturing_enabled ? 'required' : 'nullable', 'string', 'max:255'],
+    'curing_yard_name' => [$this->manufacturing_enabled ? 'required' : 'nullable', 'string', 'max:255'],
+    'finished_goods_store_name' => [$this->manufacturing_enabled ? 'required' : 'nullable', 'string', 'max:255'],
+    'machine_name' => [$this->manufacturing_enabled && $this->machine_section_open && (filled($this->machine_code) || filled($this->machine_daily_capacity)) ? 'required' : 'nullable', 'string', 'max:255'],
+    'machine_code' => ['nullable', 'string', 'max:100'],
+    'machine_daily_capacity' => ['nullable', 'numeric', 'gt:0'],
+    'default_sellable_after_days' => ['nullable', 'integer', 'gt:0', 'lte:default_curing_days'],
+    'default_curing_days' => ['nullable', 'integer', 'gt:0'],
+    'quality_control_preference' => ['boolean'],
 ];
 
 rules(fn () => $this->validationRules());
@@ -110,11 +151,130 @@ $updatedBranchRegion = function () {
     $this->branch_district = '';
 };
 
+$activeSteps = fn (): array => $this->manufacturing_enabled
+    ? [1 => __('setup.steps.business'), 2 => __('setup.steps.owner'), 3 => __('setup.steps.branch'), 4 => __('setup.steps.production'), 5 => __('setup.steps.review')]
+    : [1 => __('setup.steps.business'), 2 => __('setup.steps.owner'), 3 => __('setup.steps.branch'), 5 => __('setup.steps.review')];
+
+$stepPosition = fn (): int => array_search($this->step, array_keys($this->activeSteps()), true) + 1;
+
+$updatedManufacturingEnabled = function ($value) {
+    $this->manufacturing_enabled = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+    if (! $this->manufacturing_enabled && $this->step === 4) {
+        $this->step = 5;
+    }
+};
+
+$productionLocationDefinitions = fn (): array => [
+    'raw_materials' => [
+        'name_field' => 'raw_materials_store_name',
+        'recommended_name' => 'Raw Materials Store',
+        'title' => __('setup.raw_materials_store'),
+        'type' => __('setup.location_types.warehouse'),
+        'description' => __('setup.location_descriptions.raw_materials'),
+        'icon' => 'archive-box',
+        'tone' => 'amber',
+    ],
+    'production_area' => [
+        'name_field' => 'production_area_name',
+        'recommended_name' => 'Production Area',
+        'title' => __('setup.production_area'),
+        'type' => __('setup.location_types.production'),
+        'description' => __('setup.location_descriptions.production_area'),
+        'icon' => 'building-office',
+        'tone' => 'cyan',
+    ],
+    'curing_yard' => [
+        'name_field' => 'curing_yard_name',
+        'recommended_name' => 'Curing Yard',
+        'title' => __('setup.curing_yard'),
+        'type' => __('setup.location_types.curing'),
+        'description' => __('setup.location_descriptions.curing_yard'),
+        'icon' => 'beaker',
+        'tone' => 'blue',
+    ],
+    'finished_goods' => [
+        'name_field' => 'finished_goods_store_name',
+        'recommended_name' => 'Finished Goods Store',
+        'title' => __('setup.finished_goods_store'),
+        'type' => __('setup.location_types.store'),
+        'description' => __('setup.location_descriptions.finished_goods'),
+        'icon' => 'building-storefront',
+        'tone' => 'emerald',
+    ],
+];
+
+$compatibleSetupLocations = function (string $role): array {
+    if ($this->inventory_stock_mode !== 'warehouse') {
+        return [];
+    }
+
+    return ['main_store' => __('setup.main_store')];
+};
+
+$selectProductionLocation = function (string $role, string $source) {
+    $definition = $this->productionLocationDefinitions()[$role] ?? null;
+    if (! $definition || ! in_array($source, ['recommended', 'main_store'], true)) {
+        return;
+    }
+
+    if ($source === 'main_store' && ! array_key_exists($source, $this->compatibleSetupLocations($role))) {
+        return;
+    }
+
+    $this->location_sources[$role] = $source;
+    $this->{$definition['name_field']} = $source === 'recommended'
+        ? $definition['recommended_name']
+        : 'Main Store';
+    $this->location_rename_open[$role] = false;
+    $this->shared_location_confirmed = false;
+};
+
+$toggleLocationRename = function (string $role) {
+    $definition = $this->productionLocationDefinitions()[$role] ?? null;
+    if (! $definition) {
+        return;
+    }
+
+    $this->location_rename_open[$role] = ! ($this->location_rename_open[$role] ?? false);
+    if ($this->location_rename_open[$role]) {
+        $this->location_sources[$role] = 'custom';
+    }
+    $this->shared_location_confirmed = false;
+};
+
+$toggleMachineSection = function () {
+    $this->machine_section_open = ! $this->machine_section_open;
+};
+
+$locationAssignmentsHaveDuplicates = function (): bool {
+    $names = collect($this->productionLocationDefinitions())
+        ->map(fn ($definition) => mb_strtolower(trim((string) $this->{$definition['name_field']})))
+        ->filter();
+
+    return $names->unique()->count() !== $names->count();
+};
+
+$updatedInventoryStockMode = function ($value) {
+    if ($value !== 'warehouse') {
+        foreach ($this->location_sources as $role => $source) {
+            if ($source === 'main_store') {
+                $this->selectProductionLocation($role, 'recommended');
+            }
+        }
+    }
+};
+
+$updatedRawMaterialsStoreName = fn () => $this->shared_location_confirmed = false;
+$updatedProductionAreaName = fn () => $this->shared_location_confirmed = false;
+$updatedCuringYardName = fn () => $this->shared_location_confirmed = false;
+$updatedFinishedGoodsStoreName = fn () => $this->shared_location_confirmed = false;
+
 $stepFields = function (int $step): array {
     return match ($step) {
-        1 => ['company_name', 'business_type', 'tin_number', 'vrn_number', 'phone', 'whatsapp_number', 'email', 'address', 'region', 'district', 'country', 'logo_upload', 'description', 'currency', 'timezone', 'language', 'inventory_stock_mode'],
+        1 => ['company_name', 'business_type', 'tin_number', 'vrn_number', 'phone', 'whatsapp_number', 'email', 'address', 'region', 'district', 'country', 'logo_upload', 'description', 'currency', 'timezone', 'language', 'inventory_stock_mode', 'manufacturing_enabled'],
         2 => ['admin_name', 'admin_phone', 'admin_email', 'admin_password', 'admin_password_confirmation', 'admin_photo'],
         3 => ['branch_name', 'branch_code', 'branch_phone', 'branch_email', 'branch_address', 'branch_region', 'branch_district', 'branch_manager_name', 'branch_status', 'branch_is_default'],
+        4 => ['production_branch', 'raw_materials_store_name', 'production_area_name', 'curing_yard_name', 'finished_goods_store_name', 'machine_name', 'machine_code', 'machine_daily_capacity', 'default_sellable_after_days', 'default_curing_days', 'quality_control_preference'],
         default => [],
     };
 };
@@ -122,15 +282,25 @@ $stepFields = function (int $step): array {
 $next = function () {
     $rules = collect($this->validationRules())->only($this->stepFields($this->step))->all();
     $this->validate($rules);
-    $this->step = min(4, $this->step + 1);
+    if ($this->step === 4 && $this->locationAssignmentsHaveDuplicates() && ! $this->shared_location_confirmed) {
+        throw ValidationException::withMessages([
+            'shared_location_confirmed' => __('setup.validation.confirm_shared_location'),
+        ]);
+    }
+    $steps = array_keys($this->activeSteps());
+    $position = array_search($this->step, $steps, true);
+    $this->step = $steps[min(count($steps) - 1, $position + 1)];
 };
 
 $back = function () {
-    $this->step = max(1, $this->step - 1);
+    $steps = array_keys($this->activeSteps());
+    $position = array_search($this->step, $steps, true);
+    $this->step = $steps[max(0, $position - 1)];
 };
 
 $goTo = function (int $step) {
-    if ($step < $this->step) {
+    $steps = array_keys($this->activeSteps());
+    if (in_array($step, $steps, true) && array_search($step, $steps, true) < array_search($this->step, $steps, true)) {
         $this->step = $step;
     }
 };
@@ -138,7 +308,26 @@ $goTo = function (int $step) {
 $complete = function () {
     $data = $this->validate();
 
-    DB::transaction(function () use ($data) {
+    if (! $data['manufacturing_enabled']) {
+        foreach (['production_branch', 'raw_materials_store_name', 'production_area_name', 'curing_yard_name', 'finished_goods_store_name', 'machine_name', 'machine_code', 'machine_daily_capacity', 'default_sellable_after_days', 'default_curing_days'] as $field) {
+            $data[$field] = null;
+        }
+        $data['quality_control_preference'] = false;
+    } else {
+        if ($this->locationAssignmentsHaveDuplicates() && ! $this->shared_location_confirmed) {
+            throw ValidationException::withMessages([
+                'shared_location_confirmed' => __('setup.validation.confirm_shared_location'),
+            ]);
+        }
+
+        if (! $this->machine_section_open) {
+            foreach (['machine_name', 'machine_code', 'machine_daily_capacity'] as $field) {
+                $data[$field] = null;
+            }
+        }
+    }
+
+    $result = DB::transaction(function () use ($data) {
         $branchHasCompanyId = Schema::hasColumn('branches', 'company_id');
         $stockLocationHasCompanyId = Schema::hasColumn('stock_locations', 'company_id');
         $userHasCompanyId = Schema::hasColumn('users', 'company_id');
@@ -164,9 +353,8 @@ $complete = function () {
             'currency' => $data['currency'],
             'timezone' => $data['timezone'],
             'language' => $data['language'],
+            'manufacturing_enabled' => (bool) $data['manufacturing_enabled'],
         ]);
-
-        Branch::query()->where('is_default', true)->update(['is_default' => false]);
 
         $branchAttributes = [
             'code' => strtoupper($data['branch_code'] ?: 'MAIN'),
@@ -235,6 +423,48 @@ $complete = function () {
                 ->update(['status' => 'inactive']);
         }
 
+        $productionLocations = collect();
+        if ($data['manufacturing_enabled']) {
+            $locationDefinitions = [
+                ['code' => 'RAW-MATERIALS', 'name' => $data['raw_materials_store_name'], 'type' => 'warehouse', 'sellable' => false],
+                ['code' => 'PRODUCTION-AREA', 'name' => $data['production_area_name'], 'type' => 'other', 'sellable' => false],
+                ['code' => 'CURING-YARD', 'name' => $data['curing_yard_name'], 'type' => 'curing', 'sellable' => false],
+                ['code' => 'FINISHED-GOODS', 'name' => $data['finished_goods_store_name'], 'type' => 'store', 'sellable' => true],
+            ];
+
+            foreach ($locationDefinitions as $definition) {
+                $query = StockLocation::query()->where('branch_id', $branch->id)
+                    ->when($stockLocationHasCompanyId, fn ($query) => $query->where('company_id', $company->id));
+                $location = $query->where(fn ($locationQuery) => $locationQuery
+                    ->where('code', $definition['code'])
+                    ->orWhereRaw('LOWER(name) = ?', [mb_strtolower(trim($definition['name']))]))
+                    ->first();
+
+                if (! $location) {
+                    $location = new StockLocation;
+                    if ($stockLocationHasCompanyId) {
+                        $location->company_id = $company->id;
+                    }
+                    $location->branch_id = $branch->id;
+                }
+
+                $location->forceFill([
+                    'code' => $definition['code'],
+                    'name' => trim($definition['name']),
+                    'type' => $definition['type'],
+                    'status' => 'active',
+                    'is_active' => true,
+                    'can_receive_stock' => true,
+                    'can_issue_stock' => true,
+                    'can_transfer' => true,
+                    'can_sell' => $definition['sellable'],
+                    'is_sellable' => $definition['sellable'],
+                    'is_warehouse' => $definition['type'] === 'warehouse',
+                ])->save();
+                $productionLocations->put($definition['code'], $location);
+            }
+        }
+
         $enableWarehouse = $data['inventory_stock_mode'] === 'warehouse';
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
@@ -263,6 +493,22 @@ $complete = function () {
         $user->assignRole($role);
         $user->syncPermissions($permissions);
 
+        $machine = null;
+        if ($data['manufacturing_enabled'] && filled($data['machine_name'])) {
+            $machine = Machine::query()->firstOrCreate(
+                ['company_id' => $company->id, 'name' => trim($data['machine_name'])],
+                [
+                    'branch_id' => $branch->id,
+                    'code' => filled($data['machine_code']) ? strtoupper(trim($data['machine_code'])) : null,
+                    'daily_capacity' => filled($data['machine_daily_capacity']) ? $data['machine_daily_capacity'] : null,
+                    'capacity_unit' => 'pcs_per_day',
+                    'status' => Machine::STATUS_ACTIVE,
+                    'created_by' => $user->id,
+                    'updated_by' => $user->id,
+                ]
+            );
+        }
+
         if ($company->business_type === 'Auto Spare Parts') {
             (new AutoPartsCategorySeeder($company->id, $branch->id))->run();
             (new AutoPartsUnitSeeder($company->id, $branch->id))->run();
@@ -273,7 +519,9 @@ $complete = function () {
             (new HardwareProductSeeder($company->id, $branch->id))->run();
         }
 
-        $setting = Setting::query()->first() ?: new Setting;
+        $setting = $settingHasCompanyId
+            ? Setting::query()->firstOrNew(['company_id' => $company->id])
+            : (Setting::query()->first() ?: new Setting);
         $settingData = [
             'company_name' => $company->company_name,
             'business_type' => $company->business_type,
@@ -305,7 +553,22 @@ $complete = function () {
         }
 
         $setting->fill($settingData)->save();
+
+        return ['company' => $company, 'user' => $user, 'branch' => $branch, 'locations' => $productionLocations, 'machine' => $machine];
     });
+
+    if ($data['manufacturing_enabled']) {
+        Auth::loginUsingId($result['user']->id);
+        session()->regenerate();
+        session()->put('production_setup_suggestions', [
+            'default_sellable_after_days' => $data['default_sellable_after_days'],
+            'default_curing_days' => $data['default_curing_days'],
+            'quality_control_preference' => (bool) $data['quality_control_preference'],
+        ]);
+        $this->redirectRoute('production.setup-checklist', navigate: false);
+
+        return;
+    }
 
     session()->flash('success', 'System setup completed. Sign in with your Super Admin account.');
     $this->redirectRoute('login', navigate: false);
@@ -332,20 +595,20 @@ $complete = function () {
 
         <div class="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div class="flex items-center justify-between gap-4">
-                <p class="text-sm font-black text-navy-900 dark:text-white">Step {{ $step }} of 4</p>
-                <p class="text-xs font-bold uppercase tracking-wide text-slate-400">{{ [1 => 'Business', 2 => 'Owner', 3 => 'Branch', 4 => 'Review'][$step] }}</p>
+                <p class="text-sm font-black text-navy-900 dark:text-white">{{ __('setup.progress', ['current' => $this->stepPosition(), 'total' => count($this->activeSteps())]) }}</p>
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-400">{{ $this->activeSteps()[$step] }}</p>
             </div>
             <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                <div class="h-full rounded-full bg-cyan-500 transition-all duration-300" style="width: {{ ($step / 4) * 100 }}%"></div>
+                <div class="h-full rounded-full bg-cyan-500 transition-all duration-300" style="width: {{ ($this->stepPosition() / count($this->activeSteps())) * 100 }}%"></div>
             </div>
         </div>
 
         <div class="grid gap-6 lg:grid-cols-[280px_1fr]">
             <aside class="overflow-x-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-soft dark:border-slate-800 dark:bg-slate-900 lg:sticky lg:top-6 lg:self-start lg:overflow-visible lg:p-4">
                 <div class="flex min-w-max gap-2 lg:block lg:min-w-0 lg:space-y-2">
-                @foreach ([1 => 'Hardware Business Information', 2 => 'Super Admin Account', 3 => 'Branch Information', 4 => 'Review & Complete'] as $number => $label)
+                @foreach ($this->activeSteps() as $number => $label)
                     <button type="button" wire:click="goTo({{ $number }})" class="flex w-52 shrink-0 items-center gap-3 rounded-xl px-3 py-3 text-left transition lg:w-full {{ $step === $number ? 'bg-cyan-50 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-300' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5' }}">
-                        <span class="grid h-9 w-9 place-items-center rounded-lg {{ $step >= $number ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-white/10' }}">{{ $number }}</span>
+                        <span class="grid h-9 w-9 place-items-center rounded-lg {{ $this->stepPosition() >= $loop->iteration ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-white/10' }}">{{ $loop->iteration }}</span>
                         <span class="min-w-0 text-sm font-black leading-tight">{{ $label }}</span>
                     </button>
                 @endforeach
@@ -553,6 +816,23 @@ $complete = function () {
     @enderror
 </div>
 </div>
+                            <div class="md:col-span-2 rounded-2xl border border-cyan-200 bg-cyan-50/60 p-4 dark:border-cyan-500/30 dark:bg-cyan-500/10 sm:p-5">
+                                <p class="text-xs font-black uppercase tracking-wide text-cyan-700 dark:text-cyan-300">{{ __('setup.business_operations') }}</p>
+                                <h2 class="mt-1 text-xl font-black">{{ __('setup.manufacturing_question') }}</h2>
+                                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                                    <label class="cursor-pointer rounded-xl border p-4 transition {{ ! $manufacturing_enabled ? 'border-cyan-500 bg-white ring-2 ring-cyan-500/20 dark:bg-slate-950' : 'border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-950/60' }}">
+                                        <input type="radio" wire:model.live="manufacturing_enabled" value="0" class="sr-only">
+                                        <span class="block text-base font-black">{{ __('setup.manufacturing_no') }}</span>
+                                        <span class="mt-1 block text-sm text-slate-500">{{ __('setup.manufacturing_no_help') }}</span>
+                                    </label>
+                                    <label class="cursor-pointer rounded-xl border p-4 transition {{ $manufacturing_enabled ? 'border-cyan-500 bg-white ring-2 ring-cyan-500/20 dark:bg-slate-950' : 'border-slate-200 bg-white/70 dark:border-slate-700 dark:bg-slate-950/60' }}">
+                                        <input type="radio" wire:model.live="manufacturing_enabled" value="1" class="sr-only">
+                                        <span class="block text-base font-black">{{ __('setup.manufacturing_yes') }}</span>
+                                        <span class="mt-1 block text-sm text-slate-500">{{ __('setup.manufacturing_yes_help') }}</span>
+                                    </label>
+                                </div>
+                                @error('manufacturing_enabled')<span class="mt-2 block text-xs font-semibold text-red-600">{{ $message }}</span>@enderror
+                            </div>
                         </div>
                     </div>
                 @elseif ($step === 2)
@@ -593,6 +873,98 @@ $complete = function () {
                             <div class="md:col-span-2"><x-form-textarea label="Address" name="branch_address" wire:model="branch_address" rows="3" /></div>
                         </div>
                     </div>
+                @elseif ($step === 4 && $manufacturing_enabled)
+                    <div>
+                        <h1 class="text-2xl font-black">{{ __('setup.production_setup') }}</h1>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('setup.production_setup_help') }}</p>
+                        <div class="mt-6">
+                            <label for="production_branch" class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                                {{ __('setup.production_branch') }}
+                                <select id="production_branch" wire:model="production_branch" class="mt-1 block min-h-11 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950">
+                                    <option value="primary">{{ $branch_name }} ({{ $branch_code }})</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div class="mt-6 grid min-w-0 gap-4 md:grid-cols-2">
+                            @foreach ($this->productionLocationDefinitions() as $role => $definition)
+                                @php
+                                    $nameField = $definition['name_field'];
+                                    $currentName = $this->{$nameField};
+                                @endphp
+                                <x-setup.production-location-card
+                                    :role="$role"
+                                    :definition="$definition"
+                                    :name-field="$nameField"
+                                    :current-name="$currentName"
+                                    :source="$location_sources[$role]"
+                                    :rename-open="$location_rename_open[$role]"
+                                    :existing-locations="$this->compatibleSetupLocations($role)"
+                                />
+                            @endforeach
+                        </div>
+
+                        @if ($this->locationAssignmentsHaveDuplicates())
+                            <div class="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100" role="alert" aria-live="polite">
+                                <div class="flex items-start gap-3">
+                                    <svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-300" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M8.485 2.495c.673-1.17 2.357-1.17 3.03 0l6.28 10.91c.67 1.165-.171 2.62-1.515 2.62H3.72c-1.344 0-2.185-1.455-1.515-2.62l6.28-10.91ZM10 6a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 6Zm0 7.75a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
+                                    <div>
+                                        <h2 class="font-black">{{ __('setup.shared_location_title') }}</h2>
+                                        <p class="mt-1 text-sm leading-6">{{ __('setup.shared_location_warning') }}</p>
+                                        <label class="mt-3 flex cursor-pointer items-start gap-2 text-sm font-bold">
+                                            <input type="checkbox" wire:model.live="shared_location_confirmed" class="mt-0.5 rounded border-amber-400 text-amber-600 focus:ring-amber-500">
+                                            <span>{{ __('setup.confirm_shared_location') }}</span>
+                                        </label>
+                                        @error('shared_location_confirmed')<span class="mt-2 block text-xs font-semibold text-red-700 dark:text-red-300" role="alert">{{ $message }}</span>@enderror
+                                    </div>
+                                </div>
+                            </div>
+                        @endif
+
+                        <div class="mt-6 overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-700">
+                            <button type="button" wire:click="toggleMachineSection" class="flex min-h-14 w-full items-center justify-between gap-4 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-white/5" aria-expanded="{{ $machine_section_open ? 'true' : 'false' }}" aria-controls="first-machine-fields">
+                                <span class="flex items-center gap-3 font-black">
+                                    <span class="grid h-9 w-9 place-items-center rounded-lg bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-200" aria-hidden="true">
+                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.75 2.75a.75.75 0 0 0-1.5 0v6.5h-6.5a.75.75 0 0 0 0 1.5h6.5v6.5a.75.75 0 0 0 1.5 0v-6.5h6.5a.75.75 0 0 0 0-1.5h-6.5v-6.5Z"/></svg>
+                                    </span>
+                                    {{ __('setup.first_machine_optional') }}
+                                </span>
+                                <svg class="h-5 w-5 shrink-0 text-slate-400 transition {{ $machine_section_open ? 'rotate-180' : '' }}" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd"/></svg>
+                            </button>
+                            @if ($machine_section_open)
+                            <div id="first-machine-fields" class="grid gap-4 border-t border-slate-200 p-4 md:grid-cols-3 dark:border-slate-700">
+                                <x-form-input :label="__('setup.machine_name')" name="machine_name" wire:model="machine_name" />
+                                <x-form-input :label="__('setup.machine_code')" name="machine_code" wire:model="machine_code" />
+                                <x-form-input :label="__('setup.daily_capacity')" name="machine_daily_capacity" type="number" min="0.0001" step="0.0001" wire:model="machine_daily_capacity" />
+                            </div>
+                            @endif
+                        </div>
+
+                        <div class="mt-6 rounded-2xl border border-slate-200 p-4 dark:border-slate-700 sm:p-5">
+                            <h2 class="font-black">{{ __('setup.curing_defaults_title') }}</h2>
+                            <div class="mt-4 grid min-w-0 gap-4 md:grid-cols-2">
+                                <div>
+                                    <x-form-input :label="__('setup.earliest_selling_day')" name="default_sellable_after_days" type="number" min="1" wire:model="default_sellable_after_days" />
+                                    <p class="mt-1 text-xs leading-5 text-slate-500">{{ __('setup.earliest_selling_day_help') }}</p>
+                                </div>
+                                <div>
+                                    <x-form-input :label="__('setup.full_curing_days')" name="default_curing_days" type="number" min="1" wire:model="default_curing_days" />
+                                    <p class="mt-1 text-xs leading-5 text-slate-500">{{ __('setup.full_curing_days_help') }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 rounded-2xl border border-cyan-200 bg-cyan-50/70 p-4 dark:border-cyan-500/30 dark:bg-cyan-500/10 sm:p-5">
+                            <label class="flex cursor-pointer items-start gap-3" for="quality_control_preference">
+                                <input id="quality_control_preference" type="checkbox" wire:model="quality_control_preference" class="mt-1 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">
+                                <span>
+                                    <span class="block font-black text-slate-950 dark:text-white">{{ __('setup.quality_control') }}</span>
+                                    <span class="mt-1 block text-sm leading-6 text-slate-600 dark:text-slate-300">{{ __('setup.quality_description') }}</span>
+                                    <span class="mt-2 block text-xs font-semibold leading-5 text-cyan-800 dark:text-cyan-200">{{ __('setup.quality_help') }}</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
                 @else
                     <div>
                         <h1 class="text-2xl font-black">Review & Complete</h1>
@@ -607,13 +979,21 @@ $complete = function () {
                             <x-card title="Branch Information">
                                 <dl class="space-y-2 text-sm"><dt class="font-black">Branch</dt><dd>{{ $branch_name }}</dd><dt class="font-black">Code</dt><dd>{{ $branch_code }}</dd><dt class="font-black">Manager</dt><dd>{{ $branch_manager_name ?: $admin_name }}</dd><dt class="font-black">Default</dt><dd>{{ $branch_is_default ? 'Yes' : 'No' }}</dd></dl>
                             </x-card>
+                            @unless ($manufacturing_enabled)
+                                <x-card :title="__('setup.business_operations')"><dl class="space-y-2 text-sm"><dt class="font-black">{{ __('setup.manufacturing_enabled') }}</dt><dd>{{ __('setup.no') }}</dd></dl></x-card>
+                            @endunless
+                            @if ($manufacturing_enabled)
+                                <x-card :title="__('setup.production_setup')">
+                                    <dl class="space-y-2 text-sm"><dt class="font-black">{{ __('setup.manufacturing_enabled') }}</dt><dd>{{ __('setup.yes') }}</dd><dt class="font-black">{{ __('setup.production_branch') }}</dt><dd>{{ $branch_name }}</dd><dt class="font-black">{{ __('setup.production_locations') }}</dt><dd>{{ $raw_materials_store_name }}, {{ $production_area_name }}, {{ $curing_yard_name }}, {{ $finished_goods_store_name }}</dd>@if($machine_section_open && filled($machine_name))<dt class="font-black">{{ __('setup.first_machine_optional') }}</dt><dd>{{ $machine_name }}{{ filled($machine_code) ? ' · '.$machine_code : '' }}</dd>@endif<dt class="font-black">{{ __('setup.curing_defaults') }}</dt><dd>{{ $default_sellable_after_days }} / {{ $default_curing_days }} {{ __('setup.days') }}</dd><dt class="font-black">{{ __('setup.quality_control') }}</dt><dd>{{ $quality_control_preference ? __('setup.yes') : __('setup.no') }}</dd></dl>
+                                </x-card>
+                            @endif
                         </div>
                     </div>
                 @endif
 
                 <div class="mt-8 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 dark:border-slate-800 sm:flex-row sm:justify-between">
                     <button type="button" wire:click="back" @disabled($step === 1) class="rounded-xl border border-slate-200 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700">Back</button>
-                    @if ($step < 4)
+                    @if ($step !== 5)
                         <button type="button" wire:click="next" class="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-cyan-500/20" wire:loading.attr="disabled">Next</button>
                     @else
                         <button type="button" wire:click="complete" class="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-cyan-500/20" wire:loading.attr="disabled">

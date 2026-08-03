@@ -17,7 +17,6 @@ layout('layouts.app');
 state([
     'branch_id' => '',
     'stock_location_id' => '',
-    'pending_stock_location_id' => '',
     'search' => '',
     'barcode' => '',
     'customer_id' => '',
@@ -72,45 +71,13 @@ $currentSaleLocation = function () {
     return $locations->firstWhere('id', (int) $this->stock_location_id);
 };
 
-$hasSelectedSaleLocation = fn () => filled($this->stock_location_id) && (bool) $this->currentSaleLocation();
-
 $applyStockLocation = function ($locationId) {
     $this->stock_location_id = filled($locationId) ? (string) $locationId : '';
-    $this->pending_stock_location_id = '';
-    $this->search = '';
-    $this->barcode = '';
     $this->resetErrorBag(['stock_location_id', 'cart']);
 };
 
 $requestStockLocationChange = function ($locationId) {
-    $locationId = filled($locationId) ? (string) $locationId : '';
-
-    if ($locationId === (string) $this->stock_location_id) {
-        return;
-    }
-
-    if ($this->cart !== []) {
-        $this->pending_stock_location_id = $locationId;
-        $this->dispatch('open-modal', 'confirm-selling-location-change');
-
-        return;
-    }
-
     $this->applyStockLocation($locationId);
-};
-
-$confirmStockLocationChange = function () {
-    $locationId = $this->pending_stock_location_id;
-    $this->cart = [];
-    $this->syncDefaultPaymentAmount();
-    $this->unassigned_credit_confirmed = false;
-    $this->applyStockLocation($locationId);
-    $this->dispatch('close-modal', 'confirm-selling-location-change');
-};
-
-$cancelStockLocationChange = function () {
-    $this->pending_stock_location_id = '';
-    $this->dispatch('close-modal', 'confirm-selling-location-change');
 };
 
 $priceForProduct = function (Product $product): string {
@@ -233,25 +200,104 @@ $updatedPayments = function () {
     $this->syncDefaultPaymentAmount();
 };
 
-$updatedCart = function () {
+$updatedCart = function ($value = null, $key = null) {
     $this->syncDefaultPaymentAmount();
-};
 
-$addProduct = function (int $productId) {
-    if (! $this->hasSelectedSaleLocation()) {
-        $this->addError('stock_location_id', \App\Support\UiText::translate('Select Selling Location'));
-
+    if (! is_string($key) || ! str_ends_with($key, '.quantity')) {
         return;
     }
+
+    $index = (int) str($key)->before('.')->toString();
+    $item = $this->cart[$index] ?? null;
+    if (! $item || blank($item['stock_location_id'] ?? null)) {
+        return;
+    }
+
+    $selected = $this->stockByLocationForProduct((int) $item['product_id'])
+        ->firstWhere('id', (int) $item['stock_location_id']);
+    $available = (float) ($selected['stock'] ?? 0) * max(0.0001, (float) ($item['conversion_factor'] ?? 1));
+
+    if ((float) $value > $available) {
+        $this->addError("cart.{$index}.quantity", 'Quantity exceeds stock available at '.($item['stock_location_name'] ?? 'the selected location').'.');
+    } else {
+        $this->resetErrorBag("cart.{$index}.quantity");
+    }
+};
+
+$locationBalancesForProduct = function (int $productId) {
+    $preferredId = filled($this->stock_location_id) ? (int) $this->stock_location_id : null;
+
+    return $this->allowedSaleLocations()
+        ->map(function (StockLocation $location) use ($productId): array {
+            return [
+                'id' => $location->id,
+                'name' => InventorySettings::stockLocationLabel($location),
+                'stock' => app(InventoryService::class)->getProductStock($productId, $location->id, (int) $this->branch_id),
+            ];
+        })
+        ->sortBy(fn (array $row): array => [$row['id'] === $preferredId ? 0 : 1, $row['name']])
+        ->values();
+};
+
+$stockByLocationForProduct = function (int $productId) {
+    return $this->locationBalancesForProduct($productId)
+        ->filter(fn (array $row): bool => $row['stock'] > 0)
+        ->values();
+};
+
+$changeLineLocation = function (int $index, $locationId): void {
+    if (! isset($this->cart[$index])) {
+        return;
+    }
+    $locationId = (int) $locationId;
+    $productId = (int) $this->cart[$index]['product_id'];
+    $locations = $this->stockByLocationForProduct($productId);
+    $selected = $locations->firstWhere('id', $locationId);
+    if (! $selected) {
+        $this->addError("cart.{$index}.stock_location_id", 'Select an authorised location with available stock.');
+        return;
+    }
+    $duplicate = collect($this->cart)->contains(fn (array $item, int $itemIndex): bool => $itemIndex !== $index
+        && (int) $item['product_id'] === $productId
+        && (int) ($item['stock_location_id'] ?? 0) === $locationId);
+    if ($duplicate) {
+        $this->addError("cart.{$index}.stock_location_id", 'This product already has a cart line for that location.');
+        return;
+    }
+    $this->cart[$index]['stock_location_id'] = $locationId;
+    $this->cart[$index]['stock_location_name'] = $selected['name'];
+    $conversionFactor = max(0.0001, (float) ($this->cart[$index]['conversion_factor'] ?? 1));
+    if ((float) $this->cart[$index]['quantity'] > $selected['stock'] * $conversionFactor) {
+        $this->addError("cart.{$index}.quantity", 'Quantity exceeds stock available at '.$selected['name'].'.');
+    } else {
+        $this->resetErrorBag(["cart.{$index}.quantity", "cart.{$index}.stock_location_id"]);
+    }
+};
+
+$addProduct = function (int $productId, $locationId = null) {
+    $locations = $this->stockByLocationForProduct($productId);
+    if ($locations->isEmpty()) {
+        $this->addError('cart', 'This product has no stock in an authorised selling location.');
+        return;
+    }
+    if (filled($locationId)) {
+        $selectedLocation = $locations->firstWhere('id', (int) $locationId);
+        if (! $selectedLocation) {
+            $this->addError('cart', 'Select an authorised location with available stock.');
+            return;
+        }
+    } elseif ($locations->count() === 1) {
+        $selectedLocation = $locations->first();
+    } else {
+        $this->addError('cart', 'Select the source location for this product.');
+        return;
+    }
+    $this->resetErrorBag('cart');
 
     $product = Product::query()->with(['category', 'measurementType', 'unit', 'sellingUnit', 'size'])->findOrFail($productId);
     $supportsFractionalSales = $product->allowsDecimalQuantities();
     $conversionFactor = $product->saleConversionFactor();
-    $baseStock = app(InventoryService::class)->getProductStock(
-        $productId,
-        (int) $this->currentSaleLocation()->id,
-        (int) $this->branch_id,
-    );
+    $baseStock = (float) $selectedLocation['stock'];
     $available = $baseStock * $conversionFactor;
 
     if ($available <= 0) {
@@ -267,7 +313,7 @@ $addProduct = function (int $productId) {
     }
 
     foreach ($this->cart as $index => $item) {
-        if ((int) $item['product_id'] === $productId) {
+        if ((int) $item['product_id'] === $productId && (int) ($item['stock_location_id'] ?? 0) === (int) $selectedLocation['id']) {
             $step = $supportsFractionalSales ? max(0.0001, (float) ($product->quantity_step ?: 1)) : 1;
             $this->cart[$index]['quantity'] = (string) min($available, (float) $item['quantity'] + $step);
             $this->cart[$index]['sale_type'] = $this->sale_type;
@@ -280,6 +326,8 @@ $addProduct = function (int $productId) {
 
     $this->cart[] = [
         'product_id' => $product->id,
+        'stock_location_id' => (int) $selectedLocation['id'],
+        'stock_location_name' => $selectedLocation['name'],
         'name' => $product->displayName(),
         'size' => $product->sizeLabel(),
         'sku' => $product->sku,
@@ -303,12 +351,6 @@ $addProduct = function (int $productId) {
 };
 
 $addBarcode = function () {
-    if (! $this->hasSelectedSaleLocation()) {
-        $this->addError('stock_location_id', \App\Support\UiText::translate('Select Selling Location'));
-
-        return;
-    }
-
     $product = Product::where('barcode', $this->barcode)->first();
     if ($product) {
         $this->addProduct($product->id);
@@ -418,11 +460,20 @@ $completeSale = function (InventoryService $inventory) {
     $this->processing = true;
 
     try {
+        $fallbackLocationId = filled($this->stock_location_id)
+            ? (int) $this->stock_location_id
+            : (int) ($this->allowedSaleLocations()->first()?->id ?? 0);
+        foreach ($this->cart as $index => $item) {
+            if (blank($item['stock_location_id'] ?? null) && $fallbackLocationId) {
+                $this->cart[$index]['stock_location_id'] = $fallbackLocationId;
+            }
+        }
         $this->validate([
-            'stock_location_id' => ['required', 'exists:stock_locations,id'],
+            'stock_location_id' => ['nullable', 'exists:stock_locations,id'],
             'customer_id' => ['nullable', 'exists:customers,id'],
             'cart' => ['required', 'array', 'min:1'],
             'cart.*.product_id' => ['required', 'exists:products,id'],
+            'cart.*.stock_location_id' => ['required', 'integer', 'exists:stock_locations,id'],
             'cart.*.sale_type' => ['required', 'in:retail,wholesale'],
             'cart.*.quantity' => ['required', 'numeric', 'gt:0'],
             'cart.*.unit_price' => ['required', 'numeric', 'min:0'],
@@ -450,19 +501,6 @@ $completeSale = function (InventoryService $inventory) {
             }
         }
 
-        if (! InventorySettings::warehouseEnabled()) {
-            $this->stock_location_id = (string) $inventory->getDispensingLocation((int) $this->branch_id)->id;
-        }
-
-        if (blank($this->stock_location_id)) {
-            throw ValidationException::withMessages(['stock_location_id' => \App\Support\UiText::translate('Select Selling Location')]);
-        }
-
-        $location = StockLocation::findOrFail($this->stock_location_id);
-        if (! InventorySettings::canUserSellFromLocation(auth()->user(), $location)) {
-            throw ValidationException::withMessages(['stock_location_id' => 'Huna ruhusa ya kuuza kutoka sehemu hii ya stock.']);
-        }
-
         if (collect($this->payments)->contains(fn ($payment) => $payment['payment_method'] === 'credit') && ! $this->canCreditSale()) {
             throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('You are not authorized to create credit sales.')]);
         }
@@ -481,7 +519,7 @@ $completeSale = function (InventoryService $inventory) {
             $this->cart,
             $this->payments,
             $this->customer_id ? (int) $this->customer_id : null,
-            (int) $this->stock_location_id,
+            (int) ($this->stock_location_id ?: $this->cart[0]['stock_location_id']),
             (int) $this->branch_id,
             auth()->id(),
             $this->notes,
@@ -527,24 +565,24 @@ $completeSale = function (InventoryService $inventory) {
             : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300';
         $allowedLocations = $this->allowedSaleLocations();
         $selectedSaleLocation = $this->currentSaleLocation();
-        $locationReady = $this->hasSelectedSaleLocation();
+        $locationReady = $allowedLocations->isNotEmpty();
         $selectedCustomer = $customer_id ? Customer::query()->find($customer_id) : null;
         $remainingCredit = max(0, $this->grandTotal() - $this->paidTotal());
     @endphp
 
-    <x-page-header title="POS Sales" description="Select the selling location before loading available stock." :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
+    <x-page-header title="POS Sales" description="Build one sale from any authorised selling location." :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
 
     <div class="grid gap-6 xl:grid-cols-[1fr_440px]">
         <div class="space-y-5">
             <x-card>
                 <div class="grid gap-3 md:grid-cols-3">
-                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}" @disabled(! $locationReady)>
+                    <input wire:model.live.debounce.300ms="search" wire:loading.attr="disabled" wire:target="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}">
                     <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Barcode input') }}" @disabled(! $locationReady)>
-                    @if (InventorySettings::warehouseEnabled() && $allowedLocations->count() > 1)
+                    @if ($allowedLocations->count() > 1)
                         <label class="block text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400" for="selling-location">
-                            {{ $t('Selling From') }} *
+                            Preferred Location
                             <select id="selling-location" wire:change="requestStockLocationChange($event.target.value)" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white" aria-label="{{ $t('Selling From') }}">
-                                <option value="" @selected(blank($stock_location_id))>{{ $t('Select Selling Location') }}</option>
+                                <option value="" @selected(blank($stock_location_id))>All authorised locations</option>
                                 @foreach ($allowedLocations as $location)
                                     <option value="{{ $location->id }}" @selected((string) $stock_location_id === (string) $location->id)>{{ InventorySettings::stockLocationLabel($location) }}</option>
                                 @endforeach
@@ -552,7 +590,7 @@ $completeSale = function (InventoryService $inventory) {
                         </label>
                     @else
                         <div class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm font-bold text-cyan-800 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">
-                            Unauza kutoka: {{ $selectedSaleLocation ? InventorySettings::stockLocationLabel($selectedSaleLocation) : $t('Selling from Dispensing Area') }}
+                            Preferred Location: {{ $selectedSaleLocation ? InventorySettings::stockLocationLabel($selectedSaleLocation) : ($allowedLocations->first() ? InventorySettings::stockLocationLabel($allowedLocations->first()) : 'No authorised selling locations') }}
                         </div>
                     @endif
                 </div>
@@ -588,30 +626,13 @@ $completeSale = function (InventoryService $inventory) {
                         ->take(24)
                         ->get()
                     : collect();
-                $stockProductIds = $products->pluck('id')
-                    ->merge(collect($cart)->pluck('product_id'))
-                    ->filter()
-                    ->unique()
-                    ->map(fn ($id) => (int) $id)
-                    ->values()
-                    ->all();
-                $stockByProduct = $locationReady
-                    ? app(InventoryService::class)->getProductStocks(
-                        $stockProductIds,
-                        (int) $selectedSaleLocation->id,
-                        (int) $branch_id,
-                    )
-                    : [];
-                $availableStock = fn (int $productId, float $conversionFactor = 1): float =>
-                    ($stockByProduct[$productId] ?? 0) * $conversionFactor;
-                $stockLabel = InventorySettings::warehouseEnabled() ? $t('Stock') : $t('Available Stock');
             @endphp
             @unless ($locationReady)
                 <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                    {{ $t('Select Selling Location') }}
+                    No authorised selling locations are assigned to your account.
                 </div>
             @endunless
-            <div class="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 xl:grid-cols-3 xl:gap-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 @foreach ($products as $product)
                     @php
                         $displayPrice = $sale_type === 'wholesale' ? $product->wholesale_price : $product->selling_price;
@@ -619,36 +640,60 @@ $completeSale = function (InventoryService $inventory) {
                         $sellingUnitLabel = $product->sellingUnit?->short_name ?: $product->unit?->short_name;
                         $baseUnitLabel = $product->unit?->short_name;
                         $conversionFactor = $product->saleConversionFactor();
-                        $available = $availableStock($product->id, $conversionFactor);
-                        $baseAvailable = $available / $conversionFactor;
+                        $locationBalances = $this->locationBalancesForProduct($product->id);
                         $showsBaseStock = $product->usesUnitConversion() && $baseUnitLabel && ($sellingUnitLabel !== $baseUnitLabel || abs($conversionFactor - 1) > 0.0001);
+                        $productInitials = \App\Support\ProductAvatar::wordInitials($product->name);
                     @endphp
-                    <button type="button" wire:key="pos-product-{{ $product->id }}" wire:click="addProduct({{ $product->id }})" class="min-w-0 touch-manipulation rounded-xl border border-slate-200 bg-white p-2.5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-soft disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-navy-900 sm:p-4" @disabled(! $locationReady)>
-                        <img class="h-20 w-full rounded-lg object-cover sm:h-24 xl:h-28" src="{{ $product->image_url }}" alt="{{ $product->name }}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/images/product-placeholder.svg';">
-                        <p class="mt-2 line-clamp-2 font-black sm:mt-3">{{ $product->displayName() }}</p>
-                        @if ($product->sizeLabel())
-                            <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ $t('Size') }}: {{ $product->sizeLabel() }}</p>
-                        @endif
-                        <p class="text-xs text-slate-500">{{ $product->sku }} / {{ $sellingUnitLabel }}</p>
-                        <p class="text-[11px] font-bold text-slate-500">{{ $product->measurementType?->name ?? str($product->measurementCode())->title() }}</p>
-                        <div class="mt-2 flex items-start justify-between gap-3 text-sm">
-                            <span class="font-bold text-build-orange">TZS {{ \App\Support\NumberFormatter::money($displayPrice) }}</span>
-                            <span class="text-right text-slate-500">
-                                <span class="block">{{ $stockLabel }}: {{ \App\Support\NumberFormatter::quantity($available) }} {{ $sellingUnitLabel }}</span>
-                                @if ($showsBaseStock)
-                                    <span class="block text-[11px]">{{ $t('Base Stock') }}: {{ \App\Support\NumberFormatter::quantity($baseAvailable) }} {{ $baseUnitLabel }}</span>
-                                @endif
-                            </span>
+                    <article wire:key="pos-product-{{ $product->id }}" class="flex h-full min-w-0 flex-col rounded-[18px] border border-[#E5E7EB] bg-white p-4 text-left shadow-[0_8px_25px_rgba(15,23,42,0.08)] transition duration-200 ease-out motion-safe:hover:-translate-y-1 hover:shadow-[0_15px_40px_rgba(0,0,0,0.12)]">
+                        <x-product-image
+                            :product="$product"
+                            :initials="$productInitials"
+                            class="h-[130px] w-full"
+                            frame-class="rounded-[12px]"
+                            fallback-class="bg-[#FF6A00] text-white"
+                            initials-class="text-[56px] font-bold leading-none tracking-[2px]"
+                        />
+
+                        <div class="mt-3.5 min-w-0">
+                            <p class="line-clamp-2 text-[20px] font-bold leading-6 text-[#111827]">{{ $product->displayName() }}</p>
+                            <p class="mt-1 text-[14px] text-[#6B7280]">{{ $sellingUnitLabel ?: '-' }} · {{ $product->measurementType?->name ?? str($product->measurementCode())->title() }}</p>
+                            @if ($product->sizeLabel())
+                                <p class="mt-0.5 text-[13px] font-semibold text-[#6B7280]">{{ $t('Size') }}: {{ $product->sizeLabel() }}</p>
+                            @endif
+                            <p class="mt-1 truncate text-[13px] text-[#6B7280]">SKU: {{ $product->sku ?: '-' }}</p>
+                        </div>
+
+                        <div class="mt-3">
+                            <span class="text-[28px] font-extrabold leading-none text-[#00B5E2]">TZS {{ \App\Support\NumberFormatter::money($displayPrice) }}</span>
+                        </div>
+
+                        <div class="mt-auto space-y-2 pt-4">
+                            @forelse($locationBalances as $balance)
+                                @php
+                                    $sellingStock = $balance['stock'] * $conversionFactor;
+                                    $stockStateClasses = $balance['stock'] <= 0
+                                        ? 'bg-[#FEE2E2] text-[#DC2626]'
+                                        : ($balance['stock'] <= (float) $product->reorder_level
+                                            ? 'bg-[#FEF3C7] text-[#D97706]'
+                                            : 'bg-[#DCFCE7] text-[#15803D]');
+                                @endphp
+                                <button type="button" wire:click="addProduct({{ $product->id }}, {{ $balance['id'] }})" wire:loading.attr="disabled" wire:target="addProduct" @disabled($balance['stock'] <= 0) class="flex w-full items-center justify-between gap-3 rounded-[10px] border border-[#E5E7EB] bg-white px-3 py-2 text-left text-[13px] transition hover:border-[#00B5E2] hover:bg-sky-50 disabled:cursor-not-allowed disabled:hover:border-[#E5E7EB] disabled:hover:bg-white">
+                                    <span class="min-w-0 truncate font-semibold text-[#374151]">{{ $balance['name'] }}</span>
+                                    <span class="shrink-0 rounded-md px-2 py-1 font-bold {{ $stockStateClasses }}">{{ \App\Support\NumberFormatter::quantity($sellingStock) }} {{ $sellingUnitLabel }}</span>
+                                </button>
+                            @empty
+                                <p class="rounded-[10px] bg-[#FEE2E2] px-3 py-2 text-[13px] font-bold text-[#DC2626]">No stock in an authorised selling location</p>
+                            @endforelse
                         </div>
                         @if ($showsBaseStock)
-                            <p class="mt-2 rounded-lg bg-cyan-50 px-2 py-1 text-[11px] font-bold text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-200">
+                            <p class="mt-2 rounded-lg bg-cyan-50 px-2 py-1 text-[11px] font-bold text-cyan-700">
                                 1 {{ $baseUnitLabel }} = {{ \App\Support\NumberFormatter::quantity($conversionFactor) }} {{ $sellingUnitLabel }}
                             </p>
                         @endif
                         @if ($supportsFractionalSales)
-                            <span class="mt-2 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-black text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-200">{{ $t('Fractional Sale') }}</span>
+                            <span class="mt-2 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-black text-cyan-700">{{ $t('Fractional Sale') }}</span>
                         @endif
-                    </button>
+                    </article>
                 @endforeach
             </div>
         </div>
@@ -695,8 +740,10 @@ $completeSale = function (InventoryService $inventory) {
                         $isFractionalSale = (bool) ($item['allow_fractional_sale'] ?? false);
                         $conversionFactor = max(0.0001, (float) ($item['conversion_factor'] ?? 1));
                         $baseQuantity = $quantity / $conversionFactor;
-                        $availableSellingQuantity = $availableStock((int) ($item['product_id'] ?? 0), $conversionFactor);
-                        $availableBaseQuantity = $availableSellingQuantity / $conversionFactor;
+                        $lineLocationBalances = $this->stockByLocationForProduct((int) ($item['product_id'] ?? 0));
+                        $selectedLineLocation = $lineLocationBalances->firstWhere('id', (int) ($item['stock_location_id'] ?? 0));
+                        $availableBaseQuantity = (float) ($selectedLineLocation['stock'] ?? 0);
+                        $availableSellingQuantity = $availableBaseQuantity * $conversionFactor;
                         $quantityStep = (string) ($item['quantity_step'] ?? 1);
                         $minimumQuantity = (string) ($item['minimum_sale_quantity'] ?? 1);
                     @endphp
@@ -718,14 +765,24 @@ $completeSale = function (InventoryService $inventory) {
                             </div>
                             <button wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">{{ $t('Remove') }}</button>
                         </div>
+                        <label class="mt-3 block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Selling From
+                            <select wire:change="changeLineLocation({{ $index }}, $event.target.value)" wire:loading.attr="disabled" wire:target="changeLineLocation" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
+                                @foreach($lineLocationBalances as $locationBalance)
+                                    <option value="{{ $locationBalance['id'] }}" @selected((int)($item['stock_location_id'] ?? 0)===(int)$locationBalance['id'])>{{ $locationBalance['name'] }} · {{ \App\Support\NumberFormatter::quantity($locationBalance['stock'] * $conversionFactor) }} {{ $sellingUnitLabel }}</option>
+                                @endforeach
+                            </select>
+                            <span class="mt-1 block text-[11px] font-bold normal-case tracking-normal text-emerald-700 dark:text-emerald-300">Stock at {{ $selectedLineLocation['name'] ?? ($item['stock_location_name'] ?? 'selected location') }}: {{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span>
+                            @error("cart.{$index}.stock_location_id")<span class="mt-1 block text-xs font-semibold normal-case tracking-normal text-red-600">{{ $message }}</span>@enderror
+                        </label>
                         <div class="mt-3 grid gap-2 sm:grid-cols-4">
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Qty') }} ({{ $sellingUnitLabel ?: '-' }})
-                                <input wire:model.live.debounce.75ms="cart.{{ $index }}.quantity" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
+                                <input wire:model.live.debounce.75ms="cart.{{ $index }}.quantity" wire:loading.attr="disabled" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
                             </label>
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Unit Price') }}
-                                <span data-money-field wire:ignore wire:key="pos-unit-price-{{ $item['product_id'] }}" class="mt-1 block min-w-0">
+                                <span data-money-field wire:ignore wire:key="pos-unit-price-{{ $index }}-{{ $item['product_id'] }}-{{ $item['stock_location_id'] ?? 0 }}" class="mt-1 block min-w-0">
                                     <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
                                     <input type="hidden" data-money-value value="{{ $item['unit_price'] ?? '' }}" wire:model.live="cart.{{ $index }}.unit_price">
                                 </span>
@@ -747,6 +804,7 @@ $completeSale = function (InventoryService $inventory) {
                         </div>
 
                         <div class="mt-2 grid gap-1 text-xs text-slate-500 dark:text-slate-400">
+                            <div class="flex justify-between font-black text-slate-800 dark:text-slate-100"><span>Line Total</span><span>TZS {{ \App\Support\NumberFormatter::money(max(0, ($quantity * $unitPrice) - ($quantity * $discountPerUnit) + ($quantity * $taxPerUnit))) }}</span></div>
                             @if ($isFractionalSale || abs($conversionFactor - 1) > 0.0001)
                                 <div class="flex justify-between"><span>{{ $t('Available Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span></div>
                                 @if ($baseUnitLabel && ($baseUnitLabel !== $sellingUnitLabel || abs($conversionFactor - 1) > 0.0001))
@@ -757,6 +815,7 @@ $completeSale = function (InventoryService $inventory) {
                                 <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t('Base Quantity Deducted') }}</span><span>{{ \App\Support\NumberFormatter::quantity($baseQuantity) }} {{ $baseUnitLabel }}</span></div>
                             @endif
                         </div>
+                        @error("cart.{$index}.quantity")<p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>@enderror
                     </div>
                 @endforeach
 
@@ -827,20 +886,6 @@ $completeSale = function (InventoryService $inventory) {
             <span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span>
         </button>
     </div>
-
-    <x-modal name="confirm-selling-location-change" maxWidth="md">
-        <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-            <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t('Change Selling Location') }}</h2>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('Changing the selling location will clear the current cart.') }}</p>
-        </div>
-        <div class="px-5 py-5">
-            <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">{{ $t('Do you want to continue?') }}</p>
-            <div class="mt-5 flex justify-end gap-2">
-                <button type="button" wire:click="cancelStockLocationChange" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Cancel') }}</button>
-                <button type="button" wire:click="confirmStockLocationChange" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t('Continue') }}</button>
-            </div>
-        </div>
-    </x-modal>
 
     <x-modal name="unassigned-credit-warning" maxWidth="2xl">
         <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">

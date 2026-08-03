@@ -1,0 +1,12 @@
+<?php
+use App\Models\ProductionQualityPlan;use App\Services\ProductionQualityService;use App\Support\CompanyFeatures;use function Livewire\Volt\{layout,mount,state};layout('layouts.app');state(['plan']);mount(function(ProductionQualityPlan $plan){abort_unless(CompanyFeatures::manufacturingEnabled()&&auth()->user()?->canAny(['production.view_quality','production.manage_quality_plans']),403);$this->plan=$plan->load(['product','checks.unit','creator']);});$duplicate=function(){$copy=app(ProductionQualityService::class)->duplicatePlan($this->plan,auth()->user());$this->redirectRoute('production.quality.plans.edit',$copy,navigate:true);};?>
+<div><x-page-header :title="$plan->name" :description="'Immutable plan version · '.str($plan->status)->headline()" :breadcrumbs="[__('production.quality.plans')=>route('production.quality.plans.index'),$plan->name=>null]"/><div class="mb-4 flex gap-2">
+@if($plan->status==='draft')
+    @can('production.manage_quality_plans')
+        <a href="{{route('production.quality.plans.edit',$plan)}}" wire:navigate class="rounded-lg bg-build-orange px-3 py-2 text-sm font-black text-white">Edit draft</a>
+    @endcan
+@endif
+@can('production.manage_quality_plans')
+    <button wire:click="duplicate" class="rounded-lg border px-3 py-2 text-sm font-bold">Duplicate as draft</button>
+@endcan
+</div><x-card><dl class="grid gap-4 md:grid-cols-3"><div><dt class="text-xs text-slate-500">Product</dt><dd class="font-bold">{{$plan->product?->name}}</dd></div><div><dt class="text-xs text-slate-500">Stage</dt><dd class="font-bold">{{str($plan->inspection_stage)->headline()}}</dd></div><div><dt class="text-xs text-slate-500">Code / Version</dt><dd class="font-bold">{{$plan->code?:'—'}} / {{$plan->version?:'—'}}</dd></div></dl></x-card><x-card class="mt-5"><div class="overflow-x-auto"><x-table :headers="['Check','Type','Rule','Requirement','Limits / Target','Unit']">@foreach($plan->checks as $check)<tr><td class="px-3 py-3 font-bold">{{$check->name}}</td><td class="px-3 py-3">{{str($check->check_type)->headline()}}</td><td class="px-3 py-3">{{str($check->acceptance_rule)->headline()}}</td><td class="px-3 py-3">{{$check->required?'Required':'Optional'}}{{$check->critical?' · Critical':''}}</td><td class="px-3 py-3">{{$check->minimum_value??'—'}} / {{$check->maximum_value??'—'}} / {{$check->target_value??'—'}}</td><td class="px-3 py-3">{{$check->unit?->short_name?:'—'}}</td></tr>@endforeach</x-table></div></x-card></div>

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use LogicException;
 
 #[Fillable([
     'company_id',
@@ -23,6 +24,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'unit_price',
     'reference_type',
     'reference_id',
+    'production_curing_batch_id',
+    'production_curing_release_id',
+    'posting_reference',
     'notes',
     'created_by',
     'movement_date',
@@ -31,9 +35,23 @@ class StockMovement extends Model
 {
     use HasCompany, HasFactory;
 
-    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in'];
+    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in', 'production_output', 'curing_release_in'];
 
-    public const NEGATIVE_TYPES = ['sale_out', 'transfer_out', 'adjustment_out', 'damage_out', 'purchase_receipt_reversal'];
+    public const NEGATIVE_TYPES = ['sale_out', 'transfer_out', 'adjustment_out', 'damage_out', 'purchase_receipt_reversal', 'production_consumption', 'curing_release_out', 'curing_damage'];
+
+    protected static function booted(): void
+    {
+        static::updating(function (self $movement): void {
+            if ($movement->production_curing_release_id) {
+                throw new LogicException('Posted curing release movements are immutable.');
+            }
+        });
+        static::deleting(function (self $movement): void {
+            if ($movement->production_curing_release_id) {
+                throw new LogicException('Posted curing release movements cannot be deleted.');
+            }
+        });
+    }
 
     public function branch(): BelongsTo
     {
@@ -63,6 +81,16 @@ class StockMovement extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function curingBatch(): BelongsTo
+    {
+        return $this->belongsTo(ProductionCuringBatch::class, 'production_curing_batch_id');
+    }
+
+    public function curingRelease(): BelongsTo
+    {
+        return $this->belongsTo(ProductionCuringRelease::class, 'production_curing_release_id');
     }
 
     public function signedQuantity(): float
