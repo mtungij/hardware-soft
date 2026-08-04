@@ -196,14 +196,19 @@ final class ProductionReportService
         $query = $this->orderQuery($filters)->with(['product.unit', 'curingBatch', 'qualityInspections'])->latest('production_date')->latest('id');
 
         return $this->result($query, $limit, $export,
-            ['Order / Product', 'Planned', 'Produced', 'Accepted', 'Production Rejected', 'Curing Damage', 'QC Rejected', 'Released', 'Remaining Curing', 'Production Yield', 'Final Sellable Yield', 'Rejection', 'Damage', 'Total Recorded Loss'],
+            ['Order / Product', 'Planned Quantity', 'Produced', 'Accepted Into Curing', 'Production Reject', 'QC Reject', 'Curing Damage', 'Released Quantity', 'Remaining Curing', 'Yield %', 'QC Pass Rate', 'QC Failure Rate', 'Rework Quantity', 'Quarantined Quantity', 'Total Recorded Loss'],
             function ($o) {
                 $u = $o->product?->unit?->short_name;
                 $damage = $o->curingBatch?->damaged_quantity ?? 0;
-                $qcRejected = $o->qualityInspections->where('approval_status', 'approved')->reduce(fn (string $sum, $i) => bcadd($sum, (string) ($i->failed_quantity ?? 0), 12), '0');
+                $qcRejected = $o->curingBatch?->qc_rejected_quantity ?? 0;
+                $approved = $o->qualityInspections->where('approval_status', 'approved');
+                $qcInspected = $approved->reduce(fn (string $sum, $i) => bcadd($sum, (string) ($i->inspected_quantity ?? 0), 12), '0');
+                $qcPassed = $approved->reduce(fn (string $sum, $i) => bcadd($sum, (string) ($i->passed_quantity ?? 0), 12), '0');
+                $rework = $approved->where('disposition', 'rework')->reduce(fn (string $sum, $i) => bcadd($sum, (string) ($i->failed_quantity ?? 0), 12), '0');
+                $quarantined = $approved->where('disposition', 'quarantine')->reduce(fn (string $sum, $i) => bcadd($sum, (string) ($i->failed_quantity ?? 0), 12), '0');
                 $loss = bcadd(bcadd((string) $o->rejected_quantity, (string) $damage, 12), (string) $qcRejected, 12);
 
-                return [($o->order_number ?: '—').' / '.($o->product?->name ?: '—'), $this->q($o->planned_quantity, $u), $this->q($o->total_produced_quantity, $u), $this->q($o->accepted_quantity, $u), $this->q($o->rejected_quantity, $u), $this->q($damage, $u), $this->q($qcRejected, $u), $this->q($o->curingBatch?->released_quantity, $u), $this->q($o->curingBatch?->remaining_quantity, $u), $this->percentage($o->accepted_quantity, $o->total_produced_quantity), $this->percentage($o->curingBatch?->released_quantity, $o->total_produced_quantity), $this->percentage($o->rejected_quantity, $o->total_produced_quantity), $this->percentage($damage, $o->accepted_quantity), $this->q($loss, $u)];
+                return [($o->order_number ?: '—').' / '.($o->product?->name ?: '—'), $this->q($o->planned_quantity, $u), $this->q($o->total_produced_quantity, $u), $this->q($o->accepted_quantity, $u), $this->q($o->rejected_quantity, $u), $this->q($qcRejected, $u), $this->q($damage, $u), $this->q($o->curingBatch?->released_quantity, $u), $this->q($o->curingBatch?->remaining_quantity, $u), $this->percentage($o->accepted_quantity, $o->total_produced_quantity), $this->percentage($qcPassed, $qcInspected), $this->percentage($qcRejected, $qcInspected), $this->q($rework, $u), $this->q($quarantined, $u), $this->q($loss, $u)];
             });
     }
 
@@ -221,7 +226,7 @@ final class ProductionReportService
             ->when($filters['search'] ?? null, fn (Builder $q, $v) => $q->where('batch_number', 'like', '%'.$v.'%'))->latest('production_date')->latest('id');
 
         return $this->result($query, $limit, $export,
-            ['Batch / Order', 'Product', 'Site / Machine', 'Curing / Destination', 'Accepted', 'Released', 'Damaged', 'Remaining', 'Curing Start', 'Earliest Sellable', 'Full Curing', 'Age', 'Ageing Bucket', 'Progress', 'QC Approval', 'Quarantine', 'Active Hold', 'Status'],
+            ['Batch / Order', 'Product', 'Site / Machine', 'Curing / Destination', 'Accepted Into Curing', 'Production Reject', 'QC Reject', 'Curing Damage', 'Released', 'Remaining', 'Release Eligible', 'Curing Start', 'Earliest Sellable', 'Full Curing', 'Age', 'Ageing Bucket', 'Progress', 'QC Approval', 'Quarantine', 'Active Hold', 'Status'],
             function ($b) {
                 $u = $b->product?->unit?->short_name;
                 $elapsed = max(0, $b->curing_started_at?->diffInDays(now()) ?? 0);
@@ -229,7 +234,7 @@ final class ProductionReportService
                 $progress = min(100, (int) floor(($elapsed / $total) * 100));
                 $ageBucket = bccomp((string) $b->remaining_quantity, '0', 12) === 1 && now()->gt($b->full_curing_at) ? 'Past full curing, unreleased' : (bccomp((string) $b->remaining_quantity, '0', 12) === 1 && now()->gt($b->minimum_sellable_at) ? 'Past earliest release, unreleased' : ($elapsed < 3 ? 'Less than 3 days' : ($elapsed <= 7 ? '3–7 days' : ($elapsed <= 14 ? '8–14 days' : 'More than 14 days'))));
 
-                return [($b->batch_number ?: '—').' / '.($b->productionOrder?->order_number ?: '—'), $b->product?->name ?: '—', ($b->branch?->name ?: 'Company-wide').' / '.($b->machine?->name ?: '—'), ($b->sourceLocation?->name ?: '—').' / '.($b->defaultReleaseLocation?->name ?: '—'), $this->q($b->accepted_quantity, $u), $this->q($b->released_quantity, $u), $this->q($b->damaged_quantity, $u), $this->q($b->remaining_quantity, $u), $this->dateTime($b->curing_started_at), $this->dateTime($b->minimum_sellable_at), $this->dateTime($b->full_curing_at), $elapsed.' days', $ageBucket, $progress.'%', $b->qc_approved_at ? 'Approved' : 'Pending', $b->status === ProductionCuringBatch::STATUS_QUARANTINED ? 'Yes' : 'No', $b->qualityHolds->where('status', 'active')->isNotEmpty() ? 'Yes' : 'No', str($b->resolvedStatus())->headline()];
+                return [($b->batch_number ?: '—').' / '.($b->productionOrder?->order_number ?: '—'), $b->product?->name ?: '—', ($b->branch?->name ?: 'Company-wide').' / '.($b->machine?->name ?: '—'), ($b->sourceLocation?->name ?: '—').' / '.($b->defaultReleaseLocation?->name ?: '—'), $this->q($b->accepted_quantity, $u), $this->q($b->productionOrder?->rejected_quantity, $u), $this->q($b->qc_rejected_quantity, $u), $this->q($b->damaged_quantity, $u), $this->q($b->released_quantity, $u), $this->q($b->remaining_quantity, $u), $this->q($b->release_eligible_quantity, $u), $this->dateTime($b->curing_started_at), $this->dateTime($b->minimum_sellable_at), $this->dateTime($b->full_curing_at), $elapsed.' days', $ageBucket, $progress.'%', $b->qc_approved_at ? 'Approved' : 'Pending', $b->status === ProductionCuringBatch::STATUS_QUARANTINED ? 'Yes' : 'No', $b->qualityHolds->where('status', 'active')->isNotEmpty() ? 'Yes' : 'No', str($b->resolvedStatus())->headline()];
             });
     }
 
@@ -242,8 +247,8 @@ final class ProductionReportService
             ->when($filters['search'] ?? null, fn (Builder $q, $v) => $q->where('inspection_number', 'like', '%'.$v.'%'))->latest('inspected_at');
 
         return $this->result($query, $limit, $export,
-            ['Inspection', 'Batch / Order', 'Product', 'Stage / Date', 'Inspector', 'Result', 'Approval', 'Passed Qty', 'Rejected Qty', 'Critical Failure', 'Retest Of', 'Active Hold', 'Approved By / At'],
-            fn ($i) => [$i->inspection_number, ($i->curingBatch?->batch_number ?: '—').' / '.($i->productionOrder?->order_number ?: '—'), $i->product?->name ?: '—', str($i->inspection_stage)->headline().' / '.$this->dateTime($i->inspected_at), $i->inspector?->name ?: '—', str($i->result)->headline(), str($i->approval_status)->headline(), $this->q($i->passed_quantity), $this->q($i->failed_quantity), $i->results->where('is_critical', true)->where('result', 'failed')->isNotEmpty() ? 'Yes' : 'No', $i->supersedes?->inspection_number ?: '—', $i->holds->where('status', 'active')->isNotEmpty() ? 'Yes' : 'No', ($i->approver?->name ?: '—').' / '.$this->dateTime($i->approved_at)]);
+            ['Inspection', 'Batch / Order', 'Product', 'Stage / Date', 'Inspector', 'Decision', 'Approval', 'QC Accepted', 'QC Rejected', 'Disposition', 'Critical Failure', 'Retest Of', 'Active Hold', 'Approved By / At'],
+            fn ($i) => [$i->inspection_number, ($i->curingBatch?->batch_number ?: '—').' / '.($i->productionOrder?->order_number ?: '—'), $i->product?->name ?: '—', str($i->inspection_stage)->headline().' / '.$this->dateTime($i->inspected_at), $i->inspector?->name ?: '—', str($i->result)->headline(), str($i->approval_status)->headline(), $this->q($i->passed_quantity), $this->q($i->failed_quantity), $i->disposition ? str($i->disposition)->headline() : '—', $i->results->where('is_critical', true)->where('result', 'failed')->isNotEmpty() ? 'Yes' : 'No', $i->supersedes?->inspection_number ?: '—', $i->holds->where('status', 'active')->isNotEmpty() ? 'Yes' : 'No', ($i->approver?->name ?: '—').' / '.$this->dateTime($i->approved_at)]);
     }
 
     private function releases(array $filters, int $limit, bool $export): array

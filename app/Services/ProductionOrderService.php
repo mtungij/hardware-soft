@@ -23,6 +23,7 @@ class ProductionOrderService
         private ProductionRecipeCalculator $calculator,
         private InventoryService $inventory,
         private ProductionQualityService $quality,
+        private ProductionLocationService $productionLocations,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -70,13 +71,36 @@ class ProductionOrderService
         }
 
         $branchId = $assignment->branch_id ?: $assignment->machine?->branch_id ?: $user->branch_id;
-        $raw = $this->location($data['raw_material_stock_location_id'] ?? null, $companyId, $branchId, true);
-        $final = $this->location(
-            $data['final_finished_goods_stock_location_id'] ?? $data['finished_goods_stock_location_id'] ?? null,
-            $companyId, $branchId, false, true
-        );
+        $defaults = $this->productionLocations->defaults($companyId, $branchId);
+        $canOverrideLocations = $user->can('production.override_default_locations');
+        $raw = $canOverrideLocations
+            ? $this->productionLocations->location(
+                (int) ($data['raw_material_stock_location_id'] ?? 0),
+                ProductionLocationService::RAW,
+                $companyId,
+                $branchId,
+                $user,
+            )
+            : $defaults[ProductionLocationService::RAW];
+        $final = $canOverrideLocations
+            ? $this->productionLocations->location(
+                (int) ($data['final_finished_goods_stock_location_id'] ?? $data['finished_goods_stock_location_id'] ?? 0),
+                ProductionLocationService::FINISHED,
+                $companyId,
+                $branchId,
+                $user,
+            )
+            : $defaults[ProductionLocationService::FINISHED];
         $output = $assignment->product->requires_curing
-            ? $this->location($data['production_output_stock_location_id'] ?? null, $companyId, $branchId, false, false)
+            ? ($canOverrideLocations
+                ? $this->productionLocations->location(
+                    (int) ($data['production_output_stock_location_id'] ?? 0),
+                    ProductionLocationService::CURING,
+                    $companyId,
+                    $branchId,
+                    $user,
+                )
+                : $defaults[ProductionLocationService::CURING])
             : $final;
 
         return DB::transaction(function () use ($assignment, $data, $user, $companyId, $planned, $recipe, $branchId, $raw, $final, $output): ProductionOrder {

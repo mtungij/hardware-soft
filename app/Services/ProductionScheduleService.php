@@ -99,13 +99,17 @@ class ProductionScheduleService
             throw ValidationException::withMessages(['branch_id' => __('production.validation.branch_mismatch')]);
         }
 
-        $duplicate = ProductionMachineAssignment::query()
-            ->forCurrentCompany()
-            ->where('machine_id', $machine->id)
-            ->whereDate('production_date', $data['production_date'])
-            ->when($assignment, fn ($query) => $query->whereKeyNot($assignment->id))
-            ->with('product')
-            ->first();
+        $blocksSlot = in_array($data['status'], ProductionMachineAssignment::BLOCKING_STATUSES, true);
+        $duplicate = $blocksSlot
+            ? ProductionMachineAssignment::query()
+                ->forCurrentCompany()
+                ->blocking()
+                ->where('machine_id', $machine->id)
+                ->whereDate('production_date', $data['production_date'])
+                ->when($assignment, fn ($query) => $query->whereKeyNot($assignment->id))
+                ->with('product')
+                ->first()
+            : null;
 
         if ($duplicate) {
             throw ValidationException::withMessages([
@@ -127,14 +131,36 @@ class ProductionScheduleService
         ];
 
         try {
-            return DB::transaction(function () use ($assignment, $values, $user): ProductionMachineAssignment {
-                $currentInstallation = Machine::query()->forCurrentCompany()->whereKey($values['machine_id'])
-                    ->lockForUpdate()->firstOrFail()->currentMouldInstallation()->lockForUpdate()->first();
+            return DB::transaction(function () use ($assignment, $values, $user, $blocksSlot): ProductionMachineAssignment {
+                $lockedMachine = Machine::query()->forCurrentCompany()->whereKey($values['machine_id'])
+                    ->lockForUpdate()->firstOrFail();
+                $currentInstallation = $lockedMachine->currentMouldInstallation()->lockForUpdate()->first();
                 if (! $currentInstallation
                     || (int) $currentInstallation->id !== (int) $values['production_mould_installation_id']
                     || (int) $currentInstallation->production_mould_id !== (int) $values['production_mould_id']) {
                     throw ValidationException::withMessages(['machine_id' => __('production.validation.assignment_mould_changed')]);
                 }
+
+                $duplicate = $blocksSlot
+                    ? ProductionMachineAssignment::query()
+                        ->forCurrentCompany()
+                        ->blocking()
+                        ->where('machine_id', $values['machine_id'])
+                        ->whereDate('production_date', $values['production_date'])
+                        ->when($assignment, fn ($query) => $query->whereKeyNot($assignment->id))
+                        ->with('product')
+                        ->lockForUpdate()
+                        ->first()
+                    : null;
+                if ($duplicate) {
+                    throw ValidationException::withMessages([
+                        'machine_id' => __('production.validation.duplicate', [
+                            'product' => $duplicate->product?->name ?: __('production.unknown_product'),
+                            'date' => $values['production_date'],
+                        ]),
+                    ]);
+                }
+
                 if ($assignment) {
                     $assignment = ProductionMachineAssignment::query()->forCurrentCompany()
                         ->whereKey($assignment->id)->lockForUpdate()->firstOrFail();

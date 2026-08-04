@@ -261,11 +261,14 @@ $createNewAssignmentFrom = function (int $assignmentId): void {
     abort_unless($this->canManage(), 403);
     $assignment = ProductionMachineAssignment::query()->forCurrentCompany()
         ->with('productionOrder')->findOrFail($assignmentId);
-    abort_unless($assignment->historicalProductionOrder(), 422);
+    $isCancelled = $assignment->status === ProductionMachineAssignment::STATUS_CANCELLED;
+    abort_unless($isCancelled || $assignment->historicalProductionOrder(), 422);
 
-    $newDate = $assignment->production_date->copy()->addDay();
+    $newDate = $isCancelled
+        ? $assignment->production_date->copy()
+        : $assignment->production_date->copy()->addDay();
     while (ProductionMachineAssignment::query()->forCurrentCompany()
-        ->where('machine_id', $assignment->machine_id)->whereDate('production_date', $newDate)->exists()) {
+        ->blocking()->where('machine_id', $assignment->machine_id)->whereDate('production_date', $newDate)->exists()) {
         $newDate->addDay();
     }
     $machine = Machine::query()->forCurrentCompany()->whereKey($assignment->machine_id)->firstOrFail();
@@ -282,7 +285,9 @@ $createNewAssignmentFrom = function (int $assignmentId): void {
     $this->planned_start_time = $assignment->planned_start_time ? substr($assignment->planned_start_time, 0, 5) : '';
     $this->planned_end_time = $assignment->planned_end_time ? substr($assignment->planned_end_time, 0, 5) : '';
     $this->loadProductsForMachine($this->machine_id);
-    session()->flash('warning', 'New assignment prepared from historical schedule. Select a current compatible product and active recipe, then save.');
+    session()->flash('warning', $isCancelled
+        ? 'Replacement prepared on the cancelled assignment date. Select a current compatible product and active recipe, then save a new assignment.'
+        : 'New assignment prepared from historical schedule. Select a current compatible product and active recipe, then save.');
 };
 
 $viewAssignment = fn (int $assignmentId) => $this->viewingId = ProductionMachineAssignment::query()
@@ -320,7 +325,23 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
 
     abort_unless(in_array($status, $allowedTransitions[$assignment->status] ?? [], true), 422);
 
-    $assignment->update(['status' => $status, 'updated_by' => auth()->id()]);
+    if ($assignment->status === ProductionMachineAssignment::STATUS_CANCELLED
+        && in_array($status, ProductionMachineAssignment::BLOCKING_STATUSES, true)) {
+        app(ProductionScheduleService::class)->save([
+            'machine_id' => $assignment->machine_id,
+            'product_id' => $assignment->product_id,
+            'production_recipe_id' => $assignment->production_recipe_id,
+            'branch_id' => $assignment->branch_id,
+            'production_date' => $assignment->production_date->toDateString(),
+            'target_quantity' => $assignment->target_quantity,
+            'planned_start_time' => $assignment->planned_start_time,
+            'planned_end_time' => $assignment->planned_end_time,
+            'status' => $status,
+            'notes' => $assignment->notes,
+        ], auth()->user(), $assignment);
+    } else {
+        $assignment->update(['status' => $status, 'updated_by' => auth()->id()]);
+    }
     session()->flash('success', $status === ProductionMachineAssignment::STATUS_COMPLETED
         ? 'Schedule marked completed. No inventory was created or consumed.'
         : 'Assignment status updated.');
@@ -360,6 +381,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                         $installedMould = $selectedInstallation?->mould;
                         $existingAssignment = $selectedMachine && filled($selectedDate)
                             ? ProductionMachineAssignment::query()->forCurrentCompany()
+                                ->blocking()
                                 ->where('machine_id', $selectedMachine->id)
                                 ->whereDate('production_date', $selectedDate)
                                 ->when($editingId, fn ($query) => $query->whereKeyNot($editingId))
@@ -508,7 +530,12 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                                 @if($this->canManage() && $historicalOrder)
                                     <button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="rounded border border-cyan-500 px-2 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create New Assignment From This</button>
                                 @elseif($this->canManage() && ! $linkedOrder && $assignment->status !== 'completed')
-                                    <button wire:click="editAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">{{ $requiresReassignment ? __('production.schedule.reassign') : ($assignment->status === 'cancelled' ? 'Replace / Reactivate' : 'Edit') }}</button>
+                                    @if($assignment->status === 'cancelled')
+                                        <button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="rounded border border-cyan-500 px-2 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create Replacement</button>
+                                        <button wire:click="editAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">Reactivate</button>
+                                    @else
+                                        <button wire:click="editAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">{{ $requiresReassignment ? __('production.schedule.reassign') : 'Edit' }}</button>
+                                    @endif
                                     @if ($assignment->status !== 'cancelled')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'cancelled')" class="rounded bg-red-600 px-2 py-1 text-xs font-bold text-white">Cancel</button>@endif
                                     @if ($assignment->status === 'planned')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'confirmed')" class="rounded bg-cyan-700 px-2 py-1 text-xs font-bold text-white">Confirm</button>@endif
                                     @if ($assignment->status === 'confirmed')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'completed')" wire:confirm="Close this schedule only? This will not create stock." class="rounded bg-emerald-700 px-2 py-1 text-xs font-bold text-white">Complete Schedule</button>@endif
@@ -533,7 +560,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                         <div class="flex items-start justify-between gap-2"><div><h3 class="font-black">{{ $assignment->machine?->name }}</h3><p class="text-sm text-slate-500">{{ $currentMould?->name ?: __('production.moulds.none_installed') }} · {{ $assignment->product?->name }}</p><p class="text-xs text-slate-500">{{ $assignment->recipe?->name }}</p>@if($requiresReassignment)<p class="mt-1 text-xs font-black text-amber-700 dark:text-amber-300">{{ __('production.schedule.requires_reassignment') }} · {{ __('production.schedule.assigned_mould', ['mould' => $assignment->mould?->name ?: '—']) }}</p>@elseif($historicalOrder && $mouldHasChanged)<p class="mt-1 text-xs font-black text-amber-700 dark:text-amber-300">Historical assignment — linked to completed Production Order {{ $historicalOrder->order_number }}. Create a new assignment.</p>@endif</div><span class="badge-warning">{{ ucfirst($assignment->status) }}</span></div>
                         <dl class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><dt class="text-slate-500">Target</dt><dd>{{ $assignment->target_quantity ?? '—' }}</dd></div><div><dt class="text-slate-500">Branch</dt><dd>{{ $assignment->branch?->name ?: 'Company-wide' }}</dd></div></dl>
                         <button wire:click="viewAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">View details</button>
-                        @if($this->canManage() && $historicalOrder)<button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="mt-3 rounded border border-cyan-500 px-3 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create New Assignment From This</button>@elseif($this->canManage() && ! $linkedOrder && $assignment->status !== 'completed')<button wire:click="editAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">{{ $requiresReassignment ? __('production.schedule.reassign') : 'Edit' }}</button>@endif
+                        @if($this->canManage() && $historicalOrder)<button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="mt-3 rounded border border-cyan-500 px-3 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create New Assignment From This</button>@elseif($this->canManage() && ! $linkedOrder && $assignment->status !== 'completed')@if($assignment->status === 'cancelled')<button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="mt-3 rounded border border-cyan-500 px-3 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create Replacement</button><button wire:click="editAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">Reactivate</button>@else<button wire:click="editAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">{{ $requiresReassignment ? __('production.schedule.reassign') : 'Edit' }}</button>@endif @endif
                     </article>
                 @empty
                     <p class="py-8 text-center text-slate-500">No assignments for this date.</p>

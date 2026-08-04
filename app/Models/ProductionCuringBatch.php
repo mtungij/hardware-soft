@@ -16,7 +16,7 @@ use LogicException;
     'company_id', 'branch_id', 'production_order_id', 'product_id', 'machine_id',
     'source_stock_location_id', 'default_release_stock_location_id', 'batch_number',
     'production_date', 'curing_started_at', 'minimum_sellable_at', 'full_curing_at',
-    'accepted_quantity', 'released_quantity', 'damaged_quantity', 'remaining_quantity',
+    'accepted_quantity', 'released_quantity', 'damaged_quantity', 'qc_rejected_quantity', 'release_eligible_quantity', 'remaining_quantity',
     'status', 'qc_approved_at', 'approved_by', 'notes', 'quarantine_reason', 'created_by', 'updated_by', 'closed_by', 'closed_at',
 ])]
 class ProductionCuringBatch extends Model
@@ -35,6 +35,12 @@ class ProductionCuringBatch extends Model
 
     public const STATUS_QUARANTINED = 'quarantined';
 
+    public const STATUS_ON_HOLD = 'on_hold';
+
+    public const STATUS_REWORK_REQUIRED = 'rework_required';
+
+    public const STATUS_AWAITING_RETEST = 'awaiting_retest';
+
     public const STATUS_CLOSED = 'closed';
 
     protected static function booted(): void
@@ -49,13 +55,14 @@ class ProductionCuringBatch extends Model
             'minimum_sellable_at' => 'datetime', 'full_curing_at' => 'datetime',
             'accepted_quantity' => 'decimal:12', 'released_quantity' => 'decimal:12',
             'damaged_quantity' => 'decimal:12', 'remaining_quantity' => 'decimal:12',
+            'qc_rejected_quantity' => 'decimal:12', 'release_eligible_quantity' => 'decimal:12',
             'qc_approved_at' => 'datetime', 'closed_at' => 'datetime',
         ];
     }
 
     public function resolvedStatus(?CarbonInterface $at = null): string
     {
-        if (in_array($this->status, [self::STATUS_QUARANTINED, self::STATUS_CLOSED], true)) {
+        if (in_array($this->status, [self::STATUS_QUARANTINED, self::STATUS_ON_HOLD, self::STATUS_REWORK_REQUIRED, self::STATUS_AWAITING_RETEST, self::STATUS_CLOSED], true)) {
             return $this->status;
         }
         if (bccomp((string) $this->remaining_quantity, '0', 12) <= 0) {
@@ -75,7 +82,7 @@ class ProductionCuringBatch extends Model
 
     public function isEligibleForRelease(?CarbonInterface $at = null): bool
     {
-        return ! in_array($this->status, [self::STATUS_QUARANTINED, self::STATUS_CLOSED], true)
+        return ! in_array($this->status, [self::STATUS_QUARANTINED, self::STATUS_ON_HOLD, self::STATUS_REWORK_REQUIRED, self::STATUS_AWAITING_RETEST, self::STATUS_CLOSED], true)
             && bccomp((string) $this->remaining_quantity, '0', 12) > 0
             && ($this->status === self::STATUS_READY_FOR_RELEASE
                 || ($at ?: now($this->company?->timezone ?: config('app.timezone')))->gte($this->minimum_sellable_at));

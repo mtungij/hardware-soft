@@ -16,7 +16,7 @@ use LogicException;
 #[Fillable([
     'company_id', 'branch_id', 'machine_id', 'production_mould_id',
     'production_mould_installation_id', 'product_id', 'production_recipe_id', 'production_date',
-    'target_quantity', 'planned_start_time', 'planned_end_time', 'status',
+    'target_quantity', 'planned_start_time', 'planned_end_time', 'status', 'active_slot_key',
     'notes', 'created_by', 'updated_by',
 ])]
 class ProductionMachineAssignment extends Model
@@ -38,11 +38,29 @@ class ProductionMachineAssignment extends Model
         self::STATUS_COMPLETED,
     ];
 
+    public const BLOCKING_STATUSES = [
+        self::STATUS_PLANNED,
+        self::STATUS_CONFIRMED,
+    ];
+
     protected static function booted(): void
     {
+        static::saving(function (ProductionMachineAssignment $assignment): void {
+            $assignment->active_slot_key = self::activeSlotKey(
+                (int) $assignment->company_id,
+                (int) $assignment->machine_id,
+                $assignment->production_date,
+                $assignment->status,
+            );
+        });
         static::updating(function (ProductionMachineAssignment $assignment): void {
             if ($assignment->immutableProductionOrder()) {
                 throw new LogicException('Historical production assignments linked to a non-cancelled production order are immutable.');
+            }
+        });
+        static::deleting(function (ProductionMachineAssignment $assignment): void {
+            if (! $assignment->isForceDeleting() && $assignment->active_slot_key !== null) {
+                $assignment->forceFill(['active_slot_key' => null])->saveQuietly();
             }
         });
     }
@@ -121,6 +139,24 @@ class ProductionMachineAssignment extends Model
     public function scopeForCurrentCompany(Builder $query): Builder
     {
         return $query->where($this->qualifyColumn('company_id'), CompanyFeatures::companyId());
+    }
+
+    public function scopeBlocking(Builder $query): Builder
+    {
+        return $query->whereIn($this->qualifyColumn('status'), self::BLOCKING_STATUSES);
+    }
+
+    public static function activeSlotKey(int $companyId, int $machineId, mixed $productionDate, string $status): ?string
+    {
+        if (! in_array($status, self::BLOCKING_STATUSES, true)) {
+            return null;
+        }
+
+        $date = $productionDate instanceof \DateTimeInterface
+            ? $productionDate->format('Y-m-d')
+            : substr((string) $productionDate, 0, 10);
+
+        return "{$companyId}:{$machineId}:{$date}";
     }
 
     public function scopeEligibleForProductionOrder(Builder $query): Builder

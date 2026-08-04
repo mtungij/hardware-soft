@@ -544,6 +544,9 @@ $complete = function () {
             'allow_direct_stock_in' => ! $enableWarehouse,
             'allow_sales_from_store' => false,
             'default_stock_location_id' => $enableWarehouse ? $mainStoreLocation?->id : $dispensingLocation->id,
+            'default_raw_material_location_id' => $productionLocations->get('RAW-MATERIALS')?->id,
+            'default_curing_location_id' => $productionLocations->get('CURING-YARD')?->id,
+            'default_finished_goods_location_id' => $productionLocations->get('FINISHED-GOODS')?->id,
             'theme_color' => '#06b6d4',
             'system_initialized' => true,
         ];

@@ -10,19 +10,22 @@ use App\Models\ProductionOrder;
 use App\Models\ProductionOrderMaterial;
 use App\Models\ProductionRecipe;
 use App\Models\ProductionRecipeItem;
+use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\InventoryService;
-use App\Services\ProductionOrderService;
+use App\Services\ProductionLocationService;
 use App\Services\ProductionMouldService;
+use App\Services\ProductionOrderService;
 use App\Services\ProductionRecipeCalculator;
 use App\Services\ProductionRecipeService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
+use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -45,11 +48,32 @@ beforeEach(function () {
         'machine_id' => $this->machine->id, 'product_id' => $this->finished->id,
         'production_date' => '2026-07-29', 'target_quantity' => 1440, 'status' => 'confirmed',
     ]);
-    $this->location = StockLocation::query()->where('branch_id', $this->branch->id)->firstOrFail();
-    $this->location->forceFill([
+    $this->location = StockLocation::query()->create([
+        'company_id' => $this->company->id,
+        'branch_id' => $this->branch->id,
+        'name' => 'Production Test Raw Materials',
+        'code' => 'PRODUCTION-TEST-RAW',
+        'type' => 'warehouse',
         'status' => 'active', 'is_active' => true, 'can_issue_stock' => true,
-        'can_receive_stock' => true, 'can_transfer' => true,
-    ])->save();
+        'can_receive_stock' => true, 'can_transfer' => true, 'is_sellable' => false, 'can_sell' => false,
+    ]);
+    $this->curingLocation = StockLocation::query()->create([
+        'company_id' => $this->company->id, 'branch_id' => $this->branch->id,
+        'name' => 'Production Test Curing Yard', 'code' => 'PRODUCTION-TEST-CURING', 'type' => 'curing',
+        'status' => 'active', 'is_active' => true, 'can_issue_stock' => true,
+        'can_receive_stock' => true, 'can_transfer' => true, 'is_sellable' => false, 'can_sell' => false,
+    ]);
+    $this->finishedLocation = StockLocation::query()->create([
+        'company_id' => $this->company->id, 'branch_id' => $this->branch->id,
+        'name' => 'Production Test Finished Goods', 'code' => 'PRODUCTION-TEST-FINISHED', 'type' => 'store',
+        'status' => 'active', 'is_active' => true, 'can_issue_stock' => true,
+        'can_receive_stock' => true, 'can_transfer' => true, 'is_sellable' => true, 'can_sell' => true,
+    ]);
+    Setting::query()->firstOrFail()->update([
+        'default_raw_material_location_id' => $this->location->id,
+        'default_curing_location_id' => $this->curingLocation->id,
+        'default_finished_goods_location_id' => $this->finishedLocation->id,
+    ]);
     $this->recipe = app(ProductionRecipeService::class)->save([
         'name' => 'Execution Recipe', 'code' => 'EXEC-R1', 'version' => '1',
         'product_id' => $this->finished->id, 'output_quantity' => 1,
@@ -66,6 +90,7 @@ beforeEach(function () {
             'source_quantity' => '', 'material_unit_id' => '', 'unit_cost' => 20, 'notes' => '',
         ],
     ], $this->admin);
+    $this->assignment->update(['production_recipe_id' => $this->recipe->id]);
 });
 
 function createProductionOrderForTest(object $test, array $overrides = []): ProductionOrder
@@ -73,7 +98,8 @@ function createProductionOrderForTest(object $test, array $overrides = []): Prod
     return app(ProductionOrderService::class)->createFromAssignment($test->assignment, [
         'planned_quantity' => 1440,
         'raw_material_stock_location_id' => $test->location->id,
-        'finished_goods_stock_location_id' => $test->location->id,
+        'production_output_stock_location_id' => $test->curingLocation->id,
+        'final_finished_goods_stock_location_id' => $test->finishedLocation->id,
         'notes' => 'Execution plan',
         ...$overrides,
     ], $test->admin);
@@ -87,6 +113,28 @@ function stockProductionMaterialForTest(object $test, string $quantity = '100'):
         'cost_price' => 10, 'selling_price' => 20, 'reason' => 'Production lifecycle test',
         'notes' => '', 'movement_date' => '2026-07-29',
     ], $test->admin->id);
+}
+
+function createProductionLocationForTest(object $test, string $code, string $purpose, ?int $branchId = null): StockLocation
+{
+    $attributes = match ($purpose) {
+        'raw' => ['type' => 'warehouse', 'is_sellable' => false, 'can_sell' => false],
+        'curing' => ['type' => 'curing', 'is_sellable' => false, 'can_sell' => false],
+        'finished' => ['type' => 'store', 'is_sellable' => true, 'can_sell' => true],
+    };
+
+    return StockLocation::query()->create([
+        'company_id' => $test->company->id,
+        'branch_id' => $branchId,
+        'name' => str($code)->headline()->toString(),
+        'code' => $code,
+        'status' => 'active',
+        'is_active' => true,
+        'can_issue_stock' => true,
+        'can_receive_stock' => true,
+        'can_transfer' => true,
+        ...$attributes,
+    ]);
 }
 
 function executeProductionOrderForTest(object $test, ProductionOrder $order, string $actual = '18', string $accepted = '1400', string $rejected = '40'): ProductionOrder
@@ -178,6 +226,287 @@ test('valid assignment creates planned order frozen snapshot and requirements wi
 
     $this->recipe->items()->first()->update(['normalized_quantity' => '9']);
     expect($order->refresh()->materials()->first()->normalized_quantity_per_output)->toBe('0.012500000000');
+});
+
+test('admin configures company production defaults and invalid locations are rejected', function () {
+    $alternateRaw = createProductionLocationForTest($this, 'SETTINGS-RAW', 'raw', $this->branch->id);
+    $alternateCuring = createProductionLocationForTest($this, 'SETTINGS-CURING', 'curing', $this->branch->id);
+    $alternateFinished = createProductionLocationForTest($this, 'SETTINGS-FINISHED', 'finished', $this->branch->id);
+
+    Volt::test('settings.company')
+        ->set('default_raw_material_location_id', (string) $alternateRaw->id)
+        ->set('default_curing_location_id', (string) $alternateCuring->id)
+        ->set('default_finished_goods_location_id', (string) $alternateFinished->id)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $setting = Setting::query()->firstOrFail();
+    expect($setting->default_raw_material_location_id)->toBe($alternateRaw->id)
+        ->and($setting->default_curing_location_id)->toBe($alternateCuring->id)
+        ->and($setting->default_finished_goods_location_id)->toBe($alternateFinished->id);
+
+    $otherCompany = Company::query()->create([
+        'company_name' => 'Other Defaults Company', 'business_type' => 'Factory',
+        'phone' => '+255700844444', 'whatsapp_number' => '+255700844444',
+    ]);
+    $crossCompany = StockLocation::withoutGlobalScopes()->create([
+        'company_id' => $otherCompany->id, 'name' => 'Other Raw', 'code' => 'OTHER-RAW',
+        'type' => 'warehouse', 'status' => 'active', 'is_active' => true,
+        'can_receive_stock' => true, 'can_issue_stock' => true, 'is_sellable' => false,
+    ]);
+    Volt::test('settings.company')
+        ->set('default_raw_material_location_id', (string) $crossCompany->id)
+        ->call('save')
+        ->assertHasErrors(['default_raw_material_location_id']);
+
+    $alternateCuring->update(['status' => 'inactive', 'is_active' => false]);
+    Volt::test('settings.company')
+        ->set('default_curing_location_id', (string) $alternateCuring->id)
+        ->call('save')
+        ->assertHasErrors(['default_curing_location_id']);
+
+    Volt::test('settings.company')
+        ->set('default_raw_material_location_id', (string) $alternateFinished->id)
+        ->call('save')
+        ->assertHasErrors(['default_raw_material_location_id']);
+});
+
+test('production location permissions follow the intended role matrix', function () {
+    $operator = Role::findByName('Production Operator');
+    $manager = Role::findByName('Production Manager');
+    $admin = Role::findByName('Admin');
+    $superAdmin = Role::findByName('Super Admin');
+
+    expect($operator->hasPermissionTo('production.override_default_locations'))->toBeFalse()
+        ->and($operator->hasPermissionTo('production.manage_location_defaults'))->toBeFalse()
+        ->and($manager->hasPermissionTo('production.override_default_locations'))->toBeTrue()
+        ->and($manager->hasPermissionTo('production.manage_location_defaults'))->toBeFalse()
+        ->and($admin->hasPermissionTo('production.override_default_locations'))->toBeTrue()
+        ->and($admin->hasPermissionTo('production.manage_location_defaults'))->toBeTrue()
+        ->and($superAdmin->hasPermissionTo('production.override_default_locations'))->toBeTrue()
+        ->and($superAdmin->hasPermissionTo('production.manage_location_defaults'))->toBeTrue();
+});
+
+test('company settings access alone cannot manipulate production defaults', function () {
+    $alternateRaw = createProductionLocationForTest($this, 'UNAUTHORISED-SETTINGS-RAW', 'raw', $this->branch->id);
+    $settingsBefore = Setting::query()->firstOrFail()->only([
+        'default_raw_material_location_id', 'default_curing_location_id', 'default_finished_goods_location_id',
+    ]);
+    $manager = User::factory()->create([
+        'company_id' => $this->company->id, 'branch_id' => $this->branch->id,
+        'status' => 'active', 'is_system_owner' => false,
+    ]);
+    $manager->assignRole('Manager');
+    $manager->givePermissionTo('company-settings.update');
+    $this->actingAs($manager);
+
+    Volt::test('settings.company')
+        ->set('default_raw_material_location_id', (string) $alternateRaw->id)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(Setting::query()->firstOrFail()->only(array_keys($settingsBefore)))->toBe($settingsBefore);
+});
+
+test('production operator receives locked defaults and manipulated locations are ignored', function () {
+    $this->finished->update(['requires_curing' => true, 'curing_days_required' => 7, 'sellable_after_days' => 7]);
+    $alternateRaw = createProductionLocationForTest($this, 'OPERATOR-RAW', 'raw', $this->branch->id);
+    $alternateCuring = createProductionLocationForTest($this, 'OPERATOR-CURING', 'curing', $this->branch->id);
+    $alternateFinished = createProductionLocationForTest($this, 'OPERATOR-FINISHED', 'finished', $this->branch->id);
+    $operator = User::factory()->create([
+        'company_id' => $this->company->id, 'branch_id' => $this->branch->id,
+        'status' => 'active', 'is_system_owner' => false,
+    ]);
+    $operator->assignRole('Production Operator');
+    $settingsBefore = Setting::query()->firstOrFail()->only([
+        'default_raw_material_location_id', 'default_curing_location_id', 'default_finished_goods_location_id',
+    ]);
+    $movementsBefore = StockMovement::withoutGlobalScopes()->count();
+    $this->actingAs($operator);
+
+    $component = Volt::test('production.orders.create')
+        ->set('assignment_id', (string) $this->assignment->id)
+        ->assertSet('raw_location_id', (string) $this->location->id)
+        ->assertSet('output_location_id', (string) $this->curingLocation->id)
+        ->assertSet('finished_location_id', (string) $this->finishedLocation->id);
+
+    foreach (['production-raw-location', 'production-curing-location', 'production-finished-location'] as $testId) {
+        preg_match('/<select data-testid="'.$testId.'".*?<\/select>/s', $component->html(), $select);
+        expect($select[0] ?? '')->toMatch('/\sdisabled(?:\s|>)/');
+    }
+
+    $component
+        ->set('raw_location_id', (string) $alternateRaw->id)
+        ->set('output_location_id', (string) $alternateCuring->id)
+        ->set('finished_location_id', (string) $alternateFinished->id)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $order = ProductionOrder::query()->where('production_machine_assignment_id', $this->assignment->id)->firstOrFail();
+    expect($order->raw_material_stock_location_id)->toBe($this->location->id)
+        ->and($order->production_output_stock_location_id)->toBe($this->curingLocation->id)
+        ->and($order->final_finished_goods_stock_location_id)->toBe($this->finishedLocation->id)
+        ->and(Setting::query()->firstOrFail()->only(array_keys($settingsBefore)))->toBe($settingsBefore)
+        ->and(StockMovement::withoutGlobalScopes()->count())->toBe($movementsBefore);
+});
+
+test('authorised production location override is validated and does not change company defaults', function () {
+    $this->finished->update(['requires_curing' => true, 'curing_days_required' => 7, 'sellable_after_days' => 7]);
+    $alternateRaw = createProductionLocationForTest($this, 'MANAGER-RAW', 'raw', $this->branch->id);
+    $alternateCuring = createProductionLocationForTest($this, 'MANAGER-CURING', 'curing', $this->branch->id);
+    $alternateFinished = createProductionLocationForTest($this, 'MANAGER-FINISHED', 'finished', $this->branch->id);
+    $settingsBefore = Setting::query()->firstOrFail()->getAttributes();
+
+    expect(fn () => app(ProductionOrderService::class)->createFromAssignment($this->assignment, [
+        'planned_quantity' => 1440,
+        'raw_material_stock_location_id' => $alternateFinished->id,
+        'production_output_stock_location_id' => $alternateCuring->id,
+        'final_finished_goods_stock_location_id' => $alternateFinished->id,
+    ], $this->admin))->toThrow(ValidationException::class);
+    expect(ProductionOrder::query()->where('production_machine_assignment_id', $this->assignment->id)->doesntExist())->toBeTrue();
+
+    Volt::test('production.orders.create')
+        ->set('assignment_id', (string) $this->assignment->id)
+        ->assertSet('raw_location_id', (string) $this->location->id)
+        ->set('raw_location_id', (string) $alternateRaw->id)
+        ->set('output_location_id', (string) $alternateCuring->id)
+        ->set('finished_location_id', (string) $alternateFinished->id)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $order = ProductionOrder::query()->where('production_machine_assignment_id', $this->assignment->id)->firstOrFail();
+    expect($order->raw_material_stock_location_id)->toBe($alternateRaw->id)
+        ->and($order->production_output_stock_location_id)->toBe($alternateCuring->id)
+        ->and($order->final_finished_goods_stock_location_id)->toBe($alternateFinished->id)
+        ->and(Setting::query()->firstOrFail()->getAttributes())->toBe($settingsBefore);
+});
+
+test('missing and branch-incompatible production defaults block order creation', function () {
+    Setting::query()->firstOrFail()->update(['default_curing_location_id' => null]);
+    Volt::test('production.orders.create')
+        ->set('assignment_id', (string) $this->assignment->id)
+        ->assertSee(ProductionLocationService::CONFIGURATION_MESSAGE)
+        ->call('save')
+        ->assertHasErrors(['production_location_defaults']);
+    expect(ProductionOrder::query()->where('production_machine_assignment_id', $this->assignment->id)->doesntExist())->toBeTrue();
+
+    $otherBranch = Branch::query()->create([
+        'company_id' => $this->company->id, 'name' => 'Other Production Branch',
+        'code' => 'OTHER-PRODUCTION-BRANCH', 'status' => 'active', 'is_default' => false,
+    ]);
+    $wrongBranchRaw = createProductionLocationForTest($this, 'WRONG-BRANCH-RAW-DEFAULT', 'raw', $otherBranch->id);
+    Setting::query()->firstOrFail()->update([
+        'default_raw_material_location_id' => $wrongBranchRaw->id,
+        'default_curing_location_id' => $this->curingLocation->id,
+    ]);
+
+    expect(fn () => createProductionOrderForTest($this))->toThrow(ValidationException::class);
+    expect(ProductionOrder::query()->where('production_machine_assignment_id', $this->assignment->id)->doesntExist())->toBeTrue();
+});
+
+test('company-wide defaults work and existing orders retain their selected locations', function () {
+    $companyRaw = createProductionLocationForTest($this, 'COMPANY-WIDE-RAW', 'raw');
+    $companyCuring = createProductionLocationForTest($this, 'COMPANY-WIDE-CURING', 'curing');
+    $companyFinished = createProductionLocationForTest($this, 'COMPANY-WIDE-FINISHED', 'finished');
+    Setting::query()->firstOrFail()->update([
+        'default_raw_material_location_id' => $companyRaw->id,
+        'default_curing_location_id' => $companyCuring->id,
+        'default_finished_goods_location_id' => $companyFinished->id,
+    ]);
+
+    $operator = User::factory()->create([
+        'company_id' => $this->company->id, 'branch_id' => $this->branch->id, 'status' => 'active',
+    ]);
+    $operator->assignRole('Production Operator');
+    $order = app(ProductionOrderService::class)->createFromAssignment($this->assignment, [
+        'planned_quantity' => 1440,
+        'raw_material_stock_location_id' => $this->location->id,
+        'final_finished_goods_stock_location_id' => $this->finishedLocation->id,
+    ], $operator);
+
+    expect($order->raw_material_stock_location_id)->toBe($companyRaw->id)
+        ->and($order->final_finished_goods_stock_location_id)->toBe($companyFinished->id);
+
+    Setting::query()->firstOrFail()->update([
+        'default_raw_material_location_id' => $this->location->id,
+        'default_finished_goods_location_id' => $this->finishedLocation->id,
+    ]);
+    expect($order->fresh()->raw_material_stock_location_id)->toBe($companyRaw->id)
+        ->and($order->fresh()->final_finished_goods_stock_location_id)->toBe($companyFinished->id);
+});
+
+test('configured raw default drives live availability and start validation without planning stock movements', function () {
+    stockProductionMaterialForTest($this, '20');
+    $beforeCreate = StockMovement::withoutGlobalScopes()->count();
+    $order = createProductionOrderForTest($this, ['planned_quantity' => 10]);
+    $inventoryLine = $order->materials->firstWhere('line_type', ProductionOrderMaterial::TYPE_INVENTORY);
+
+    expect(app(ProductionOrderService::class)->availability($order)[$inventoryLine->id])->toBe('20.0000')
+        ->and(StockMovement::withoutGlobalScopes()->count())->toBe($beforeCreate);
+
+    $started = app(ProductionOrderService::class)->start($order, $this->admin);
+    expect($started->status)->toBe(ProductionOrder::STATUS_IN_PROGRESS)
+        ->and(StockMovement::withoutGlobalScopes()->count())->toBe($beforeCreate);
+});
+
+test('availability stays scoped to the selected raw location when stock exists at another location', function () {
+    $diagnosticMaterial = $this->material->replicate();
+    $diagnosticMaterial->forceFill([
+        'name' => 'Location Diagnostic Cement',
+        'sku' => 'LOCATION-DIAGNOSTIC-CEMENT',
+        'inventory_source' => Product::INVENTORY_SOURCE_PURCHASED,
+    ])->save();
+    $this->recipe->items()->where('cost_type', ProductionRecipeItem::TYPE_INVENTORY)->firstOrFail()->update([
+        'material_product_id' => $diagnosticMaterial->id,
+    ]);
+
+    $stockedLocation = StockLocation::query()->create([
+        'company_id' => $this->company->id,
+        'branch_id' => $this->branch->id,
+        'name' => 'Raw Materials Store Diagnostic',
+        'code' => 'RAW-MATERIALS-DIAGNOSTIC',
+        'type' => 'warehouse',
+        'status' => 'active',
+        'is_active' => true,
+        'can_issue_stock' => true,
+        'can_receive_stock' => true,
+    ]);
+    app(InventoryService::class)->directStockIn([
+        'branch_id' => $this->branch->id,
+        'product_id' => $diagnosticMaterial->id,
+        'stock_location_id' => $stockedLocation->id,
+        'quantity' => 20,
+        'cost_price' => 10,
+        'selling_price' => 20,
+        'reason' => 'Location mismatch regression fixture',
+        'notes' => '',
+        'movement_date' => '2026-07-29',
+    ], $this->admin->id);
+
+    $order = createProductionOrderForTest($this, [
+        'raw_material_stock_location_id' => $this->location->id,
+    ]);
+    $materialLine = $order->materials()->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY)->firstOrFail();
+    $availability = app(ProductionOrderService::class)->availability($order);
+
+    expect($order->raw_material_stock_location_id)->toBe($this->location->id)
+        ->and($availability[$materialLine->id])->toBe('0.0000')
+        ->and(app(InventoryService::class)->getProductStock(
+            $diagnosticMaterial->id,
+            $stockedLocation->id,
+            $this->branch->id,
+        ))->toBe(20.0);
+
+    Volt::test('production.orders.show', ['order' => $order])
+        ->assertSee('Location Diagnostic Cement')
+        ->assertSee('0.0000')
+        ->assertSee('Shortage');
+
+    Volt::test('store-stock.index')
+        ->set('locationFilter', (string) $stockedLocation->id)
+        ->set('search', 'Location Diagnostic Cement')
+        ->assertSee('Raw Materials Store Diagnostic')
+        ->assertSee('20');
 });
 
 test('duplicate order inactive recipe and missing active recipe are rejected', function () {
@@ -445,14 +774,14 @@ test('completion atomically consumes actual material adds accepted output exclud
     ], $this->admin->id);
     $inventory = app(InventoryService::class);
     $rawBefore = $inventory->getProductStock($this->material->id, $this->location->id, $this->branch->id);
-    $finishedBefore = $inventory->getProductStock($this->finished->id, $this->location->id, $this->branch->id);
+    $finishedBefore = $inventory->getProductStock($this->finished->id, $this->finishedLocation->id, $this->branch->id);
     $order = executeProductionOrderForTest($this, createProductionOrderForTest($this));
     $order = app(ProductionOrderService::class)->complete($order, $this->admin);
     $movementCount = StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->count();
 
     expect($order->status)->toBe(ProductionOrder::STATUS_COMPLETED)
         ->and($inventory->getProductStock($this->material->id, $this->location->id, $this->branch->id))->toBe($rawBefore - 18)
-        ->and($inventory->getProductStock($this->finished->id, $this->location->id, $this->branch->id))->toBe($finishedBefore + 1400)
+        ->and($inventory->getProductStock($this->finished->id, $this->finishedLocation->id, $this->branch->id))->toBe($finishedBefore + 1400)
         ->and($movementCount)->toBe(2)
         ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_output')->value('quantity_in'))->toBe('1400.0000');
 

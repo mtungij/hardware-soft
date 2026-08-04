@@ -42,6 +42,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'stock_adjustment_approval_required',
     'default_branch_id',
     'default_stock_location_id',
+    'default_raw_material_location_id',
+    'default_curing_location_id',
+    'default_finished_goods_location_id',
     'theme_color',
     'system_initialized',
     'mail_host',
@@ -59,6 +62,21 @@ class Setting extends Model
     public function defaultBranch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'default_branch_id');
+    }
+
+    public function defaultRawMaterialLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class, 'default_raw_material_location_id');
+    }
+
+    public function defaultCuringLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class, 'default_curing_location_id');
+    }
+
+    public function defaultFinishedGoodsLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class, 'default_finished_goods_location_id');
     }
 
     protected function casts(): array

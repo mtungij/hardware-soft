@@ -2,6 +2,7 @@
 
 use App\Models\Company;
 use App\Models\Setting;
+use App\Services\ProductionLocationService;
 use Illuminate\Support\Facades\Storage;
 use Livewire\WithFileUploads;
 
@@ -39,6 +40,9 @@ state([
     'language' => 'sw',
     'receipt_footer_message' => '',
     'manufacturing_enabled' => false,
+    'default_raw_material_location_id' => '',
+    'default_curing_location_id' => '',
+    'default_finished_goods_location_id' => '',
 ]);
 
 $authorizeCompanySettings = function (): void {
@@ -79,6 +83,9 @@ mount(function () {
     $this->language = $this->company?->language ?: $setting?->language ?: 'sw';
     $this->receipt_footer_message = $setting?->receipt_footer_message ?: '';
     $this->manufacturing_enabled = $this->company?->manufacturingEnabled() ?? false;
+    $this->default_raw_material_location_id = (string) ($setting?->default_raw_material_location_id ?: '');
+    $this->default_curing_location_id = (string) ($setting?->default_curing_location_id ?: '');
+    $this->default_finished_goods_location_id = (string) ($setting?->default_finished_goods_location_id ?: '');
 });
 
 rules([
@@ -104,6 +111,9 @@ rules([
     'language' => ['required', 'in:sw,en'],
     'receipt_footer_message' => ['nullable', 'string', 'max:500'],
     'manufacturing_enabled' => ['boolean'],
+    'default_raw_material_location_id' => ['nullable', 'integer'],
+    'default_curing_location_id' => ['nullable', 'integer'],
+    'default_finished_goods_location_id' => ['nullable', 'integer'],
 ]);
 
 $updatedRegion = function () {
@@ -152,6 +162,20 @@ $save = function () {
     $setting = Setting::withoutGlobalScopes()
         ->where('company_id', $company->id)
         ->first() ?: new Setting(['company_id' => $company->id]);
+    $canManageProductionDefaults = auth()->user()?->can('production.manage_location_defaults') ?? false;
+    $productionDefaults = [];
+    if ($canManageProductionDefaults) {
+        $productionLocationService = app(ProductionLocationService::class);
+        foreach ([
+            ProductionLocationService::RAW => 'default_raw_material_location_id',
+            ProductionLocationService::CURING => 'default_curing_location_id',
+            ProductionLocationService::FINISHED => 'default_finished_goods_location_id',
+        ] as $purpose => $field) {
+            $productionDefaults[$field] = filled($data[$field])
+                ? $productionLocationService->location((int) $data[$field], $purpose, $company->id, null, null, $field)->id
+                : null;
+        }
+    }
     $setting->fill([
         'company_name' => $company->company_name,
         'business_type' => $company->business_type,
@@ -176,6 +200,7 @@ $save = function () {
         'receipt_footer_message' => filled($data['receipt_footer_message'])
             ? $data['receipt_footer_message']
             : null,
+        ...$productionDefaults,
     ])->save();
 
     $this->company = $company;
@@ -216,6 +241,14 @@ $removeLogo = function () {
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Settings' => route('settings.index'), 'Company' => null]"
     />
 
+    @php
+        $canManageProductionDefaults = auth()->user()?->can('production.manage_location_defaults') ?? false;
+        $productionLocationService = app(ProductionLocationService::class);
+        $companyId = $company?->id ?: auth()->user()?->company_id;
+        $rawDefaultLocations = $productionLocationService->eligibleLocations(ProductionLocationService::RAW, (int) $companyId, null);
+        $curingDefaultLocations = $productionLocationService->eligibleLocations(ProductionLocationService::CURING, (int) $companyId, null);
+        $finishedDefaultLocations = $productionLocationService->eligibleLocations(ProductionLocationService::FINISHED, (int) $companyId, null);
+    @endphp
     <x-card>
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
             <x-form-input label="Company Name" name="company_name" wire:model="company_name" required />
@@ -257,6 +290,30 @@ $removeLogo = function () {
                     class="h-5 w-5 shrink-0 rounded border-slate-300 text-build-orange focus:ring-build-orange"
                 >
             </label>
+
+            <section class="rounded-xl border border-cyan-200 bg-cyan-50/50 p-4 dark:border-cyan-500/30 dark:bg-cyan-500/5 md:col-span-2">
+                <h2 class="text-lg font-black text-slate-950 dark:text-white">Production Location Defaults</h2>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">New Production Orders use these company-scoped locations. Branch-specific locations are valid only for assignments in that branch.</p>
+                <div class="mt-4 grid gap-4 lg:grid-cols-3">
+                    @foreach ([
+                        ['field' => 'default_raw_material_location_id', 'label' => 'Default Raw Material Warehouse', 'locations' => $rawDefaultLocations],
+                        ['field' => 'default_curing_location_id', 'label' => 'Default Curing Yard', 'locations' => $curingDefaultLocations],
+                        ['field' => 'default_finished_goods_location_id', 'label' => 'Default Finished Goods Warehouse', 'locations' => $finishedDefaultLocations],
+                    ] as $defaultField)
+                        <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
+                            {{ $defaultField['label'] }}
+                            <select wire:model="{{ $defaultField['field'] }}" @disabled(! $canManageProductionDefaults) class="mt-1 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:disabled:bg-slate-800">
+                                <option value="">Not configured</option>
+                                @foreach($defaultField['locations'] as $location)
+                                    <option value="{{ $location->id }}">{{ $location->name }} · {{ $location->code }} · {{ $location->branch?->name ?: 'Company-wide' }} · {{ str($location->type)->headline() }}</option>
+                                @endforeach
+                            </select>
+                            @error($defaultField['field']) <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                        </label>
+                    @endforeach
+                </div>
+                @unless($canManageProductionDefaults)<p class="mt-3 text-xs font-bold text-amber-700 dark:text-amber-300">You do not have permission to manage production location defaults.</p>@endunless
+            </section>
 
             <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800 md:row-span-2">
                 <div class="flex items-start gap-4">

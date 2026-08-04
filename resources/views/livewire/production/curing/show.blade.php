@@ -109,6 +109,8 @@ $recordDamage = function (): void {
             ProductionCuringBatch::STATUS_READY_FOR_RELEASE => $t('ready_for_release'),
             ProductionCuringBatch::STATUS_PARTIALLY_RELEASED => $t('partially_released'), ProductionCuringBatch::STATUS_RELEASED => $t('fully_released'),
             ProductionCuringBatch::STATUS_QUARANTINED => $t('quarantined'), ProductionCuringBatch::STATUS_CLOSED => $t('closed'),
+            ProductionCuringBatch::STATUS_ON_HOLD => 'On Hold', ProductionCuringBatch::STATUS_REWORK_REQUIRED => 'Rework Required',
+            ProductionCuringBatch::STATUS_AWAITING_RETEST => 'Awaiting Retest',
         ];
         $statusClasses = [
             ProductionCuringBatch::STATUS_CURING => 'border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-200',
@@ -117,6 +119,9 @@ $recordDamage = function (): void {
             ProductionCuringBatch::STATUS_PARTIALLY_RELEASED => 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200',
             ProductionCuringBatch::STATUS_RELEASED => 'border-emerald-300 bg-emerald-100 text-emerald-900 dark:border-emerald-400/40 dark:bg-emerald-400/15 dark:text-emerald-100',
             ProductionCuringBatch::STATUS_QUARANTINED => 'border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200',
+            ProductionCuringBatch::STATUS_ON_HOLD => 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200',
+            ProductionCuringBatch::STATUS_REWORK_REQUIRED => 'border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200',
+            ProductionCuringBatch::STATUS_AWAITING_RETEST => 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-200',
             ProductionCuringBatch::STATUS_CLOSED => 'border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200',
         ];
         $formatQuantity = function ($value): string {
@@ -261,17 +266,20 @@ $recordDamage = function (): void {
 
     <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         @foreach([
-            [$t('accepted'),'accepted_quantity',$t('accepted_help'),'border-cyan-200 bg-cyan-50 dark:border-cyan-500/30 dark:bg-cyan-500/10','text-cyan-600 dark:text-cyan-300'],
-            [$t('released'),'released_quantity',$t('released_help'),'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10','text-emerald-600 dark:text-emerald-300'],
-            [$t('damaged'),'damaged_quantity',$t('damaged_help'),'border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10','text-red-600 dark:text-red-300'],
-            [$t('remaining_curing'),'remaining_quantity',$t('remaining_help'),'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10','text-amber-600 dark:text-amber-300'],
-        ] as [$label,$field,$help,$classes,$iconClasses])
+            ['Accepted Into Curing',$batch->accepted_quantity,'Production output accepted into this curing batch.','border-cyan-200 bg-cyan-50 dark:border-cyan-500/30 dark:bg-cyan-500/10','text-cyan-600 dark:text-cyan-300'],
+            ['Production Reject',$batch->productionOrder?->rejected_quantity,'Rejected before curing; never entered curing stock.','border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10','text-red-600 dark:text-red-300'],
+            ['QC Reject',$batch->qc_rejected_quantity,'Rejected from curing by an approved QC disposition.','border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10','text-red-600 dark:text-red-300'],
+            ['Curing Damage',$batch->damaged_quantity,'Damage recorded after entering the curing yard.','border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10','text-red-600 dark:text-red-300'],
+            ['Released',$batch->released_quantity,$t('released_help'),'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10','text-emerald-600 dark:text-emerald-300'],
+            ['Remaining in Curing',$batch->remaining_quantity,$t('remaining_help'),'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10','text-amber-600 dark:text-amber-300'],
+            ['Release Eligible',$batch->release_eligible_quantity,'Approved quantity still available to move to Finished Goods.','border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10','text-emerald-600 dark:text-emerald-300'],
+        ] as [$label,$value,$help,$classes,$iconClasses])
             <section class="rounded-xl border p-4 shadow-sm {{ $classes }}">
                 <div class="flex items-center justify-between gap-3">
                     <h2 class="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">{{ $label }}</h2>
                     <svg class="h-5 w-5 {{ $iconClasses }}" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7 12 3 4 7m16 0-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
                 </div>
-                <p class="mt-2 text-2xl font-black text-slate-950 dark:text-white">{{ $formatQuantity($batch->{$field}) }} <span class="text-base">{{ $unit }}</span></p>
+                <p class="mt-2 text-2xl font-black text-slate-950 dark:text-white">{{ $formatQuantity($value) }} <span class="text-base">{{ $unit }}</span></p>
                 <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">{{ $help }}</p>
             </section>
         @endforeach

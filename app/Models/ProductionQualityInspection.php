@@ -11,12 +11,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
-#[Fillable(['company_id', 'branch_id', 'production_quality_plan_id', 'production_order_id', 'production_curing_batch_id', 'recipe_snapshot_id', 'product_id', 'machine_id', 'inspection_number', 'inspection_stage', 'applicable_quantity', 'inspected_quantity', 'sample_quantity', 'passed_quantity', 'failed_quantity', 'result', 'approval_status', 'inspected_at', 'inspected_by', 'approved_at', 'approved_by', 'approval_reason', 'rejection_reason', 'corrective_action', 'retest_required', 'supersedes_inspection_id', 'notes'])]
+#[Fillable(['company_id', 'branch_id', 'production_quality_plan_id', 'plan_name_snapshot', 'plan_version_snapshot', 'production_order_id', 'production_curing_batch_id', 'recipe_snapshot_id', 'product_id', 'machine_id', 'inspection_number', 'inspection_stage', 'applicable_quantity', 'inspected_quantity', 'sample_quantity', 'passed_quantity', 'failed_quantity', 'result', 'approval_status', 'inspected_at', 'inspected_by', 'approved_at', 'approved_by', 'qc_rejection_applied_at', 'approval_reason', 'rejection_reason', 'reason_justification', 'disposition', 'corrective_action', 'retest_required', 'retest_date', 'supersedes_inspection_id', 'notes'])]
 class ProductionQualityInspection extends Model
 {
     use HasCompany;
 
-    public const RESULTS = ['pending', 'passed', 'failed', 'conditional'];
+    public const RESULTS = ['pending', 'passed', 'conditional', 'failed', 'hold'];
+
+    public const DISPOSITIONS = ['quarantine', 'rework', 'scrap', 'return_to_curing', 'await_retest', 'other'];
 
     public const APPROVALS = ['pending', 'approved', 'rejected'];
 
@@ -32,7 +34,7 @@ class ProductionQualityInspection extends Model
 
     protected function casts(): array
     {
-        return ['inspected_at' => 'datetime', 'approved_at' => 'datetime', 'retest_required' => 'boolean', 'applicable_quantity' => 'decimal:12', 'inspected_quantity' => 'decimal:12', 'sample_quantity' => 'decimal:12', 'passed_quantity' => 'decimal:12', 'failed_quantity' => 'decimal:12'];
+        return ['inspected_at' => 'datetime', 'approved_at' => 'datetime', 'qc_rejection_applied_at' => 'datetime', 'retest_required' => 'boolean', 'retest_date' => 'date', 'applicable_quantity' => 'decimal:12', 'inspected_quantity' => 'decimal:12', 'sample_quantity' => 'decimal:12', 'passed_quantity' => 'decimal:12', 'failed_quantity' => 'decimal:12'];
     }
 
     public function plan(): BelongsTo
@@ -83,6 +85,16 @@ class ProductionQualityInspection extends Model
     public function holds(): HasMany
     {
         return $this->hasMany(ProductionQualityHold::class);
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(ProductionQualityAttachment::class);
+    }
+
+    public function auditEvents(): HasMany
+    {
+        return $this->hasMany(ProductionQualityAuditEvent::class)->orderBy('occurred_at')->orderBy('id');
     }
 
     public function supersedes(): BelongsTo

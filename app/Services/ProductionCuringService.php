@@ -96,6 +96,10 @@ class ProductionCuringService
             $remaining = bcsub((string) $batch->remaining_quantity, $quantity, 12);
             $batch->update([
                 'released_quantity' => $released, 'remaining_quantity' => $remaining,
+                'release_eligible_quantity' => $batch->qc_approved_at
+                    ? (bccomp(bcsub((string) $batch->release_eligible_quantity, $quantity, 12), '0', 12) < 0
+                        ? '0' : bcsub((string) $batch->release_eligible_quantity, $quantity, 12))
+                    : (string) $batch->release_eligible_quantity,
                 'status' => bccomp($remaining, '0', 12) <= 0
                     ? ProductionCuringBatch::STATUS_RELEASED
                     : ProductionCuringBatch::STATUS_PARTIALLY_RELEASED,
@@ -158,6 +162,10 @@ class ProductionCuringService
             $batch->update([
                 'damaged_quantity' => bcadd((string) $batch->damaged_quantity, $quantity, 12),
                 'remaining_quantity' => $remaining,
+                'release_eligible_quantity' => bccomp((string) $batch->release_eligible_quantity, '0', 12) > 0
+                    ? (bccomp(bcsub((string) $batch->release_eligible_quantity, $quantity, 12), '0', 12) < 0
+                        ? '0' : bcsub((string) $batch->release_eligible_quantity, $quantity, 12))
+                    : '0',
                 'status' => bccomp($remaining, '0', 12) <= 0 ? ProductionCuringBatch::STATUS_CLOSED : $batch->status,
                 'closed_at' => bccomp($remaining, '0', 12) <= 0 ? now() : null,
                 'closed_by' => bccomp($remaining, '0', 12) <= 0 ? $user->id : null,

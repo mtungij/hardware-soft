@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
-#[Fillable(['company_id', 'production_quality_inspection_id', 'production_quality_plan_check_id', 'check_name', 'check_type', 'acceptance_rule', 'unit_id', 'minimum_value', 'maximum_value', 'target_value', 'allowed_options', 'numeric_value', 'boolean_value', 'text_value', 'selected_value', 'result', 'is_required', 'is_critical', 'inspector_comment'])]
+#[Fillable(['company_id', 'production_quality_inspection_id', 'production_quality_plan_check_id', 'check_name', 'requirement_snapshot', 'check_type', 'acceptance_rule', 'unit_id', 'unit_snapshot', 'plan_version_snapshot', 'minimum_value', 'maximum_value', 'target_value', 'allowed_options', 'numeric_value', 'boolean_value', 'text_value', 'selected_value', 'result', 'is_required', 'is_critical', 'inspector_comment'])]
 class ProductionQualityInspectionResult extends Model
 {
     use HasCompany;

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
-#[Fillable(['company_id', 'product_id', 'name', 'code', 'version', 'inspection_stage', 'status', 'effective_from', 'effective_to', 'requires_approval', 'notes', 'created_by', 'updated_by'])]
+#[Fillable(['company_id', 'product_id', 'name', 'code', 'version', 'inspection_stage', 'status', 'effective_from', 'effective_to', 'requires_approval', 'enforce_approval_separation', 'requires_failure_evidence', 'notes', 'created_by', 'updated_by'])]
 class ProductionQualityPlan extends Model
 {
     use HasCompany;
@@ -39,7 +39,7 @@ class ProductionQualityPlan extends Model
 
     protected function casts(): array
     {
-        return ['effective_from' => 'date', 'effective_to' => 'date', 'requires_approval' => 'boolean'];
+        return ['effective_from' => 'date', 'effective_to' => 'date', 'requires_approval' => 'boolean', 'enforce_approval_separation' => 'boolean', 'requires_failure_evidence' => 'boolean'];
     }
 
     public function product(): BelongsTo

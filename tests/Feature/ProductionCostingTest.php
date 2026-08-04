@@ -11,6 +11,7 @@ use App\Models\ProductionOrderCostingLine;
 use App\Models\ProductionOrderMaterial;
 use App\Models\ProductionRecipe;
 use App\Models\ProductionRecipeItem;
+use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Unit;
@@ -60,6 +61,11 @@ beforeEach(function () {
         'company_id' => $this->company->id, 'branch_id' => $this->branch->id, 'name' => 'Cost Curing', 'code' => 'CST-CUR',
         'type' => 'curing', 'status' => 'active', 'is_active' => true, 'can_issue_stock' => true,
         'can_receive_stock' => true, 'can_transfer' => true, 'can_sell' => false, 'is_sellable' => false,
+    ]);
+    Setting::query()->updateOrCreate(['company_id' => $this->company->id], [
+        'default_raw_material_location_id' => $this->raw->id,
+        'default_curing_location_id' => $this->curingLocation->id,
+        'default_finished_goods_location_id' => $this->finishedLocation->id,
     ]);
     app(ProductionRecipeService::class)->save([
         'name' => 'Costing Recipe', 'code' => 'CST-R1', 'version' => '1', 'product_id' => $this->finished->id,

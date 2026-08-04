@@ -12,6 +12,7 @@ use App\Models\ProductionQualityInspection;
 use App\Models\ProductionQualityPlan;
 use App\Models\ProductionRecipe;
 use App\Models\ProductionRecipeItem;
+use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Unit;
@@ -64,6 +65,11 @@ beforeEach(function () {
         'company_id' => $this->company->id, 'branch_id' => $this->branch->id, 'name' => 'Finished Goods', 'code' => 'CUR-FG',
         'type' => 'store', 'status' => 'active', 'is_active' => true, 'can_issue_stock' => true,
         'can_receive_stock' => true, 'can_transfer' => true, 'can_sell' => true, 'is_sellable' => true,
+    ]);
+    Setting::query()->updateOrCreate(['company_id' => $this->company->id], [
+        'default_raw_material_location_id' => $this->raw->id,
+        'default_curing_location_id' => $this->curing->id,
+        'default_finished_goods_location_id' => $this->sellable->id,
     ]);
     $this->recipe = app(ProductionRecipeService::class)->save([
         'name' => 'Curing Recipe', 'code' => 'CUR-R1', 'version' => '1', 'product_id' => $this->finished->id,

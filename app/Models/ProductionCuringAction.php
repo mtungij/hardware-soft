@@ -22,6 +22,8 @@ class ProductionCuringAction extends Model
 
     public const DAMAGE = 'damage';
 
+    public const QC_REJECTION = 'qc_rejection';
+
     public const CLOSE = 'close';
 
     protected static function booted(): void

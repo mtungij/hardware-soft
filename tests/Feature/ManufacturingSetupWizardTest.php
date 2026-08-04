@@ -97,12 +97,16 @@ test('manufacturing setup creates scoped locations and optional machine without 
     $company = Company::query()->where('company_name', 'Setup Company Mfg')->firstOrFail();
     $locations = StockLocation::query()->where('company_id', $company->id)->whereIn('code', ['RAW-MATERIALS', 'PRODUCTION-AREA', 'CURING-YARD', 'FINISHED-GOODS'])->get()->keyBy('code');
     $machine = Machine::query()->where('company_id', $company->id)->firstOrFail();
+    $setting = Setting::query()->where('company_id', $company->id)->firstOrFail();
 
     expect($company->manufacturing_enabled)->toBeTrue()
         ->and($locations)->toHaveCount(4)
         ->and($locations['CURING-YARD']->is_sellable)->toBeFalse()
         ->and($locations['CURING-YARD']->can_sell)->toBeFalse()
         ->and($locations['FINISHED-GOODS']->is_sellable)->toBeTrue()
+        ->and($setting->default_raw_material_location_id)->toBe($locations['RAW-MATERIALS']->id)
+        ->and($setting->default_curing_location_id)->toBe($locations['CURING-YARD']->id)
+        ->and($setting->default_finished_goods_location_id)->toBe($locations['FINISHED-GOODS']->id)
         ->and($machine->name)->toBe('First Block Press')
         ->and($machine->daily_capacity)->toBe('750.5000')
         ->and($machine->branch_id)->toBe($locations['CURING-YARD']->branch_id)

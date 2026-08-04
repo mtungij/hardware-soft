@@ -4,6 +4,7 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Machine;
 use App\Models\Product;
+use App\Models\ProductionCuringAction;
 use App\Models\ProductionCuringBatch;
 use App\Models\ProductionOrder;
 use App\Models\ProductionQualityHold;
@@ -16,6 +17,8 @@ use App\Models\User;
 use App\Services\ProductionCuringService;
 use App\Services\ProductionQualityService;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
 
@@ -56,12 +59,34 @@ beforeEach(function () {
     StockMovement::query()->create(['company_id' => $this->company->id, 'branch_id' => $this->branch->id, 'product_id' => $this->product->id, 'stock_location_id' => $this->curing->id, 'movement_type' => 'production_output', 'quantity' => 100, 'quantity_in' => 100, 'quantity_out' => 0, 'reference_type' => ProductionOrder::class, 'reference_id' => $this->order->id, 'movement_date' => now()->toDateString(), 'created_by' => $this->admin->id]);
 });
 
-function qcPlan(object $test, string $stage = 'pre_release', array $check = []): ProductionQualityPlan
+function qcPlan(object $test, string $stage = 'pre_release', array $check = [], array $planOverrides = []): ProductionQualityPlan
 {
-    $plan = ProductionQualityPlan::query()->create(['company_id' => $test->company->id, 'product_id' => $test->product->id, 'name' => 'Release QC', 'code' => 'QC-REL', 'version' => '1', 'inspection_stage' => $stage, 'status' => 'draft', 'requires_approval' => true, 'created_by' => $test->admin->id]);
+    $plan = ProductionQualityPlan::query()->create(['company_id' => $test->company->id, 'product_id' => $test->product->id, 'name' => 'Release QC', 'code' => 'QC-REL', 'version' => '1', 'inspection_stage' => $stage, 'status' => 'draft', 'requires_approval' => true, 'created_by' => $test->admin->id, ...$planOverrides]);
     $plan->checks()->create(['company_id' => $test->company->id, 'name' => 'Strength', 'check_type' => 'numeric', 'minimum_value' => '10.00000000', 'required' => true, 'critical' => true, 'acceptance_rule' => 'minimum', 'sort_order' => 1, ...$check]);
 
     return app(ProductionQualityService::class)->activatePlan($plan, $test->admin);
+}
+
+function queuedQc(object $test): ProductionQualityInspection
+{
+    qcPlan($test);
+
+    return app(ProductionQualityService::class)->queueCuringInspection($test->order->fresh('product'), $test->batch, $test->admin);
+}
+
+function recordQueuedQc(object $test, ProductionQualityInspection $inspection, string $accepted, string $rejected, array $overrides = []): ProductionQualityInspection
+{
+    $line = $inspection->results()->firstOrFail();
+
+    return app(ProductionQualityService::class)->recordQueuedInspection($inspection, [
+        'result' => 'passed',
+        'accepted_quantity' => $accepted,
+        'rejected_quantity' => $rejected,
+        'inspector_id' => $test->admin->id,
+        'disposition' => bccomp($rejected, '0', 12) > 0 ? 'scrap' : null,
+        'check_answers' => [$line->id => ['numeric_value' => '12']],
+        ...$overrides,
+    ], $test->admin);
 }
 
 function qcInspect(object $test, array $answer = ['numeric_value' => '12'], array $data = []): ProductionQualityInspection

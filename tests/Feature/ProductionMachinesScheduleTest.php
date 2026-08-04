@@ -7,7 +7,9 @@ use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\ProductionMachineAssignment;
 use App\Models\ProductionMould;
+use App\Models\ProductionOrder;
 use App\Models\ProductionRecipe;
+use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\ProductionMouldService;
@@ -212,11 +214,11 @@ test('target quantity must be positive in schedule component', function () {
         ->assertHasErrors(['target_quantity']);
 });
 
-test('one machine can only have one assignment per date at database and application levels', function () {
-    app(ProductionScheduleService::class)->save(productionAssignmentData($this), $this->admin);
+test('concurrent creation attempts cannot produce two active assignments for one machine and date', function () {
+    $first = app(ProductionScheduleService::class)->save(productionAssignmentData($this), $this->admin);
 
     expect(fn () => app(ProductionScheduleService::class)
-        ->save(productionAssignmentData($this, ['product_id' => $this->purchased->id]), $this->admin))
+        ->save(productionAssignmentData($this), $this->admin))
         ->toThrow(ValidationException::class);
 
     expect(fn () => ProductionMachineAssignment::withoutGlobalScopes()->create([
@@ -225,6 +227,13 @@ test('one machine can only have one assignment per date at database and applicat
         'created_by' => $this->admin->id,
         'updated_by' => $this->admin->id,
     ]))->toThrow(QueryException::class);
+
+    expect($first->active_slot_key)->toBe(ProductionMachineAssignment::activeSlotKey(
+        $this->company->id,
+        $this->machine->id,
+        '2026-07-29',
+        ProductionMachineAssignment::STATUS_PLANNED,
+    ));
 });
 
 test('an existing assignment never removes an active machine from the daily assignment dropdown', function () {
@@ -272,43 +281,110 @@ test('same machine can be scheduled on another date and different machines on th
     expect(ProductionMachineAssignment::query()->count())->toBe(3);
 });
 
-test('cancelled assignment is replaced by updating the retained row', function () {
-    $assignment = app(ProductionScheduleService::class)->save(
-        productionAssignmentData($this, ['status' => ProductionMachineAssignment::STATUS_CANCELLED]),
-        $this->admin
-    );
-
-    $replacement = $this->manufactured->replicate();
-    $replacement->name = 'Kerbstone';
-    $replacement->sku = 'MFG-KERB';
-    $replacement->inventory_source = Product::INVENTORY_SOURCE_MANUFACTURED;
-    $replacement->save();
-    $replacementRecipe = ProductionRecipe::query()->create([
+test('cancelled assignment keeps its history and allows a new assignment in the same slot', function () {
+    $assignment = app(ProductionScheduleService::class)->save(productionAssignmentData($this), $this->admin);
+    $location = StockLocation::query()->where('branch_id', $this->branch->id)->firstOrFail();
+    $cancelledOrder = ProductionOrder::query()->create([
         'company_id' => $this->company->id,
-        'product_id' => $replacement->id,
-        'name' => 'Kerbstone Active Recipe',
-        'code' => 'KERB-ACTIVE',
-        'version' => '1',
-        'output_quantity' => 1,
-        'output_unit_id' => $replacement->unit_id,
-        'status' => ProductionRecipe::STATUS_ACTIVE,
+        'branch_id' => $this->branch->id,
+        'production_machine_assignment_id' => $assignment->id,
+        'machine_id' => $this->machine->id,
+        'product_id' => $this->manufactured->id,
+        'production_recipe_id' => $this->recipe->id,
+        'raw_material_stock_location_id' => $location->id,
+        'finished_goods_stock_location_id' => $location->id,
+        'order_number' => 'PRD-CANCELLED-SCHEDULE-HISTORY',
+        'production_date' => $assignment->production_date,
+        'planned_quantity' => 500,
+        'status' => ProductionOrder::STATUS_CANCELLED,
+        'cancelled_at' => now(),
+        'cancellation_reason' => 'Schedule replacement fixture',
         'created_by' => $this->admin->id,
         'updated_by' => $this->admin->id,
+        'cancelled_by' => $this->admin->id,
     ]);
+    $assignment->update([
+        'status' => ProductionMachineAssignment::STATUS_CANCELLED,
+        'updated_by' => $this->admin->id,
+    ]);
+    $assignmentHistory = $assignment->fresh()->getAttributes();
+    $orderHistory = $cancelledOrder->fresh()->getAttributes();
+    $movementCount = StockMovement::withoutGlobalScopes()->count();
 
-    app(ProductionScheduleService::class)->save(
-        productionAssignmentData($this, [
-            'product_id' => $replacement->id,
-            'production_recipe_id' => $replacementRecipe->id,
-            'status' => ProductionMachineAssignment::STATUS_PLANNED,
-        ]),
+    $schedule = Volt::test('production.schedule.index')
+        ->set('selectedDate', '2026-07-29')
+        ->set('branch_id', (string) $this->branch->id)
+        ->set('machine_id', (string) $this->machine->id)
+        ->assertDontSee('Assignment already exists.')
+        ->assertSet('availableProducts.0.id', $this->manufactured->id)
+        ->assertSee('SCHEDULE-MOULD-A')
+        ->assertSee('Create Replacement')
+        ->assertSee('Reactivate');
+
+    preg_match('/<select data-testid="assignment-product-select".*?<\/select>/s', $schedule->html(), $productSelect);
+    expect($productSelect[0] ?? '')
+        ->toContain('value="'.$this->manufactured->id.'"')
+        ->not->toMatch('/\sdisabled(?:\s|>)/');
+
+    $schedule->set('product_id', (string) $this->manufactured->id)
+        ->assertSet('production_recipe_id', (string) $this->recipe->id)
+        ->set('target_quantity', '600')
+        ->set('planned_start_time', '08:00')
+        ->set('planned_end_time', '16:00')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSee('Cancelled')
+        ->assertSee('Planned');
+
+    $newAssignment = ProductionMachineAssignment::query()
+        ->whereKeyNot($assignment->id)
+        ->whereDate('production_date', '2026-07-29')
+        ->firstOrFail();
+
+    expect($newAssignment->id)->not->toBe($assignment->id)
+        ->and($newAssignment->status)->toBe(ProductionMachineAssignment::STATUS_PLANNED)
+        ->and($assignment->fresh()->getAttributes())->toBe($assignmentHistory)
+        ->and($cancelledOrder->fresh()->getAttributes())->toBe($orderHistory)
+        ->and(ProductionMachineAssignment::query()->count())->toBe(2)
+        ->and(ProductionMachineAssignment::query()->eligibleForProductionOrder()->pluck('id')->all())
+        ->toBe([$newAssignment->id])
+        ->and(StockMovement::withoutGlobalScopes()->count())->toBe($movementCount);
+
+    Volt::test('production.schedule.index')
+        ->call('setAssignmentStatus', $assignment->id, ProductionMachineAssignment::STATUS_PLANNED)
+        ->assertHasErrors(['machine_id']);
+
+    expect($assignment->refresh()->status)->toBe(ProductionMachineAssignment::STATUS_CANCELLED)
+        ->and($cancelledOrder->fresh()->getAttributes())->toBe($orderHistory);
+});
+
+test('create replacement prepares a new row while reactivate intentionally edits the cancelled row', function () {
+    $cancelled = app(ProductionScheduleService::class)->save(
+        productionAssignmentData($this, ['status' => ProductionMachineAssignment::STATUS_CANCELLED]),
         $this->admin,
-        $assignment
     );
 
-    expect(ProductionMachineAssignment::query()->count())->toBe(1)
-        ->and($assignment->refresh()->product_id)->toBe($replacement->id)
-        ->and($assignment->status)->toBe(ProductionMachineAssignment::STATUS_PLANNED);
+    $component = Volt::test('production.schedule.index')
+        ->call('createNewAssignmentFrom', $cancelled->id)
+        ->assertSet('editingId', null)
+        ->assertSet('selectedDate', '2026-07-29')
+        ->assertSet('machine_id', (string) $this->machine->id)
+        ->assertSet('availableProducts.0.id', $this->manufactured->id)
+        ->set('product_id', (string) $this->manufactured->id)
+        ->assertSet('production_recipe_id', (string) $this->recipe->id)
+        ->set('target_quantity', '500')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $replacement = ProductionMachineAssignment::query()->whereKeyNot($cancelled->id)->firstOrFail();
+    expect($replacement->id)->not->toBe($cancelled->id)
+        ->and($cancelled->refresh()->status)->toBe(ProductionMachineAssignment::STATUS_CANCELLED);
+
+    $replacement->update(['status' => ProductionMachineAssignment::STATUS_CANCELLED]);
+    Volt::test('production.schedule.index')
+        ->call('editAssignment', $cancelled->id)
+        ->assertSet('editingId', $cancelled->id)
+        ->assertSet('status', ProductionMachineAssignment::STATUS_CANCELLED);
 });
 
 test('completed assignment is read only and completion creates no stock movement', function () {

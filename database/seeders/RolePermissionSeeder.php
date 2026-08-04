@@ -53,7 +53,7 @@ class RolePermissionSeeder extends Seeder
             }
         }
 
-        foreach (['view user stock locations', 'manage user stock locations', 'assign selling locations', 'assign transfer locations', 'assign receiving locations', 'assign default stock location', 'view all stock locations', 'sell from multiple locations', 'manage cross branch stock locations', 'receive purchases', 'edit draft goods receipts', 'post goods receipts', 'cancel goods receipts', 'adjust purchase receiving cost', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'create unassigned credit sales', 'view unassigned credit sales', 'assign unassigned credit customer', 'receive credit payments', 'view customer balances', 'customer-balances.view', 'receive sale payments', 'print receipt', 'receive customer payments', 'customer-payments.view', 'customer-payments.create', 'customer-payments.print', 'customer-payment-reports.view', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'customer-statements.view', 'customer-statements.export', 'view customer notifications', 'manage customer communications', 'publish announcements', 'send customer messages', 'pay suppliers', 'manage cashbook', 'export reports', 'export pdf', 'export excel', 'print reports', 'view stock valuation', 'view sales profit', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings', 'company-settings.update', 'production.view', 'production.view_product_families', 'production.manage_product_families', 'production.view_moulds', 'production.manage_moulds', 'production.manage_machines', 'production.manage_schedule', 'production.view_recipes', 'production.manage_recipes', 'production.view_orders', 'production.create_orders', 'production.execute_orders', 'production.complete_orders', 'production.cancel_orders'] as $permissionName) {
+        foreach (['view user stock locations', 'manage user stock locations', 'assign selling locations', 'assign transfer locations', 'assign receiving locations', 'assign default stock location', 'view all stock locations', 'sell from multiple locations', 'manage cross branch stock locations', 'receive purchases', 'edit draft goods receipts', 'post goods receipts', 'cancel goods receipts', 'adjust purchase receiving cost', 'adjust store stock', 'approve stock adjustment', 'complete stock transfers', 'cancel stock transfers', 'access pos', 'sell from store', 'sell from dispensing', 'create credit sales', 'create unassigned credit sales', 'view unassigned credit sales', 'assign unassigned credit customer', 'receive credit payments', 'view customer balances', 'customer-balances.view', 'receive sale payments', 'print receipt', 'receive customer payments', 'customer-payments.view', 'customer-payments.create', 'customer-payments.print', 'customer-payment-reports.view', 'manage customer portal', 'approve customer accounts', 'approve customer receipts', 'approve customer deposits', 'view customer statements', 'customer-statements.view', 'customer-statements.export', 'view customer notifications', 'manage customer communications', 'publish announcements', 'send customer messages', 'pay suppliers', 'manage cashbook', 'export reports', 'export pdf', 'export excel', 'print reports', 'view stock valuation', 'view sales profit', 'send purchase emails', 'resend purchase emails', 'view email logs', 'manage email settings', 'company-settings.update', 'production.view', 'production.view_product_families', 'production.manage_product_families', 'production.view_moulds', 'production.manage_moulds', 'production.manage_machines', 'production.manage_schedule', 'production.view_recipes', 'production.manage_recipes', 'production.view_orders', 'production.create_orders', 'production.execute_orders', 'production.complete_orders', 'production.cancel_orders', 'production.override_default_locations', 'production.manage_location_defaults'] as $permissionName) {
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
@@ -65,7 +65,7 @@ class RolePermissionSeeder extends Seeder
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
-        foreach (['production.view_quality', 'production.manage_quality_plans', 'production.perform_quality_inspections', 'production.approve_quality', 'production.manage_quality_holds'] as $permissionName) {
+        foreach (['production.view_quality', 'production.manage_quality_plans', 'production.perform_quality_inspections', 'production.approve_quality', 'production.manage_quality_holds', 'production.record_qc_result', 'production.approve_qc', 'production.manage_qc_plans', 'production.override_qc_separation'] as $permissionName) {
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
@@ -82,6 +82,8 @@ class RolePermissionSeeder extends Seeder
             'Accountant',
             'Quality Manager',
             'Quality Inspector',
+            'Production Manager',
+            'Production Operator',
         ];
 
         foreach ($roles as $roleName) {
@@ -96,8 +98,20 @@ class RolePermissionSeeder extends Seeder
         Role::findByName('Manager', $this->guard)->revokePermissionTo('production.finalize_costing');
         Role::findByName('Manager', $this->guard)->revokePermissionTo(['production.manage_quality_plans', 'production.approve_quality']);
         Role::findByName('Manager', $this->guard)->revokePermissionTo('production.view_cost_reports');
-        Role::findByName('Quality Manager', $this->guard)->syncPermissions(['view dashboard', 'production.view', 'production.view_quality', 'production.manage_quality_plans', 'production.perform_quality_inspections', 'production.approve_quality', 'production.manage_quality_holds']);
-        Role::findByName('Quality Inspector', $this->guard)->syncPermissions(['view dashboard', 'production.view', 'production.view_quality', 'production.perform_quality_inspections']);
+        Role::findByName('Manager', $this->guard)->revokePermissionTo(['production.override_default_locations', 'production.manage_location_defaults']);
+        Role::findByName('Production Manager', $this->guard)->givePermissionTo([
+            'view dashboard', 'production.view', 'production.view_moulds', 'production.manage_moulds',
+            'production.manage_machines', 'production.manage_schedule', 'production.view_recipes',
+            'production.manage_recipes', 'production.view_orders', 'production.create_orders',
+            'production.execute_orders', 'production.complete_orders', 'production.cancel_orders',
+            'production.override_default_locations',
+        ]);
+        Role::findByName('Production Operator', $this->guard)->givePermissionTo([
+            'view dashboard', 'production.view', 'production.view_orders',
+            'production.create_orders', 'production.execute_orders',
+        ]);
+        Role::findByName('Quality Manager', $this->guard)->syncPermissions(['view dashboard', 'production.view', 'production.view_quality', 'production.manage_quality_plans', 'production.perform_quality_inspections', 'production.approve_quality', 'production.manage_quality_holds', 'production.record_qc_result', 'production.approve_qc', 'production.manage_qc_plans']);
+        Role::findByName('Quality Inspector', $this->guard)->syncPermissions(['view dashboard', 'production.view', 'production.view_quality', 'production.perform_quality_inspections', 'production.record_qc_result']);
         $inventoryViewPermissions = [
             'view categories',
             'view units',
