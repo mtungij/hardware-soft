@@ -65,16 +65,16 @@ test('generic alternatives are product specific active and directly normalized t
 test('an existing product can add and later deactivate a conversion from edit product', function () {
     $component = Volt::test('products.edit', ['product' => $this->product])
         ->assertSee('Unit Conversions & Pricing')
-        ->set('unit_conversions', [[
-            'unit_id' => (string) $this->box->id,
-            'conversion_factor' => '12',
-            'retail_price' => '1500',
-            'wholesale_price' => '1400',
-            'purchase_price' => '1200',
-            'can_purchase' => true,
-            'can_sell' => true,
-            'active' => true,
-        ]])
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && $rows === [])
+        ->assertSee('No alternative units configured. Base-unit buying and selling continue to work as before.')
+        ->call('addUnitConversion')
+        ->set('unit_conversions.0.unit_id', (string) $this->box->id)
+        ->set('unit_conversions.0.conversion_factor', '12')
+        ->set('unit_conversions.0.retail_price', '1500')
+        ->set('unit_conversions.0.wholesale_price', '1400')
+        ->set('unit_conversions.0.purchase_price', '1200')
+        ->set('unit_conversions.0.can_purchase', true)
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
         ->assertSee('Box contains')
         ->assertSee('1 Box =')
         ->assertSee('Enter how many pcs are contained in one Box.')
@@ -101,10 +101,15 @@ test('an existing product can add and later deactivate a conversion from edit pr
 
     $bag = Unit::where('company_id', $this->branch->company_id)->where('short_name', 'bag')->firstOrFail();
     Volt::test('products.edit', ['product' => $this->product->fresh()])
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
         ->assertSee('Box contains')
         ->assertSee('Retail Price / Box')
         ->set('unit_id', (string) $bag->id)
         ->assertSeeHtml('aria-label="How many bag are contained in 1 Box"')
+        ->call('addUnitConversion')
+        ->assertCount('unit_conversions', 2)
+        ->call('removeUnitConversion', 1)
+        ->assertCount('unit_conversions', 1)
         ->set('unit_conversions.0.active', false)
         ->set('unit_id', (string) $this->product->unit_id)
         ->call('save')
@@ -258,7 +263,10 @@ test('retail and wholesale POS use package prices while deducting canonical base
 
 test('create product adds exactly one removable alternative unit row per action', function () {
     Volt::test('products.create')
-        ->assertCount('unit_conversions', 0)
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && $rows === [])
+        ->assertSee('No alternative units configured. Base-unit buying and selling continue to work as before.')
+        ->set('unit_conversions', null)
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && $rows === [])
         ->call('addUnitConversion')
         ->assertCount('unit_conversions', 1)
         ->assertSet('unit_conversions.0', [
@@ -285,33 +293,55 @@ test('create product adds exactly one removable alternative unit row per action'
 });
 
 test('create product saves with a valid alternative unit conversion', function () {
+    $bag = Unit::where('company_id', $this->branch->company_id)->where('short_name', 'bag')->firstOrFail();
+    $bundle = Unit::where('company_id', $this->branch->company_id)->where('short_name', 'bundle')->firstOrFail();
+
     Volt::test('products.create')
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && $rows === [])
         ->set('branch_id', (string) $this->branch->id)
         ->set('category_id', (string) $this->product->category_id)
         ->set('measurement_type_id', (string) $this->product->measurement_type_id)
         ->set('purchase_unit_id', (string) $this->product->unit_id)
         ->set('unit_id', (string) $this->product->unit_id)
         ->set('selling_unit_id', (string) $this->product->unit_id)
-        ->set('name', 'Create Product With Box')
-        ->set('sku', 'CREATE-WITH-BOX')
+        ->set('name', 'Create Product With Bag')
+        ->set('sku', 'CREATE-WITH-BAG')
         ->set('buying_price', '100')
         ->set('selling_price', '150')
         ->set('reorder_level', '0')
         ->call('addUnitConversion')
-        ->set('unit_conversions.0.unit_id', (string) $this->box->id)
-        ->set('unit_conversions.0.conversion_factor', '12')
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
+        ->set('unit_conversions.0.unit_id', (string) $bag->id)
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
+        ->set('unit_conversions.0.conversion_factor', '50')
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
         ->set('unit_conversions.0.retail_price', '1500')
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
         ->set('unit_conversions.0.wholesale_price', '1400')
         ->set('unit_conversions.0.purchase_price', '1200')
         ->set('unit_conversions.0.can_purchase', true)
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
+        ->set('unit_conversions.0.can_sell', false)
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
+        ->set('unit_conversions.0.can_sell', true)
+        ->set('unit_conversions.0.active', false)
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
+        ->set('unit_conversions.0.active', true)
+        ->call('addUnitConversion')
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 2)
+        ->set('unit_conversions.1.unit_id', (string) $bundle->id)
+        ->set('unit_conversions.1.conversion_factor', '20')
+        ->call('removeUnitConversion', 1)
+        ->assertSet('unit_conversions', fn ($rows) => is_array($rows) && count($rows) === 1)
+        ->assertSet('unit_conversions.0.unit_id', (string) $bag->id)
         ->call('save')
         ->assertHasNoErrors();
 
-    $product = Product::where('sku', 'CREATE-WITH-BOX')->firstOrFail();
+    $product = Product::where('sku', 'CREATE-WITH-BAG')->firstOrFail();
     $conversion = $product->unitConversions()->firstOrFail();
 
-    expect($conversion->unit_id)->toBe($this->box->id)
-        ->and((float) $conversion->conversion_factor)->toBe(12.0)
+    expect($conversion->unit_id)->toBe($bag->id)
+        ->and((float) $conversion->conversion_factor)->toBe(50.0)
         ->and((float) $conversion->retail_price)->toBe(1500.0)
         ->and($conversion->can_purchase)->toBeTrue()
         ->and($conversion->can_sell)->toBeTrue()

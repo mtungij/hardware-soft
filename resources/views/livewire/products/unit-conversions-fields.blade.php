@@ -7,6 +7,7 @@
                 ->orWhereHas('measurementType', fn ($type) => $type->where('code', \App\Models\MeasurementType::COUNT)))
                 ->orderBy('name')->get()
             : collect();
+        $unitConversionRows = is_iterable($unit_conversions ?? null) ? $unit_conversions : [];
     @endphp
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -17,7 +18,7 @@
     </div>
 
     <div class="mt-4 space-y-4">
-        @forelse ($unit_conversions as $index => $conversion)
+        @forelse ($unitConversionRows as $index => $conversion)
             @php
                 $alternativeUnit = filled($conversion['unit_id'] ?? null) ? \App\Models\Unit::find($conversion['unit_id']) : null;
                 $alternativeUnitLabel = $alternativeUnit?->name;
