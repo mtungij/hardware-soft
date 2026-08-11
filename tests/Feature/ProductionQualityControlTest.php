@@ -4,7 +4,6 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\Machine;
 use App\Models\Product;
-use App\Models\ProductionCuringAction;
 use App\Models\ProductionCuringBatch;
 use App\Models\ProductionOrder;
 use App\Models\ProductionQualityHold;
@@ -17,8 +16,6 @@ use App\Models\User;
 use App\Services\ProductionCuringService;
 use App\Services\ProductionQualityService;
 use Database\Seeders\DatabaseSeeder;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
 
@@ -200,6 +197,15 @@ test('approval is controlled and approved inspection is immutable', function () 
 });
 
 test('required pre-release inspection and active holds gate curing release', function () {
+    expect(fn () => app(ProductionQualityService::class)->createInspection([
+        'production_curing_batch_id' => $this->batch->id,
+        'inspection_stage' => 'pre_release',
+        'sample_quantity' => 10,
+        'inspected_quantity' => 100,
+        'passed_quantity' => 100,
+        'failed_quantity' => 0,
+    ], [], $this->admin))->toThrow(ValidationException::class, 'No active quality plan exists for this product and stage.');
+
     qcPlan($this);
     $service = app(ProductionCuringService::class);
     expect(fn () => $service->release($this->batch, 100, $this->sellable->id, $this->admin, 'qc-missing'))->toThrow(ValidationException::class, __('production.quality.pre_release_required'));

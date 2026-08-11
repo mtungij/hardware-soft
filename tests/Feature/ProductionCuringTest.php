@@ -166,8 +166,45 @@ test('production completion queues one linked quality inspection and approval un
         'requires_quality_control' => true,
         'requires_pre_release_inspection' => true,
     ]);
+    $this->finished->productFamily->update(['production_method' => 'mould_only']);
+    $manualMould = ProductionMould::query()->create([
+        'company_id' => $this->company->id,
+        'product_family_id' => $this->finished->product_family_id,
+        'code' => 'CUR-QC-MANUAL-MOULD',
+        'name' => 'Curing QC Manual Mould',
+        'active' => true,
+    ]);
+    $this->assignment->update([
+        'production_method' => 'mould_only',
+        'machine_id' => null,
+        'production_mould_id' => $manualMould->id,
+        'production_mould_installation_id' => null,
+    ]);
+    $plan = ProductionQualityPlan::query()->create([
+        'company_id' => $this->company->id,
+        'product_id' => $this->finished->id,
+        'name' => 'Pre-release Quality Template',
+        'code' => 'CURING-PRE-RELEASE',
+        'version' => '1',
+        'inspection_stage' => 'pre_release',
+        'status' => 'draft',
+        'requires_approval' => true,
+        'created_by' => $this->admin->id,
+        'updated_by' => $this->admin->id,
+    ]);
+    $check = $plan->checks()->create([
+        'company_id' => $this->company->id,
+        'name' => 'Minimum strength',
+        'check_type' => 'numeric',
+        'minimum_value' => '10',
+        'required' => true,
+        'critical' => true,
+        'acceptance_rule' => 'minimum',
+        'sort_order' => 1,
+    ]);
+    app(ProductionQualityService::class)->activatePlan($plan, $this->admin);
 
-    $order = completeCuringOrder($this);
+    $order = completeCuringOrder($this, '970', '30');
     $batch = $order->curingBatch()->firstOrFail();
     $inspection = ProductionQualityInspection::query()
         ->where('production_order_id', $order->id)
@@ -176,10 +213,18 @@ test('production completion queues one linked quality inspection and approval un
 
     expect($inspection->product_id)->toBe($order->product_id)
         ->and($inspection->recipe_snapshot_id)->toBe($order->snapshot()->value('id'))
+        ->and($order->machine_id)->toBeNull()
         ->and($inspection->machine_id)->toBe($order->machine_id)
-        ->and($inspection->applicable_quantity)->toBe('1000.000000000000')
+        ->and($inspection->applicable_quantity)->toBe('970.000000000000')
         ->and($inspection->branch_id)->toBe($order->branch_id)
         ->and($inspection->company_id)->toBe($order->company_id)
+        ->and($inspection->production_quality_plan_id)->toBe($plan->id)
+        ->and($inspection->plan_name_snapshot)->toBe('Pre-release Quality Template')
+        ->and($inspection->plan_version_snapshot)->toBe('1')
+        ->and($inspection->results)->toHaveCount(1)
+        ->and($inspection->results->first()->production_quality_plan_check_id)->toBe($check->id)
+        ->and($inspection->results->first()->check_name)->toBe('Minimum strength')
+        ->and($inspection->results->first()->result)->toBe('pending')
         ->and($inspection->result)->toBe('pending');
 
     app(ProductionOrderService::class)->complete($order->refresh(), $this->admin);
@@ -191,31 +236,45 @@ test('production completion queues one linked quality inspection and approval un
 
     Volt::test('production.quality.inspections.show', ['inspection' => $inspection])
         ->assertSee('Pass')
-        ->assertSee('Partial Pass')
+        ->assertSee('Conditional Pass')
         ->assertSee('Fail')
-        ->assertSee('Accepted quantity')
-        ->assertSee('Rejected quantity')
+        ->assertSee('QC Accepted Quantity')
+        ->assertSee('QC Rejected Quantity')
         ->assertSee('Inspector')
-        ->assertSee('Inspection notes');
+        ->assertSee('Inspection Notes')
+        ->assertSee('Minimum strength');
+
+    $snapshotCheck = $inspection->results->firstOrFail();
 
     app(ProductionQualityService::class)->recordQueuedInspection($inspection, [
-        'result' => 'passed',
-        'accepted_quantity' => '1000',
-        'rejected_quantity' => '0',
+        'result' => 'conditional',
+        'accepted_quantity' => '950',
+        'rejected_quantity' => '20',
         'inspector_id' => $this->admin->id,
+        'reason_justification' => 'Twenty units did not meet the visual release standard.',
+        'corrective_action' => 'Scrap rejected units and release only the approved balance.',
+        'disposition' => 'scrap',
         'notes' => 'Batch meets release specification.',
+        'check_answers' => [$snapshotCheck->id => ['numeric_value' => '12']],
     ], $this->admin);
 
-    app(ProductionQualityService::class)->approve($inspection->refresh(), $this->admin);
+    app(ProductionQualityService::class)->approve($inspection->refresh(), $this->admin, 'Approved balance is within specification.');
+    app(ProductionQualityService::class)->approve($inspection->refresh(), $this->admin, 'Repeated approval is idempotent.');
 
     expect($batch->refresh()->status)->toBe(ProductionCuringBatch::STATUS_READY_FOR_RELEASE)
         ->and($batch->qc_approved_at)->not->toBeNull()
         ->and($batch->approved_by)->toBe($this->admin->id)
+        ->and($batch->productionOrder->rejected_quantity)->toBe('30.0000')
+        ->and($batch->qc_rejected_quantity)->toBe('20.000000000000')
+        ->and($batch->damaged_quantity)->toBe('0.000000000000')
+        ->and($batch->release_eligible_quantity)->toBe('950.000000000000')
         ->and($batch->released_quantity)->toBe('0.000000000000')
-        ->and($batch->remaining_quantity)->toBe($batch->accepted_quantity)
+        ->and($batch->remaining_quantity)->toBe('950.000000000000')
         ->and($inspection->refresh()->approval_status)->toBe('approved')
-        ->and($inspection->passed_quantity)->toBe('1000.000000000000')
-        ->and($inspection->failed_quantity)->toBe('0.000000000000')
+        ->and($inspection->passed_quantity)->toBe('950.000000000000')
+        ->and($inspection->failed_quantity)->toBe('20.000000000000')
+        ->and($inspection->results()->first()->result)->toBe('passed')
+        ->and(StockMovement::query()->where('posting_reference', 'QC-REJ-'.$inspection->inspection_number)->count())->toBe(1)
         ->and(app(InventoryService::class)->getProductStock($this->finished->id, $this->sellable->id, $this->branch->id))->toBe(0.0);
 
     Volt::test('production.curing.index')
@@ -223,6 +282,10 @@ test('production completion queues one linked quality inspection and approval un
 
     Volt::test('production.curing.show', ['batch' => $batch->refresh()])
         ->assertSee(__('production.curing.details.ready_for_release'))
+        ->assertSee('Production Reject')
+        ->assertSee('QC Reject')
+        ->assertSee('Curing Damage')
+        ->assertSee('Release Eligible')
         ->assertDontSee(__('production.curing.details.release_locked'));
 
     Volt::test('production.orders.show', ['order' => $order->refresh()])
@@ -252,7 +315,7 @@ test('curing details show accessible progress human age readiness dates and unch
         ->assertSee(__('production.curing.details.date_block', ['date' => '08 Aug 2026']))
         ->assertSee(__('production.curing.details.accepted'))
         ->assertSee(__('production.curing.details.released'))
-        ->assertSee(__('production.curing.details.damaged'))
+        ->assertSee('Curing Damage')
         ->assertSee(__('production.curing.details.remaining_curing'))
         ->assertSee($unit)
         ->assertSee(__('production.curing.details.production_completed'))
