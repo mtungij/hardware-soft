@@ -6,6 +6,7 @@ use App\Models\Machine;
 use App\Models\Product;
 use App\Models\ProductionCuringBatch;
 use App\Models\ProductionMachineAssignment;
+use App\Models\ProductionMould;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderMaterial;
 use App\Models\ProductionQualityInspection;
@@ -19,6 +20,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\InventoryService;
 use App\Services\ProductionCuringService;
+use App\Services\ProductionMouldService;
 use App\Services\ProductionOrderService;
 use App\Services\ProductionQualityService;
 use App\Services\ProductionRecipeService;
@@ -80,6 +82,10 @@ beforeEach(function () {
         'material_unit_id' => $this->unit->id, 'entry_mode' => ProductionRecipeItem::MODE_PER_OUTPUT,
         'source_quantity' => 0.01, 'yield_quantity' => '', 'notes' => '',
     ]], $this->admin);
+    $this->mould = ProductionMould::query()->create(['company_id' => $this->company->id, 'product_family_id' => $this->finished->product_family_id, 'code' => 'CUR-MOULD', 'name' => 'Curing Mould', 'active' => true]);
+    $this->mould->compatibleMachines()->syncWithPivotValues([$this->machine->id], ['company_id' => $this->company->id]);
+    $installation = app(ProductionMouldService::class)->install($this->machine, $this->mould, $this->admin);
+    $this->assignment->update(['production_mould_id' => $this->mould->id, 'production_mould_installation_id' => $installation->id, 'production_recipe_id' => $this->recipe->id]);
     app(InventoryService::class)->directStockIn([
         'branch_id' => $this->branch->id, 'product_id' => $this->material->id, 'stock_location_id' => $this->raw->id,
         'quantity' => 100, 'cost_price' => 10, 'selling_price' => 20, 'reason' => 'Curing raw test',

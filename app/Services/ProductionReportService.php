@@ -111,11 +111,11 @@ final class ProductionReportService
     private function summary(array $filters, int $limit, bool $export): array
     {
         $group = $filters['group_by'] ?? '';
-        $query = $this->orderQuery($filters)->with(['branch', 'product.productFamily', 'product.unit', 'machine', 'assignment.mould', 'snapshot', 'starter', 'completer']);
+        $query = $this->orderQuery($filters)->with(['branch', 'product.productFamily', 'product.unit', 'machine', 'mould', 'assignment.mould', 'snapshot', 'starter', 'completer']);
         $query = (match ($group) {
             'day' => $query->orderBy('production_orders.production_date'), 'product' => $query->orderBy('production_orders.product_id'), 'family' => $query->orderBy(Product::query()->select('product_family_id')->whereColumn('products.id', 'production_orders.product_id')), 'machine' => $query->orderBy('production_orders.machine_id'), 'branch' => $query->orderBy('production_orders.branch_id'), default => $query->latest('production_orders.production_date')
         })->latest('production_orders.id');
-        $headers = ['Date', 'Order', 'Site', 'Product / Family', 'Machine / Assigned Mould', 'Recipe Snapshot', 'Planned', 'Produced', 'Accepted', 'Rejected', 'Status', 'Started / Completed', 'Operators'];
+        $headers = ['Date', 'Order', 'Site', 'Product / Family', 'Production Method', 'Machine', 'Mould', 'Recipe Snapshot', 'Planned', 'Produced', 'Accepted', 'Rejected', 'Status', 'Started / Completed', 'Operators'];
         if ($group !== '') {
             $headers = ['Group', ...$headers];
         }
@@ -123,7 +123,7 @@ final class ProductionReportService
         $result = $this->result($query, $limit, $export,
             $headers,
             function ($o) use ($group) {
-                $row = [$o->production_date?->format('d M Y'), $o->order_number, $o->branch?->name ?: 'Company-wide', ($o->product?->name ?: '—').' / '.($o->product?->productFamily?->name ?: '—'), ($o->machine?->name ?: '—').' / '.($o->assignment?->mould?->name ?: 'Not recorded'), trim(($o->snapshot?->recipe_name ?: 'Not captured').' '.($o->snapshot?->recipe_version ? 'v'.$o->snapshot->recipe_version : '')), $this->q($o->planned_quantity, $o->product?->unit?->short_name), $this->q($o->total_produced_quantity, $o->product?->unit?->short_name), $this->q($o->accepted_quantity, $o->product?->unit?->short_name), $this->q($o->rejected_quantity, $o->product?->unit?->short_name), str($o->status)->headline(), $this->dateTime($o->started_at).' / '.$this->dateTime($o->completed_at), ($o->starter?->name ?: '—').' / '.($o->completer?->name ?: '—')];
+                $row = [$o->production_date?->format('d M Y'), $o->order_number, $o->branch?->name ?: 'Company-wide', ($o->product?->name ?: '—').' / '.($o->product?->productFamily?->name ?: '—'), $o->productionMethodLabel(), $o->machine?->name ?: '—', $o->mould?->name ?: $o->assignment?->mould?->name ?: 'Not recorded', trim(($o->snapshot?->recipe_name ?: 'Not captured').' '.($o->snapshot?->recipe_version ? 'v'.$o->snapshot->recipe_version : '')), $this->q($o->planned_quantity, $o->product?->unit?->short_name), $this->q($o->total_produced_quantity, $o->product?->unit?->short_name), $this->q($o->accepted_quantity, $o->product?->unit?->short_name), $this->q($o->rejected_quantity, $o->product?->unit?->short_name), str($o->status)->headline(), $this->dateTime($o->started_at).' / '.$this->dateTime($o->completed_at), ($o->starter?->name ?: '—').' / '.($o->completer?->name ?: '—')];
 
                 return $group === '' ? $row : [$this->summaryGroup($o, $group), ...$row];
             });

@@ -3,7 +3,9 @@
 use App\Models\Branch;
 use App\Models\Machine;
 use App\Models\Product;
+use App\Models\ProductFamily;
 use App\Models\ProductionMachineAssignment;
+use App\Models\ProductionMould;
 use App\Models\ProductionRecipe;
 use App\Services\ProductionScheduleService;
 use App\Support\CompanyFeatures;
@@ -29,6 +31,8 @@ state([
     'editingId' => null,
     'viewingId' => null,
     'machine_id' => '',
+    'production_method' => ProductFamily::METHOD_MACHINE_MOULD,
+    'production_mould_id' => '',
     'product_id' => '',
     'production_recipe_id' => '',
     'branch_id' => '',
@@ -52,7 +56,9 @@ mount(function (): void {
 
 rules(fn () => [
     'selectedDate' => ['required', 'date_format:Y-m-d'],
-    'machine_id' => ['required', 'integer'],
+    'production_method' => ['required', Rule::in(ProductFamily::PRODUCTION_METHODS)],
+    'machine_id' => [$this->production_method === ProductFamily::METHOD_MACHINE_MOULD ? 'required' : 'nullable', 'integer'],
+    'production_mould_id' => [$this->production_method === ProductFamily::METHOD_MOULD_ONLY ? 'required' : 'nullable', 'integer'],
     'product_id' => ['required', 'integer'],
     'production_recipe_id' => ['required', 'integer'],
     'branch_id' => ['nullable', 'integer'],
@@ -70,6 +76,13 @@ rules(fn () => [
 $canManage = fn (): bool => auth()->user()?->can('production.manage_schedule') ?? false;
 
 $mouldHasChanged = function (ProductionMachineAssignment $assignment): bool {
+    if ($assignment->production_method === ProductFamily::METHOD_MOULD_ONLY) {
+        $assignment->loadMissing(['mould', 'product']);
+
+        return ! $assignment->mould?->active
+            || $assignment->mould?->under_maintenance
+            || (int) $assignment->mould?->product_family_id !== (int) $assignment->product?->product_family_id;
+    }
     $assignment->loadMissing('machine.currentMouldInstallation.mould');
     $currentInstallation = $assignment->machine?->currentMouldInstallation;
 
@@ -87,13 +100,37 @@ $requiresReassignment = function (ProductionMachineAssignment $assignment): bool
 
 $resetForm = function (): void {
     $this->reset([
-        'editingId', 'machine_id', 'product_id', 'production_recipe_id', 'branch_id', 'target_quantity',
+        'editingId', 'machine_id', 'production_mould_id', 'product_id', 'production_recipe_id', 'branch_id', 'target_quantity',
         'planned_start_time', 'planned_end_time', 'notes', 'capacityWarning',
     ]);
     $this->availableProducts = [];
     $this->availableRecipes = [];
     $this->status = ProductionMachineAssignment::STATUS_PLANNED;
+    $this->production_method = ProductFamily::METHOD_MACHINE_MOULD;
     $this->resetValidation();
+};
+
+$loadProductsForMould = function ($mouldId): void {
+    $mould = filled($mouldId) ? ProductionMould::query()->forCurrentCompany()->available()->find($mouldId) : null;
+    $this->availableProducts = $mould ? Product::query()->where('company_id', CompanyFeatures::companyId())
+        ->manufactured()->where('status', 'active')->where('product_family_id', $mould->product_family_id)
+        ->orderBy('name')->get(['id', 'name'])->map(fn (Product $product) => ['id' => $product->id, 'name' => $product->name])->all() : [];
+};
+
+$updatedProductionMethod = function (): void {
+    $this->machine_id = '';
+    $this->production_mould_id = '';
+    $this->product_id = '';
+    $this->production_recipe_id = '';
+    $this->availableProducts = [];
+    $this->availableRecipes = [];
+};
+
+$updatedProductionMouldId = function (): void {
+    $this->product_id = '';
+    $this->production_recipe_id = '';
+    $this->availableRecipes = [];
+    $this->loadProductsForMould($this->production_mould_id);
 };
 
 $loadProductsForMachine = function ($machineId): void {
@@ -239,7 +276,21 @@ $editAssignment = function (int $assignmentId): void {
     $this->editingId = $assignment->id;
     $this->selectedDate = $assignment->production_date->toDateString();
     $this->machine_id = (string) $assignment->machine_id;
+    $this->production_method = $assignment->production_method ?: ProductFamily::METHOD_MACHINE_MOULD;
+    $this->production_mould_id = (string) $assignment->production_mould_id;
     $this->branch_id = $assignment->branch_id ? (string) $assignment->branch_id : '';
+    if ($this->production_method === ProductFamily::METHOD_MOULD_ONLY) {
+        $this->loadProductsForMould($this->production_mould_id);
+        $this->product_id = (string) $assignment->product_id;
+        $this->loadRecipesForProduct($this->product_id);
+        $this->production_recipe_id = (string) $assignment->production_recipe_id;
+        $this->target_quantity = $assignment->target_quantity ?? '';
+        $this->planned_start_time = $assignment->planned_start_time ? substr($assignment->planned_start_time, 0, 5) : '';
+        $this->planned_end_time = $assignment->planned_end_time ? substr($assignment->planned_end_time, 0, 5) : '';
+        $this->status = $assignment->status;
+        $this->notes = $assignment->notes ?? '';
+        return;
+    }
     $machine = Machine::query()->forCurrentCompany()->whereKey($assignment->machine_id)->firstOrFail();
     $currentInstallation = $machine->currentMouldInstallation()->with('mould.family')->first();
     $currentFamilyId = $currentInstallation?->mould?->product_family_id;
@@ -389,6 +440,10 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                                 ->first()
                             : null;
                     @endphp
+                    <label class="block text-sm font-bold">Production Method
+                        <select data-testid="assignment-production-method" wire:model.live="production_method" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"><option value="machine_mould">Machine + Mould</option><option value="mould_only">Mould Only</option></select>
+                    </label>
+                    @if($production_method === ProductFamily::METHOD_MACHINE_MOULD)
                     <label class="block text-sm font-bold">Machine
                         <select data-testid="assignment-machine-select" wire:model.live="machine_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
                             <option value="">Select machine</option>
@@ -398,6 +453,13 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                         </select>
                         @error('machine_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                     </label>
+                    @else
+                    <label class="block text-sm font-bold">Mould
+                        <select data-testid="assignment-mould-select" wire:model.live="production_mould_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"><option value="">Select mould</option>@foreach(ProductionMould::query()->forCurrentCompany()->available()->with('family')->orderBy('name')->get() as $mould)<option value="{{ $mould->id }}">{{ $mould->name }} · {{ $mould->family?->name }}</option>@endforeach</select>
+                        @error('production_mould_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                        <span class="mt-1 block text-xs text-slate-500">Machine is not required; this mould is reserved for the selected day.</span>
+                    </label>
+                    @endif
                     @if($existingAssignment)
                         @php
                             $existingOrder = $existingAssignment->immutableProductionOrder();
@@ -413,6 +475,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                             @endif
                         </div>
                     @endif
+                    @if($production_method === ProductFamily::METHOD_MACHINE_MOULD)
                     <dl data-testid="assignment-current-installation" data-installation-id="{{ $selectedInstallation?->id }}" class="grid gap-3 rounded-xl border p-3 text-sm {{ $installedMould ? 'border-cyan-200 bg-cyan-50 dark:border-cyan-500/30 dark:bg-cyan-500/10' : 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10' }}">
                         <div><dt class="text-xs font-bold uppercase text-slate-500 dark:text-slate-300">Installed Mould</dt><dd class="mt-1 font-black text-slate-950 dark:text-white">{{ $installedMould?->name ?: __('production.moulds.none_installed') }}</dd></div>
                         @if($installedMould)
@@ -420,8 +483,9 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                             <div><dt class="text-xs font-bold uppercase text-slate-500 dark:text-slate-300">Installation Date</dt><dd class="font-bold text-slate-900 dark:text-slate-100">{{ $selectedInstallation?->installed_at?->format('d M Y H:i') ?: '—' }}</dd></div>
                         @endif
                     </dl>
+                    @endif
                     <label class="block text-sm font-bold">Manufactured Product
-                        <select data-testid="assignment-product-select" wire:model.live="product_id" @disabled(! $installedMould) class="mt-1 block w-full rounded-lg border-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-800">
+                        <select data-testid="assignment-product-select" wire:model.live="product_id" @disabled($production_method === ProductFamily::METHOD_MACHINE_MOULD ? ! $installedMould : ! $production_mould_id) class="mt-1 block w-full rounded-lg border-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-800">
                             <option value="">Select product</option>
                             @foreach ($availableProducts as $product)
                                 <option value="{{ $product['id'] }}">{{ $product['name'] }}</option>
@@ -430,7 +494,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                         @error('product_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                     </label>
                     <label class="block text-sm font-bold">Recipe
-                        <select data-testid="assignment-recipe-select" wire:model.live="production_recipe_id" @disabled(! $installedMould || ! $product_id) class="mt-1 block w-full rounded-lg border-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-800">
+                        <select data-testid="assignment-recipe-select" wire:model.live="production_recipe_id" @disabled(! $product_id) class="mt-1 block w-full rounded-lg border-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-800">
                             <option value="">Select active recipe</option>
                             @foreach($availableRecipes as $recipe)<option value="{{ $recipe['id'] }}">{{ $recipe['name'] }} · {{ $recipe['version'] ?: '—' }}</option>@endforeach
                         </select>
@@ -510,10 +574,10 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                             $mouldHasChanged = $this->mouldHasChanged($assignment);
                             $linkedOrder = $assignment->immutableProductionOrder();
                             $historicalOrder = $assignment->historicalProductionOrder();
-                            $currentMould = $assignment->machine?->currentMouldInstallation?->mould;
+                            $currentMould = $assignment->production_method === ProductFamily::METHOD_MOULD_ONLY ? $assignment->mould : $assignment->machine?->currentMouldInstallation?->mould;
                         @endphp
                         <tr>
-                            <td class="px-4 py-3 font-black">{{ $assignment->machine?->name }}</td>
+                            <td class="px-4 py-3 font-black">{{ $assignment->machine?->name ?: '—' }}<p class="text-xs font-normal text-slate-500">{{ $assignment->production_method === ProductFamily::METHOD_MOULD_ONLY ? 'Mould Only' : 'Machine + Mould' }}</p></td>
                             <td class="px-4 py-3"><p class="font-bold text-slate-900 dark:text-white">{{ $currentMould?->name ?: __('production.moulds.none_installed') }}</p>@if($requiresReassignment)<p class="mt-1 text-xs text-amber-700 dark:text-amber-300">{{ __('production.schedule.assigned_mould', ['mould' => $assignment->mould?->name ?: '—']) }}</p>@elseif($historicalOrder && $mouldHasChanged)<p class="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">Historical assignment — linked to completed Production Order {{ $historicalOrder->order_number }}. Create a new assignment.</p>@endif</td>
                             <td class="px-4 py-3"><p>{{ $assignment->product?->name }}</p><p class="text-xs text-slate-500">{{ $assignment->recipe?->name ?: '—' }}</p></td>
                             <td class="px-4 py-3">{{ $assignment->production_date->format('d M Y') }}</td>
@@ -554,7 +618,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                         $mouldHasChanged = $this->mouldHasChanged($assignment);
                         $linkedOrder = $assignment->immutableProductionOrder();
                         $historicalOrder = $assignment->historicalProductionOrder();
-                        $currentMould = $assignment->machine?->currentMouldInstallation?->mould;
+                        $currentMould = $assignment->production_method === ProductFamily::METHOD_MOULD_ONLY ? $assignment->mould : $assignment->machine?->currentMouldInstallation?->mould;
                     @endphp
                     <article class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                         <div class="flex items-start justify-between gap-2"><div><h3 class="font-black">{{ $assignment->machine?->name }}</h3><p class="text-sm text-slate-500">{{ $currentMould?->name ?: __('production.moulds.none_installed') }} · {{ $assignment->product?->name }}</p><p class="text-xs text-slate-500">{{ $assignment->recipe?->name }}</p>@if($requiresReassignment)<p class="mt-1 text-xs font-black text-amber-700 dark:text-amber-300">{{ __('production.schedule.requires_reassignment') }} · {{ __('production.schedule.assigned_mould', ['mould' => $assignment->mould?->name ?: '—']) }}</p>@elseif($historicalOrder && $mouldHasChanged)<p class="mt-1 text-xs font-black text-amber-700 dark:text-amber-300">Historical assignment — linked to completed Production Order {{ $historicalOrder->order_number }}. Create a new assignment.</p>@endif</div><span class="badge-warning">{{ ucfirst($assignment->status) }}</span></div>

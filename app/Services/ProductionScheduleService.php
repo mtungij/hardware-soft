@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\Branch;
 use App\Models\Machine;
 use App\Models\Product;
+use App\Models\ProductFamily;
 use App\Models\ProductionMachineAssignment;
+use App\Models\ProductionMould;
 use App\Models\ProductionRecipe;
 use App\Models\User;
 use Illuminate\Database\QueryException;
@@ -43,38 +45,49 @@ class ProductionScheduleService
             ]);
         }
 
-        $machine = Machine::query()
-            ->forCurrentCompany()
-            ->whereKey($data['machine_id'])
-            ->first();
-
-        if (! $machine) {
-            throw ValidationException::withMessages(['machine_id' => __('production.validation.invalid_machine')]);
-        }
-
-        if ($machine->status !== Machine::STATUS_ACTIVE) {
-            throw ValidationException::withMessages(['machine_id' => __('production.validation.machine_not_active')]);
-        }
-
-        $installation = $machine->currentMouldInstallation()->with('mould')->first();
-        if (! $installation?->mould) {
-            throw ValidationException::withMessages(['machine_id' => __('production.validation.mould_required')]);
-        }
-        $mould = $installation->mould;
-        if (! $mould->active || $mould->under_maintenance) {
-            throw ValidationException::withMessages(['machine_id' => __('production.validation.mould_unavailable')]);
-        }
-        if (! $mould->compatibleMachines()->whereKey($machine->id)->exists()) {
-            throw ValidationException::withMessages(['machine_id' => __('production.moulds.validation.not_compatible')]);
-        }
-
         $product = Product::query()
+            ->with('productFamily')
             ->where('company_id', $companyId)
             ->whereKey($data['product_id'])
             ->first();
 
         if (! $product || ! $product->isManufactured()) {
             throw ValidationException::withMessages(['product_id' => __('production.validation.manufactured_only')]);
+        }
+        $method = $product->productFamily?->production_method ?: ProductFamily::METHOD_MACHINE_MOULD;
+        if (! in_array($method, ProductFamily::PRODUCTION_METHODS, true)) {
+            throw ValidationException::withMessages(['product_id' => 'The product family has an invalid production method.']);
+        }
+
+        $machine = null;
+        $installation = null;
+        if ($method === ProductFamily::METHOD_MACHINE_MOULD) {
+            $machine = Machine::query()->forCurrentCompany()->whereKey($data['machine_id'] ?? null)->first();
+            if (! $machine) {
+                throw ValidationException::withMessages(['machine_id' => __('production.validation.invalid_machine')]);
+            }
+            if ($machine->status !== Machine::STATUS_ACTIVE) {
+                throw ValidationException::withMessages(['machine_id' => __('production.validation.machine_not_active')]);
+            }
+            $installation = $machine->currentMouldInstallation()->with('mould')->first();
+            $mould = $installation?->mould;
+            if (! $mould) {
+                throw ValidationException::withMessages(['machine_id' => __('production.validation.mould_required')]);
+            }
+            if (! $mould->compatibleMachines()->whereKey($machine->id)->exists()) {
+                throw ValidationException::withMessages(['machine_id' => __('production.moulds.validation.not_compatible')]);
+            }
+        } else {
+            if (filled($data['machine_id'] ?? null)) {
+                throw ValidationException::withMessages(['machine_id' => 'A mould-only schedule must not be converted into machine production.']);
+            }
+            $mould = ProductionMould::query()->forCurrentCompany()->available()->whereKey($data['production_mould_id'] ?? null)->first();
+            if (! $mould) {
+                throw ValidationException::withMessages(['production_mould_id' => __('production.validation.mould_required')]);
+            }
+        }
+        if (! $mould->active || $mould->under_maintenance) {
+            throw ValidationException::withMessages(['production_mould_id' => __('production.validation.mould_unavailable')]);
         }
         if (! $product->product_family_id || (int) $product->product_family_id !== (int) $mould->product_family_id) {
             throw ValidationException::withMessages(['product_id' => __('production.validation.product_mould_incompatible')]);
@@ -95,7 +108,7 @@ class ProductionScheduleService
             throw ValidationException::withMessages(['branch_id' => __('production.validation.invalid_branch')]);
         }
 
-        if ($machine->branch_id && $branchId && (int) $machine->branch_id !== $branchId) {
+        if ($machine?->branch_id && $branchId && (int) $machine->branch_id !== $branchId) {
             throw ValidationException::withMessages(['branch_id' => __('production.validation.branch_mismatch')]);
         }
 
@@ -104,7 +117,7 @@ class ProductionScheduleService
             ? ProductionMachineAssignment::query()
                 ->forCurrentCompany()
                 ->blocking()
-                ->where('machine_id', $machine->id)
+                ->where($method === ProductFamily::METHOD_MACHINE_MOULD ? 'machine_id' : 'production_mould_id', $method === ProductFamily::METHOD_MACHINE_MOULD ? $machine->id : $mould->id)
                 ->whereDate('production_date', $data['production_date'])
                 ->when($assignment, fn ($query) => $query->whereKeyNot($assignment->id))
                 ->with('product')
@@ -113,7 +126,7 @@ class ProductionScheduleService
 
         if ($duplicate) {
             throw ValidationException::withMessages([
-                'machine_id' => __('production.validation.duplicate', [
+                ($method === ProductFamily::METHOD_MACHINE_MOULD ? 'machine_id' : 'production_mould_id') => __('production.validation.duplicate', [
                     'product' => $duplicate->product?->name ?: __('production.unknown_product'),
                     'date' => $data['production_date'],
                 ]),
@@ -123,8 +136,10 @@ class ProductionScheduleService
         $values = [
             ...$data,
             'company_id' => $companyId,
+            'production_method' => $method,
+            'machine_id' => $machine?->id,
             'production_mould_id' => $mould->id,
-            'production_mould_installation_id' => $installation->id,
+            'production_mould_installation_id' => $installation?->id,
             'production_recipe_id' => $recipe->id,
             'branch_id' => $branchId,
             'updated_by' => $user->id,
@@ -132,20 +147,23 @@ class ProductionScheduleService
 
         try {
             return DB::transaction(function () use ($assignment, $values, $user, $blocksSlot): ProductionMachineAssignment {
-                $lockedMachine = Machine::query()->forCurrentCompany()->whereKey($values['machine_id'])
-                    ->lockForUpdate()->firstOrFail();
-                $currentInstallation = $lockedMachine->currentMouldInstallation()->lockForUpdate()->first();
-                if (! $currentInstallation
-                    || (int) $currentInstallation->id !== (int) $values['production_mould_installation_id']
-                    || (int) $currentInstallation->production_mould_id !== (int) $values['production_mould_id']) {
-                    throw ValidationException::withMessages(['machine_id' => __('production.validation.assignment_mould_changed')]);
+                if ($values['production_method'] === ProductFamily::METHOD_MACHINE_MOULD) {
+                    $lockedMachine = Machine::query()->forCurrentCompany()->whereKey($values['machine_id'])->lockForUpdate()->firstOrFail();
+                    $currentInstallation = $lockedMachine->currentMouldInstallation()->lockForUpdate()->first();
+                    if (! $currentInstallation
+                        || (int) $currentInstallation->id !== (int) $values['production_mould_installation_id']
+                        || (int) $currentInstallation->production_mould_id !== (int) $values['production_mould_id']) {
+                        throw ValidationException::withMessages(['machine_id' => __('production.validation.assignment_mould_changed')]);
+                    }
+                } else {
+                    ProductionMould::query()->forCurrentCompany()->whereKey($values['production_mould_id'])->lockForUpdate()->firstOrFail();
                 }
 
                 $duplicate = $blocksSlot
                     ? ProductionMachineAssignment::query()
                         ->forCurrentCompany()
                         ->blocking()
-                        ->where('machine_id', $values['machine_id'])
+                        ->where($values['production_method'] === ProductFamily::METHOD_MACHINE_MOULD ? 'machine_id' : 'production_mould_id', $values['production_method'] === ProductFamily::METHOD_MACHINE_MOULD ? $values['machine_id'] : $values['production_mould_id'])
                         ->whereDate('production_date', $values['production_date'])
                         ->when($assignment, fn ($query) => $query->whereKeyNot($assignment->id))
                         ->with('product')
@@ -154,7 +172,7 @@ class ProductionScheduleService
                     : null;
                 if ($duplicate) {
                     throw ValidationException::withMessages([
-                        'machine_id' => __('production.validation.duplicate', [
+                        ($values['production_method'] === ProductFamily::METHOD_MACHINE_MOULD ? 'machine_id' : 'production_mould_id') => __('production.validation.duplicate', [
                             'product' => $duplicate->product?->name ?: __('production.unknown_product'),
                             'date' => $values['production_date'],
                         ]),

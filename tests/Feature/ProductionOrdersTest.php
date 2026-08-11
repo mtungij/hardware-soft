@@ -90,7 +90,17 @@ beforeEach(function () {
             'source_quantity' => '', 'material_unit_id' => '', 'unit_cost' => 20, 'notes' => '',
         ],
     ], $this->admin);
-    $this->assignment->update(['production_recipe_id' => $this->recipe->id]);
+    $this->mould = ProductionMould::query()->create([
+        'company_id' => $this->company->id, 'product_family_id' => $this->finished->product_family_id,
+        'code' => 'EXEC-MOULD', 'name' => 'Execution Mould', 'active' => true,
+    ]);
+    $this->mould->compatibleMachines()->syncWithPivotValues([$this->machine->id], ['company_id' => $this->company->id]);
+    $installation = app(ProductionMouldService::class)->install($this->machine, $this->mould, $this->admin);
+    $this->assignment->update([
+        'production_recipe_id' => $this->recipe->id,
+        'production_mould_id' => $this->mould->id,
+        'production_mould_installation_id' => $installation->id,
+    ]);
 });
 
 function createProductionOrderForTest(object $test, array $overrides = []): ProductionOrder
@@ -158,6 +168,45 @@ test('precision is hardened to twelve decimals with practically exact yield mult
         ->and($calculator->normalizeYield(1, 125))->toBe('0.008000000000');
 });
 
+test('mould-only production completes, posts raw stock, and enters curing without a machine', function () {
+    $this->finished->productFamily->update(['production_method' => 'mould_only']);
+    $this->finished->update([
+        'requires_curing' => true,
+        'curing_days_required' => 28,
+        'sellable_after_days' => 7,
+    ]);
+    $this->assignment->update([
+        'production_method' => 'mould_only',
+        'machine_id' => null,
+        'production_mould_installation_id' => null,
+        'target_quantity' => 80,
+    ]);
+    stockProductionMaterialForTest($this, '10');
+
+    $order = app(ProductionOrderService::class)->createFromAssignment($this->assignment, [
+        'planned_quantity' => 80,
+        'raw_material_stock_location_id' => $this->location->id,
+        'production_output_stock_location_id' => $this->curingLocation->id,
+        'final_finished_goods_stock_location_id' => $this->finishedLocation->id,
+    ], $this->admin);
+    $order = app(ProductionOrderService::class)->start($order, $this->admin);
+    $materials = $order->materials->mapWithKeys(fn ($line) => [$line->id => [
+        'actual_quantity' => $line->line_type === ProductionOrderMaterial::TYPE_INVENTORY ? '1' : $line->actual_quantity,
+        'actual_cost' => $line->actual_cost,
+    ]])->all();
+    $order = app(ProductionOrderService::class)->completeExecution($order, $materials, 75, 5, null, $this->admin);
+
+    expect($order->machine_id)->toBeNull()
+        ->and($order->production_method)->toBe('mould_only')
+        ->and($order->curing_stock_location_id)->toBe($this->curingLocation->id)
+        ->and($order->finished_goods_release_location_id)->toBe($this->finishedLocation->id)
+        ->and($order->status)->toBe(ProductionOrder::STATUS_COMPLETED)
+        ->and($order->curingBatch)->not->toBeNull()
+        ->and($order->curingBatch->machine_id)->toBeNull()
+        ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_consumption')->exists())->toBeTrue()
+        ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_output')->exists())->toBeTrue();
+});
+
 test('order routes and menu require manufacturing and order permissions', function () {
     $this->get(route('dashboard'))->assertOk()->assertSee(__('production.orders.title'));
     $this->get(route('production.orders.index'))->assertOk();
@@ -180,7 +229,7 @@ test('production order assignment dropdown includes global planned and confirmed
         'active' => true,
     ]);
     $mould->compatibleMachines()->syncWithPivotValues([$this->machine->id], ['company_id' => $this->company->id]);
-    $installation = app(ProductionMouldService::class)->install($this->machine, $mould, $this->admin);
+    $installation = app(ProductionMouldService::class)->replace($this->machine, $mould, $this->admin);
     $this->assignment->update([
         'branch_id' => null,
         'status' => ProductionMachineAssignment::STATUS_CONFIRMED,
@@ -425,6 +474,8 @@ test('company-wide defaults work and existing orders retain their selected locat
     ], $operator);
 
     expect($order->raw_material_stock_location_id)->toBe($companyRaw->id)
+        ->and($order->curing_stock_location_id)->toBe($companyCuring->id)
+        ->and($order->finished_goods_release_location_id)->toBe($companyFinished->id)
         ->and($order->final_finished_goods_stock_location_id)->toBe($companyFinished->id);
 
     Setting::query()->firstOrFail()->update([
@@ -432,6 +483,8 @@ test('company-wide defaults work and existing orders retain their selected locat
         'default_finished_goods_location_id' => $this->finishedLocation->id,
     ]);
     expect($order->fresh()->raw_material_stock_location_id)->toBe($companyRaw->id)
+        ->and($order->fresh()->curing_stock_location_id)->toBe($companyCuring->id)
+        ->and($order->fresh()->finished_goods_release_location_id)->toBe($companyFinished->id)
         ->and($order->fresh()->final_finished_goods_stock_location_id)->toBe($companyFinished->id);
 });
 

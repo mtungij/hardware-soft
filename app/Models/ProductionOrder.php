@@ -14,9 +14,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use LogicException;
 
 #[Fillable([
-    'company_id', 'branch_id', 'raw_material_stock_location_id', 'finished_goods_stock_location_id',
+    'company_id', 'branch_id', 'production_method', 'raw_material_stock_location_id', 'curing_stock_location_id',
+    'finished_goods_release_location_id', 'finished_goods_stock_location_id',
     'production_output_stock_location_id', 'final_finished_goods_stock_location_id',
-    'production_machine_assignment_id', 'machine_id', 'product_id', 'production_recipe_id',
+    'production_machine_assignment_id', 'machine_id', 'production_mould_id', 'product_id', 'production_recipe_id',
     'order_number', 'production_date', 'planned_quantity', 'accepted_quantity', 'rejected_quantity',
     'total_produced_quantity', 'status', 'started_at', 'submitted_at', 'completed_at', 'cancelled_at',
     'cancellation_reason', 'notes', 'created_by', 'updated_by', 'started_by', 'completed_by',
@@ -76,6 +77,16 @@ class ProductionOrder extends Model
         return $this->belongsTo(Machine::class);
     }
 
+    public function mould(): BelongsTo
+    {
+        return $this->belongsTo(ProductionMould::class, 'production_mould_id');
+    }
+
+    public function productionMethodLabel(): string
+    {
+        return $this->production_method === ProductFamily::METHOD_MOULD_ONLY ? 'Mould Only' : 'Machine + Mould';
+    }
+
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
@@ -104,6 +115,16 @@ class ProductionOrder extends Model
     public function productionOutputLocation(): BelongsTo
     {
         return $this->belongsTo(StockLocation::class, 'production_output_stock_location_id');
+    }
+
+    public function curingLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class, 'curing_stock_location_id');
+    }
+
+    public function finishedGoodsReleaseLocation(): BelongsTo
+    {
+        return $this->belongsTo(StockLocation::class, 'finished_goods_release_location_id');
     }
 
     public function finalFinishedGoodsLocation(): BelongsTo

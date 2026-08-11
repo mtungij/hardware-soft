@@ -116,6 +116,41 @@ test('production menu is visible when enabled and permission is granted', functi
         ->assertSee(__('production.daily_schedule'));
 });
 
+test('mould-only production reserves the mould day without a machine', function () {
+    $family = $this->manufactured->productFamily;
+    $family->update(['production_method' => ProductFamily::METHOD_MOULD_ONLY]);
+    $manualMould = ProductionMould::query()->create([
+        'company_id' => $this->company->id,
+        'product_family_id' => $family->id,
+        'code' => 'COLUMN-MOULD-1',
+        'name' => 'Column Mould 1',
+        'active' => true,
+        'expected_output_per_day' => 40,
+    ]);
+
+    $assignment = app(ProductionScheduleService::class)->save(productionAssignmentData($this, [
+        'machine_id' => null,
+        'production_mould_id' => $manualMould->id,
+        'target_quantity' => 40,
+    ]), $this->admin);
+
+    expect($assignment->production_method)->toBe(ProductFamily::METHOD_MOULD_ONLY)
+        ->and($assignment->machine_id)->toBeNull()
+        ->and($assignment->production_mould_id)->toBe($manualMould->id)
+        ->and($assignment->active_slot_key)->toBe("{$this->company->id}:mould:{$manualMould->id}:2026-07-29");
+
+    expect(fn () => app(ProductionScheduleService::class)->save(productionAssignmentData($this, [
+        'machine_id' => null,
+        'production_mould_id' => $manualMould->id,
+    ]), $this->admin))->toThrow(ValidationException::class);
+
+    $assignment->update(['status' => ProductionMachineAssignment::STATUS_CANCELLED]);
+    expect(app(ProductionScheduleService::class)->save(productionAssignmentData($this, [
+        'machine_id' => null,
+        'production_mould_id' => $manualMould->id,
+    ]), $this->admin))->toBeInstanceOf(ProductionMachineAssignment::class);
+});
+
 test('user without production permission cannot access production', function () {
     $cashier = User::factory()->create([
         'company_id' => $this->company->id,

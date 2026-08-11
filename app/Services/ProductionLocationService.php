@@ -17,7 +17,7 @@ class ProductionLocationService
 
     public const FINISHED = 'finished';
 
-    public const CONFIGURATION_MESSAGE = 'Production location defaults are not fully configured. Ask an administrator to configure the Raw Material Warehouse, Curing Yard, and Finished Goods Warehouse in Company Settings.';
+    public const CONFIGURATION_MESSAGE = 'Production location defaults are not fully configured in Company Settings.';
 
     /** @return array{raw: StockLocation, curing: StockLocation, finished: StockLocation} */
     public function defaults(int $companyId, ?int $branchId): array
@@ -29,8 +29,13 @@ class ProductionLocationService
             self::FINISHED => $setting?->default_finished_goods_location_id,
         ];
 
-        if (collect($locations)->contains(fn ($id) => blank($id))) {
-            throw ValidationException::withMessages(['production_location_defaults' => self::CONFIGURATION_MESSAGE]);
+        foreach ($locations as $purpose => $locationId) {
+            if (blank($locationId)) {
+                $label = match ($purpose) {
+                    self::RAW => 'Default Raw Material Warehouse', self::CURING => 'Default Curing Yard', self::FINISHED => 'Default Finished Goods Warehouse',
+                };
+                throw ValidationException::withMessages(['production_location_defaults' => self::CONFIGURATION_MESSAGE." {$label} is not configured. Configure it in Company Settings before creating a Production Order."]);
+            }
         }
 
         $resolved = [];
@@ -112,8 +117,8 @@ class ProductionLocationService
     {
         return match ($purpose) {
             self::RAW => 'raw_material_stock_location_id',
-            self::CURING => 'production_output_stock_location_id',
-            self::FINISHED => 'final_finished_goods_stock_location_id',
+            self::CURING => 'curing_stock_location_id',
+            self::FINISHED => 'finished_goods_release_location_id',
         };
     }
 

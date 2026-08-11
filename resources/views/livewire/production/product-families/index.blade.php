@@ -25,6 +25,7 @@ state([
     'icon' => 'cube',
     'colour' => 'cyan',
     'active' => true,
+    'production_method' => ProductFamily::METHOD_MACHINE_MOULD,
     'default_curing_days' => '',
     'default_earliest_release_days' => '',
     'default_requires_curing' => false,
@@ -56,6 +57,7 @@ rules(fn () => [
     'icon' => ['required', Rule::in(ProductFamily::ICONS)],
     'colour' => ['required', Rule::in(ProductFamily::COLOURS)],
     'active' => ['boolean'],
+    'production_method' => ['required', Rule::in(ProductFamily::PRODUCTION_METHODS)],
     'default_requires_curing' => ['boolean'],
     'default_curing_days' => [$this->default_requires_curing ? 'required' : 'nullable', 'integer', 'min:1', 'max:65535'],
     'default_earliest_release_days' => [$this->default_requires_curing ? 'required' : 'nullable', 'integer', 'min:1', 'max:65535', 'lte:default_curing_days'],
@@ -81,6 +83,7 @@ $resetForm = function (): void {
     $this->icon = 'cube';
     $this->colour = 'cyan';
     $this->active = true;
+    $this->production_method = ProductFamily::METHOD_MACHINE_MOULD;
     $this->resetValidation();
 };
 
@@ -112,6 +115,7 @@ $editFamily = function (int $familyId): void {
     $this->icon = $family->icon ?: 'cube';
     $this->colour = $family->colour ?: 'cyan';
     $this->active = (bool) $family->active;
+    $this->production_method = $family->production_method ?: ProductFamily::METHOD_MACHINE_MOULD;
     $this->default_curing_days = $family->default_curing_days ?? '';
     $this->default_earliest_release_days = $family->default_earliest_release_days ?? '';
     $this->default_requires_curing = (bool) $family->default_requires_curing;
@@ -190,6 +194,12 @@ $families = function () {
                         </label>
                     </div>
                     <label class="flex items-center gap-3 text-sm font-bold text-slate-800 dark:text-slate-200"><input type="checkbox" wire:model="active" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">{{ __('production.product_families.active') }}</label>
+                    <label class="block text-sm font-bold text-slate-800 dark:text-slate-200">Production Method
+                        <select data-testid="production-method" wire:model="production_method" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
+                            <option value="machine_mould">Machine + Mould</option>
+                            <option value="mould_only">Mould Only</option>
+                        </select>
+                    </label>
 
                     <fieldset class="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
                         <legend class="px-1 text-sm font-black text-slate-950 dark:text-white">{{ __('production.product_families.defaults') }}</legend>

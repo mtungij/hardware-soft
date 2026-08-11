@@ -81,7 +81,7 @@ $save = function () {
         ]);
         $selected = $assignment_id ? ProductionMachineAssignment::query()->forCurrentCompany()->with(['machine.currentMouldInstallation.mould', 'mould', 'product', 'recipe'])->find($assignment_id) : null;
         $branchId = $selected?->branch_id ?: $selected?->machine?->branch_id ?: auth()->user()?->branch_id;
-        $canOverrideLocations = auth()->user()?->can('production.override_default_locations') ?? false;
+        $canOverrideLocations = (auth()->user()?->can('production.override_order_locations') || auth()->user()?->can('production.override_default_locations')) ?? false;
         $productionLocationService = app(ProductionLocationService::class);
         $rawLocations = $selected ? $productionLocationService->eligibleLocations(ProductionLocationService::RAW, (int) CompanyFeatures::companyId(), $branchId ? (int) $branchId : null, $canOverrideLocations ? auth()->user() : null) : collect();
         $curingLocations = $selected ? $productionLocationService->eligibleLocations(ProductionLocationService::CURING, (int) CompanyFeatures::companyId(), $branchId ? (int) $branchId : null, $canOverrideLocations ? auth()->user() : null) : collect();
@@ -93,12 +93,12 @@ $save = function () {
             <label class="block text-sm font-bold md:col-span-2">Daily Assignment
                 <select data-testid="production-order-assignment-select" wire:model.live="assignment_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
                     <option value="">Select assignment</option>
-                    @foreach ($assignments as $assignment)<option value="{{ $assignment->id }}">{{ $assignment->production_date->format('d M Y') }} · {{ $assignment->machine?->name }} · {{ $assignment->product?->name }}</option>@endforeach
+                    @foreach ($assignments as $assignment)<option value="{{ $assignment->id }}">{{ $assignment->production_date->format('d M Y') }} · {{ $assignment->machine?->name ?: 'No machine required' }} · {{ $assignment->mould?->name }} · {{ $assignment->product?->name }}</option>@endforeach
                 </select>
                 @error('assignment') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
             </label>
             @if ($selected)
-                <div class="rounded-xl bg-slate-100 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Machine / Date</p><p class="font-black">{{ $selected->machine?->name }} · {{ $selected->production_date->format('d M Y') }}</p></div>
+                <div class="rounded-xl bg-slate-100 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Production Method / Machine / Date</p><p class="font-black">{{ $selected->production_method === 'mould_only' ? 'Mould Only' : 'Machine + Mould' }} · {{ $selected->machine?->name ?: 'Not required' }} · {{ $selected->production_date->format('d M Y') }}</p></div>
                 <div class="rounded-xl bg-slate-100 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Installed / Assigned Mould</p><p class="font-black">{{ $selected->machine?->currentMouldInstallation?->mould?->name ?: 'No mould installed' }} · {{ $selected->mould?->name ?: 'No assigned mould' }}</p></div>
                 <div class="rounded-xl bg-slate-100 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Product / Active Recipe</p><p class="font-black">{{ $selected->product?->name }} · {{ $activeRecipe ? $activeRecipe->name.' v'.($activeRecipe->version ?: '—') : 'No active recipe' }}</p></div>
             @endif

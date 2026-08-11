@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use LogicException;
 
 #[Fillable([
-    'company_id', 'branch_id', 'machine_id', 'production_mould_id',
+    'company_id', 'branch_id', 'production_method', 'machine_id', 'production_mould_id',
     'production_mould_installation_id', 'product_id', 'production_recipe_id', 'production_date',
     'target_quantity', 'planned_start_time', 'planned_end_time', 'status', 'active_slot_key',
     'notes', 'created_by', 'updated_by',
@@ -48,7 +48,8 @@ class ProductionMachineAssignment extends Model
         static::saving(function (ProductionMachineAssignment $assignment): void {
             $assignment->active_slot_key = self::activeSlotKey(
                 (int) $assignment->company_id,
-                (int) $assignment->machine_id,
+                $assignment->machine_id ? (int) $assignment->machine_id : null,
+                $assignment->production_mould_id ? (int) $assignment->production_mould_id : null,
                 $assignment->production_date,
                 $assignment->status,
             );
@@ -146,8 +147,13 @@ class ProductionMachineAssignment extends Model
         return $query->whereIn($this->qualifyColumn('status'), self::BLOCKING_STATUSES);
     }
 
-    public static function activeSlotKey(int $companyId, int $machineId, mixed $productionDate, string $status): ?string
+    public static function activeSlotKey(int $companyId, ?int $machineId, mixed $mouldIdOrDate, mixed $productionDateOrStatus, ?string $status = null): ?string
     {
+        // Keep the original four-argument API for callers representing machine-based work.
+        $mouldId = $status === null ? null : ($mouldIdOrDate ? (int) $mouldIdOrDate : null);
+        $productionDate = $status === null ? $mouldIdOrDate : $productionDateOrStatus;
+        $status ??= (string) $productionDateOrStatus;
+
         if (! in_array($status, self::BLOCKING_STATUSES, true)) {
             return null;
         }
@@ -156,7 +162,9 @@ class ProductionMachineAssignment extends Model
             ? $productionDate->format('Y-m-d')
             : substr((string) $productionDate, 0, 10);
 
-        return "{$companyId}:{$machineId}:{$date}";
+        return $machineId
+            ? "{$companyId}:{$machineId}:{$date}"
+            : "{$companyId}:mould:{$mouldId}:{$date}";
     }
 
     public function scopeEligibleForProductionOrder(Builder $query): Builder
@@ -164,22 +172,37 @@ class ProductionMachineAssignment extends Model
         return $query
             ->whereIn($this->qualifyColumn('status'), [self::STATUS_PLANNED, self::STATUS_CONFIRMED])
             ->whereDoesntHave('productionOrder')
-            ->whereHas('machine', fn (Builder $machine) => $machine->where('status', Machine::STATUS_ACTIVE))
+            ->where(function (Builder $method): void {
+                $method->where(function (Builder $machine): void {
+                    $machine->where('production_method', ProductFamily::METHOD_MACHINE_MOULD)
+                        ->whereHas('machine', fn (Builder $q) => $q->where('status', Machine::STATUS_ACTIVE));
+                })->orWhere(function (Builder $mouldOnly): void {
+                    $mouldOnly->where('production_method', ProductFamily::METHOD_MOULD_ONLY)->whereNull('machine_id');
+                });
+            })
             ->whereHas('product', fn (Builder $product) => $product
                 ->where('inventory_source', Product::INVENTORY_SOURCE_MANUFACTURED)
                 ->where('status', 'active'))
             ->whereHas('recipe', fn (Builder $recipe) => $recipe
                 ->where('status', ProductionRecipe::STATUS_ACTIVE)
                 ->whereColumn('production_recipes.product_id', $this->qualifyColumn('product_id')))
-            ->whereExists(fn ($current) => $current
-                ->selectRaw('1')
-                ->from('production_mould_installations as current_installation')
-                ->join('production_moulds as current_mould', 'current_mould.id', '=', 'current_installation.production_mould_id')
-                ->whereColumn('current_installation.current_machine_id', $this->qualifyColumn('machine_id'))
-                ->whereColumn('current_installation.id', $this->qualifyColumn('production_mould_installation_id'))
-                ->whereColumn('current_mould.id', $this->qualifyColumn('production_mould_id'))
-                ->where('current_mould.active', true)
-                ->where('current_mould.under_maintenance', false)
-                ->whereRaw('current_mould.product_family_id = (select product_family_id from products where products.id = production_machine_assignments.product_id)'));
+            ->where(function (Builder $mouldRule): void {
+                $mouldRule->where(function (Builder $currentMethod): void {
+                    $currentMethod->where('production_method', ProductFamily::METHOD_MACHINE_MOULD)->whereExists(fn ($current) => $current
+                        ->selectRaw('1')
+                        ->from('production_mould_installations as current_installation')
+                        ->join('production_moulds as current_mould', 'current_mould.id', '=', 'current_installation.production_mould_id')
+                        ->whereColumn('current_installation.current_machine_id', $this->qualifyColumn('machine_id'))
+                        ->whereColumn('current_installation.id', $this->qualifyColumn('production_mould_installation_id'))
+                        ->whereColumn('current_mould.id', $this->qualifyColumn('production_mould_id'))
+                        ->where('current_mould.active', true)
+                        ->where('current_mould.under_maintenance', false)
+                        ->whereRaw('current_mould.product_family_id = (select product_family_id from products where products.id = production_machine_assignments.product_id)'));
+                })->orWhere(function (Builder $manual): void {
+                    $manual->where('production_method', ProductFamily::METHOD_MOULD_ONLY)
+                        ->whereHas('mould', fn (Builder $mould) => $mould->available()
+                            ->whereRaw('production_moulds.product_family_id = (select product_family_id from products where products.id = production_machine_assignments.product_id)'));
+                });
+            });
     }
 }

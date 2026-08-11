@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\DocumentSequence;
 use App\Models\Machine;
+use App\Models\ProductFamily;
 use App\Models\ProductionCuringBatch;
 use App\Models\ProductionMachineAssignment;
 use App\Models\ProductionOrder;
@@ -37,13 +38,23 @@ class ProductionOrderService
             throw ValidationException::withMessages(['assignment' => 'Cancelled assignments cannot create production orders.']);
         }
 
-        $assignment->loadMissing(['machine.currentMouldInstallation.mould', 'product', 'recipe']);
+        $assignment->loadMissing(['machine.currentMouldInstallation.mould', 'mould', 'product.productFamily', 'recipe']);
         if (! $assignment->product?->isManufactured()) {
             throw ValidationException::withMessages(['product' => 'Only manufactured products can create production orders.']);
         }
 
         $planned = $this->positive($data['planned_quantity'] ?? $assignment->target_quantity, 'planned_quantity');
-        if ($assignment->production_mould_id) {
+        $method = $assignment->production_method ?: ProductFamily::METHOD_MACHINE_MOULD;
+        if ($method === ProductFamily::METHOD_MACHINE_MOULD && ! $assignment->machine_id) {
+            throw ValidationException::withMessages(['machine_id' => 'Machine is required for Machine + Mould production.']);
+        }
+        if (! $assignment->production_mould_id) {
+            throw ValidationException::withMessages(['production_mould_id' => 'Mould is required for production.']);
+        }
+        if ($method === ProductFamily::METHOD_MOULD_ONLY && $assignment->machine_id) {
+            throw ValidationException::withMessages(['machine_id' => 'Mould-only production must not be silently converted into machine production.']);
+        }
+        if ($method === ProductFamily::METHOD_MACHINE_MOULD) {
             $currentMould = $assignment->machine?->currentMouldInstallation?->mould;
             if (! $currentMould || (int) $currentMould->id !== (int) $assignment->production_mould_id) {
                 throw ValidationException::withMessages(['assignment' => __('production.validation.assignment_mould_changed')]);
@@ -56,6 +67,14 @@ class ProductionOrderService
             }
             if ((int) $currentMould->product_family_id !== (int) $assignment->product?->product_family_id) {
                 throw ValidationException::withMessages(['assignment' => __('production.validation.product_mould_incompatible')]);
+            }
+        } else {
+            $mould = $assignment->mould;
+            if (! $mould?->active || $mould->under_maintenance) {
+                throw ValidationException::withMessages(['production_mould_id' => __('production.validation.mould_unavailable')]);
+            }
+            if ((int) $mould->product_family_id !== (int) $assignment->product?->product_family_id) {
+                throw ValidationException::withMessages(['production_mould_id' => __('production.validation.product_mould_incompatible')]);
             }
         }
 
@@ -72,7 +91,7 @@ class ProductionOrderService
 
         $branchId = $assignment->branch_id ?: $assignment->machine?->branch_id ?: $user->branch_id;
         $defaults = $this->productionLocations->defaults($companyId, $branchId);
-        $canOverrideLocations = $user->can('production.override_default_locations');
+        $canOverrideLocations = $user->can('production.override_order_locations') || $user->can('production.override_default_locations');
         $raw = $canOverrideLocations
             ? $this->productionLocations->location(
                 (int) ($data['raw_material_stock_location_id'] ?? 0),
@@ -91,19 +110,20 @@ class ProductionOrderService
                 $user,
             )
             : $defaults[ProductionLocationService::FINISHED];
-        $output = $assignment->product->requires_curing
-            ? ($canOverrideLocations
-                ? $this->productionLocations->location(
-                    (int) ($data['production_output_stock_location_id'] ?? 0),
-                    ProductionLocationService::CURING,
-                    $companyId,
-                    $branchId,
-                    $user,
-                )
-                : $defaults[ProductionLocationService::CURING])
-            : $final;
+        $curing = $canOverrideLocations
+            ? $this->productionLocations->location(
+                (int) ($data['curing_stock_location_id'] ?? ($assignment->product->requires_curing
+                    ? ($data['production_output_stock_location_id'] ?? 0)
+                    : $defaults[ProductionLocationService::CURING]->id)),
+                ProductionLocationService::CURING,
+                $companyId,
+                $branchId,
+                $user,
+            )
+            : $defaults[ProductionLocationService::CURING];
+        $output = $assignment->product->requires_curing ? $curing : $final;
 
-        return DB::transaction(function () use ($assignment, $data, $user, $companyId, $planned, $recipe, $branchId, $raw, $final, $output): ProductionOrder {
+        return DB::transaction(function () use ($assignment, $data, $user, $companyId, $planned, $recipe, $branchId, $raw, $curing, $final, $output, $method): ProductionOrder {
             $assignment = ProductionMachineAssignment::query()->forCurrentCompany()->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
             $existing = ProductionOrder::query()->forCurrentCompany()
                 ->where('production_machine_assignment_id', $assignment->id)->lockForUpdate()->first();
@@ -116,13 +136,16 @@ class ProductionOrderService
             }
 
             $values = [
-                'company_id' => $companyId, 'branch_id' => $branchId,
+                'company_id' => $companyId, 'branch_id' => $branchId, 'production_method' => $method,
                 'raw_material_stock_location_id' => $raw->id,
+                'curing_stock_location_id' => $curing->id,
+                'finished_goods_release_location_id' => $final->id,
                 'finished_goods_stock_location_id' => $final->id,
                 'production_output_stock_location_id' => $output->id,
                 'final_finished_goods_stock_location_id' => $final->id,
                 'production_machine_assignment_id' => $assignment->id,
-                'machine_id' => $assignment->machine_id, 'product_id' => $assignment->product_id,
+                'machine_id' => $assignment->machine_id, 'production_mould_id' => $assignment->production_mould_id,
+                'product_id' => $assignment->product_id,
                 'production_recipe_id' => $recipe->id, 'production_date' => $assignment->production_date,
                 'planned_quantity' => $planned, 'accepted_quantity' => 0, 'rejected_quantity' => 0,
                 'total_produced_quantity' => 0, 'status' => ProductionOrder::STATUS_PLANNED,
@@ -200,9 +223,13 @@ class ProductionOrderService
             if (! $order->snapshot()->exists() || ! $order->production_recipe_id || ! $order->materials()->exists()) {
                 throw ValidationException::withMessages(['snapshot' => 'An immutable active-recipe snapshot is required before production can start.']);
             }
-            $machine = Machine::query()->forCurrentCompany()->whereKey($order->machine_id)->lockForUpdate()->firstOrFail();
-            if ($machine->status !== Machine::STATUS_ACTIVE) {
-                throw ValidationException::withMessages(['machine' => 'The machine must be active before production starts.']);
+            if ($order->production_method === ProductFamily::METHOD_MACHINE_MOULD) {
+                $machine = Machine::query()->forCurrentCompany()->whereKey($order->machine_id)->lockForUpdate()->firstOrFail();
+                if ($machine->status !== Machine::STATUS_ACTIVE) {
+                    throw ValidationException::withMessages(['machine' => 'The machine must be active before production starts.']);
+                }
+            } elseif ($order->production_method !== ProductFamily::METHOD_MOULD_ONLY || $order->machine_id || ! $order->production_mould_id) {
+                throw ValidationException::withMessages(['production_method' => 'The production method, machine, and mould combination is invalid.']);
             }
             $raw = $this->lockedLocation($order->raw_material_stock_location_id, $order, $user, true);
             $inventoryLines = $order->materials()->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY)->lockForUpdate()->get();

@@ -12,13 +12,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 
 #[Fillable([
-    'company_id', 'name', 'code', 'description', 'icon', 'colour', 'active',
+    'company_id', 'name', 'code', 'description', 'icon', 'colour', 'active', 'production_method',
     'default_curing_days', 'default_earliest_release_days', 'default_requires_curing',
     'default_requires_qc', 'default_selling_unit_id', 'default_inventory_unit_id',
 ])]
 class ProductFamily extends Model
 {
     use HasCompany;
+
+    public const METHOD_MACHINE_MOULD = 'machine_mould';
+
+    public const METHOD_MOULD_ONLY = 'mould_only';
+
+    public const PRODUCTION_METHODS = [self::METHOD_MACHINE_MOULD, self::METHOD_MOULD_ONLY];
 
     public const DEFAULT_CODE = 'concrete-blocks';
 
@@ -120,5 +126,10 @@ class ProductFamily extends Model
             'unit_id' => $this->default_inventory_unit_id,
             'selling_unit_id' => $this->default_selling_unit_id,
         ];
+    }
+
+    public function productionMethodLabel(): string
+    {
+        return $this->production_method === self::METHOD_MOULD_ONLY ? 'Mould Only' : 'Machine + Mould';
     }
 }

@@ -5,6 +5,7 @@ use App\Models\Company;
 use App\Models\Machine;
 use App\Models\Product;
 use App\Models\ProductionMachineAssignment;
+use App\Models\ProductionMould;
 use App\Models\ProductionOrder;
 use App\Models\ProductionOrderCosting;
 use App\Models\ProductionOrderCostingLine;
@@ -19,6 +20,7 @@ use App\Models\User;
 use App\Services\InventoryService;
 use App\Services\ProductionCostingService;
 use App\Services\ProductionCuringService;
+use App\Services\ProductionMouldService;
 use App\Services\ProductionOrderService;
 use App\Services\ProductionRecipeService;
 use Carbon\Carbon;
@@ -67,7 +69,7 @@ beforeEach(function () {
         'default_curing_location_id' => $this->curingLocation->id,
         'default_finished_goods_location_id' => $this->finishedLocation->id,
     ]);
-    app(ProductionRecipeService::class)->save([
+    $this->recipe = app(ProductionRecipeService::class)->save([
         'name' => 'Costing Recipe', 'code' => 'CST-R1', 'version' => '1', 'product_id' => $this->finished->id,
         'output_quantity' => 1, 'output_unit_id' => $this->finished->unit_id, 'status' => ProductionRecipe::STATUS_ACTIVE,
         'effective_from' => '', 'effective_to' => '', 'notes' => '',
@@ -77,6 +79,10 @@ beforeEach(function () {
         ['cost_type' => ProductionRecipeItem::TYPE_NON_INVENTORY, 'cost_name' => 'Labour', 'source_quantity' => '', 'material_unit_id' => '', 'unit_cost' => 3, 'notes' => ''],
         ['cost_type' => ProductionRecipeItem::TYPE_NON_INVENTORY, 'cost_name' => 'Water', 'source_quantity' => 0.5, 'material_unit_id' => $this->unit->id, 'unit_cost' => 1.5, 'notes' => ''],
     ], $this->admin);
+    $this->mould = ProductionMould::query()->create(['company_id' => $this->company->id, 'product_family_id' => $this->finished->product_family_id, 'code' => 'CST-MOULD', 'name' => 'Costing Mould', 'active' => true]);
+    $this->mould->compatibleMachines()->syncWithPivotValues([$this->machine->id], ['company_id' => $this->company->id]);
+    $installation = app(ProductionMouldService::class)->install($this->machine, $this->mould, $this->admin);
+    $this->assignment->update(['production_mould_id' => $this->mould->id, 'production_mould_installation_id' => $installation->id, 'production_recipe_id' => $this->recipe->id]);
     app(InventoryService::class)->directStockIn([
         'branch_id' => $this->branch->id, 'product_id' => $this->material->id, 'stock_location_id' => $this->raw->id,
         'quantity' => 100, 'cost_price' => 10, 'selling_price' => 20, 'reason' => 'Historical cost test',
