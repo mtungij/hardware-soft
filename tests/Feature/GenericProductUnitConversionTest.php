@@ -29,6 +29,22 @@ beforeEach(function () {
     $this->box = Unit::where('company_id', $this->branch->company_id)->where('short_name', 'box')->firstOrFail();
 });
 
+test('product create HTTP page renders shared unit conversions after base pricing and before status', function () {
+    $this->get(route('products.create'))
+        ->assertOk()
+        ->assertSee('Unit Conversions & Pricing')
+        ->assertSee('Add Alternative Unit')
+        ->assertSeeInOrder([
+            'Base Unit Pricing',
+            'Reorder Level',
+            'Unit Conversions & Pricing',
+            'Add Alternative Unit',
+            'Status',
+            'Taxable product',
+            'Stock Traceability',
+        ]);
+});
+
 test('generic alternatives are product specific active and directly normalized to base stock', function () {
     $service = app(ProductUnitConversionService::class);
     $dozen = Unit::create(['company_id' => $this->branch->company_id, 'name' => 'Dozen', 'short_name' => 'doz', 'measurement_type_id' => $this->product->measurement_type_id, 'status' => 'active']);
