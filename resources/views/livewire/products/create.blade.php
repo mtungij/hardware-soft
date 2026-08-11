@@ -234,6 +234,14 @@ $removeImage = function () {
     $this->resetErrorBag('image_upload');
 };
 
+$addUnitConversion = function (): void {
+    $this->appendUnitConversionRow();
+};
+
+$removeUnitConversion = function (int $index): void {
+    $this->removeUnitConversionRow($index);
+};
+
 $imagePreviewUrl = function (): ?string {
     if (! $this->image_upload) {
         return null;

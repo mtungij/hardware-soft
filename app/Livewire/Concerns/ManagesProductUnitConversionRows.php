@@ -16,7 +16,7 @@ trait ManagesProductUnitConversionRows
         }
     }
 
-    public function addUnitConversion(): void
+    protected function appendUnitConversionRow(): void
     {
         $this->normalizeUnitConversionRows();
 
@@ -32,7 +32,7 @@ trait ManagesProductUnitConversionRows
         ];
     }
 
-    public function removeUnitConversion(int $index): void
+    protected function removeUnitConversionRow(int $index): void
     {
         $this->normalizeUnitConversionRows();
 
