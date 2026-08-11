@@ -45,6 +45,16 @@ trait ManagesProductUnitConversionRows
         $this->resetErrorBag('unit_conversions');
     }
 
+    public function addUnitConversion(): void
+    {
+        $this->appendUnitConversionRow();
+    }
+
+    public function removeUnitConversion(int $index): void
+    {
+        $this->removeUnitConversionRow($index);
+    }
+
     private function normalizeUnitConversionRows(): void
     {
         if (! is_array($this->unit_conversions ?? null)) {

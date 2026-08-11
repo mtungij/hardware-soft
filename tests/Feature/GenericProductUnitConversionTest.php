@@ -308,6 +308,25 @@ test('create product adds exactly one removable alternative unit row per action'
         ->assertSet('unit_conversions.0.active', true);
 });
 
+test('create product can add alternative unit after selecting measurement type and base stock unit', function () {
+    Volt::test('products.create')
+        ->set('measurement_type_id', (string) $this->product->measurement_type_id)
+        ->set('unit_id', (string) $this->product->unit_id)
+        ->assertSee('Add Alternative Unit')
+        ->call('addUnitConversion')
+        ->assertCount('unit_conversions', 1)
+        ->assertSet('unit_conversions.0', [
+            'unit_id' => null,
+            'conversion_factor' => null,
+            'retail_price' => null,
+            'wholesale_price' => null,
+            'purchase_price' => null,
+            'can_purchase' => false,
+            'can_sell' => true,
+            'active' => true,
+        ]);
+});
+
 test('create product saves with a valid alternative unit conversion', function () {
     $bag = Unit::where('company_id', $this->branch->company_id)->where('short_name', 'bag')->firstOrFail();
     $bundle = Unit::where('company_id', $this->branch->company_id)->where('short_name', 'bundle')->firstOrFail();
