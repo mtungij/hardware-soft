@@ -256,18 +256,88 @@ test('retail and wholesale POS use package prices while deducting canonical base
         ->toThrow(ValidationException::class);
 });
 
-test('add alternative unit creates only one removable empty row', function () {
+test('create product adds exactly one removable alternative unit row per action', function () {
     Volt::test('products.create')
         ->assertCount('unit_conversions', 0)
         ->call('addUnitConversion')
         ->assertCount('unit_conversions', 1)
+        ->assertSet('unit_conversions.0', [
+            'unit_id' => null,
+            'conversion_factor' => null,
+            'retail_price' => null,
+            'wholesale_price' => null,
+            'purchase_price' => null,
+            'can_purchase' => false,
+            'can_sell' => true,
+            'active' => true,
+        ])
         ->assertSee('Contains')
         ->assertSee('Retail Price')
         ->assertDontSee('Retail Price / Alternative unit')
         ->call('addUnitConversion')
-        ->assertCount('unit_conversions', 1)
+        ->assertCount('unit_conversions', 2)
         ->call('removeUnitConversion', 0)
-        ->assertCount('unit_conversions', 0);
+        ->assertCount('unit_conversions', 1)
+        ->assertSet('unit_conversions.0.unit_id', null)
+        ->assertSet('unit_conversions.0.can_purchase', false)
+        ->assertSet('unit_conversions.0.can_sell', true)
+        ->assertSet('unit_conversions.0.active', true);
+});
+
+test('create product saves with a valid alternative unit conversion', function () {
+    Volt::test('products.create')
+        ->set('branch_id', (string) $this->branch->id)
+        ->set('category_id', (string) $this->product->category_id)
+        ->set('measurement_type_id', (string) $this->product->measurement_type_id)
+        ->set('purchase_unit_id', (string) $this->product->unit_id)
+        ->set('unit_id', (string) $this->product->unit_id)
+        ->set('selling_unit_id', (string) $this->product->unit_id)
+        ->set('name', 'Create Product With Box')
+        ->set('sku', 'CREATE-WITH-BOX')
+        ->set('buying_price', '100')
+        ->set('selling_price', '150')
+        ->set('reorder_level', '0')
+        ->call('addUnitConversion')
+        ->set('unit_conversions.0.unit_id', (string) $this->box->id)
+        ->set('unit_conversions.0.conversion_factor', '12')
+        ->set('unit_conversions.0.retail_price', '1500')
+        ->set('unit_conversions.0.wholesale_price', '1400')
+        ->set('unit_conversions.0.purchase_price', '1200')
+        ->set('unit_conversions.0.can_purchase', true)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $product = Product::where('sku', 'CREATE-WITH-BOX')->firstOrFail();
+    $conversion = $product->unitConversions()->firstOrFail();
+
+    expect($conversion->unit_id)->toBe($this->box->id)
+        ->and((float) $conversion->conversion_factor)->toBe(12.0)
+        ->and((float) $conversion->retail_price)->toBe(1500.0)
+        ->and($conversion->can_purchase)->toBeTrue()
+        ->and($conversion->can_sell)->toBeTrue()
+        ->and($conversion->active)->toBeTrue();
+});
+
+test('create product saves with no alternative unit conversions', function () {
+    Volt::test('products.create')
+        ->assertCount('unit_conversions', 0)
+        ->set('branch_id', (string) $this->branch->id)
+        ->set('category_id', (string) $this->product->category_id)
+        ->set('measurement_type_id', (string) $this->product->measurement_type_id)
+        ->set('purchase_unit_id', (string) $this->product->unit_id)
+        ->set('unit_id', (string) $this->product->unit_id)
+        ->set('selling_unit_id', (string) $this->product->unit_id)
+        ->set('name', 'Create Product Without Conversion')
+        ->set('sku', 'CREATE-NO-CONVERSION')
+        ->set('buying_price', '100')
+        ->set('selling_price', '150')
+        ->set('reorder_level', '0')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $product = Product::where('sku', 'CREATE-NO-CONVERSION')->firstOrFail();
+
+    expect($product->unitConversions()->count())->toBe(0);
 });
 
 test('multiple package rows retain independent contained quantities and labels', function () {

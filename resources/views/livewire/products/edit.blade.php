@@ -1,12 +1,12 @@
 <?php
 
-use App\Models\Branch;
+use App\Livewire\Concerns\ManagesProductUnitConversionRows;
 use App\Models\Category;
 use App\Models\MeasurementType;
 use App\Models\Product;
 use App\Models\ProductFamily;
-use App\Models\ProductSize;
 use App\Models\Unit;
+use App\Services\ProductImageService;
 use App\Services\ProductUnitConversionService;
 use App\Support\CompanyFeatures;
 use App\Support\ProductMeasurementOptions;
@@ -21,7 +21,7 @@ use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
 
 layout('layouts.app');
-uses([WithFileUploads::class]);
+uses([WithFileUploads::class, ManagesProductUnitConversionRows::class]);
 
 state([
     'product' => null,
@@ -135,28 +135,6 @@ $removeImage = function () {
     $this->resetErrorBag('image_upload');
 };
 
-$addUnitConversion = function (): void {
-    if (collect($this->unit_conversions)->contains(fn (array $row): bool => blank($row['unit_id'] ?? null))) {
-        return;
-    }
-
-    $this->unit_conversions[] = [
-        'unit_id' => '',
-        'conversion_factor' => '',
-        'retail_price' => '',
-        'wholesale_price' => '',
-        'purchase_price' => '',
-        'can_purchase' => false,
-        'can_sell' => true,
-        'active' => true,
-    ];
-};
-
-$removeUnitConversion = function (int $index): void {
-    unset($this->unit_conversions[$index]);
-    $this->unit_conversions = array_values($this->unit_conversions);
-};
-
 $imagePreviewUrl = function (): ?string {
     if (! $this->image_upload) {
         return null;
@@ -164,7 +142,7 @@ $imagePreviewUrl = function (): ?string {
 
     try {
         return $this->image_upload->temporaryUrl();
-    } catch (\Throwable) {
+    } catch (Throwable) {
         return null;
     }
 };
@@ -484,7 +462,7 @@ $save = function () {
     try {
         DB::transaction(function () use ($validated, $imageUpload, $removeImage, $unitConversions, &$newPath): void {
             if ($imageUpload) {
-                $newPath = app(\App\Services\ProductImageService::class)->store($imageUpload, $this->product);
+                $newPath = app(ProductImageService::class)->store($imageUpload, $this->product);
                 $validated['image_path'] = $newPath;
             } elseif ($removeImage) {
                 $validated['image_path'] = null;
@@ -493,7 +471,7 @@ $save = function () {
             $this->product->update($validated);
             app(ProductUnitConversionService::class)->sync($this->product, $unitConversions);
         });
-    } catch (\Throwable $exception) {
+    } catch (Throwable $exception) {
         if ($newPath) {
             Storage::disk('public')->delete($newPath);
         }
@@ -502,7 +480,7 @@ $save = function () {
     }
 
     if (($newPath || $removeImage) && $oldPath && $oldPath !== $newPath) {
-        app(\App\Services\ProductImageService::class)->deleteOwned($oldPath, $this->product);
+        app(ProductImageService::class)->deleteOwned($oldPath, $this->product);
     }
 
     session()->flash('success', 'Product updated successfully.');
@@ -632,8 +610,8 @@ $save = function () {
 
             @if ($this->requiresPurchaseConversion())
                 @php
-                    $purchaseUnit = Unit::find($purchase_unit_id);
-                    $stockUnit = Unit::find($unit_id);
+                    $purchaseUnit = \App\Models\Unit::find($purchase_unit_id);
+                    $stockUnit = \App\Models\Unit::find($unit_id);
                 @endphp
                 <div>
                     <x-form-input label="Purchase to Stock Factor" name="purchase_conversion_factor" type="number" step="0.0001" wire:model="purchase_conversion_factor" required />
@@ -674,7 +652,7 @@ $save = function () {
                     <input wire:model.live.debounce.300ms="product_size_search" class="mt-1 block w-full rounded-t-lg border border-b-0 border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search size, e.g. 2 × 4">
                     <select wire:model="product_size_id" class="block w-full rounded-b-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                         <option value="">No size</option>
-                        @foreach (ProductSize::query()->where(fn ($query) => $query->where('status', 'active')->when($product_size_id, fn ($q) => $q->orWhere('id', $product_size_id)))->when($product_size_search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$product_size_search}%")->orWhere('symbol', 'like', "%{$product_size_search}%")))->orderBy('symbol')->limit(50)->get() as $size)
+                        @foreach (\App\Models\ProductSize::query()->where(fn ($query) => $query->where('status', 'active')->when($product_size_id, fn ($q) => $q->orWhere('id', $product_size_id)))->when($product_size_search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$product_size_search}%")->orWhere('symbol', 'like', "%{$product_size_search}%")))->orderBy('symbol')->limit(50)->get() as $size)
                             <option value="{{ $size->id }}">{{ $size->label() }}</option>
                         @endforeach
                     </select>
@@ -686,7 +664,7 @@ $save = function () {
                 Branch
                 <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                     <option value="">Global product</option>
-                    @foreach (Branch::orderBy('name')->get() as $branch)
+                    @foreach (\App\Models\Branch::orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                     @endforeach
                 </select>
@@ -745,8 +723,8 @@ $save = function () {
                     <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         @if ($this->requiresUnitConversion())
                             @php
-                                $baseUnit = Unit::find($unit_id);
-                                $sellingUnit = Unit::find($selling_unit_id);
+                                $baseUnit = \App\Models\Unit::find($unit_id);
+                                $sellingUnit = \App\Models\Unit::find($selling_unit_id);
                             @endphp
                             <div>
                                 <x-form-input label="Conversion Factor" name="conversion_factor" type="number" step="0.0001" wire:model="conversion_factor" required />
