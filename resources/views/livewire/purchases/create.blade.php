@@ -5,8 +5,10 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\StockLocation;
 use App\Models\Supplier;
+use App\Models\Unit;
 use App\Services\AccountingService;
 use App\Services\InventoryService;
+use App\Services\ProductUnitConversionService;
 use App\Support\CompanyFeatures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -51,6 +53,11 @@ $toNumber = function (mixed $value): float {
 $newItem = fn (): array => [
     'uuid' => (string) Str::uuid(),
     'product_id' => '',
+    'product_unit_conversion_id' => '',
+    'use_base_unit' => false,
+    'purchase_unit_id' => '',
+    'purchase_conversion_factor' => 1.0,
+    'base_ordered_quantity' => 1.0,
     'ordered_quantity' => 1.0,
     'received_quantity' => 0.0,
     'cost_price' => 0.0,
@@ -67,6 +74,7 @@ $normalizeNumericState = function (): void {
         }
 
         $this->items[$index]['ordered_quantity'] = $this->toNumber($item['ordered_quantity'] ?? $item['ordered_qty'] ?? 0);
+        $this->items[$index]['base_ordered_quantity'] = $this->toNumber($item['ordered_quantity'] ?? 0) * max(0.0001, $this->toNumber($item['purchase_conversion_factor'] ?? 1));
         $this->items[$index]['received_quantity'] = $this->toNumber($item['received_quantity'] ?? $item['received_qty'] ?? 0);
         $this->items[$index]['cost_price'] = $this->toNumber($item['cost_price'] ?? $item['unit_cost'] ?? 0);
         $this->items[$index]['selling_price'] = $this->toNumber($item['selling_price'] ?? 0);
@@ -138,16 +146,47 @@ $selectProduct = function (int $index, string $productId) {
         return;
     }
 
-    $product = $productId ? Product::query()->purchasable()->find($productId) : null;
-    $costPrice = $this->toNumber($product?->buying_price);
+    $product = $productId ? Product::query()->with(['unit', 'purchaseUnit', 'unitConversions.unit'])->purchasable()->find($productId) : null;
+    $conversion = $product?->unitConversions->first(fn ($row) => $row->active && $row->can_purchase);
+    $costPrice = $this->toNumber($conversion?->purchase_price ?? $product?->buying_price);
     $sellingPrice = $this->toNumber($product?->selling_price);
 
     $this->items[$index]['product_id'] = $product ? (string) $product->id : '';
+    $this->items[$index]['product_unit_conversion_id'] = $conversion ? (string) $conversion->id : '';
+    $this->items[$index]['use_base_unit'] = false;
+    $this->items[$index]['purchase_unit_id'] = $conversion?->unit_id ?: ($product?->purchase_unit_id ?: $product?->unit_id ?: '');
+    $this->items[$index]['purchase_conversion_factor'] = $conversion?->conversion_factor ?: ($product?->purchaseConversionFactor() ?? 1);
     $this->items[$index]['cost_price'] = $costPrice;
     $this->items[$index]['selling_price'] = $sellingPrice;
     $this->recalculateTotals();
     $this->dispatch('money-input-updated', model: "items.{$index}.cost_price", value: $costPrice);
     $this->dispatch('money-input-updated', model: "items.{$index}.selling_price", value: $sellingPrice);
+};
+
+$selectPurchaseUnit = function (int $index, string $selection): void {
+    $item = $this->items[$index] ?? null;
+    $product = $item ? Product::query()->with(['unit', 'purchaseUnit'])->find($item['product_id'] ?? null) : null;
+
+    if (! $product) {
+        return;
+    }
+
+    if ($selection === 'base') {
+        $this->items[$index]['product_unit_conversion_id'] = '';
+        $this->items[$index]['use_base_unit'] = true;
+        $this->items[$index]['purchase_unit_id'] = $product->unit_id;
+        $this->items[$index]['purchase_conversion_factor'] = 1;
+        $this->items[$index]['cost_price'] = $this->toNumber($product->buying_price);
+    } else {
+        $conversion = app(ProductUnitConversionService::class)->resolveForPurchase($product, (int) $selection);
+        $this->items[$index]['product_unit_conversion_id'] = (string) $conversion->id;
+        $this->items[$index]['use_base_unit'] = false;
+        $this->items[$index]['purchase_unit_id'] = $conversion->unit_id;
+        $this->items[$index]['purchase_conversion_factor'] = (float) $conversion->conversion_factor;
+        $this->items[$index]['cost_price'] = $this->toNumber($conversion->purchase_price ?? $product->buying_price);
+    }
+
+    $this->recalculateTotals();
 };
 
 $updatedItems = function (): void {
@@ -190,6 +229,8 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                 }
             }),
         ],
+        'items.*.product_unit_conversion_id' => ['nullable', 'exists:product_unit_conversions,id'],
+        'items.*.use_base_unit' => ['boolean'],
         'items.*.ordered_quantity' => ['required', 'numeric', 'min:0.01'],
         'items.*.received_quantity' => ['required', 'numeric', 'min:0'],
         'items.*.cost_price' => ['required', 'numeric', 'min:0'],
@@ -238,7 +279,14 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         ]);
 
         foreach ($validated['items'] as $item) {
-            $product = Product::query()->findOrFail($item['product_id']);
+            $product = Product::query()->with(['unit', 'purchaseUnit'])->findOrFail($item['product_id']);
+            $conversion = app(ProductUnitConversionService::class)->resolveForPurchase(
+                $product,
+                filled($item['product_unit_conversion_id'] ?? null) ? (int) $item['product_unit_conversion_id'] : null,
+            );
+            $usesBase = (bool) ($item['use_base_unit'] ?? false);
+            $purchaseUnit = $conversion?->unit ?: ($usesBase ? $product->unit : $product->purchaseUnit);
+            $factor = $conversion ? (float) $conversion->conversion_factor : ($usesBase ? 1 : $product->purchaseConversionFactor());
             $quantity = $this->toNumber($item['ordered_quantity']);
             $cost = $this->toNumber($item['cost_price']);
             $sellingPriceValue = $this->toNumber($item['selling_price']);
@@ -249,12 +297,19 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
 
             $purchase->items()->create([
                 'product_id' => $item['product_id'],
-                'purchase_unit_id' => $product->purchase_unit_id ?: $product->unit_id,
+                'product_unit_conversion_id' => $conversion?->id,
+                'purchase_unit_id' => $purchaseUnit?->id ?: $product->unit_id,
                 'stock_unit_id' => $product->unit_id,
-                'purchase_conversion_factor' => $product->purchaseConversionFactor(),
+                'purchase_conversion_factor' => $factor,
+                'purchase_unit_name_snapshot' => $purchaseUnit?->name,
+                'purchase_unit_code_snapshot' => $purchaseUnit?->short_name,
+                'stock_unit_name_snapshot' => $product->unit?->name,
+                'stock_unit_code_snapshot' => $product->unit?->short_name,
                 'product_size_id' => $product->product_size_id,
                 'ordered_quantity' => $quantity,
+                'base_ordered_quantity' => round($quantity * $factor, 4),
                 'received_quantity' => 0,
+                'base_received_quantity' => 0,
                 'cost_price' => $cost,
                 'selling_price' => $sellingPrice,
                 'line_total' => $lineTotal,
@@ -358,14 +413,16 @@ $submitPurchase = function () {
 
             <div class="relative z-20 overflow-x-auto pb-4 transition-[padding] focus-within:pb-96">
                 <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Purchase Unit</th><th>Ordered Qty</th><th>Unit Cost</th><th>Selling Price</th><th>Line Total</th><th></th></tr></thead>
+                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Purchase Unit</th><th>Ordered Qty</th><th>Conversion</th><th>Base Qty</th><th>Unit Cost</th><th>Selling Price</th><th>Line Total</th><th></th></tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach ($items as $index => $item)
                             @php
                                 $itemKey = $item['uuid'] ?? "legacy-{$index}";
                                 $selectedProduct = filled($item['product_id'] ?? null)
-                                    ? Product::query()->with(['size', 'purchaseUnit.measurementType', 'unit.measurementType'])->find($item['product_id'])
+                                    ? Product::query()->with(['size', 'purchaseUnit.measurementType', 'unit.measurementType', 'unitConversions.unit'])->find($item['product_id'])
                                     : null;
+                                $selectedPurchaseUnit = filled($item['purchase_unit_id'] ?? null) ? Unit::find($item['purchase_unit_id']) : null;
+                                $purchaseConversions = $selectedProduct?->unitConversions?->filter(fn ($row) => $row->active && $row->can_purchase) ?? collect();
                                 $sellingPriceValue = $item['selling_price'] ?? 0;
                                 $purchaseMeasurementCode = $selectedProduct?->purchaseUnit?->measurementType?->code
                                     ?? $selectedProduct?->unit?->measurementType?->code;
@@ -400,12 +457,25 @@ $submitPurchase = function () {
                                     @endif
                                     @error("items.{$index}.product_id") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
-                                <td class="px-3 py-3 font-bold">{{ $selectedProduct?->purchaseUnit?->short_name ?: $selectedProduct?->unit?->short_name ?: '-' }}</td>
+                                <td class="px-3 py-3">
+                                    @if ($purchaseConversions->isNotEmpty())
+                                        <select wire:change="selectPurchaseUnit({{ $index }}, $event.target.value)" class="w-32 rounded-lg border-slate-200 text-sm dark:border-slate-700 dark:bg-navy-950">
+                                            <option value="base" @selected(($item['use_base_unit'] ?? false))>{{ $selectedProduct?->unit?->short_name }} (base)</option>
+                                            @foreach ($purchaseConversions as $purchaseConversion)
+                                                <option value="{{ $purchaseConversion->id }}" @selected((string) ($item['product_unit_conversion_id'] ?? '') === (string) $purchaseConversion->id)>{{ $purchaseConversion->unit?->short_name }}</option>
+                                            @endforeach
+                                        </select>
+                                    @else
+                                        <span class="font-bold">{{ $selectedPurchaseUnit?->short_name ?: '-' }}</span>
+                                    @endif
+                                </td>
                                 <td class="px-3 py-3">
                                     <input wire:model.blur="items.{{ $index }}.ordered_quantity" type="number" min="{{ $quantityStep }}" step="{{ $quantityStep }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                    @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->purchaseUnit?->short_name ?: $selectedProduct->unit?->short_name }}</span>@endif
+                                    @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedPurchaseUnit?->short_name }}</span>@endif
                                     @error("items.{$index}.ordered_quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
+                                <td class="px-3 py-3 text-xs font-semibold">1 {{ $selectedPurchaseUnit?->short_name ?: '-' }} = {{ \App\Support\NumberFormatter::quantity($item['purchase_conversion_factor'] ?? 1) }} {{ $selectedProduct?->unit?->short_name }}</td>
+                                <td class="px-3 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity(($item['ordered_quantity'] ?? 0) * ($item['purchase_conversion_factor'] ?? 1)) }} {{ $selectedProduct?->unit?->short_name }}</td>
                                 <td class="px-3 py-3">
                                     <span data-money-field wire:ignore class="block w-36" wire:key="purchase-cost-price-{{ $itemKey }}">
                                         <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">

@@ -319,7 +319,7 @@ class InventoryService
                     throw ValidationException::withMessages(["cart.{$index}.stock_location_id" => 'You are not authorised to sell from this location.']);
                 }
                 $product = Product::query()
-                    ->with(['category', 'measurementType', 'size'])
+                    ->with(['category', 'measurementType', 'size', 'unit', 'sellingUnit'])
                     ->where('company_id', $companyId)
                     ->whereKey($row['product_id'] ?? null)
                     ->lockForUpdate()
@@ -331,12 +331,24 @@ class InventoryService
 
                 $quantity = (float) ($row['quantity'] ?? 0);
                 $saleType = ($row['sale_type'] ?? 'retail') === 'wholesale' ? 'wholesale' : 'retail';
-                $unitPrice = (float) ($saleType === 'wholesale' ? $product->wholesale_price : $product->selling_price);
+                $selectedConversion = app(ProductUnitConversionService::class)->resolveForSale(
+                    $product,
+                    filled($row['product_unit_conversion_id'] ?? null) ? (int) $row['product_unit_conversion_id'] : null,
+                );
+                $explicitBaseUnit = array_key_exists('selling_unit_id', $row)
+                    && (int) $row['selling_unit_id'] === (int) $product->unit_id;
+                $unitPrice = $selectedConversion
+                    ? $selectedConversion->priceFor($saleType)
+                    : (float) ($saleType === 'wholesale' ? $product->wholesale_price : $product->selling_price);
                 $discountPerUnit = (float) ($row['discount_per_unit'] ?? $row['discount_amount'] ?? 0);
                 $taxPerUnit = (float) ($row['tax_amount'] ?? 0);
                 $allowsDecimalQuantity = $product->allowsDecimalQuantities();
-                $conversionFactor = $product->saleConversionFactor();
-                $baseQuantity = $product->baseQuantityForSale($quantity);
+                $conversionFactor = $selectedConversion
+                    ? (float) $selectedConversion->conversion_factor
+                    : ($explicitBaseUnit ? 1.0 : $product->saleConversionFactor());
+                $baseQuantity = $selectedConversion
+                    ? $selectedConversion->baseQuantity($quantity)
+                    : ($explicitBaseUnit ? round($quantity, 4) : $product->baseQuantityForSale($quantity));
                 $minimumSaleQuantity = $allowsDecimalQuantity ? (float) ($product->minimum_sale_quantity ?: 1) : 1.0;
                 $quantityStep = $allowsDecimalQuantity ? (float) ($product->quantity_step ?: 1) : 1.0;
 
@@ -364,12 +376,18 @@ class InventoryService
                     throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' converted base quantity must be greater than zero.']);
                 }
 
-                if ($saleType === 'wholesale' && blank($product->wholesale_price)) {
+                if ($unitPrice === null) {
+                    throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' does not have a '.$saleType.' price for the selected unit.']);
+                }
+
+                if (! $selectedConversion && ! $explicitBaseUnit && $saleType === 'wholesale' && blank($product->wholesale_price)) {
                     throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' does not have a wholesale price.']);
                 }
 
                 $baseUnitCost = (float) $product->buying_price;
-                $sellingUnitCost = $baseUnitCost / $conversionFactor;
+                $sellingUnitCost = $selectedConversion || $explicitBaseUnit
+                    ? $baseUnitCost * $conversionFactor
+                    : $baseUnitCost / $conversionFactor;
 
                 if ($unitPrice < $sellingUnitCost) {
                     throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' price cannot be below buying price.']);
@@ -411,9 +429,15 @@ class InventoryService
                     'sale_type' => $saleType,
                     'quantity' => $quantity,
                     'base_quantity' => $baseQuantity,
-                    'selling_unit_id' => $product->selling_unit_id ?: $product->unit_id,
+                    'product_unit_conversion_id' => $selectedConversion?->id,
+                    'selling_unit_id' => $selectedConversion?->unit_id ?: ($explicitBaseUnit ? $product->unit_id : ($product->selling_unit_id ?: $product->unit_id)),
                     'base_unit_id' => $product->unit_id,
                     'conversion_factor' => $conversionFactor,
+                    'conversion_factor_to_base' => $selectedConversion || $explicitBaseUnit ? $conversionFactor : null,
+                    'selling_unit_name_snapshot' => $selectedConversion?->unit?->name ?: ($explicitBaseUnit ? $product->unit?->name : $product->sellingUnit?->name),
+                    'selling_unit_code_snapshot' => $selectedConversion?->unit?->short_name ?: ($explicitBaseUnit ? $product->unit?->short_name : $product->sellingUnit?->short_name),
+                    'base_unit_name_snapshot' => $product->unit?->name,
+                    'base_unit_code_snapshot' => $product->unit?->short_name,
                     'unit_price' => $unitPrice,
                     'discount_per_unit' => $discountPerUnit,
                     'discount_amount' => $itemDiscount,
@@ -423,7 +447,9 @@ class InventoryService
                     'net_total' => $netTotal,
                     'tax_amount' => $itemTax,
                     'line_total' => $lineTotal,
-                    'unit_cost' => $this->getAverageCost($product->id, $location->id, $branchId) / $conversionFactor,
+                    'unit_cost' => $selectedConversion || $explicitBaseUnit
+                        ? $this->getAverageCost($product->id, $location->id, $branchId) * $conversionFactor
+                        : $this->getAverageCost($product->id, $location->id, $branchId) / $conversionFactor,
                     'base_unit_cost' => $this->getAverageCost($product->id, $location->id, $branchId),
                 ];
             }
@@ -496,6 +522,7 @@ class InventoryService
                 $location = $item['location'];
                 $saleItem = $sale->items()->create([
                     'product_id' => $item['product']->id,
+                    'product_unit_conversion_id' => $item['product_unit_conversion_id'],
                     'product_size_id' => $item['product']->product_size_id,
                     'stock_location_id' => $location->id,
                     'sold_from_label' => InventorySettings::stockLocationLabel($location),
@@ -505,6 +532,12 @@ class InventoryService
                     'selling_unit_id' => $item['selling_unit_id'],
                     'base_unit_id' => $item['base_unit_id'],
                     'conversion_factor' => $item['conversion_factor'],
+                    'conversion_factor_to_base' => $item['conversion_factor_to_base'],
+                    'selling_unit_name_snapshot' => $item['selling_unit_name_snapshot'],
+                    'selling_unit_code_snapshot' => $item['selling_unit_code_snapshot'],
+                    'base_unit_name_snapshot' => $item['base_unit_name_snapshot'],
+                    'base_unit_code_snapshot' => $item['base_unit_code_snapshot'],
+                    'base_unit_cost' => $item['base_unit_cost'],
                     'unit_cost' => $item['unit_cost'],
                     'unit_price' => $item['unit_price'],
                     'discount_per_unit' => $item['discount_per_unit'],
@@ -580,7 +613,9 @@ class InventoryService
                     'quantity' => $returnQuantity,
                     'quantity_in' => $returnQuantity,
                     'quantity_out' => 0,
-                    'unit_cost' => (float) $item->unit_cost * (float) ($item->conversion_factor ?: 1),
+                    'unit_cost' => $item->conversion_factor_to_base !== null
+                        ? (float) $item->unit_cost / max(0.0001, (float) $item->conversion_factor_to_base)
+                        : (float) $item->unit_cost * (float) ($item->conversion_factor ?: 1),
                     'unit_price' => $item->unit_price,
                     'reference_type' => Sale::class,
                     'reference_id' => $sale->id,
@@ -794,6 +829,11 @@ class InventoryService
                             'product_id' => $item->product_id,
                             'purchase_unit_id' => $item->purchase_unit_id ?: $item->product?->purchase_unit_id ?: $item->product?->unit_id,
                             'stock_unit_id' => $item->stock_unit_id ?: $item->product?->unit_id,
+                            'purchase_unit_name_snapshot' => $item->purchase_unit_name_snapshot ?: $item->purchaseUnit?->name,
+                            'purchase_unit_code_snapshot' => $item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name,
+                            'stock_unit_name_snapshot' => $item->stock_unit_name_snapshot ?: $item->stockUnit?->name,
+                            'stock_unit_code_snapshot' => $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name,
+                            'conversion_factor_snapshot' => $item->purchaseFactor(),
                             'stock_location_id' => $location->id,
                             'ordered_quantity' => $item->ordered_quantity,
                             'previously_received_quantity' => $line['previously_received'],
@@ -826,6 +866,7 @@ class InventoryService
                             ]);
 
                             $item->increment('received_quantity', $quantity);
+                            $item->increment('base_received_quantity', $stockQuantity);
                         }
                     }
 

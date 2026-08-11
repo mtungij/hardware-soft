@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\ProductFamily;
 use App\Models\ProductSize;
 use App\Models\Unit;
+use App\Services\ProductUnitConversionService;
 use App\Support\CompanyFeatures;
 use App\Support\ProductMeasurementOptions;
 use Illuminate\Support\Facades\DB;
@@ -62,6 +63,7 @@ state([
     'reorder_level' => '0',
     'taxable' => false,
     'status' => 'active',
+    'unit_conversions' => [],
 ]);
 
 mount(function (): void {
@@ -232,6 +234,28 @@ $removeImage = function () {
     $this->resetErrorBag('image_upload');
 };
 
+$addUnitConversion = function (): void {
+    if (collect($this->unit_conversions)->contains(fn (array $row): bool => blank($row['unit_id'] ?? null))) {
+        return;
+    }
+
+    $this->unit_conversions[] = [
+        'unit_id' => '',
+        'conversion_factor' => '',
+        'retail_price' => '',
+        'wholesale_price' => '',
+        'purchase_price' => '',
+        'can_purchase' => false,
+        'can_sell' => true,
+        'active' => true,
+    ];
+};
+
+$removeUnitConversion = function (int $index): void {
+    unset($this->unit_conversions[$index]);
+    $this->unit_conversions = array_values($this->unit_conversions);
+};
+
 $imagePreviewUrl = function (): ?string {
     if (! $this->image_upload) {
         return null;
@@ -311,12 +335,23 @@ $rules = fn () => [
     'reorder_level' => ['required', 'numeric', 'min:0'],
     'taxable' => ['boolean'],
     'status' => ['required', 'in:active,inactive'],
+    'unit_conversions' => ['array'],
+    'unit_conversions.*.unit_id' => ['required', 'exists:units,id', 'distinct'],
+    'unit_conversions.*.conversion_factor' => ['required', 'numeric', 'gt:0'],
+    'unit_conversions.*.retail_price' => ['nullable', 'numeric', 'min:0'],
+    'unit_conversions.*.wholesale_price' => ['nullable', 'numeric', 'min:0'],
+    'unit_conversions.*.purchase_price' => ['nullable', 'numeric', 'min:0'],
+    'unit_conversions.*.can_purchase' => ['boolean'],
+    'unit_conversions.*.can_sell' => ['boolean'],
+    'unit_conversions.*.active' => ['boolean'],
 ];
 
 $save = function () {
     $validated = $this->validate($this->rules());
     $imageUpload = $validated['image_upload'] ?? null;
+    $unitConversions = $validated['unit_conversions'] ?? [];
     unset($validated['image_upload'], $validated['remove_image']);
+    unset($validated['unit_conversions']);
     unset($validated['family_defaults_applied']);
     $validated['inventory_source'] = $this->manufacturingEnabled()
         ? $validated['inventory_source']
@@ -366,8 +401,10 @@ $save = function () {
     $storedPath = null;
 
     try {
-        DB::transaction(function () use ($validated, $imageUpload, &$storedPath): void {
+        DB::transaction(function () use ($validated, $imageUpload, $unitConversions, &$storedPath): void {
             $product = Product::create($validated);
+
+            app(ProductUnitConversionService::class)->sync($product, $unitConversions);
 
             if ($imageUpload) {
                 $storedPath = app(\App\Services\ProductImageService::class)->store($imageUpload, $product);
@@ -559,10 +596,10 @@ $save = function () {
 
             <x-form-input label="Brand" name="brand" wire:model="brand" />
             <x-form-input label="Model / Size" name="model_size" wire:model="model_size" />
-            <x-money-input label="Buying Price" name="buying_price" value="{{ $buying_price }}" wire:model="buying_price" required />
-            <x-money-input label="Selling Price" name="selling_price" value="{{ $selling_price }}" wire:model="selling_price" required />
-            <x-money-input label="Wholesale Price" name="wholesale_price" value="{{ $wholesale_price }}" wire:model="wholesale_price" />
+            @include('livewire.products.base-unit-pricing-fields')
             <x-form-input label="Reorder Level" name="reorder_level" type="number" step="0.01" wire:model="reorder_level" required />
+
+            @include('livewire.products.unit-conversions-fields')
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Status

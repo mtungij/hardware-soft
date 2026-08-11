@@ -85,9 +85,15 @@ mount(function (Sale $sale) {
                     </td>
                     <td class="px-4 py-3">{{ $item->sold_from_label ?: ($item->stockLocation ? \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) : '-') }}</td>
                     <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $item->sale_type === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item->sale_type ?? 'retail')->title() }}</span></td>
-                    <td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->quantity) }} {{ $item->sellingUnit?->short_name }}</td>
-                    <td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->base_quantity ?: $item->quantity) }} {{ $item->baseUnit?->short_name }}</td>
-                    <td class="px-4 py-3 text-right">1 {{ $item->baseUnit?->short_name }} = {{ \App\Support\NumberFormatter::quantity($item->conversion_factor ?: 1) }} {{ $item->sellingUnit?->short_name }}</td>
+                    <td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->quantity) }} {{ $item->selling_unit_code_snapshot ?: $item->sellingUnit?->short_name }}</td>
+                    <td class="px-4 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->base_quantity ?: $item->quantity) }} {{ $item->base_unit_code_snapshot ?: $item->baseUnit?->short_name }}</td>
+                    <td class="px-4 py-3 text-right">
+                        @if ($item->conversion_factor_to_base !== null)
+                            1 {{ $item->selling_unit_code_snapshot ?: $item->sellingUnit?->short_name }} = {{ \App\Support\NumberFormatter::quantity($item->conversion_factor_to_base ?: 1) }} {{ $item->base_unit_code_snapshot ?: $item->baseUnit?->short_name }}
+                        @else
+                            1 {{ $item->baseUnit?->short_name }} = {{ \App\Support\NumberFormatter::quantity($item->conversion_factor ?: 1) }} {{ $item->sellingUnit?->short_name }}
+                        @endif
+                    </td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($item->unit_price) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($discountPerUnit) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($netUnitPrice) }}</td>

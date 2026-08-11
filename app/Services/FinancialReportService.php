@@ -24,7 +24,9 @@ class FinancialReportService
         $cogs = (float) SaleItem::query()
             ->whereIn('sale_id', $saleIds)
             ->get()
-            ->sum(fn (SaleItem $item) => (float) $item->quantity * (float) $item->unit_cost);
+            ->sum(fn (SaleItem $item) => $item->base_unit_cost !== null
+                ? (float) $item->base_quantity * (float) $item->base_unit_cost
+                : (float) $item->quantity * (float) $item->unit_cost);
         $expenses = (float) Expense::query()
             ->whereDate('expense_date', '>=', $from)
             ->whereDate('expense_date', '<=', $to)
@@ -74,7 +76,7 @@ class FinancialReportService
     public function purchases(?int $branchId, string $from, string $to)
     {
         return Purchase::query()
-            ->with(['branch', 'supplier', 'items.purchaseUnit'])
+            ->with(['branch', 'supplier', 'items.purchaseUnit', 'items.stockUnit', 'items.product'])
             ->whereBetween('purchase_date', [$from, $to])
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
             ->latest()

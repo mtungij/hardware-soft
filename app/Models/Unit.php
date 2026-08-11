@@ -29,6 +29,11 @@ class Unit extends Model
         return $this->hasMany(Product::class, 'purchase_unit_id');
     }
 
+    public function productUnitConversions(): HasMany
+    {
+        return $this->hasMany(ProductUnitConversion::class);
+    }
+
     public function measurementType(): BelongsTo
     {
         return $this->belongsTo(MeasurementType::class);

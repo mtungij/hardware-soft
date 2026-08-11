@@ -66,7 +66,7 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
         </x-card>
 
         <x-card title="Purchase Items" class="xl:col-span-2">
-            <x-table :headers="['Product', 'Purchase Unit', 'Ordered', 'Received', 'Remaining', 'Unit Cost', 'Selling', 'Total']">
+            <x-table :headers="['Product', 'Purchase Unit', 'Conversion', 'Ordered', 'Base Ordered', 'Received', 'Base Received', 'Remaining', 'Unit Cost', 'Selling', 'Total']">
                 @foreach ($purchase->items as $item)
                     <tr>
                         <td class="px-4 py-3 font-bold">
@@ -75,9 +75,12 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
                                 <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->sizeLabel() }}</p>
                             @endif
                         </td>
-                        <td class="px-4 py-3">{{ $item->purchaseUnit?->short_name }}</td>
+                        <td class="px-4 py-3">{{ $item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name }}</td>
+                        <td class="px-4 py-3">1 {{ $item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name }} = {{ \App\Support\NumberFormatter::quantity($item->purchaseFactor()) }} {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}</td>
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->base_ordered_quantity ?? $item->stockQuantity((float) $item->ordered_quantity)) }} {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}</td>
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->base_received_quantity ?? $item->stockQuantity((float) $item->received_quantity)) }} {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}</td>
                         <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($item->remainingQuantity()) }}</td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }} / {{ $item->purchaseUnit?->short_name }}</td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->selling_price) }}</td>

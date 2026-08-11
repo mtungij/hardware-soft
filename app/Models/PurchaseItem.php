@@ -12,12 +12,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'purchase_id',
     'company_id',
     'product_id',
+    'product_unit_conversion_id',
     'purchase_unit_id',
     'stock_unit_id',
     'purchase_conversion_factor',
+    'purchase_unit_name_snapshot',
+    'purchase_unit_code_snapshot',
+    'stock_unit_name_snapshot',
+    'stock_unit_code_snapshot',
     'product_size_id',
     'ordered_quantity',
+    'base_ordered_quantity',
     'received_quantity',
+    'base_received_quantity',
     'cost_price',
     'selling_price',
     'line_total',
@@ -34,6 +41,11 @@ class PurchaseItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function productUnitConversion(): BelongsTo
+    {
+        return $this->belongsTo(ProductUnitConversion::class);
     }
 
     public function purchaseUnit(): BelongsTo
@@ -96,7 +108,9 @@ class PurchaseItem extends Model
     {
         return [
             'ordered_quantity' => 'decimal:4',
+            'base_ordered_quantity' => 'decimal:4',
             'received_quantity' => 'decimal:4',
+            'base_received_quantity' => 'decimal:4',
             'cost_price' => 'decimal:2',
             'selling_price' => 'decimal:2',
             'line_total' => 'decimal:2',

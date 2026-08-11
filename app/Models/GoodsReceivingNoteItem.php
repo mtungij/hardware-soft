@@ -16,6 +16,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'product_id',
     'purchase_unit_id',
     'stock_unit_id',
+    'purchase_unit_name_snapshot',
+    'purchase_unit_code_snapshot',
+    'stock_unit_name_snapshot',
+    'stock_unit_code_snapshot',
+    'conversion_factor_snapshot',
     'stock_location_id',
     'ordered_quantity',
     'previously_received_quantity',
@@ -71,6 +76,7 @@ class GoodsReceivingNoteItem extends Model
     {
         return [
             'received_quantity' => 'decimal:4',
+            'conversion_factor_snapshot' => 'decimal:4',
             'stock_quantity' => 'decimal:4',
             'cost_price' => 'decimal:2',
             'ordered_quantity' => 'decimal:4',

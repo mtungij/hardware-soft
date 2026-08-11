@@ -5,6 +5,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\StockLocation;
 use App\Services\InventoryService;
+use App\Services\ProductUnitConversionService;
 use App\Support\InventorySettings;
 use Illuminate\Validation\ValidationException;
 
@@ -80,7 +81,14 @@ $requestStockLocationChange = function ($locationId) {
     $this->applyStockLocation($locationId);
 };
 
-$priceForProduct = function (Product $product): string {
+$priceForProduct = function (Product $product, ?int $conversionId = null): string {
+    if ($conversionId) {
+        $conversion = app(ProductUnitConversionService::class)->resolveForSale($product, $conversionId);
+        $price = $conversion->priceFor($this->sale_type);
+
+        return $price === null ? '' : (string) $price;
+    }
+
     if ($this->sale_type === 'wholesale') {
         return filled($product->wholesale_price) ? (string) $product->wholesale_price : '';
     }
@@ -96,7 +104,7 @@ $updatedSaleType = function () {
             continue;
         }
 
-        $unitPrice = $this->priceForProduct($product);
+        $unitPrice = $this->priceForProduct($product, filled($item['product_unit_conversion_id'] ?? null) ? (int) $item['product_unit_conversion_id'] : null);
 
         if ($unitPrice === '') {
             $this->cart[$index]['unit_price'] = '0';
@@ -215,7 +223,10 @@ $updatedCart = function ($value = null, $key = null) {
 
     $selected = $this->stockByLocationForProduct((int) $item['product_id'])
         ->firstWhere('id', (int) $item['stock_location_id']);
-    $available = (float) ($selected['stock'] ?? 0) * max(0.0001, (float) ($item['conversion_factor'] ?? 1));
+    $factor = max(0.0001, (float) ($item['conversion_factor'] ?? 1));
+    $available = ($item['uses_direct_conversion'] ?? false)
+        ? (float) ($selected['stock'] ?? 0) / $factor
+        : (float) ($selected['stock'] ?? 0) * $factor;
 
     if ((float) $value > $available) {
         $this->addError("cart.{$index}.quantity", 'Quantity exceeds stock available at '.($item['stock_location_name'] ?? 'the selected location').'.');
@@ -259,7 +270,8 @@ $changeLineLocation = function (int $index, $locationId): void {
     }
     $duplicate = collect($this->cart)->contains(fn (array $item, int $itemIndex): bool => $itemIndex !== $index
         && (int) $item['product_id'] === $productId
-        && (int) ($item['stock_location_id'] ?? 0) === $locationId);
+        && (int) ($item['stock_location_id'] ?? 0) === $locationId
+        && (string) ($item['unit_selection'] ?? 'default') === (string) ($this->cart[$index]['unit_selection'] ?? 'default'));
     if ($duplicate) {
         $this->addError("cart.{$index}.stock_location_id", 'This product already has a cart line for that location.');
         return;
@@ -267,11 +279,69 @@ $changeLineLocation = function (int $index, $locationId): void {
     $this->cart[$index]['stock_location_id'] = $locationId;
     $this->cart[$index]['stock_location_name'] = $selected['name'];
     $conversionFactor = max(0.0001, (float) ($this->cart[$index]['conversion_factor'] ?? 1));
-    if ((float) $this->cart[$index]['quantity'] > $selected['stock'] * $conversionFactor) {
+    $available = ($this->cart[$index]['uses_direct_conversion'] ?? false)
+        ? $selected['stock'] / $conversionFactor
+        : $selected['stock'] * $conversionFactor;
+    if ((float) $this->cart[$index]['quantity'] > $available) {
         $this->addError("cart.{$index}.quantity", 'Quantity exceeds stock available at '.$selected['name'].'.');
     } else {
         $this->resetErrorBag(["cart.{$index}.quantity", "cart.{$index}.stock_location_id"]);
     }
+};
+
+$changeLineUnit = function (int $index, string $selection): void {
+    $item = $this->cart[$index] ?? null;
+    $product = $item ? Product::query()->with(['unit', 'sellingUnit'])->find($item['product_id']) : null;
+
+    if (! $product) {
+        return;
+    }
+
+    $duplicate = collect($this->cart)->contains(fn (array $row, int $rowIndex): bool => $rowIndex !== $index
+        && (int) ($row['product_id'] ?? 0) === (int) $product->id
+        && (int) ($row['stock_location_id'] ?? 0) === (int) ($item['stock_location_id'] ?? 0)
+        && (string) ($row['unit_selection'] ?? 'default') === $selection);
+
+    if ($duplicate) {
+        $this->addError("cart.{$index}.unit_price", 'This product, unit, and stock location already has a cart line.');
+
+        return;
+    }
+
+    if ($selection === 'base') {
+        $this->cart[$index]['product_unit_conversion_id'] = '';
+        $this->cart[$index]['selling_unit_id'] = $product->unit_id;
+        $this->cart[$index]['selling_unit'] = $product->unit?->short_name;
+        $this->cart[$index]['conversion_factor'] = '1';
+        $this->cart[$index]['uses_direct_conversion'] = true;
+        $unitPrice = $this->priceForProduct($product);
+    } elseif ($selection === 'default') {
+        $this->cart[$index]['product_unit_conversion_id'] = '';
+        $this->cart[$index]['selling_unit_id'] = $product->selling_unit_id ?: $product->unit_id;
+        $this->cart[$index]['selling_unit'] = $product->sellingUnit?->short_name ?: $product->unit?->short_name;
+        $this->cart[$index]['conversion_factor'] = (string) $product->saleConversionFactor();
+        $this->cart[$index]['uses_direct_conversion'] = false;
+        $unitPrice = $this->priceForProduct($product);
+    } else {
+        $conversion = app(ProductUnitConversionService::class)->resolveForSale($product, (int) $selection);
+        $this->cart[$index]['product_unit_conversion_id'] = (string) $conversion->id;
+        $this->cart[$index]['selling_unit_id'] = $conversion->unit_id;
+        $this->cart[$index]['selling_unit'] = $conversion->unit?->short_name;
+        $this->cart[$index]['conversion_factor'] = (string) $conversion->conversion_factor;
+        $this->cart[$index]['uses_direct_conversion'] = true;
+        $unitPrice = $this->priceForProduct($product, $conversion->id);
+    }
+
+    if ($unitPrice === '') {
+        $this->addError("cart.{$index}.unit_price", 'No '.$this->sale_type.' price is configured for this unit.');
+        return;
+    }
+
+    $this->cart[$index]['unit_selection'] = $selection;
+    $this->cart[$index]['unit_price'] = $unitPrice;
+    $this->cart[$index]['tax_amount'] = $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0';
+    $this->resetErrorBag(["cart.{$index}.unit_price", "cart.{$index}.quantity"]);
+    $this->syncDefaultPaymentAmount();
 };
 
 $addProduct = function (int $productId, $locationId = null) {
@@ -294,7 +364,7 @@ $addProduct = function (int $productId, $locationId = null) {
     }
     $this->resetErrorBag('cart');
 
-    $product = Product::query()->with(['category', 'measurementType', 'unit', 'sellingUnit', 'size'])->findOrFail($productId);
+    $product = Product::query()->with(['category', 'measurementType', 'unit', 'sellingUnit', 'size', 'unitConversions.unit'])->findOrFail($productId);
     $supportsFractionalSales = $product->allowsDecimalQuantities();
     $conversionFactor = $product->saleConversionFactor();
     $baseStock = (float) $selectedLocation['stock'];
@@ -313,7 +383,7 @@ $addProduct = function (int $productId, $locationId = null) {
     }
 
     foreach ($this->cart as $index => $item) {
-        if ((int) $item['product_id'] === $productId && (int) ($item['stock_location_id'] ?? 0) === (int) $selectedLocation['id']) {
+        if ((int) $item['product_id'] === $productId && (int) ($item['stock_location_id'] ?? 0) === (int) $selectedLocation['id'] && ($item['unit_selection'] ?? 'default') === 'default') {
             $step = $supportsFractionalSales ? max(0.0001, (float) ($product->quantity_step ?: 1)) : 1;
             $this->cart[$index]['quantity'] = (string) min($available, (float) $item['quantity'] + $step);
             $this->cart[$index]['sale_type'] = $this->sale_type;
@@ -332,6 +402,10 @@ $addProduct = function (int $productId, $locationId = null) {
         'size' => $product->sizeLabel(),
         'sku' => $product->sku,
         'sale_type' => $this->sale_type,
+        'unit_selection' => 'default',
+        'product_unit_conversion_id' => '',
+        'selling_unit_id' => $product->selling_unit_id ?: $product->unit_id,
+        'uses_direct_conversion' => false,
         'quantity' => $supportsFractionalSales
             ? (string) ($product->minimum_sale_quantity ?: ($product->quantity_step ?: 1))
             : '1',
@@ -473,6 +547,7 @@ $completeSale = function (InventoryService $inventory) {
             'customer_id' => ['nullable', 'exists:customers,id'],
             'cart' => ['required', 'array', 'min:1'],
             'cart.*.product_id' => ['required', 'exists:products,id'],
+            'cart.*.product_unit_conversion_id' => ['nullable', 'exists:product_unit_conversions,id'],
             'cart.*.stock_location_id' => ['required', 'integer', 'exists:stock_locations,id'],
             'cart.*.sale_type' => ['required', 'in:retail,wholesale'],
             'cart.*.quantity' => ['required', 'numeric', 'gt:0'],
@@ -619,7 +694,7 @@ $completeSale = function (InventoryService $inventory) {
 
             @php
                 $products = $locationReady
-                    ? Product::with(['category', 'measurementType', 'unit', 'sellingUnit', 'size'])
+                    ? Product::with(['category', 'measurementType', 'unit', 'sellingUnit', 'size', 'unitConversions.unit'])
                         ->where('status', 'active')
                         ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhere('barcode', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))
                         ->orderBy('name')
@@ -657,6 +732,8 @@ $completeSale = function (InventoryService $inventory) {
                         <div class="mt-3.5 min-w-0">
                             <p class="line-clamp-2 text-[20px] font-bold leading-6 text-[#111827]">{{ $product->displayName() }}</p>
                             <p class="mt-1 text-[14px] text-[#6B7280]">{{ $sellingUnitLabel ?: '-' }} · {{ $product->measurementType?->name ?? str($product->measurementCode())->title() }}</p>
+                            @php $alsoSoldBy = $product->unitConversions->filter(fn ($row) => $row->active && $row->can_sell)->pluck('unit.short_name')->filter()->join(', '); @endphp
+                            @if ($alsoSoldBy)<p class="mt-0.5 text-[12px] font-semibold text-cyan-700">Also sold by {{ $alsoSoldBy }}</p>@endif
                             @if ($product->sizeLabel())
                                 <p class="mt-0.5 text-[13px] font-semibold text-[#6B7280]">{{ $t('Size') }}: {{ $product->sizeLabel() }}</p>
                             @endif
@@ -739,11 +816,14 @@ $completeSale = function (InventoryService $inventory) {
                         $baseUnitLabel = $item['base_unit'] ?? '';
                         $isFractionalSale = (bool) ($item['allow_fractional_sale'] ?? false);
                         $conversionFactor = max(0.0001, (float) ($item['conversion_factor'] ?? 1));
-                        $baseQuantity = $quantity / $conversionFactor;
+                        $usesDirectConversion = (bool) ($item['uses_direct_conversion'] ?? false);
+                        $baseQuantity = $usesDirectConversion ? $quantity * $conversionFactor : $quantity / $conversionFactor;
                         $lineLocationBalances = $this->stockByLocationForProduct((int) ($item['product_id'] ?? 0));
                         $selectedLineLocation = $lineLocationBalances->firstWhere('id', (int) ($item['stock_location_id'] ?? 0));
                         $availableBaseQuantity = (float) ($selectedLineLocation['stock'] ?? 0);
-                        $availableSellingQuantity = $availableBaseQuantity * $conversionFactor;
+                        $availableSellingQuantity = $usesDirectConversion ? $availableBaseQuantity / $conversionFactor : $availableBaseQuantity * $conversionFactor;
+                        $lineProduct = Product::query()->with(['unit', 'sellingUnit', 'unitConversions.unit'])->find($item['product_id'] ?? null);
+                        $lineConversions = $lineProduct?->unitConversions?->filter(fn ($row) => $row->active && $row->can_sell) ?? collect();
                         $quantityStep = (string) ($item['quantity_step'] ?? 1);
                         $minimumQuantity = (string) ($item['minimum_sale_quantity'] ?? 1);
                     @endphp
@@ -766,10 +846,21 @@ $completeSale = function (InventoryService $inventory) {
                             <button wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">{{ $t('Remove') }}</button>
                         </div>
                         <label class="mt-3 block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                            Selling Unit
+                            <select wire:change="changeLineUnit({{ $index }}, $event.target.value)" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
+                                <option value="default" @selected(($item['unit_selection'] ?? 'default') === 'default')>{{ $lineProduct?->sellingUnit?->short_name ?: $lineProduct?->unit?->short_name }} (default)</option>
+                                @if ((int) $lineProduct?->selling_unit_id !== (int) $lineProduct?->unit_id)<option value="base" @selected(($item['unit_selection'] ?? '') === 'base')>{{ $lineProduct?->unit?->short_name }} (base)</option>@endif
+                                @foreach ($lineConversions as $lineConversion)
+                                    <option value="{{ $lineConversion->id }}" @selected((string) ($item['unit_selection'] ?? '') === (string) $lineConversion->id)>{{ $lineConversion->unit?->short_name }} · 1 = {{ \App\Support\NumberFormatter::quantity($lineConversion->conversion_factor) }} {{ $lineProduct?->unit?->short_name }}</option>
+                                @endforeach
+                            </select>
+                            @error("cart.{$index}.unit_price")<span class="mt-1 block text-xs font-semibold normal-case text-red-600">{{ $message }}</span>@enderror
+                        </label>
+                        <label class="mt-3 block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Selling From
                             <select wire:change="changeLineLocation({{ $index }}, $event.target.value)" wire:loading.attr="disabled" wire:target="changeLineLocation" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
                                 @foreach($lineLocationBalances as $locationBalance)
-                                    <option value="{{ $locationBalance['id'] }}" @selected((int)($item['stock_location_id'] ?? 0)===(int)$locationBalance['id'])>{{ $locationBalance['name'] }} · {{ \App\Support\NumberFormatter::quantity($locationBalance['stock'] * $conversionFactor) }} {{ $sellingUnitLabel }}</option>
+                                    <option value="{{ $locationBalance['id'] }}" @selected((int)($item['stock_location_id'] ?? 0)===(int)$locationBalance['id'])>{{ $locationBalance['name'] }} · {{ \App\Support\NumberFormatter::quantity($usesDirectConversion ? $locationBalance['stock'] / $conversionFactor : $locationBalance['stock'] * $conversionFactor) }} {{ $sellingUnitLabel }}</option>
                                 @endforeach
                             </select>
                             <span class="mt-1 block text-[11px] font-bold normal-case tracking-normal text-emerald-700 dark:text-emerald-300">Stock at {{ $selectedLineLocation['name'] ?? ($item['stock_location_name'] ?? 'selected location') }}: {{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span>
@@ -809,7 +900,7 @@ $completeSale = function (InventoryService $inventory) {
                                 <div class="flex justify-between"><span>{{ $t('Available Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span></div>
                                 @if ($baseUnitLabel && ($baseUnitLabel !== $sellingUnitLabel || abs($conversionFactor - 1) > 0.0001))
                                     <div class="flex justify-between"><span>{{ $t('Available Base Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableBaseQuantity) }} {{ $baseUnitLabel }}</span></div>
-                                    <div class="flex justify-between"><span>{{ $t('Unit Conversion') }}</span><span>1 {{ $baseUnitLabel }} = {{ \App\Support\NumberFormatter::quantity($conversionFactor) }} {{ $sellingUnitLabel }}</span></div>
+                                    <div class="flex justify-between"><span>{{ $t('Unit Conversion') }}</span><span>{{ $usesDirectConversion ? '1 '.$sellingUnitLabel.' = '.\App\Support\NumberFormatter::quantity($conversionFactor).' '.$baseUnitLabel : '1 '.$baseUnitLabel.' = '.\App\Support\NumberFormatter::quantity($conversionFactor).' '.$sellingUnitLabel }}</span></div>
                                 @endif
                                 <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t('Selling Quantity') }}</span><span>{{ \App\Support\NumberFormatter::quantity($quantity) }} {{ $sellingUnitLabel }}</span></div>
                                 <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t('Base Quantity Deducted') }}</span><span>{{ \App\Support\NumberFormatter::quantity($baseQuantity) }} {{ $baseUnitLabel }}</span></div>

@@ -136,7 +136,7 @@ class ReportExportService
 
     private function sales(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $rows = Sale::with(['customer', 'soldBy', 'createdBy', 'items.stockLocation'])
+        $rows = Sale::with(['customer', 'soldBy', 'createdBy', 'items.stockLocation', 'items.product', 'items.sellingUnit', 'items.baseUnit'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($from, fn ($q) => $q->whereDate('sale_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('sale_date', '<=', $to))
@@ -148,14 +148,26 @@ class ReportExportService
             ->latest()
             ->get();
 
-        return ['Sales Report', ['Sale Number', 'User', 'Stock Location', 'Sale Type', 'Amount', 'Date', 'Customer', 'Paid', 'Balance'], $rows->map(fn ($sale) => [$sale->sale_number, $sale->soldBy?->name ?? $sale->createdBy?->name, $sale->stockLocationLabel(), $sale->saleTypeLabel(), $this->formatCurrency($sale->total_amount), $this->formatDate($sale->sale_date), $sale->customer?->name ?? 'Walk-in', $this->formatCurrency($sale->paid_amount), $this->formatCurrency($sale->balance_amount)])->all(), ['Total Amount' => $this->formatCurrency($rows->sum('total_amount'))]];
+        $exportRows = $rows->map(function (Sale $sale): array {
+            $transactionQuantities = $sale->items->map(fn (SaleItem $item) => $item->product?->displayName().' '.$this->formatQuantity($item->quantity).' '.($item->selling_unit_code_snapshot ?: $item->sellingUnit?->short_name))->join("\n");
+            $baseQuantities = $sale->items->map(fn (SaleItem $item) => $item->product?->displayName().' '.$this->formatQuantity($item->base_quantity ?: $item->quantity).' '.($item->base_unit_code_snapshot ?: $item->baseUnit?->short_name))->join("\n");
+            $cogs = $sale->items->sum(fn (SaleItem $item) => $item->base_unit_cost !== null
+                ? (float) $item->base_quantity * (float) $item->base_unit_cost
+                : (float) $item->quantity * (float) $item->unit_cost);
+
+            return [$sale->sale_number, $transactionQuantities, $baseQuantities, $sale->soldBy?->name ?? $sale->createdBy?->name, $sale->stockLocationLabel(), $sale->saleTypeLabel(), $this->formatCurrency($sale->total_amount), $this->formatCurrency($cogs), $this->formatCurrency((float) $sale->total_amount - $cogs), $this->formatDate($sale->sale_date), $sale->customer?->name ?? 'Walk-in', $this->formatCurrency($sale->paid_amount), $this->formatCurrency($sale->balance_amount)];
+        })->all();
+
+        return ['Sales Report', ['Sale Number', 'Transaction Quantities', 'Base Quantities', 'User', 'Stock Location', 'Sale Type', 'Amount', 'COGS', 'Gross Profit', 'Date', 'Customer', 'Paid', 'Balance'], $exportRows, ['Total Amount' => $this->formatCurrency($rows->sum('total_amount'))]];
     }
 
     private function salesItems(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
         $canViewProfit = $request->user()?->can('view sales profit') ?? false;
-        $lineCost = fn (SaleItem $item): float => (float) $item->quantity * (float) $item->unit_cost;
-        $lineProfit = fn (SaleItem $item): float => (float) ($item->profit_amount ?? ((float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost)));
+        $lineCost = fn (SaleItem $item): float => $item->base_unit_cost !== null
+            ? (float) $item->base_quantity * (float) $item->base_unit_cost
+            : (float) $item->quantity * (float) $item->unit_cost;
+        $lineProfit = fn (SaleItem $item): float => (float) ($item->profit_amount ?? ((float) $item->line_total - $lineCost($item)));
         $tr = fn (string $key): string => __('messages.sales_items.'.$key);
         $paymentLabel = fn (string $method): string => $tr('method_'.$method);
 
@@ -265,9 +277,19 @@ class ReportExportService
 
     private function purchases(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $rows = Purchase::with(['supplier', 'items.purchaseUnit'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('purchase_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('purchase_date', '<=', $to))->when($search, fn ($q) => $q->where('reference_number', 'like', "%{$search}%")->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%")))->latest()->get();
+        $rows = Purchase::with(['supplier', 'items.product', 'items.purchaseUnit', 'items.stockUnit'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('purchase_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('purchase_date', '<=', $to))->when($search, fn ($q) => $q->where('reference_number', 'like', "%{$search}%")->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%")))->latest()->get();
 
-        return ['Purchase Report', ['Date', 'Reference', 'Supplier', 'Purchase Units', 'Status', 'Total', 'Paid', 'Balance'], $rows->map(fn ($purchase) => [$this->formatDate($purchase->purchase_date), $purchase->reference_number, $purchase->supplier?->name, $purchase->items->pluck('purchaseUnit.short_name')->filter()->unique()->join(', '), ucfirst($purchase->status), $this->formatCurrency($purchase->total_amount), $this->formatCurrency($purchase->paid_amount), $this->formatCurrency($purchase->balance_amount)])->all(), ['Total Purchases' => $this->formatCurrency($rows->sum('total_amount'))]];
+        $exportRows = $rows->map(function (Purchase $purchase): array {
+            $ordered = $purchase->items->map(fn ($item) => $item->product?->displayName().' '.$this->formatQuantity($item->ordered_quantity).' '.($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name))->join("\n");
+            $conversions = $purchase->items->map(fn ($item) => '1 '.($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name).' = '.$this->formatQuantity($item->purchaseFactor()).' '.($item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name))->join("\n");
+            $baseOrdered = $purchase->items->map(fn ($item) => $this->formatQuantity($item->base_ordered_quantity ?? $item->stockQuantity((float) $item->ordered_quantity)).' '.($item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name))->join("\n");
+            $received = $purchase->items->map(fn ($item) => $this->formatQuantity($item->received_quantity).' '.($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name).' / '.$this->formatQuantity($item->base_received_quantity ?? $item->stockQuantity((float) $item->received_quantity)).' '.($item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name))->join("\n");
+            $remaining = $purchase->items->map(fn ($item) => $this->formatQuantity($item->remainingQuantity()).' '.($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name))->join("\n");
+
+            return [$this->formatDate($purchase->purchase_date), $purchase->reference_number, $purchase->supplier?->name, $ordered, $conversions, $baseOrdered, $received, $remaining, ucfirst($purchase->status), $this->formatCurrency($purchase->total_amount), $this->formatCurrency($purchase->paid_amount), $this->formatCurrency($purchase->balance_amount)];
+        })->all();
+
+        return ['Purchase Report', ['Date', 'Reference', 'Supplier', 'Ordered Qty', 'Conversion', 'Base Qty Ordered', 'Received / Base Received', 'Remaining Qty', 'Status', 'Total', 'Paid', 'Balance'], $exportRows, ['Total Purchases' => $this->formatCurrency($rows->sum('total_amount'))]];
     }
 
     private function expenses(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array

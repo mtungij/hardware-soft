@@ -352,7 +352,10 @@ $postReceipt = function (InventoryService $inventory) {
                                     @endif
                                 </td>
                                 <td class="px-3 py-3 font-mono">{{ $item->product?->sku }}</td>
-                                <td class="px-3 py-3">{{ $item->purchaseUnit?->short_name }}</td>
+                                <td class="px-3 py-3">
+                                    {{ $item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name }}
+                                    <span class="mt-1 block text-[11px] text-slate-500">1 {{ $item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name }} = {{ \App\Support\NumberFormatter::quantity($item->purchaseFactor()) }} {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}</span>
+                                </td>
                                 <td class="px-3 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
                                 <td class="px-3 py-3 text-right">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
                                 <td class="px-3 py-3 text-right font-bold">{{ \App\Support\NumberFormatter::quantity($item->remainingQuantity()) }}</td>
@@ -362,7 +365,7 @@ $postReceipt = function (InventoryService $inventory) {
                                 </td>
                                 <td class="px-3 py-3 font-bold">
                                     {{ \App\Support\NumberFormatter::quantity($item->stockQuantity((float) ($lines[$item->id]['quantity'] ?? 0))) }}
-                                    {{ $item->stockUnit?->short_name }}
+                                    {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}
                                 </td>
                                 <td class="px-3 py-3">
                                     <input wire:model="lines.{{ $item->id }}.unit_cost" type="number" step="0.01" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">

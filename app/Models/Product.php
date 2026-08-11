@@ -76,6 +76,12 @@ class Product extends Model
         });
 
         static::updating(function (Product $product): void {
+            if ($product->isDirty('unit_id') && $product->exists && $product->stockMovements()->exists()) {
+                throw ValidationException::withMessages([
+                    'unit_id' => 'Base Stock Unit cannot be changed after stock movements exist.',
+                ]);
+            }
+
             $product->normalizeInventorySource();
             $product->normalizeProductFamily();
         });
@@ -209,6 +215,11 @@ class Product extends Model
     public function saleItems(): HasMany
     {
         return $this->hasMany(SaleItem::class);
+    }
+
+    public function unitConversions(): HasMany
+    {
+        return $this->hasMany(ProductUnitConversion::class);
     }
 
     public function supportsFractionalSales(): bool
