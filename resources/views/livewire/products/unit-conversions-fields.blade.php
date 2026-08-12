@@ -7,7 +7,9 @@
                 ->orWhereHas('measurementType', fn ($type) => $type->where('code', \App\Models\MeasurementType::COUNT)))
                 ->orderBy('name')->get()
             : collect();
-        $unitConversionRows = is_iterable($unit_conversions ?? null) ? $unit_conversions : [];
+$unitConversionRows = is_iterable($unit_conversions ?? null)
+    ? $unit_conversions
+    : (isset($this) && is_iterable($this->unit_conversions ?? null) ? $this->unit_conversions : []);
     @endphp
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
