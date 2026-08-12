@@ -112,6 +112,9 @@ mount(function (Product $product) {
     $this->reorder_level = (string) $product->reorder_level;
     $this->taxable = $product->taxable;
     $this->status = $product->status;
+
+// dd($this->product);
+    
     $this->unit_conversions = $product->unitConversions()->orderBy('id')->get()->map(fn ($conversion) => [
         'unit_id' => (string) $conversion->unit_id,
         'conversion_factor' => (string) $conversion->conversion_factor,
