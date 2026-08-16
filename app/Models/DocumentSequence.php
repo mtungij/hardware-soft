@@ -28,6 +28,14 @@ class DocumentSequence extends Model
 
     public const QUALITY_HOLD = 'quality_hold';
 
+    public const CUSTOMER_MATERIAL_ACCOUNT = 'customer_material_account';
+
+    public const CUSTOMER_MATERIAL_DEPOSIT = 'customer_material_deposit';
+
+    public const CUSTOMER_MATERIAL_REFUND = 'customer_material_refund';
+
+    public const CUSTOMER_MATERIAL_ISSUE = 'customer_material_issue';
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

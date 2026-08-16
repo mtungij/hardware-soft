@@ -125,6 +125,7 @@
                     ['label' => __('messages.staff.nav.sales'), 'route' => 'sales.index', 'icon' => 'sales', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Cashier', 'Store Keeper', 'Accountant']],
                     ['label' => __('messages.staff.nav.customers'), 'route' => 'customers.index', 'icon' => 'customer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                     ['label' => __('messages.staff.nav.credit_sales'), 'route' => 'customer-balances.index', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
+                    ['label' => 'Customer Material Accounts', 'route' => 'customer-material-accounts.index', 'icon' => 'bank', 'permission' => 'customer_material_accounts.view'],
                 ]],
                 ['label' => __('messages.staff.nav.accounting'), 'icon' => 'accounting', 'items' => [
                     ['label' => __('messages.staff.nav.expenses'), 'route' => 'expenses.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
@@ -147,6 +148,7 @@
                     ['label' => __('messages.staff.nav.purchase_reports'), 'route' => 'reports.purchases', 'icon' => 'reports', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.profit_reports'), 'route' => 'reports.profit-loss', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.stock_reports'), 'route' => 'reports.stock-valuation', 'icon' => 'summary', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => 'Material Account Reports', 'route' => 'customer-material-accounts.reports', 'icon' => 'chart', 'permission' => 'customer_material_accounts.reports'],
                 ]],
                 ['label' => __('messages.staff.nav.administration'), 'icon' => 'admin', 'items' => [
                     ['label' => __('messages.staff.nav.users'), 'route' => 'users.index', 'icon' => 'users', 'roles' => ['Super Admin', 'Admin']],

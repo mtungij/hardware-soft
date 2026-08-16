@@ -90,6 +90,11 @@ class Branch extends Model
         return $this->hasMany(CashbookSession::class);
     }
 
+    public function customerMaterialAccounts(): HasMany
+    {
+        return $this->hasMany(CustomerMaterialAccount::class);
+    }
+
     public function machines(): HasMany
     {
         return $this->hasMany(Machine::class);

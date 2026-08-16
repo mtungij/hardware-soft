@@ -75,6 +75,11 @@ class Customer extends Model
         return $this->hasMany(CustomerNotification::class);
     }
 
+    public function materialAccounts(): HasMany
+    {
+        return $this->hasMany(CustomerMaterialAccount::class);
+    }
+
     protected function casts(): array
     {
         return [

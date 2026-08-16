@@ -204,6 +204,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('dashboard', 'dashboard')->name('dashboard');
     Volt::route('help-center', 'help-center.index')->name('help-center.index');
 
+    Route::prefix('customer-material-accounts')->middleware('can:customer_material_accounts.view')->group(function () {
+        Volt::route('/', 'customer-material-accounts.index')->name('customer-material-accounts.index');
+        Volt::route('create', 'customer-material-accounts.create')->middleware('can:customer_material_accounts.create')->name('customer-material-accounts.create');
+        Volt::route('reports', 'customer-material-accounts.reports')->middleware('can:customer_material_accounts.reports')->name('customer-material-accounts.reports');
+        Volt::route('{customerMaterialAccount}/edit-plan', 'customer-material-accounts.edit-plan')->middleware('can:customer_material_accounts.edit')->name('customer-material-accounts.edit-plan');
+        Volt::route('{customerMaterialAccount}', 'customer-material-accounts.show')->name('customer-material-accounts.show');
+    });
+    Volt::route('customer-material-deposits/{cashTransaction}/receipt', 'customer-material-accounts.deposit-receipt')->middleware('can:customer_material_accounts.view')->name('customer-material-accounts.deposit-receipt');
+    Volt::route('customer-material-issues/{materialIssue}/document', 'customer-material-accounts.issue-document')->middleware('can:customer_material_accounts.view')->name('customer-material-accounts.issue-document');
+
     Route::prefix('production')->middleware('production.access:production.view')->group(function () {
         Volt::route('/', 'production.overview')->name('production.index');
         Volt::route('setup-checklist', 'production.setup-checklist')->name('production.setup-checklist');

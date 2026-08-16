@@ -73,6 +73,21 @@ class RolePermissionSeeder extends Seeder
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
+        $materialAccountPermissions = [
+            'customer_material_accounts.view',
+            'customer_material_accounts.create',
+            'customer_material_accounts.edit',
+            'customer_material_accounts.record_deposit',
+            'customer_material_accounts.issue_material',
+            'customer_material_accounts.refund',
+            'customer_material_accounts.cancel',
+            'customer_material_accounts.override_price',
+            'customer_material_accounts.reports',
+        ];
+        foreach ($materialAccountPermissions as $permissionName) {
+            Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
+        }
+
         $roles = [
             'Super Admin',
             'Admin',
@@ -158,8 +173,11 @@ class RolePermissionSeeder extends Seeder
             'view customer balances',
             'receive customer payments',
             'view cashbook',
+            'customer_material_accounts.view',
+            'customer_material_accounts.create',
+            'customer_material_accounts.record_deposit',
         ]);
-        Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', ...$storeKeeperPermissions, 'view sales', 'sell from store']);
+        Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', ...$storeKeeperPermissions, 'view sales', 'sell from store', 'customer_material_accounts.view', 'customer_material_accounts.issue_material']);
         Role::findByName('Store Keeper', $this->guard)->givePermissionTo('view stock valuation');
         Role::findByName('Store Keeper', $this->guard)->givePermissionTo(['export pdf', 'export excel', 'print reports']);
         Role::findByName('Accountant', $this->guard)->syncPermissions([
@@ -220,6 +238,10 @@ class RolePermissionSeeder extends Seeder
             'resend purchase emails',
             'view email logs',
             'manage email settings',
+            'customer_material_accounts.view',
+            'customer_material_accounts.record_deposit',
+            'customer_material_accounts.refund',
+            'customer_material_accounts.reports',
         ]);
     }
 }

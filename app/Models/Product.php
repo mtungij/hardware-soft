@@ -217,6 +217,16 @@ class Product extends Model
         return $this->hasMany(SaleItem::class);
     }
 
+    public function customerMaterialPlanLines(): HasMany
+    {
+        return $this->hasMany(CustomerMaterialPlanLine::class);
+    }
+
+    public function customerMaterialIssueLines(): HasMany
+    {
+        return $this->hasMany(CustomerMaterialIssueLine::class);
+    }
+
     public function unitConversions(): HasMany
     {
         return $this->hasMany(ProductUnitConversion::class);
