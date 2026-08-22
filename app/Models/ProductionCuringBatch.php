@@ -13,10 +13,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use LogicException;
 
 #[Fillable([
-    'company_id', 'branch_id', 'production_order_id', 'product_id', 'machine_id',
+    'company_id', 'branch_id', 'production_order_id', 'product_id', 'machine_id', 'production_mould_id',
     'source_stock_location_id', 'default_release_stock_location_id', 'batch_number',
     'production_date', 'curing_started_at', 'minimum_sellable_at', 'full_curing_at',
-    'accepted_quantity', 'released_quantity', 'damaged_quantity', 'qc_rejected_quantity', 'release_eligible_quantity', 'remaining_quantity',
+    'accepted_quantity', 'production_rejected_quantity', 'released_quantity', 'damaged_quantity', 'qc_rejected_quantity', 'release_eligible_quantity', 'remaining_quantity',
     'status', 'qc_approved_at', 'approved_by', 'notes', 'quarantine_reason', 'created_by', 'updated_by', 'closed_by', 'closed_at',
 ])]
 class ProductionCuringBatch extends Model
@@ -54,6 +54,7 @@ class ProductionCuringBatch extends Model
             'production_date' => 'date', 'curing_started_at' => 'datetime',
             'minimum_sellable_at' => 'datetime', 'full_curing_at' => 'datetime',
             'accepted_quantity' => 'decimal:12', 'released_quantity' => 'decimal:12',
+            'production_rejected_quantity' => 'decimal:12',
             'damaged_quantity' => 'decimal:12', 'remaining_quantity' => 'decimal:12',
             'qc_rejected_quantity' => 'decimal:12', 'release_eligible_quantity' => 'decimal:12',
             'qc_approved_at' => 'datetime', 'closed_at' => 'datetime',
@@ -134,6 +135,11 @@ class ProductionCuringBatch extends Model
     public function machine(): BelongsTo
     {
         return $this->belongsTo(Machine::class);
+    }
+
+    public function mould(): BelongsTo
+    {
+        return $this->belongsTo(ProductionMould::class, 'production_mould_id');
     }
 
     public function sourceLocation(): BelongsTo

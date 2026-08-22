@@ -194,7 +194,20 @@ test('mould-only production completes, posts raw stock, and enters curing withou
         'actual_quantity' => $line->line_type === ProductionOrderMaterial::TYPE_INVENTORY ? '1' : $line->actual_quantity,
         'actual_cost' => $line->actual_cost,
     ]])->all();
-    $order = app(ProductionOrderService::class)->completeExecution($order, $materials, 75, 5, null, $this->admin);
+    $order = app(ProductionOrderService::class)->saveExecution($order, $materials, 75, 5, null, $this->admin);
+    $order = app(ProductionOrderService::class)->submit($order, $this->admin);
+
+    expect($order->status)->toBe(ProductionOrder::STATUS_AWAITING_COMPLETION)
+        ->and(app(ProductionOrderService::class)->completionIssues($order, $this->admin))->toBe([]);
+    Volt::test('production.orders.show', ['order' => $order])
+        ->assertSee('Mould Only')
+        ->assertSee('Execution Mould')
+        ->assertSee('Complete &amp; Post Stock', escape: false)
+        ->assertSeeHtml('wire:click="complete"');
+
+    $order = app(ProductionOrderService::class)->complete($order, $this->admin);
+    $movementCount = StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->count();
+    $postingReference = $order->posting_reference;
 
     expect($order->machine_id)->toBeNull()
         ->and($order->production_method)->toBe('mould_only')
@@ -203,8 +216,39 @@ test('mould-only production completes, posts raw stock, and enters curing withou
         ->and($order->status)->toBe(ProductionOrder::STATUS_COMPLETED)
         ->and($order->curingBatch)->not->toBeNull()
         ->and($order->curingBatch->machine_id)->toBeNull()
+        ->and($order->curingBatch->production_mould_id)->toBe($this->mould->id)
+        ->and($order->curingBatch->production_rejected_quantity)->toBe('5.000000000000')
+        ->and($order->curingBatch->source_stock_location_id)->toBe($this->curingLocation->id)
+        ->and($order->curingBatch->default_release_stock_location_id)->toBe($this->finishedLocation->id)
         ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_consumption')->exists())->toBeTrue()
-        ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_output')->exists())->toBeTrue();
+        ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_output')->value('stock_location_id'))->toBe($this->curingLocation->id)
+        ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_output')->value('quantity_in'))->toBe('75.0000')
+        ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_output')->where('quantity_in', 5)->exists())->toBeFalse();
+
+    app(ProductionOrderService::class)->complete($order->refresh(), $this->admin);
+    expect(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->count())->toBe($movementCount)
+        ->and($order->refresh()->posting_reference)->toBe($postingReference)
+        ->and($order->curingBatch()->count())->toBe(1);
+});
+
+test('unauthorized viewer sees awaiting authorized completion instead of a silent dead end', function () {
+    stockProductionMaterialForTest($this);
+    $order = executeProductionOrderForTest($this, createProductionOrderForTest($this));
+    $viewer = User::factory()->create([
+        'company_id' => $this->company->id,
+        'branch_id' => $this->branch->id,
+        'status' => 'active',
+        'is_system_owner' => false,
+    ]);
+    $viewer->givePermissionTo('production.view_orders');
+
+    $this->actingAs($viewer);
+    Volt::test('production.orders.show', ['order' => $order])
+        ->assertSee('Awaiting authorized completion.')
+        ->assertDontSee('Complete &amp; Post Stock', escape: false);
+
+    expect(fn () => app(ProductionOrderService::class)->complete($order, $viewer))
+        ->toThrow(HttpException::class);
 });
 
 test('order routes and menu require manufacturing and order permissions', function () {

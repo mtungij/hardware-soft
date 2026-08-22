@@ -30,15 +30,15 @@ mount(fn () => abort_unless(CompanyFeatures::manufacturingEnabled() && collect([
             <input type="date" wire:model.live="dateFrom" class="rounded-lg border-slate-200 dark:bg-navy-950"><input type="date" wire:model.live="dateTo" class="rounded-lg border-slate-200 dark:bg-navy-950">
         </div>
         @php
-            $orders = ProductionOrder::query()->forCurrentCompany()->with(['machine','product','branch'])
+            $orders = ProductionOrder::query()->forCurrentCompany()->with(['machine','mould','product','branch'])
                 ->when($search, fn($q) => $q->where(fn($x) => $x->where('order_number','like',"%{$search}%")->orWhereHas('product',fn($p)=>$p->where('name','like',"%{$search}%"))->orWhereHas('machine',fn($m)=>$m->where('name','like',"%{$search}%"))))
                 ->when($statusFilter,fn($q)=>$q->where('status',$statusFilter))->when($branchFilter,fn($q)=>$q->where('branch_id',$branchFilter))
                 ->when($machineFilter,fn($q)=>$q->where('machine_id',$machineFilter))->when($productFilter,fn($q)=>$q->where('product_id',$productFilter))
                 ->when($dateFrom,fn($q)=>$q->whereDate('production_date','>=',$dateFrom))->when($dateTo,fn($q)=>$q->whereDate('production_date','<=',$dateTo))
                 ->latest()->paginate(12);
         @endphp
-        <x-table :headers="['Order','Date','Machine','Product','Planned','Accepted','Rejected','Status','Branch','Actions']">
-            @forelse ($orders as $order)<tr><td class="px-4 py-3 font-black">{{ $order->order_number }}</td><td class="px-4 py-3">{{ $order->production_date->format('d M Y') }}</td><td class="px-4 py-3">{{ $order->machine?->name }}</td><td class="px-4 py-3">{{ $order->product?->name }}</td><td class="px-4 py-3">{{ $order->planned_quantity }}</td><td class="px-4 py-3">{{ $order->accepted_quantity }}</td><td class="px-4 py-3">{{ $order->rejected_quantity }}</td><td class="px-4 py-3"><span class="badge-warning">{{ str($order->status)->headline() }}</span></td><td class="px-4 py-3">{{ $order->branch?->name ?: '—' }}</td><td class="px-4 py-3"><a href="{{ route('production.orders.show',$order) }}" wire:navigate class="rounded border px-2 py-1 text-xs font-bold">View</a></td></tr>
+        <x-table :headers="['Order','Date','Method / Equipment','Product','Planned','Accepted','Rejected','Status','Branch','Actions']">
+            @forelse ($orders as $order)<tr><td class="px-4 py-3 font-black">{{ $order->order_number }}</td><td class="px-4 py-3">{{ $order->production_date->format('d M Y') }}</td><td class="px-4 py-3"><span class="block font-bold">{{ $order->productionMethodLabel() }}</span><span class="text-xs text-slate-500">Machine: {{ $order->machine?->name ?: '—' }} · Mould: {{ $order->mould?->name ?: '—' }}</span></td><td class="px-4 py-3">{{ $order->product?->name }}</td><td class="px-4 py-3">{{ $order->planned_quantity }}</td><td class="px-4 py-3">{{ $order->accepted_quantity }}</td><td class="px-4 py-3">{{ $order->rejected_quantity }}</td><td class="px-4 py-3"><span class="badge-warning">{{ str($order->status)->headline() }}</span></td><td class="px-4 py-3">{{ $order->branch?->name ?: '—' }}</td><td class="px-4 py-3"><a href="{{ route('production.orders.show',$order) }}" wire:navigate class="rounded border px-2 py-1 text-xs font-bold">{{ $order->status===ProductionOrder::STATUS_AWAITING_COMPLETION ? 'Review & Complete' : 'View' }}</a></td></tr>
             @empty <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No production orders found.</td></tr>@endforelse
         </x-table><div class="mt-4">{{ $orders->links() }}</div>
     </x-card>

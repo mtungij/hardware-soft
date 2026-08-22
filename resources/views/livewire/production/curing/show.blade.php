@@ -14,14 +14,14 @@ state(['batch' => null, 'release_quantity' => '', 'destination_location_id' => '
 
 mount(function (ProductionCuringBatch $batch): void {
     abort_unless(CompanyFeatures::manufacturingEnabled() && collect(['production.view_curing','production.manage_curing','production.release_curing'])->contains(fn($p)=>auth()->user()?->can($p)), 403);
-    $this->batch = $batch->load(['company','product.unit','machine','productionOrder.completer','sourceLocation','defaultReleaseLocation','releases.releaser','releases.destinationLocation','actions.creator','qualityInspections.inspector','qualityInspections.retests','qualityHolds.placer','qualityHolds.releaser']);
+    $this->batch = $batch->load(['company','product.unit','machine','mould','productionOrder.completer','sourceLocation','defaultReleaseLocation','releases.releaser','releases.destinationLocation','actions.creator','qualityInspections.inspector','qualityInspections.retests','qualityHolds.placer','qualityHolds.releaser']);
     $this->destination_location_id = (string) $batch->default_release_stock_location_id;
     $this->release_token = (string) str()->uuid();
     $this->action_token = (string) str()->uuid();
 });
 
 $refreshBatch = function (): void {
-    $this->batch = $this->batch->refresh()->load(['company','product.unit','machine','productionOrder.completer','sourceLocation','defaultReleaseLocation','releases.releaser','releases.destinationLocation','actions.creator','qualityInspections.inspector','qualityInspections.retests','qualityHolds.placer','qualityHolds.releaser']);
+    $this->batch = $this->batch->refresh()->load(['company','product.unit','machine','mould','productionOrder.completer','sourceLocation','defaultReleaseLocation','releases.releaser','releases.destinationLocation','actions.creator','qualityInspections.inspector','qualityInspections.retests','qualityHolds.placer','qualityHolds.releaser']);
 };
 $release = function (): void {
     app(ProductionCuringService::class)->release($this->batch, $this->release_quantity, (int)$this->destination_location_id, auth()->user(), $this->release_token, $this->release_notes ?: null);
@@ -217,7 +217,7 @@ $recordDamage = function (): void {
             <dl class="grid gap-4 sm:grid-cols-2">
                 @foreach([
                     $t('batch_number')=>$batch->batch_number, $t('production_order')=>$batch->productionOrder?->order_number,
-                    $t('product')=>$batch->product?->name, $t('machine')=>$batch->machine?->name,
+                    $t('product')=>$batch->product?->name, $t('machine')=>$batch->machine?->name, 'Mould'=>$batch->mould?->name,
                     $t('production_date')=>$batch->production_date->format('d M Y'),
                     $t('curing_location')=>$batch->sourceLocation?->name, $t('release_location')=>$batch->defaultReleaseLocation?->name,
                 ] as $label=>$value)<div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ $label }}</dt><dd class="mt-1 font-black text-slate-950 dark:text-white">{{ $value ?: '—' }}</dd></div>@endforeach
@@ -267,7 +267,7 @@ $recordDamage = function (): void {
     <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         @foreach([
             ['Accepted Into Curing',$batch->accepted_quantity,'Production output accepted into this curing batch.','border-cyan-200 bg-cyan-50 dark:border-cyan-500/30 dark:bg-cyan-500/10','text-cyan-600 dark:text-cyan-300'],
-            ['Production Reject',$batch->productionOrder?->rejected_quantity,'Rejected before curing; never entered curing stock.','border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10','text-red-600 dark:text-red-300'],
+            ['Production Reject',$batch->production_rejected_quantity,'Rejected before curing; never entered curing stock.','border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10','text-red-600 dark:text-red-300'],
             ['QC Reject',$batch->qc_rejected_quantity,'Rejected from curing by an approved QC disposition.','border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10','text-red-600 dark:text-red-300'],
             ['Curing Damage',$batch->damaged_quantity,'Damage recorded after entering the curing yard.','border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10','text-red-600 dark:text-red-300'],
             ['Released',$batch->released_quantity,$t('released_help'),'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10','text-emerald-600 dark:text-emerald-300'],

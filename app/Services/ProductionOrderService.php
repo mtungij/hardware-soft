@@ -344,6 +344,10 @@ class ProductionOrderService
             if ($order->status !== ProductionOrder::STATUS_AWAITING_COMPLETION) {
                 throw ValidationException::withMessages(['status' => 'Only orders awaiting completion can be posted.']);
             }
+            $issues = $this->completionIssues($order, $user, includeStatus: false);
+            if ($issues !== []) {
+                throw ValidationException::withMessages($issues);
+            }
             $order->loadMissing('product.company');
             $raw = $this->lockedLocation($order->raw_material_stock_location_id, $order, $user, true);
             $outputLocationId = $order->production_output_stock_location_id ?: $order->finished_goods_stock_location_id;
@@ -397,7 +401,9 @@ class ProductionOrderService
                     $curingBatch = ProductionCuringBatch::query()->create([
                         'company_id' => $order->company_id, 'branch_id' => $order->branch_id,
                         'production_order_id' => $order->id, 'product_id' => $order->product_id,
-                        'machine_id' => $order->machine_id, 'source_stock_location_id' => $output->id,
+                        'machine_id' => $order->machine_id, 'production_mould_id' => $order->production_mould_id,
+                        'production_rejected_quantity' => $order->rejected_quantity,
+                        'source_stock_location_id' => $output->id,
                         'default_release_stock_location_id' => $order->final_finished_goods_stock_location_id ?: $order->finished_goods_stock_location_id,
                         'batch_number' => 'CUR-'.$order->order_number, 'production_date' => $order->production_date,
                         'curing_started_at' => $startedAt,
@@ -430,6 +436,103 @@ class ProductionOrderService
 
             return $order->refresh();
         }, 3);
+    }
+
+    /** @return array<string, string> */
+    public function completionIssues(ProductionOrder $order, User $user, bool $includeStatus = true): array
+    {
+        $issues = [];
+
+        if (! $user->can('production.complete_orders')) {
+            $issues['authorization'] = 'Awaiting authorized completion.';
+        }
+        if ((int) $order->company_id !== (int) $user->company_id) {
+            $issues['company'] = 'This production order does not belong to your company.';
+        }
+        if ($includeStatus && $order->status !== ProductionOrder::STATUS_AWAITING_COMPLETION) {
+            $issues['status'] = 'Only orders awaiting completion can be posted.';
+        }
+
+        if ($order->production_method === ProductFamily::METHOD_MACHINE_MOULD
+            && (! $order->machine_id || ! $order->machine()->exists())) {
+            $issues['machine_id'] = 'Missing machine for Machine + Mould production.';
+        } elseif (! in_array($order->production_method, [ProductFamily::METHOD_MACHINE_MOULD, ProductFamily::METHOD_MOULD_ONLY], true)) {
+            $issues['production_method'] = 'Missing or invalid production method.';
+        }
+        if (! $order->production_mould_id || ! $order->mould()->exists()) {
+            $issues['production_mould_id'] = 'Missing mould.';
+        }
+        if (! $order->production_recipe_id || ! $order->snapshot()->exists()) {
+            $issues['snapshot'] = 'Missing recipe snapshot.';
+        }
+
+        $materials = $order->materials()->get();
+        if ($materials->isEmpty()) {
+            $issues['materials'] = 'Missing recipe material snapshot.';
+        } elseif ($materials->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY)->contains(fn (ProductionOrderMaterial $line) => $line->actual_quantity === null)) {
+            $issues['actual_consumption'] = 'Actual raw-material consumption has not been recorded.';
+        }
+
+        if (bccomp((string) $order->accepted_quantity, '0', 4) < 0 || bccomp((string) $order->rejected_quantity, '0', 4) < 0) {
+            $issues['output_reconciliation'] = 'Accepted and Rejected quantities must be non-negative.';
+        } elseif (bccomp((string) $order->total_produced_quantity, '0', 4) <= 0) {
+            $issues['output'] = 'Actual output has not been recorded.';
+        } elseif (bccomp(
+            bcadd((string) $order->accepted_quantity, (string) $order->rejected_quantity, 4),
+            (string) $order->total_produced_quantity,
+            4
+        ) !== 0) {
+            $issues['output_reconciliation'] = 'Accepted + Rejected does not reconcile with actual output.';
+        }
+
+        $raw = $this->completionLocation($order->raw_material_stock_location_id, $order, true);
+        if (! $raw) {
+            $issues['raw_material_stock_location_id'] = 'Missing or invalid Raw Material Location.';
+        } elseif ($user->stockLocations()->exists()
+            && ! $user->stockLocations()->where('stock_locations.id', $raw->id)->wherePivot('can_transfer', true)->exists()) {
+            $issues['raw_material_stock_location_id'] = 'You are not authorised for the Raw Material Location.';
+        }
+
+        $requiresCuring = (bool) $order->product()->value('requires_curing');
+        $outputId = $order->production_output_stock_location_id ?: $order->finished_goods_stock_location_id;
+        $output = $this->completionLocation($outputId, $order, false);
+        if (! $output) {
+            $issues[$requiresCuring ? 'curing_stock_location_id' : 'finished_goods_stock_location_id'] = $requiresCuring
+                ? 'Missing or invalid Curing Location.'
+                : 'Missing or invalid Finished Goods Location.';
+        } elseif ($requiresCuring && ($output->is_sellable || ! in_array($output->type, ['curing', 'quarantine'], true))) {
+            $issues['curing_stock_location_id'] = 'Missing or invalid Curing Location.';
+        } elseif (! $requiresCuring && ! $output->is_sellable) {
+            $issues['finished_goods_stock_location_id'] = 'Missing or invalid Finished Goods Location.';
+        } elseif ($user->stockLocations()->exists()
+            && ! $user->stockLocations()->where('stock_locations.id', $output->id)->wherePivot('can_receive', true)->exists()) {
+            $issues[$requiresCuring ? 'curing_stock_location_id' : 'finished_goods_stock_location_id'] = $requiresCuring
+                ? 'You are not authorised for the Curing Location.'
+                : 'You are not authorised for the Finished Goods Location.';
+        }
+
+        if ($requiresCuring) {
+            $releaseId = $order->final_finished_goods_stock_location_id ?: $order->finished_goods_stock_location_id;
+            $release = $this->completionLocation($releaseId, $order, false);
+            if (! $release || ! $release->is_sellable) {
+                $issues['finished_goods_release_location_id'] = 'Missing or invalid Finished Goods Location.';
+            }
+        }
+
+        if ($raw) {
+            foreach ($materials->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY) as $line) {
+                if ($line->actual_quantity === null) {
+                    continue;
+                }
+                $required = $this->ledgerQuantity((string) $line->actual_quantity);
+                $available = $this->availableStock($line->material_product_id, $raw->id);
+                if (bccomp($available, $required, 4) < 0) {
+                    $issues["materials.{$line->id}"] = "Insufficient raw-material stock for {$line->name}. Required {$required}; available {$available}.";
+                }
+            }
+        }
+
+        return $issues;
     }
 
     public function cancel(ProductionOrder $order, string $reason, User $user): ProductionOrder
@@ -507,6 +610,23 @@ class ProductionOrderService
             if (! $user->stockLocations()->where('stock_locations.id', $location->id)->wherePivot($ability, true)->exists()) {
                 throw ValidationException::withMessages(['location' => 'You are not authorised for this production stock location.']);
             }
+        }
+
+        return $location;
+    }
+
+    private function completionLocation(mixed $id, ProductionOrder $order, bool $raw): ?StockLocation
+    {
+        if (! $id) {
+            return null;
+        }
+
+        $location = StockLocation::query()->where('company_id', $order->company_id)->whereKey($id)->first();
+        if (! $location || ! $location->isActive()
+            || ($order->branch_id && (int) $location->branch_id !== (int) $order->branch_id)
+            || ($raw && ! $location->can_issue_stock)
+            || (! $raw && ! $location->can_receive_stock)) {
+            return null;
         }
 
         return $location;
