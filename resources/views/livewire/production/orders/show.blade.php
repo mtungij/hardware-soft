@@ -85,19 +85,23 @@ $viewCosting=function(){
         </x-card>
     @endif
     @if($order->status===ProductionOrder::STATUS_AWAITING_COMPLETION)
-        <x-card title="Next Production Action" description="Post actual consumption and accepted output exactly once." class="mb-6">
+        @php
+            $authorizationOnly = array_keys($completionIssues) === ['authorization'];
+            $completionCardTitle = $completionIssues === []
+                ? 'Next Production Action'
+                : ($authorizationOnly ? 'Awaiting Authorized Completion' : 'Cannot Complete Production');
+        @endphp
+        <x-card :title="$completionCardTitle" description="Post actual consumption and accepted output exactly once." class="mb-6">
             @if($completionIssues === [])
                 <button wire:click="complete" wire:confirm="Post actual material consumption and accepted finished output? This cannot be edited afterward." wire:loading.attr="disabled" wire:target="complete" class="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50">
                     <span wire:loading.remove wire:target="complete">Complete &amp; Post Stock</span>
                     <span wire:loading wire:target="complete">Posting Stock...</span>
                 </button>
             @else
-                <p class="text-sm font-bold text-amber-700 dark:text-amber-300">{{ $completionIssues['authorization'] ?? 'Completion cannot proceed until the following issues are resolved:' }}</p>
-                @if(array_diff_key($completionIssues, ['authorization' => true]) !== [])
-                    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-700 dark:text-amber-300">
-                        @foreach(array_diff_key($completionIssues, ['authorization' => true]) as $issue)<li>{{ $issue }}</li>@endforeach
-                    </ul>
-                @endif
+                <p class="text-sm font-bold text-amber-700 dark:text-amber-300">Completion is currently blocked for the following reason{{ count($completionIssues) === 1 ? '' : 's' }}:</p>
+                <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-700 dark:text-amber-300">
+                    @foreach($completionIssues as $issue)<li>{{ $issue }}</li>@endforeach
+                </ul>
             @endif
         </x-card>
     @endif

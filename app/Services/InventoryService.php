@@ -79,7 +79,7 @@ class InventoryService
         return $location;
     }
 
-    public function getProductStock(int $productId, int $stockLocationId, int $branchId): float
+    public function getProductStock(int $productId, int $stockLocationId, ?int $branchId): float
     {
         return $this->getProductStocks([$productId], $stockLocationId, $branchId)[$productId] ?? 0;
     }
@@ -88,7 +88,7 @@ class InventoryService
      * @param  array<int, int>  $productIds
      * @return array<int, float>
      */
-    public function getProductStocks(array $productIds, int $stockLocationId, int $branchId): array
+    public function getProductStocks(array $productIds, int $stockLocationId, ?int $branchId): array
     {
         if ($productIds === []) {
             return [];
@@ -99,7 +99,7 @@ class InventoryService
         return StockMovement::query()
             ->whereIn('product_id', $productIds)
             ->where('stock_location_id', $stockLocationId)
-            ->where('branch_id', $branchId)
+            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
             ->select('product_id')
             ->selectRaw(
                 "SUM(CASE WHEN quantity_in <> 0 OR quantity_out <> 0 THEN quantity_in - quantity_out WHEN movement_type IN ({$negativeTypePlaceholders}) THEN -quantity ELSE quantity END) as available_quantity",
@@ -134,12 +134,17 @@ class InventoryService
         return $this->getProductStock($productId, $location->id, $branchId);
     }
 
-    public function getAverageCost(int $productId, int $stockLocationId, int $branchId): float
+    public function getAverageCost(int $productId, int $stockLocationId, ?int $branchId = null): float
     {
+        $companyId = $branchId === null
+            ? StockLocation::query()->whereKey($stockLocationId)->value('company_id')
+            : null;
+
         $incoming = StockMovement::query()
             ->where('product_id', $productId)
             ->where('stock_location_id', $stockLocationId)
-            ->where('branch_id', $branchId)
+            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
+            ->when($branchId === null && $companyId !== null, fn ($query) => $query->where('company_id', $companyId))
             ->whereIn('movement_type', StockMovement::POSITIVE_TYPES)
             ->whereNotNull('unit_cost')
             ->get();

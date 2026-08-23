@@ -125,6 +125,40 @@ function stockProductionMaterialForTest(object $test, string $quantity = '100'):
     ], $test->admin->id);
 }
 
+function awaitingMachineMouldOrderForTest(object $test): ProductionOrder
+{
+    $test->machine->update(['name' => 'MACHINE TOFALI NZITO 5"']);
+    $test->mould->update(['name' => 'MOULD OF 5"']);
+    $test->location->update(['name' => 'Raw Materials Store']);
+    $test->curingLocation->update(['name' => 'Curing Yard']);
+    $test->finishedLocation->update(['name' => 'Finished Goods Store']);
+    $test->finished->update([
+        'requires_curing' => true,
+        'curing_days_required' => 28,
+        'sellable_after_days' => 7,
+    ]);
+    $test->assignment->update([
+        'production_method' => 'machine_mould',
+        'target_quantity' => 100,
+    ]);
+    stockProductionMaterialForTest($test, '10');
+
+    $order = app(ProductionOrderService::class)->createFromAssignment($test->assignment, [
+        'planned_quantity' => 100,
+        'raw_material_stock_location_id' => $test->location->id,
+        'production_output_stock_location_id' => $test->curingLocation->id,
+        'final_finished_goods_stock_location_id' => $test->finishedLocation->id,
+    ], $test->admin);
+    $order = app(ProductionOrderService::class)->start($order, $test->admin);
+    $materials = $order->materials->mapWithKeys(fn ($line) => [$line->id => [
+        'actual_quantity' => $line->actual_quantity,
+        'actual_cost' => $line->actual_cost,
+    ]])->all();
+    $order = app(ProductionOrderService::class)->saveExecution($order, $materials, 100, 0, null, $test->admin);
+
+    return app(ProductionOrderService::class)->submit($order, $test->admin);
+}
+
 function createProductionLocationForTest(object $test, string $code, string $purpose, ?int $branchId = null): StockLocation
 {
     $attributes = match ($purpose) {
@@ -231,9 +265,189 @@ test('mould-only production completes, posts raw stock, and enters curing withou
         ->and($order->curingBatch()->count())->toBe(1);
 });
 
+test('exact machine and mould awaiting completion state exposes and executes stock posting', function () {
+    $order = awaitingMachineMouldOrderForTest($this);
+    $inventory = app(InventoryService::class);
+    $rawBefore = $inventory->getProductStock($this->material->id, $this->location->id, $this->branch->id);
+    $curingBefore = $inventory->getProductStock($this->finished->id, $this->curingLocation->id, $this->branch->id);
+    $finishedBefore = $inventory->getProductStock($this->finished->id, $this->finishedLocation->id, $this->branch->id);
+    $actualConsumed = (float) $order->materials->firstWhere('line_type', ProductionOrderMaterial::TYPE_INVENTORY)->actual_quantity;
+
+    expect($order->status)->toBe(ProductionOrder::STATUS_AWAITING_COMPLETION)
+        ->and($order->production_method)->toBe('machine_mould')
+        ->and($order->planned_quantity)->toBe('100.0000')
+        ->and($order->accepted_quantity)->toBe('100.0000')
+        ->and($order->rejected_quantity)->toBe('0.0000')
+        ->and($order->machine_id)->toBe($this->machine->id)
+        ->and($order->production_mould_id)->toBe($this->mould->id)
+        ->and($order->snapshot)->not->toBeNull()
+        ->and(app(ProductionOrderService::class)->completionIssues($order, $this->admin))->toBe([]);
+
+    Volt::test('production.orders.show', ['order' => $order])
+        ->assertSee('MACHINE TOFALI NZITO 5"')
+        ->assertSee('MOULD OF 5"')
+        ->assertSee('Complete &amp; Post Stock', escape: false)
+        ->assertDontSee('Cannot Complete Production');
+
+    $order = app(ProductionOrderService::class)->complete($order, $this->admin);
+    $movementCount = StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->count();
+
+    expect($order->status)->toBe(ProductionOrder::STATUS_COMPLETED)
+        ->and($order->posting_reference)->toBe('PRDPOST-'.$order->order_number)
+        ->and($order->completed_by)->toBe($this->admin->id)
+        ->and($order->completed_at)->not->toBeNull()
+        ->and($order->curingBatch)->not->toBeNull()
+        ->and($order->curingBatch->machine_id)->toBe($this->machine->id)
+        ->and($order->curingBatch->production_mould_id)->toBe($this->mould->id)
+        ->and($order->curingBatch->accepted_quantity)->toBe('100.000000000000')
+        ->and($order->curingBatch->production_rejected_quantity)->toBe('0.000000000000')
+        ->and($inventory->getProductStock($this->material->id, $this->location->id, $this->branch->id))->toBe($rawBefore - $actualConsumed)
+        ->and($inventory->getProductStock($this->finished->id, $this->curingLocation->id, $this->branch->id))->toBe($curingBefore + 100)
+        ->and($inventory->getProductStock($this->finished->id, $this->finishedLocation->id, $this->branch->id))->toBe($finishedBefore)
+        ->and(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_output')->where('quantity_in', 100)->count())->toBe(1);
+
+    app(ProductionOrderService::class)->complete($order->refresh(), $this->admin);
+    expect(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->count())->toBe($movementCount)
+        ->and($order->curingBatch()->count())->toBe(1);
+});
+
+test('company-wide machine mould order costs and posts through its branch-owned locations', function () {
+    $this->finished->update([
+        'requires_curing' => true,
+        'curing_days_required' => 28,
+        'sellable_after_days' => 7,
+    ]);
+    $this->assignment->update([
+        'production_method' => 'machine_mould',
+        'target_quantity' => 2800,
+    ]);
+    app(InventoryService::class)->directStockIn([
+        'branch_id' => $this->branch->id,
+        'product_id' => $this->material->id,
+        'stock_location_id' => $this->location->id,
+        'quantity' => 100,
+        'cost_price' => 10,
+        'selling_price' => 20,
+        'reason' => 'Company-wide production regression stock',
+        'notes' => '',
+        'movement_date' => '2026-07-29',
+    ], $this->admin->id);
+    $otherBranch = Branch::query()->create([
+        'company_id' => $this->company->id,
+        'name' => 'Production Cost Isolation Branch',
+        'code' => 'PRODUCTION-COST-ISOLATION',
+        'status' => 'active',
+        'is_default' => false,
+    ]);
+    StockMovement::query()->create([
+        'company_id' => $this->company->id,
+        'branch_id' => $otherBranch->id,
+        'product_id' => $this->material->id,
+        'stock_location_id' => $this->location->id,
+        'movement_type' => 'direct_stock_in',
+        'quantity' => 100,
+        'quantity_in' => 100,
+        'quantity_out' => 0,
+        'unit_cost' => 100,
+        'created_by' => $this->admin->id,
+        'movement_date' => '2026-07-29',
+    ]);
+
+    $service = app(ProductionOrderService::class);
+    $order = $service->createFromAssignment($this->assignment, [
+        'planned_quantity' => 2800,
+        'raw_material_stock_location_id' => $this->location->id,
+        'production_output_stock_location_id' => $this->curingLocation->id,
+        'final_finished_goods_stock_location_id' => $this->finishedLocation->id,
+    ], $this->admin);
+    $order->update(['branch_id' => null]);
+    $order = $service->start($order, $this->admin);
+    $materials = $order->materials->mapWithKeys(fn ($line) => [$line->id => [
+        'actual_quantity' => $line->actual_quantity,
+        'actual_cost' => $line->actual_cost,
+    ]])->all();
+    $order = $service->saveExecution($order, $materials, 2750, 50, null, $this->admin);
+    $order = $service->submit($order, $this->admin);
+
+    $inventory = app(InventoryService::class);
+    $rawBefore = $inventory->getProductStock($this->material->id, $this->location->id, $this->branch->id);
+    $curingBefore = $inventory->getProductStock($this->finished->id, $this->curingLocation->id, $this->branch->id);
+    $finishedBefore = $inventory->getProductStock($this->finished->id, $this->finishedLocation->id, $this->branch->id);
+    $actualConsumed = (float) $order->materials->firstWhere('line_type', ProductionOrderMaterial::TYPE_INVENTORY)->actual_quantity;
+
+    expect($order->branch_id)->toBeNull()
+        ->and($order->status)->toBe(ProductionOrder::STATUS_AWAITING_COMPLETION)
+        ->and($service->completionIssues($order, $this->admin))->toBe([]);
+
+    $order = $service->complete($order, $this->admin);
+    $consumption = StockMovement::query()
+        ->where('reference_type', ProductionOrder::class)
+        ->where('reference_id', $order->id)
+        ->where('movement_type', 'production_consumption')
+        ->firstOrFail();
+    $movementCount = StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->count();
+
+    expect($order->status)->toBe(ProductionOrder::STATUS_COMPLETED)
+        ->and($order->posting_reference)->toBe('PRDPOST-'.$order->order_number)
+        ->and($order->completed_by)->toBe($this->admin->id)
+        ->and($order->completed_at)->not->toBeNull()
+        ->and($consumption->branch_id)->toBe($this->branch->id)
+        ->and($consumption->unit_cost)->toBe('10.00')
+        ->and($inventory->getProductStock($this->material->id, $this->location->id, $this->branch->id))->toBe($rawBefore - $actualConsumed)
+        ->and($inventory->getProductStock($this->finished->id, $this->curingLocation->id, $this->branch->id))->toBe($curingBefore + 2750)
+        ->and($inventory->getProductStock($this->finished->id, $this->finishedLocation->id, $this->branch->id))->toBe($finishedBefore)
+        ->and($order->curingBatch)->not->toBeNull()
+        ->and($order->curingBatch->accepted_quantity)->toBe('2750.000000000000')
+        ->and($order->curingBatch->production_rejected_quantity)->toBe('50.000000000000')
+        ->and($order->curingBatch()->count())->toBe(1);
+
+    $service->complete($order->refresh(), $this->admin);
+    expect(StockMovement::query()->where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->count())->toBe($movementCount)
+        ->and($order->curingBatch()->count())->toBe(1);
+});
+
+test('branchless production inventory locations fail completion with a validation message', function () {
+    $globalRaw = createProductionLocationForTest($this, 'GLOBAL-RAW-POSTING', 'raw');
+    app(InventoryService::class)->directStockIn([
+        'branch_id' => $this->branch->id,
+        'product_id' => $this->material->id,
+        'stock_location_id' => $globalRaw->id,
+        'quantity' => 10,
+        'cost_price' => 17,
+        'selling_price' => 20,
+        'reason' => 'Global location costing fixture',
+        'notes' => '',
+        'movement_date' => '2026-07-29',
+    ], $this->admin->id);
+    $order = awaitingMachineMouldOrderForTest($this);
+    $order->update([
+        'branch_id' => null,
+        'raw_material_stock_location_id' => $globalRaw->id,
+    ]);
+
+    expect(app(InventoryService::class)->getAverageCost($this->material->id, $globalRaw->id, null))->toBe(17.0)
+        ->and(app(ProductionOrderService::class)->completionIssues($order->refresh(), $this->admin)['raw_material_stock_location_id'])
+        ->toContain('inventory movements require a branch');
+
+    expect(fn () => app(ProductionOrderService::class)->complete($order->refresh(), $this->admin))
+        ->toThrow(ValidationException::class, 'inventory movements require a branch');
+});
+
+test('awaiting completion UI lists exact machine mould and snapshot blockers', function () {
+    $order = awaitingMachineMouldOrderForTest($this);
+    $order->snapshot()->delete();
+    $order->update(['machine_id' => null, 'production_mould_id' => null]);
+
+    Volt::test('production.orders.show', ['order' => $order->refresh()])
+        ->assertSee('Cannot Complete Production')
+        ->assertSee('Missing machine for Machine + Mould production.')
+        ->assertSee('Missing mould.')
+        ->assertSee('Missing recipe snapshot.')
+        ->assertDontSee('Complete &amp; Post Stock', escape: false);
+});
+
 test('unauthorized viewer sees awaiting authorized completion instead of a silent dead end', function () {
-    stockProductionMaterialForTest($this);
-    $order = executeProductionOrderForTest($this, createProductionOrderForTest($this));
+    $order = awaitingMachineMouldOrderForTest($this);
     $viewer = User::factory()->create([
         'company_id' => $this->company->id,
         'branch_id' => $this->branch->id,
@@ -244,7 +458,8 @@ test('unauthorized viewer sees awaiting authorized completion instead of a silen
 
     $this->actingAs($viewer);
     Volt::test('production.orders.show', ['order' => $order])
-        ->assertSee('Awaiting authorized completion.')
+        ->assertSee('Awaiting Authorized Completion')
+        ->assertSee('Awaiting authorized completion. Required permission: production.complete_orders.')
         ->assertDontSee('Complete &amp; Post Stock', escape: false);
 
     expect(fn () => app(ProductionOrderService::class)->complete($order, $viewer))

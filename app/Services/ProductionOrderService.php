@@ -233,7 +233,12 @@ class ProductionOrderService
             }
             $raw = $this->lockedLocation($order->raw_material_stock_location_id, $order, $user, true);
             $inventoryLines = $order->materials()->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY)->lockForUpdate()->get();
-            $this->validateAvailableInventory($inventoryLines, $raw->id, 'planned_quantity');
+            $this->validateAvailableInventory(
+                $inventoryLines,
+                $raw->id,
+                'planned_quantity',
+                $this->effectiveInventoryBranch($order, $raw),
+            );
 
             $order->materials()->get()->each(fn (ProductionOrderMaterial $line) => $line->update([
                 'actual_quantity' => $line->planned_quantity, 'actual_cost' => $line->planned_cost,
@@ -281,7 +286,8 @@ class ProductionOrderService
             $this->validateAvailableInventory(
                 $lines->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY),
                 $raw->id,
-                'actual_quantity'
+                'actual_quantity',
+                $this->effectiveInventoryBranch($order, $raw),
             );
             $order->update([
                 'accepted_quantity' => $acceptedValue, 'rejected_quantity' => $rejectedValue,
@@ -352,6 +358,13 @@ class ProductionOrderService
             $raw = $this->lockedLocation($order->raw_material_stock_location_id, $order, $user, true);
             $outputLocationId = $order->production_output_stock_location_id ?: $order->finished_goods_stock_location_id;
             $output = $this->lockedLocation($outputLocationId, $order, $user, false);
+            $rawBranchId = $this->effectiveInventoryBranch($order, $raw);
+            $outputBranchId = $this->effectiveInventoryBranch($order, $output);
+            if ($rawBranchId === null || $outputBranchId === null) {
+                throw ValidationException::withMessages([
+                    'location' => 'Company-wide production stock locations cannot be posted because inventory movements require a branch. Select branch-owned production locations.',
+                ]);
+            }
             $requiresCuring = (bool) $order->product?->requires_curing;
             if ($requiresCuring && ($output->is_sellable || ! in_array($output->type, ['curing', 'quarantine'], true))) {
                 throw ValidationException::withMessages(['location' => 'A curing product must post to an active non-sellable curing location.']);
@@ -365,8 +378,8 @@ class ProductionOrderService
             foreach ($lines->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY) as $line) {
                 $quantity = $this->ledgerQuantity((string) $line->actual_quantity);
                 StockMovement::query()->where('product_id', $line->material_product_id)
-                    ->where('stock_location_id', $raw->id)->lockForUpdate()->get();
-                $available = $this->availableStock($line->material_product_id, $raw->id);
+                    ->where('stock_location_id', $raw->id)->where('branch_id', $rawBranchId)->lockForUpdate()->get();
+                $available = $this->availableStock($line->material_product_id, $raw->id, $rawBranchId);
                 if (bccomp($available, $quantity, 4) < 0) {
                     throw ValidationException::withMessages([
                         "materials.{$line->id}" => "{$line->name} is short. Required {$quantity}; available {$available}.",
@@ -376,12 +389,12 @@ class ProductionOrderService
 
             foreach ($lines->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY) as $line) {
                 $quantity = $this->ledgerQuantity((string) $line->actual_quantity);
-                $historicalCost = $this->inventory->getAverageCost($line->material_product_id, $raw->id, $order->branch_id);
+                $historicalCost = $this->inventory->getAverageCost($line->material_product_id, $raw->id, $rawBranchId);
                 if ($historicalCost <= 0) {
                     $historicalCost = (float) ($line->materialProduct?->buying_price ?: 0);
                 }
                 StockMovement::query()->create([
-                    'company_id' => $order->company_id, 'branch_id' => $order->branch_id,
+                    'company_id' => $order->company_id, 'branch_id' => $rawBranchId,
                     'product_id' => $line->material_product_id, 'stock_location_id' => $raw->id,
                     'source_location_id' => $raw->id, 'movement_type' => 'production_consumption',
                     'quantity' => $quantity, 'quantity_in' => 0, 'quantity_out' => $quantity,
@@ -399,7 +412,7 @@ class ProductionOrderService
                     $timezone = $order->product?->company?->timezone ?: config('app.timezone');
                     $startedAt = CarbonImmutable::parse($order->production_date->toDateString(), $timezone)->startOfDay();
                     $curingBatch = ProductionCuringBatch::query()->create([
-                        'company_id' => $order->company_id, 'branch_id' => $order->branch_id,
+                        'company_id' => $order->company_id, 'branch_id' => $outputBranchId,
                         'production_order_id' => $order->id, 'product_id' => $order->product_id,
                         'machine_id' => $order->machine_id, 'production_mould_id' => $order->production_mould_id,
                         'production_rejected_quantity' => $order->rejected_quantity,
@@ -416,7 +429,7 @@ class ProductionOrderService
                     $this->quality->queueCuringInspection($order, $curingBatch, $user);
                 }
                 StockMovement::query()->create([
-                    'company_id' => $order->company_id, 'branch_id' => $order->branch_id,
+                    'company_id' => $order->company_id, 'branch_id' => $outputBranchId,
                     'product_id' => $order->product_id, 'stock_location_id' => $output->id,
                     'destination_location_id' => $output->id, 'movement_type' => 'production_output',
                     'quantity' => $accepted, 'quantity_in' => $accepted, 'quantity_out' => 0,
@@ -444,7 +457,7 @@ class ProductionOrderService
         $issues = [];
 
         if (! $user->can('production.complete_orders')) {
-            $issues['authorization'] = 'Awaiting authorized completion.';
+            $issues['authorization'] = 'Awaiting authorized completion. Required permission: production.complete_orders.';
         }
         if ((int) $order->company_id !== (int) $user->company_id) {
             $issues['company'] = 'This production order does not belong to your company.';
@@ -520,16 +533,24 @@ class ProductionOrderService
         }
 
         if ($raw) {
+            $rawBranchId = $this->effectiveInventoryBranch($order, $raw);
+            if ($rawBranchId === null) {
+                $issues['raw_material_stock_location_id'] = 'Company-wide production stock locations cannot be posted because inventory movements require a branch. Select a branch-owned Raw Material Location.';
+            }
             foreach ($materials->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY) as $line) {
                 if ($line->actual_quantity === null) {
                     continue;
                 }
                 $required = $this->ledgerQuantity((string) $line->actual_quantity);
-                $available = $this->availableStock($line->material_product_id, $raw->id);
+                $available = $this->availableStock($line->material_product_id, $raw->id, $rawBranchId);
                 if (bccomp($available, $required, 4) < 0) {
                     $issues["materials.{$line->id}"] = "Insufficient raw-material stock for {$line->name}. Required {$required}; available {$available}.";
                 }
             }
+        }
+
+        if ($output && $this->effectiveInventoryBranch($order, $output) === null) {
+            $issues[$requiresCuring ? 'curing_stock_location_id' : 'finished_goods_stock_location_id'] = 'Company-wide production stock locations cannot be posted because inventory movements require a branch. Select a branch-owned output location.';
         }
 
         return $issues;
@@ -558,8 +579,11 @@ class ProductionOrderService
 
     public function availability(ProductionOrder $order): array
     {
+        $raw = $this->completionLocation($order->raw_material_stock_location_id, $order, true);
+        $branchId = $raw ? $this->effectiveInventoryBranch($order, $raw) : $order->branch_id;
+
         return $order->materials()->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY)->get()
-            ->mapWithKeys(fn (ProductionOrderMaterial $line) => [$line->id => $this->availableStock($line->material_product_id, $order->raw_material_stock_location_id)])
+            ->mapWithKeys(fn (ProductionOrderMaterial $line) => [$line->id => $this->availableStock($line->material_product_id, $order->raw_material_stock_location_id, $branchId)])
             ->all();
     }
 
@@ -632,10 +656,18 @@ class ProductionOrderService
         return $location;
     }
 
-    private function availableStock(int $productId, int $locationId): string
+    private function effectiveInventoryBranch(ProductionOrder $order, StockLocation $location): ?int
+    {
+        $branchId = $order->branch_id ?? $location->branch_id;
+
+        return $branchId === null ? null : (int) $branchId;
+    }
+
+    private function availableStock(int $productId, int $locationId, ?int $branchId = null): string
     {
         $negative = implode(',', array_fill(0, count(StockMovement::NEGATIVE_TYPES), '?'));
         $value = StockMovement::query()->where('product_id', $productId)->where('stock_location_id', $locationId)
+            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
             ->selectRaw("COALESCE(SUM(CASE WHEN quantity_in <> 0 OR quantity_out <> 0 THEN quantity_in - quantity_out WHEN movement_type IN ({$negative}) THEN -quantity ELSE quantity END), 0) available", StockMovement::NEGATIVE_TYPES)
             ->value('available');
 
@@ -643,7 +675,7 @@ class ProductionOrderService
     }
 
     /** @param iterable<ProductionOrderMaterial> $lines */
-    private function validateAvailableInventory(iterable $lines, int $locationId, string $quantityField): void
+    private function validateAvailableInventory(iterable $lines, int $locationId, string $quantityField, ?int $branchId): void
     {
         foreach ($lines as $line) {
             $quantity = $line->{$quantityField};
@@ -652,8 +684,10 @@ class ProductionOrderService
             }
 
             StockMovement::query()->where('product_id', $line->material_product_id)
-                ->where('stock_location_id', $locationId)->lockForUpdate()->get();
-            $available = $this->availableStock($line->material_product_id, $locationId);
+                ->where('stock_location_id', $locationId)
+                ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
+                ->lockForUpdate()->get();
+            $available = $this->availableStock($line->material_product_id, $locationId, $branchId);
             if (bccomp($available, (string) $quantity, 4) < 0) {
                 throw ValidationException::withMessages([
                     "materials.{$line->id}.actual_quantity" => "{$line->name} is short. Required {$quantity}; available {$available}.",
