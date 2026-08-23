@@ -8,53 +8,57 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('customer_material_accounts', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('branch_id')->constrained()->restrictOnDelete();
-            $table->foreignId('customer_id')->constrained()->restrictOnDelete();
-            $table->string('reference_number', 60);
-            $table->string('project_name');
-            $table->text('description')->nullable();
-            $table->string('project_location')->nullable();
-            $table->string('status', 20)->default('draft');
-            $table->timestamp('activated_at')->nullable();
-            $table->timestamp('closed_at')->nullable();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('closed_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamps();
+        if (! Schema::hasTable('customer_material_accounts')) {
+            Schema::create('customer_material_accounts', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('branch_id')->constrained()->restrictOnDelete();
+                $table->foreignId('customer_id')->constrained()->restrictOnDelete();
+                $table->string('reference_number', 60);
+                $table->string('project_name');
+                $table->text('description')->nullable();
+                $table->string('project_location')->nullable();
+                $table->string('status', 20)->default('draft');
+                $table->timestamp('activated_at')->nullable();
+                $table->timestamp('closed_at')->nullable();
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('closed_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamps();
 
-            $table->unique(['company_id', 'reference_number'], 'cma_reference_uq');
-            $table->index(['company_id', 'branch_id', 'status'], 'cma_branch_status_ix');
-            $table->index(['company_id', 'customer_id'], 'cma_customer_ix');
-        });
+                $table->unique(['company_id', 'reference_number'], 'cma_reference_uq');
+                $table->index(['company_id', 'branch_id', 'status'], 'cma_branch_status_ix');
+                $table->index(['company_id', 'customer_id'], 'cma_customer_ix');
+            });
+        }
 
-        Schema::create('customer_material_plan_lines', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('customer_material_account_id')->constrained()->restrictOnDelete();
-            $table->foreignId('product_id')->constrained()->restrictOnDelete();
-            $table->foreignId('product_unit_conversion_id')->nullable()->constrained()->restrictOnDelete();
-            $table->foreignId('transaction_unit_id')->constrained('units')->restrictOnDelete();
-            $table->foreignId('base_unit_id')->constrained('units')->restrictOnDelete();
-            $table->string('product_name_snapshot');
-            $table->string('unit_name_snapshot');
-            $table->string('unit_code_snapshot')->nullable();
-            $table->string('base_unit_name_snapshot');
-            $table->string('base_unit_code_snapshot')->nullable();
-            $table->decimal('conversion_factor_snapshot', 24, 12);
-            $table->decimal('planned_quantity', 24, 12);
-            $table->decimal('planned_base_quantity', 24, 12);
-            $table->decimal('agreed_unit_price', 18, 2);
-            $table->decimal('planned_line_total', 18, 2);
-            $table->unsignedInteger('revision')->default(1);
-            $table->text('amendment_reason')->nullable();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamps();
-            $table->index(['customer_material_account_id', 'product_id'], 'cmpl_account_product_ix');
-        });
+        if (! Schema::hasTable('customer_material_plan_lines')) {
+            Schema::create('customer_material_plan_lines', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('company_id')->constrained()->cascadeOnDelete();
+                $table->foreignId('customer_material_account_id')->constrained()->restrictOnDelete();
+                $table->foreignId('product_id')->constrained()->restrictOnDelete();
+                $table->foreignId('product_unit_conversion_id')->nullable()->constrained()->restrictOnDelete();
+                $table->foreignId('transaction_unit_id')->constrained('units')->restrictOnDelete();
+                $table->foreignId('base_unit_id')->constrained('units')->restrictOnDelete();
+                $table->string('product_name_snapshot');
+                $table->string('unit_name_snapshot');
+                $table->string('unit_code_snapshot')->nullable();
+                $table->string('base_unit_name_snapshot');
+                $table->string('base_unit_code_snapshot')->nullable();
+                $table->decimal('conversion_factor_snapshot', 24, 12);
+                $table->decimal('planned_quantity', 24, 12);
+                $table->decimal('planned_base_quantity', 24, 12);
+                $table->decimal('agreed_unit_price', 18, 2);
+                $table->decimal('planned_line_total', 18, 2);
+                $table->unsignedInteger('revision')->default(1);
+                $table->text('amendment_reason')->nullable();
+                $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamps();
+                $table->index(['customer_material_account_id', 'product_id'], 'cmpl_account_product_ix');
+            });
+        }
 
         Schema::create('customer_material_cash_transactions', function (Blueprint $table): void {
             $table->id();
