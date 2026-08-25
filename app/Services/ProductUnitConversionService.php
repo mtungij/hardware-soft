@@ -51,7 +51,14 @@ class ProductUnitConversionService
 
     public function purchasable(Product $product): Collection
     {
-        return $product->unitConversions()->with('unit')->where('active', true)->where('can_purchase', true)->orderBy('id')->get();
+        return ProductUnitConversion::query()
+            ->with('unit')
+            ->where('company_id', $product->company_id)
+            ->where('product_id', $product->id)
+            ->where('active', true)
+            ->where('can_purchase', true)
+            ->orderBy('id')
+            ->get();
     }
 
     public function sellable(Product $product): Collection
@@ -59,9 +66,9 @@ class ProductUnitConversionService
         return $product->unitConversions()->with('unit')->where('active', true)->where('can_sell', true)->orderBy('id')->get();
     }
 
-    public function resolveForPurchase(Product $product, ?int $conversionId): ?ProductUnitConversion
+    public function resolveForPurchase(Product $product, ?int $conversionId, bool $lockForUpdate = false): ?ProductUnitConversion
     {
-        return $this->resolve($product, $conversionId, 'can_purchase');
+        return $this->resolve($product, $conversionId, 'can_purchase', $lockForUpdate);
     }
 
     public function resolveForSale(Product $product, ?int $conversionId): ?ProductUnitConversion
@@ -69,7 +76,60 @@ class ProductUnitConversionService
         return $this->resolve($product, $conversionId, 'can_sell');
     }
 
-    private function resolve(Product $product, ?int $conversionId, string $flag): ?ProductUnitConversion
+    /**
+     * Normalize a purchase-unit quantity and price to the product's base stock unit.
+     *
+     * @return array{conversion: ?ProductUnitConversion, transaction_quantity: float, base_quantity: float, conversion_factor: float, transaction_unit_cost: float, base_unit_cost: float}
+     */
+    public function normalizePurchase(
+        Product $product,
+        ?int $conversionId,
+        mixed $transactionQuantity,
+        mixed $transactionUnitCost,
+        bool $lockForUpdate = false,
+    ): array {
+        if (! is_numeric($transactionQuantity) || (float) $transactionQuantity <= 0) {
+            throw ValidationException::withMessages(['quantity' => 'Quantity must be greater than zero.']);
+        }
+
+        if (! is_numeric($transactionUnitCost) || (float) $transactionUnitCost < 0) {
+            throw ValidationException::withMessages(['cost_price' => 'Buying Price must be zero or greater.']);
+        }
+
+        $quantity = (float) $transactionQuantity;
+        $cost = (float) $transactionUnitCost;
+        $conversion = $this->resolveForPurchase($product, $conversionId, $lockForUpdate);
+        $factor = $conversion ? (float) $conversion->conversion_factor : 1.0;
+
+        if ($factor <= 0) {
+            throw ValidationException::withMessages(['product_unit_conversion_id' => 'The selected unit has an invalid conversion factor.']);
+        }
+
+        $transactionMeasurement = $conversion?->unit?->measurementType?->code
+            ?? $product->unit?->measurementType?->code
+            ?? $product->measurementCode();
+
+        if ($transactionMeasurement === MeasurementType::COUNT && ! $product->quantityIsWhole($quantity)) {
+            throw ValidationException::withMessages(['quantity' => 'Quantity must be a whole number for the selected unit.']);
+        }
+
+        $baseQuantity = $conversion ? $conversion->baseQuantity($quantity) : round($quantity, 4);
+
+        if (! $product->acceptsStockQuantity($baseQuantity)) {
+            throw ValidationException::withMessages(['quantity' => $product->displayNameWithSize().' must convert to a valid base stock quantity.']);
+        }
+
+        return [
+            'conversion' => $conversion,
+            'transaction_quantity' => $quantity,
+            'base_quantity' => $baseQuantity,
+            'conversion_factor' => $factor,
+            'transaction_unit_cost' => $cost,
+            'base_unit_cost' => round($cost / $factor, 4),
+        ];
+    }
+
+    private function resolve(Product $product, ?int $conversionId, string $flag, bool $lockForUpdate = false): ?ProductUnitConversion
     {
         if (! $conversionId) {
             return null;
@@ -81,6 +141,7 @@ class ProductUnitConversionService
             ->where('product_id', $product->id)
             ->where('active', true)
             ->where($flag, true)
+            ->when($lockForUpdate, fn ($query) => $query->lockForUpdate())
             ->find($conversionId);
 
         if (! $conversion) {

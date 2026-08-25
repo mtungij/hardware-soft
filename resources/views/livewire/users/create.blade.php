@@ -188,6 +188,7 @@ $syncStockLocationAccess = function (User $user) {
 };
 
 $save = function () {
+    abort_unless(auth()->user()->can('users.create'), 403);
     $validated = $this->validate();
 
     validator(['password' => $this->password], ['password' => [Rules\Password::defaults()]])->validate();
@@ -237,6 +238,20 @@ $save = function () {
                 </select>
                 @error('status') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
+
+            @php $selectedRole = filled($role) ? Role::with('permissions')->where('name', $role)->first() : null; @endphp
+            @if ($selectedRole)
+                <div class="rounded-xl border border-cyan-200 bg-cyan-50/50 p-4 text-sm dark:border-cyan-500/30 dark:bg-cyan-500/10">
+                    <p class="font-black">{{ $selectedRole->name }} access summary</p>
+                    <div class="mt-2 grid gap-1 sm:grid-cols-2">
+                        <div><span class="text-slate-500">Sales:</span> {{ str($selectedRole->sales_scope)->replace('_', ' ')->title() }}</div>
+                        <div><span class="text-slate-500">Stock:</span> {{ str($selectedRole->stock_scope)->replace('_', ' ')->title() }}</div>
+                        <div><span class="text-slate-500">Buying Price:</span> {{ $selectedRole->hasAnyPermission(['products.view_buying_price', 'view stock valuation', 'view sales profit']) ? 'Visible' : 'Hidden' }}</div>
+                        <div><span class="text-slate-500">Profit:</span> {{ $selectedRole->hasAnyPermission(['sales.view_profit', 'view sales profit']) ? 'Visible' : 'Hidden' }}</div>
+                        <div><span class="text-slate-500">Stock Value:</span> {{ $selectedRole->hasAnyPermission(['stock.view_value', 'view stock valuation']) ? 'Visible' : 'Hidden' }}</div>
+                    </div>
+                </div>
+            @endif
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Assigned Role

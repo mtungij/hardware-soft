@@ -7,6 +7,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Support\InventorySettings;
+use App\Support\AuthorizationScope;
 use Illuminate\Support\Facades\DB;
 use Livewire\WithPagination;
 
@@ -56,6 +57,8 @@ $updatedLowStockOnly = function () {
 };
 
 $openLedger = function (int $productId, int $locationId) {
+    abort_unless(AuthorizationScope::canAccessStockLocation(auth()->user(), $locationId), 403);
+
     $this->ledgerProductId = (string) $productId;
     $this->ledgerLocationId = (string) $locationId;
     $this->dispatch('open-modal', 'stock-ledger');
@@ -64,19 +67,11 @@ $openLedger = function (int $productId, int $locationId) {
 $canSelectLocation = fn () => (InventorySettings::current()->inventory_mode ?? 'multi_location') !== 'single_location';
 
 $allowedLocationIds = function () {
-    $locations = StockLocation::query()
-        ->where('status', 'active')
-        ->where('is_active', true)
-        ->when(auth()->user()?->company_id, fn ($query, $companyId) => $query->where('company_id', $companyId))
-        ->when($this->branchFilter, fn ($query) => $query->where('branch_id', $this->branchFilter));
-
-    if (! auth()->user()?->can('view all stock locations')) {
-        $locations->whereIn('id', auth()->user()?->stockLocations()
-            ->wherePivot('can_view', true)
-            ->pluck('stock_locations.id') ?? []);
-    }
-
-    return $locations->pluck('id')->all();
+    return StockLocation::query()
+        ->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))
+        ->when($this->branchFilter, fn ($query) => $query->where('branch_id', $this->branchFilter))
+        ->pluck('id')
+        ->all();
 };
 
 $locationBadge = function (?string $type): string {
@@ -119,9 +114,10 @@ $locationBadge = function (?string $type): string {
             ->orderBy('brand')
             ->pluck('brand');
 
+        $canViewValue = auth()->user()->can('stock.view_value');
         $stockExpression = "SUM(CASE WHEN stock_movements.quantity_in <> 0 OR stock_movements.quantity_out <> 0 THEN stock_movements.quantity_in - stock_movements.quantity_out WHEN stock_movements.movement_type IN ('sale_out','transfer_out','adjustment_out','damage_out','purchase_receipt_reversal') THEN -stock_movements.quantity ELSE stock_movements.quantity END)";
-        $costNumerator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)";
-        $costDenominator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)";
+        $costNumerator = $canViewValue ? "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)" : '0';
+        $costDenominator = $canViewValue ? "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)" : '0';
         $productNameExpression = DB::connection()->getDriverName() === 'sqlite'
             ? "products.name || ' - ' || product_sizes.symbol"
             : "CONCAT(products.name, ' - ', product_sizes.symbol)";
@@ -230,7 +226,9 @@ $locationBadge = function (?string $type): string {
 
     <div class="grid gap-4 md:grid-cols-5">
         <x-card><p class="text-sm text-slate-500">Current Stock Quantity</p><p class="mt-2 text-2xl font-black">{{ \App\Support\NumberFormatter::quantity($summaryRows->sum('quantity')) }}</p></x-card>
-        <x-card><p class="text-sm text-slate-500">Current Stock Value</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($summaryRows->sum('stock_value')) }}</p></x-card>
+        @if ($canViewValue)
+            <x-card><p class="text-sm text-slate-500">Current Stock Value</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($summaryRows->sum('stock_value')) }}</p></x-card>
+        @endif
         <x-card><p class="text-sm text-slate-500">Low Stock Products</p><p class="mt-2 text-2xl font-black">{{ $summaryRows->where('stock_status', 'low_stock')->count() }}</p></x-card>
         <x-card><p class="text-sm text-slate-500">Out Of Stock Products</p><p class="mt-2 text-2xl font-black">{{ $summaryRows->where('stock_status', 'out_of_stock')->count() }}</p></x-card>
         <x-card><p class="text-sm text-slate-500">Active Locations</p><p class="mt-2 text-2xl font-black">{{ $locations->count() }}</p></x-card>
@@ -314,13 +312,15 @@ $locationBadge = function (?string $type): string {
                             <button type="button" wire:click="openLedger({{ $row->product_id }}, {{ $row->stock_location_id }})" class="grid w-full gap-2 px-4 py-3 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/5 md:grid-cols-[1.5fr_1fr_1fr_1fr_auto]">
                                 <span><span class="{{ $this->locationBadge($row->location_type) }}">{{ str($row->location_type)->replace('_', ' ')->title() }}</span> <span class="ml-2 font-bold">{{ $row->location_name }}</span></span>
                                 <span>{{ \App\Support\NumberFormatter::quantity($row->quantity) }}</span>
-                                <span>TZS {{ \App\Support\NumberFormatter::money($row->average_cost) }}</span>
-                                <span>TZS {{ \App\Support\NumberFormatter::money($row->stock_value) }}</span>
+                                @if ($canViewValue)
+                                    <span>TZS {{ \App\Support\NumberFormatter::money($row->average_cost) }}</span>
+                                    <span>TZS {{ \App\Support\NumberFormatter::money($row->stock_value) }}</span>
+                                @endif
                                 <span class="font-black">{{ str($row->stock_status)->replace('_', ' ')->title() }}</span>
                             </button>
                         @endforeach
                         <div class="grid gap-2 bg-slate-50 px-4 py-3 text-sm font-black dark:bg-white/5 md:grid-cols-[1.5fr_1fr_1fr_1fr_auto]">
-                            <span>Total</span><span>{{ \App\Support\NumberFormatter::quantity($productTotal) }}</span><span></span><span>TZS {{ \App\Support\NumberFormatter::money($productValue) }}</span><span></span>
+                            <span>Total</span><span>{{ \App\Support\NumberFormatter::quantity($productTotal) }}</span><span></span>@if ($canViewValue)<span>TZS {{ \App\Support\NumberFormatter::money($productValue) }}</span>@endif<span></span>
                         </div>
                     </div>
                 @empty
@@ -328,7 +328,7 @@ $locationBadge = function (?string $type): string {
                 @endforelse
             </div>
         @else
-            <x-table :headers="['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Quantity', 'Average Cost', 'Stock Value', 'Reorder Level', 'Status']">
+            <x-table :headers="$canViewValue ? ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Quantity', 'Average Cost', 'Stock Value', 'Reorder Level', 'Status'] : ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Quantity', 'Reorder Level', 'Status']">
                 @forelse ($rows as $row)
                     <tr wire:click="openLedger({{ $row->product_id }}, {{ $row->stock_location_id }})" class="cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5">
                         <td class="px-4 py-3 font-black">{{ $row->product_name }}</td>
@@ -340,15 +340,17 @@ $locationBadge = function (?string $type): string {
                             <span class="{{ $this->locationBadge($row->location_type) }}">{{ str($row->location_type)->replace('_', ' ')->title() }}</span>
                         </td>
                         <td class="px-4 py-3 font-black">{{ \App\Support\NumberFormatter::quantity($row->quantity) }}</td>
-                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($row->average_cost) }}</td>
-                        <td class="px-4 py-3 font-bold">TZS {{ \App\Support\NumberFormatter::money($row->stock_value) }}</td>
+                        @if ($canViewValue)
+                            <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($row->average_cost) }}</td>
+                            <td class="px-4 py-3 font-bold">TZS {{ \App\Support\NumberFormatter::money($row->stock_value) }}</td>
+                        @endif
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($row->reorder_level) }}</td>
                         <td class="px-4 py-3">
                             <span class="{{ $row->stock_status === 'in_stock' ? 'badge-success' : ($row->stock_status === 'low_stock' ? 'badge-warning' : 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300') }}">{{ str($row->stock_status)->replace('_', ' ')->title() }}</span>
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No stock records found.</td></tr>
+                    <tr><td colspan="{{ $canViewValue ? 10 : 8 }}" class="px-4 py-8 text-center text-slate-500">No stock records found.</td></tr>
                 @endforelse
             </x-table>
         @endif
@@ -362,7 +364,7 @@ $locationBadge = function (?string $type): string {
             <p class="mt-1 text-sm text-slate-500">{{ $ledgerProduct?->name }} / {{ $ledgerLocation?->name }}</p>
         </div>
         <div class="max-h-[calc(100vh-9rem)] overflow-y-auto px-5 py-5">
-            <x-table :headers="['Date', 'Type', 'In', 'Out', 'Cost', 'Reference', 'Closing Balance']">
+            <x-table :headers="$canViewValue ? ['Date', 'Type', 'In', 'Out', 'Cost', 'Reference', 'Closing Balance'] : ['Date', 'Type', 'In', 'Out', 'Reference', 'Closing Balance']">
                 @forelse ($ledgerMovements as $movement)
                     @php
                         $signed = $movement->signedQuantity();
@@ -373,7 +375,9 @@ $locationBadge = function (?string $type): string {
                         <td class="px-4 py-3"><span class="badge-info">{{ str($movement->movement_type)->replace('_', ' ')->title() }}</span></td>
                         <td class="px-4 py-3 text-emerald-700">{{ $signed > 0 ? \App\Support\NumberFormatter::quantity($signed) : '-' }}</td>
                         <td class="px-4 py-3 text-red-700">{{ $signed < 0 ? \App\Support\NumberFormatter::quantity(abs($signed)) : '-' }}</td>
-                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>
+                        @if ($canViewValue)
+                            <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>
+                        @endif
                         <td class="px-4 py-3 text-xs">{{ class_basename($movement->reference_type) }} #{{ $movement->reference_id }}</td>
                         <td class="px-4 py-3 font-black">{{ \App\Support\NumberFormatter::quantity($runningBalance) }}</td>
                     </tr>

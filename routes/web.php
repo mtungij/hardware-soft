@@ -2,28 +2,36 @@
 
 use App\Http\Controllers\CompletePosReceiptController;
 use App\Http\Controllers\CustomerPortal\CustomerFileDownloadController;
-use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\GenericExportController;
 use App\Http\Controllers\ProductionReportExportController;
 use App\Http\Controllers\PurchaseOrderPdfController;
+use App\Http\Controllers\ReportExportController;
+use App\Models\Company;
+use App\Models\Setting;
+use App\Models\UserOnboardingProgress;
+use App\Models\UserPreference;
+use App\Services\ProductionReportService;
+use App\Support\ThemePreference;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Livewire\Volt\Volt;
 
 Route::get('pwa/manifest.json', function () {
     $isCustomerPortal = request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST);
     try {
-        $companyName = \Illuminate\Support\Facades\Schema::hasTable('settings')
-            ? \App\Models\Setting::query()->value('company_name')
+        $companyName = Schema::hasTable('settings')
+            ? Setting::query()->value('company_name')
             : null;
-    } catch (\Throwable) {
+    } catch (Throwable) {
         $companyName = null;
     }
 
-    $companyName = $companyName ?: \App\Models\Company::current()?->company_name;
+    $companyName = $companyName ?: Company::current()?->company_name;
     $name = $companyName ?: config('app.name', 'Hardex');
-    $shortName = \Illuminate\Support\Str::of($name)->squish()->limit(12, '')->value();
+    $shortName = Str::of($name)->squish()->limit(12, '')->value();
     $description = $isCustomerPortal
         ? 'Customer portal for checking debts, deposits, receipts, payments, and account statements.'
         : 'Staff workspace for inventory, sales, accounting, reporting, and administration.';
@@ -67,7 +75,7 @@ Route::post('theme-preference', function (Request $request) {
         'theme' => ['required', 'in:dark,light'],
     ]);
 
-    $theme = \App\Support\ThemePreference::store($data['theme']);
+    $theme = ThemePreference::store($data['theme']);
 
     return response()->json([
         'theme' => $theme,
@@ -90,7 +98,7 @@ Route::post('onboarding/progress', function (Request $request) {
 
     $guard = $customerAccount ? 'customer' : 'web';
 
-    \App\Models\UserOnboardingProgress::query()->updateOrCreate(
+    UserOnboardingProgress::query()->updateOrCreate(
         [
             'guard' => $guard,
             'user_id' => $staffUser?->id,
@@ -116,8 +124,8 @@ Route::post('staff/language/{locale}', function (Request $request, string $local
 
     if (auth()->check()) {
         try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('user_preferences')) {
-                \App\Models\UserPreference::query()->updateOrCreate(
+            if (Schema::hasTable('user_preferences')) {
+                UserPreference::query()->updateOrCreate(
                     [
                         'guard' => 'web',
                         'user_id' => auth()->id(),
@@ -126,7 +134,7 @@ Route::post('staff/language/{locale}', function (Request $request, string $local
                     ['value' => $locale]
                 );
             }
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             report($exception);
         }
     }
@@ -201,8 +209,40 @@ Route::middleware('customer.locale')->group(function () {
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Volt::route('dashboard', 'dashboard')->name('dashboard');
+    Volt::route('dashboard', 'dashboard')->middleware('can:dashboard.view')->name('dashboard');
     Volt::route('help-center', 'help-center.index')->name('help-center.index');
+
+    Volt::route('users', 'users.index')->middleware('can:users.view')->name('users.index');
+    Volt::route('users/create', 'users.create')->middleware('can:users.create')->name('users.create');
+    Volt::route('users/{user}/edit', 'users.edit')->middleware('can:users.edit')->name('users.edit');
+    Volt::route('roles', 'roles.index')->middleware('can:roles.manage')->name('roles.index');
+    Volt::route('settings', 'settings.index')->middleware('can:settings.manage')->name('settings.index');
+    Volt::route('settings/inventory', 'settings.inventory')->middleware('can:settings.manage')->name('settings.inventory');
+    Volt::route('settings/whatsapp', 'settings.whatsapp')->middleware('can:whatsapp.view_settings')->name('settings.whatsapp');
+    Volt::route('settings/whatsapp/logs', 'settings.whatsapp-logs')->middleware('can:whatsapp.view_logs')->name('settings.whatsapp.logs');
+    Volt::route('products', 'products.index')->middleware('can:products.view')->name('products.index');
+    Volt::route('products/create', 'products.create')->middleware('can:products.create')->name('products.create');
+    Volt::route('products/{product}/edit', 'products.edit')->middleware('can:products.edit')->name('products.edit');
+    Volt::route('direct-stock-in', 'direct-stock-in.index')->middleware('can:stock.direct_stock_in')->name('direct-stock-in.index');
+    Volt::route('pos', 'pos.index')->middleware('can:sales.create')->name('pos.index');
+    Volt::route('sales', 'sales.index')->middleware('can:sales.view')->name('sales.index');
+    Volt::route('sales/{sale}', 'sales.show')->middleware('can:sales.view')->name('sales.show');
+    Volt::route('sales/{sale}/receipt', 'sales.receipt')->middleware('can:sales.view')->name('sales.receipt');
+    Route::get('sales/{sale}/receipt/complete', CompletePosReceiptController::class)->middleware('can:sales.view')->name('sales.receipt.complete');
+    Volt::route('sales/{sale}/payments', 'sales.payments')->middleware('can:sales.view')->name('sales.payments');
+    Volt::route('sales/{sale}/cancel', 'sales.cancel')->middleware('can:sales.cancel')->name('sales.cancel');
+    Volt::route('store-stock', 'store-stock.index')->middleware(['warehouse.enabled', 'can:stock.view'])->name('store-stock.index');
+    Volt::route('dispensing-stock', 'dispensing-stock.index')->middleware('can:stock.view')->name('dispensing-stock.index');
+    Volt::route('inventory-summary', 'inventory-summary.index')->middleware('can:stock.view')->name('inventory-summary.index');
+    Volt::route('stock-movements', 'stock-movements.index')->middleware('can:stock.view')->name('stock-movements.index');
+    Volt::route('reports/sales', 'reports.sales')->middleware('can:reports.sales')->name('reports.sales');
+    Volt::route('reports/purchases', 'reports.purchases')->middleware(['warehouse.enabled', 'can:reports.purchases'])->name('reports.purchases');
+    Volt::route('reports/expenses', 'reports.expenses')->middleware('can:reports.expenses')->name('reports.expenses');
+    Volt::route('reports/stock-valuation', 'reports.stock-valuation')->middleware(['can:reports.stock', 'can:stock.view_value'])->name('reports.stock-valuation');
+    Volt::route('reports/profit-loss', 'reports.profit-loss')->middleware('can:reports.profit')->name('reports.profit-loss');
+    Volt::route('reports/cashbook', 'reports.cashbook')->middleware('can:accounting.cashflow')->name('reports.cashbook');
+    Route::get('reports/{report}/export/{format}', ReportExportController::class)->middleware('can:reports.export')->name('reports.export');
+    Route::get('exports/{export}/{format}', GenericExportController::class)->middleware('can:reports.export')->where('export', '.*')->name('exports.download');
 
     Route::prefix('customer-material-accounts')->middleware('can:customer_material_accounts.view')->group(function () {
         Volt::route('/', 'customer-material-accounts.index')->name('customer-material-accounts.index');
@@ -229,7 +269,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::prefix('production/reports')->middleware('production.access:production.view_reports')->group(function () {
         Volt::route('/', 'production.reports.index')->name('production.reports.index');
-        foreach (array_keys(\App\Services\ProductionReportService::REPORTS) as $report) {
+        foreach (array_keys(ProductionReportService::REPORTS) as $report) {
             Volt::route($report, 'production.reports.report')->defaults('report', $report)
                 ->name('production.reports.'.str_replace('-', '_', $report));
         }
@@ -288,16 +328,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::view('profile', 'profile')->name('profile');
 
     Route::middleware('role.any:Super Admin,Admin')->group(function () {
-        Volt::route('users', 'users.index')->name('users.index');
-        Volt::route('users/create', 'users.create')->name('users.create');
-        Volt::route('users/{user}/edit', 'users.edit')->name('users.edit');
-
-        Volt::route('roles', 'roles.index')->name('roles.index');
-        Volt::route('settings', 'settings.index')->name('settings.index');
-        Volt::route('settings/inventory', 'settings.inventory')->name('settings.inventory');
-
-        Volt::route('products/create', 'products.create')->name('products.create');
-        Volt::route('products/{product}/edit', 'products.edit')->name('products.edit');
         Volt::route('suppliers/create', 'suppliers.create')->middleware('warehouse.enabled')->name('suppliers.create');
         Volt::route('suppliers/{supplier}/edit', 'suppliers.edit')->middleware('warehouse.enabled')->name('suppliers.edit');
         Volt::route('customers/create', 'customers.create')->name('customers.create');
@@ -306,7 +336,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('purchases/{purchase}/edit', 'purchases.edit')->middleware('warehouse.enabled')->name('purchases.edit');
         Volt::route('stock-adjustments/approve', 'stock-adjustments.approve')->name('stock-adjustments.approve');
         Volt::route('stock-transfers/{stockTransfer}/edit', 'stock-transfers.edit')->middleware('warehouse.enabled')->name('stock-transfers.edit');
-        Volt::route('sales/{sale}/cancel', 'sales.cancel')->name('sales.cancel');
     });
 
     Volt::route('settings/company', 'settings.company')
@@ -319,7 +348,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('purchases/{purchase}/purchase-order-pdf', PurchaseOrderPdfController::class)->middleware('warehouse.enabled')->name('purchases.purchase-order-pdf');
         Volt::route('stock-adjustments/create', 'stock-adjustments.create')->name('stock-adjustments.create');
         Volt::route('stock-transfers/create', 'stock-transfers.create')->middleware('warehouse.enabled')->name('stock-transfers.create');
-        Volt::route('direct-stock-in', 'direct-stock-in.index')->name('direct-stock-in.index');
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager')->group(function () {
@@ -332,7 +360,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('categories', 'categories.index')->name('categories.index');
         Volt::route('product-sizes', 'product-sizes.index')->name('product-sizes.index');
         Volt::route('units', 'units.index')->name('units.index');
-        Volt::route('products', 'products.index')->name('products.index');
         Volt::route('suppliers', 'suppliers.index')->middleware('warehouse.enabled')->name('suppliers.index');
         Volt::route('customers', 'customers.index')->name('customers.index');
     });
@@ -340,11 +367,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper,Accountant')->group(function () {
         Volt::route('purchases', 'purchases.index')->middleware('warehouse.enabled')->name('purchases.index');
         Volt::route('purchases/{purchase}', 'purchases.show')->middleware('warehouse.enabled')->name('purchases.show');
-        Volt::route('stock-movements', 'stock-movements.index')->name('stock-movements.index');
-    });
-
-    Route::middleware('role.any:Super Admin,Admin,Manager,Cashier')->group(function () {
-        Volt::route('pos', 'pos.index')->name('pos.index');
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Accountant')->group(function () {
@@ -353,16 +375,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('supplier-balances', 'supplier-balances.index')->middleware('warehouse.enabled')->name('supplier-balances.index');
         Volt::route('supplier-balances/{supplier}', 'supplier-balances.show')->middleware('warehouse.enabled')->name('supplier-balances.show');
         Volt::route('supplier-payments/create', 'supplier-payments.create')->middleware('warehouse.enabled')->name('supplier-payments.create');
-        Volt::route('reports/sales', 'reports.sales')->name('reports.sales');
-        Volt::route('reports/purchases', 'reports.purchases')->middleware('warehouse.enabled')->name('reports.purchases');
-        Volt::route('reports/expenses', 'reports.expenses')->name('reports.expenses');
         Volt::route('reports/customers', 'reports.customers')->name('reports.customers');
         Volt::route('reports/customer-payments', 'reports.customer-payments')->name('reports.customer-payments');
         Volt::route('reports/suppliers', 'reports.suppliers')->middleware('warehouse.enabled')->name('reports.suppliers');
-        Volt::route('reports/stock-valuation', 'reports.stock-valuation')->name('reports.stock-valuation');
-        Volt::route('reports/profit-loss', 'reports.profit-loss')->name('reports.profit-loss');
-        Volt::route('reports/cashbook', 'reports.cashbook')->name('reports.cashbook');
-        Route::get('reports/{report}/export/{format}', ReportExportController::class)->name('reports.export');
         Volt::route('email-settings', 'email-settings.index')->name('email-settings.index');
         Volt::route('purchase-email-logs', 'purchase-email-logs.index')->middleware('warehouse.enabled')->name('purchase-email-logs.index');
         Volt::route('customer-accounts', 'admin.customer-accounts.index')->name('customer-accounts.index');
@@ -383,10 +398,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('admin/sent-messages', 'admin.sent-messages.index')->name('admin.sent-messages.index');
     });
 
-    Route::middleware('role.any:Super Admin,Admin,Manager,Accountant,Cashier,Store Keeper')->group(function () {
-        Route::get('exports/{export}/{format}', GenericExportController::class)->where('export', '.*')->name('exports.download');
-    });
-
     Route::middleware('role.any:Super Admin,Admin,Manager,Accountant,Cashier')->group(function () {
         Volt::route('customer-balances', 'customer-balances.index')->name('customer-balances.index');
         Volt::route('customer-balances/{customer}', 'customer-balances.show')->name('customer-balances.show');
@@ -395,19 +406,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('cashbook/{cashbookSession}', 'cashbook.show')->name('cashbook.show');
     });
 
-    Route::middleware('role.any:Super Admin,Admin,Manager,Cashier,Store Keeper,Accountant')->group(function () {
-        Volt::route('sales', 'sales.index')->name('sales.index');
-        Volt::route('sales/{sale}', 'sales.show')->name('sales.show');
-        Volt::route('sales/{sale}/receipt', 'sales.receipt')->name('sales.receipt');
-        Route::get('sales/{sale}/receipt/complete', CompletePosReceiptController::class)->name('sales.receipt.complete');
-        Volt::route('sales/{sale}/payments', 'sales.payments')->name('sales.payments');
-    });
-
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper,Cashier')->group(function () {
         Volt::route('stock-locations', 'stock-locations.index')->name('stock-locations.index');
-        Volt::route('store-stock', 'store-stock.index')->middleware('warehouse.enabled')->name('store-stock.index');
-        Volt::route('dispensing-stock', 'dispensing-stock.index')->name('dispensing-stock.index');
-        Volt::route('inventory-summary', 'inventory-summary.index')->name('inventory-summary.index');
         Volt::route('goods-receipts/{receipt}', 'goods-receipts.show')->name('goods-receipts.show');
     });
 

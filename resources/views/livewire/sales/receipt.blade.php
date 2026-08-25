@@ -2,6 +2,7 @@
 
 use App\Models\Sale;
 use App\Models\Setting;
+use App\Support\AuthorizationScope;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -12,6 +13,7 @@ layout('layouts.print');
 state(['sale' => null, 'settings' => null]);
 
 mount(function (Sale $sale) {
+    AuthorizationScope::authorizeSale(auth()->user(), $sale);
     $this->sale = $sale->load([
         'customer',
         'company',

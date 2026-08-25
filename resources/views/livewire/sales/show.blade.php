@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Sale;
+use App\Support\AuthorizationScope;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -11,6 +12,7 @@ layout('layouts.app');
 state(['sale' => null]);
 
 mount(function (Sale $sale) {
+    AuthorizationScope::authorizeSale(auth()->user(), $sale);
     $this->sale = $sale->load(['branch', 'customer', 'createdBy', 'cancelledBy', 'items.product', 'items.stockLocation', 'items.sellingUnit', 'items.baseUnit', 'payments.receivedBy']);
 });
 

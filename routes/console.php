@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -49,3 +50,8 @@ Artisan::command('pwa:icons', function () {
 
     return 0;
 })->purpose('Generate Hardex PWA icons from public/images/hardex.png');
+
+Schedule::command('whatsapp:check-devices')->everyFiveMinutes()->withoutOverlapping();
+Schedule::command('whatsapp:daily-summary')->everyMinute()->withoutOverlapping();
+Schedule::command('whatsapp:stock-alerts')->everyThirtyMinutes()->withoutOverlapping();
+Schedule::command('whatsapp:debt-reminders')->hourly()->withoutOverlapping();

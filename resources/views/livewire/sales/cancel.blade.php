@@ -2,6 +2,7 @@
 
 use App\Models\Sale;
 use App\Services\InventoryService;
+use App\Support\AuthorizationScope;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -12,10 +13,13 @@ layout('layouts.app');
 state(['sale' => null]);
 
 mount(function (Sale $sale) {
+    AuthorizationScope::authorizeSale(auth()->user(), $sale);
+    abort_unless(auth()->user()->can('sales.cancel'), 403);
     $this->sale = $sale->load(['customer', 'items.product']);
 });
 
 $cancelSale = function (InventoryService $inventory) {
+    abort_unless(auth()->user()->can('sales.cancel'), 403);
     $inventory->cancelSale($this->sale->id, auth()->id());
 
     session()->flash('success', 'Sale cancelled and stock returned successfully.');

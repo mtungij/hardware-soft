@@ -5,6 +5,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\StockLocation;
 use App\Services\InventoryService;
+use App\Support\AuthorizationScope;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -44,8 +45,9 @@ mount(function () {
 
         @php
             $branchId = auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id');
-            $store = StockLocation::where('branch_id', $branchId)->where('type', 'store')->first();
-            $dispensing = StockLocation::where('branch_id', $branchId)->where('type', 'dispensing')->first();
+            $allowedLocationIds = AuthorizationScope::stockLocationIds(auth()->user());
+            $store = StockLocation::where('branch_id', $branchId)->where('type', 'store')->whereIn('id', $allowedLocationIds)->first();
+            $dispensing = StockLocation::where('branch_id', $branchId)->where('type', 'dispensing')->whereIn('id', $allowedLocationIds)->first();
             $inventory = app(InventoryService::class);
             $rows = Product::with(['category', 'measurementType', 'unit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))

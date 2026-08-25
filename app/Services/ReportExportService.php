@@ -21,6 +21,7 @@ use App\Models\StockTransfer;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
+use App\Support\AuthorizationScope;
 use App\Support\InventorySettings;
 use App\Support\NumberFormatter;
 use Illuminate\Http\Request;
@@ -94,6 +95,7 @@ class ReportExportService
 
     public function build(string $key, Request $request): array
     {
+        $this->authorizeExport($key, $request);
         $header = $this->getCompanyHeader($request);
         [$title, $headers, $rows, $totals] = $this->rows($key, $request);
 
@@ -136,7 +138,9 @@ class ReportExportService
 
     private function sales(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $rows = Sale::with(['customer', 'soldBy', 'createdBy', 'items.stockLocation', 'items.product', 'items.sellingUnit', 'items.baseUnit'])
+        $canViewCost = ($request->user()?->can('sales.view_cost') || $request->user()?->can('sales.view_profit')) ?? false;
+        $rows = AuthorizationScope::reports(Sale::query(), $request->user())
+            ->with(['customer', 'soldBy', 'createdBy', 'items.stockLocation', 'items.product', 'items.sellingUnit', 'items.baseUnit'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($from, fn ($q) => $q->whereDate('sale_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('sale_date', '<=', $to))
@@ -148,17 +152,29 @@ class ReportExportService
             ->latest()
             ->get();
 
-        $exportRows = $rows->map(function (Sale $sale): array {
+        $exportRows = $rows->map(function (Sale $sale) use ($canViewCost): array {
             $transactionQuantities = $sale->items->map(fn (SaleItem $item) => $item->product?->displayName().' '.$this->formatQuantity($item->quantity).' '.($item->selling_unit_code_snapshot ?: $item->sellingUnit?->short_name))->join("\n");
             $baseQuantities = $sale->items->map(fn (SaleItem $item) => $item->product?->displayName().' '.$this->formatQuantity($item->base_quantity ?: $item->quantity).' '.($item->base_unit_code_snapshot ?: $item->baseUnit?->short_name))->join("\n");
             $cogs = $sale->items->sum(fn (SaleItem $item) => $item->base_unit_cost !== null
                 ? (float) $item->base_quantity * (float) $item->base_unit_cost
                 : (float) $item->quantity * (float) $item->unit_cost);
 
-            return [$sale->sale_number, $transactionQuantities, $baseQuantities, $sale->soldBy?->name ?? $sale->createdBy?->name, $sale->stockLocationLabel(), $sale->saleTypeLabel(), $this->formatCurrency($sale->total_amount), $this->formatCurrency($cogs), $this->formatCurrency((float) $sale->total_amount - $cogs), $this->formatDate($sale->sale_date), $sale->customer?->name ?? 'Walk-in', $this->formatCurrency($sale->paid_amount), $this->formatCurrency($sale->balance_amount)];
+            $row = [$sale->sale_number, $transactionQuantities, $baseQuantities, $sale->soldBy?->name ?? $sale->createdBy?->name, $sale->stockLocationLabel(), $sale->saleTypeLabel(), $this->formatCurrency($sale->total_amount)];
+
+            if ($canViewCost) {
+                array_push($row, $this->formatCurrency($cogs), $this->formatCurrency((float) $sale->total_amount - $cogs));
+            }
+
+            return [...$row, $this->formatDate($sale->sale_date), $sale->customer?->name ?? 'Walk-in', $this->formatCurrency($sale->paid_amount), $this->formatCurrency($sale->balance_amount)];
         })->all();
 
-        return ['Sales Report', ['Sale Number', 'Transaction Quantities', 'Base Quantities', 'User', 'Stock Location', 'Sale Type', 'Amount', 'COGS', 'Gross Profit', 'Date', 'Customer', 'Paid', 'Balance'], $exportRows, ['Total Amount' => $this->formatCurrency($rows->sum('total_amount'))]];
+        $headers = ['Sale Number', 'Transaction Quantities', 'Base Quantities', 'User', 'Stock Location', 'Sale Type', 'Amount'];
+
+        if ($canViewCost) {
+            array_push($headers, 'COGS', 'Gross Profit');
+        }
+
+        return ['Sales Report', [...$headers, 'Date', 'Customer', 'Paid', 'Balance'], $exportRows, ['Total Amount' => $this->formatCurrency($rows->sum('total_amount'))]];
     }
 
     private function salesItems(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
@@ -174,7 +190,8 @@ class ReportExportService
         $rows = SaleItem::query()
             ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'product.unit', 'product.category', 'product.size', 'sellingUnit', 'stockLocation'])
             ->whereHas('sale', function ($query) use ($request, $branchId, $from, $to) {
-                $query->where('status', 'completed')
+                AuthorizationScope::reports($query, $request->user())
+                    ->where('status', 'completed')
                     ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
                     ->when($request->integer('customer_id'), fn ($q, $id) => $q->where('customer_id', $id))
                     ->when($request->integer('cashier_id'), fn ($q, $id) => $q->where(fn ($cashierQuery) => $cashierQuery->where('sold_by', $id)->orWhere('created_by', $id)))
@@ -275,6 +292,23 @@ class ReportExportService
         return [$tr('todays_sales_summary'), $headers, $exportRows, $totals];
     }
 
+    private function authorizeExport(string $key, Request $request): void
+    {
+        $permission = match (true) {
+            $key === 'tables.products' => 'products.view',
+            in_array($key, ['tables.store-stock', 'tables.stock-movements', 'tables.stock-transfers'], true) => 'stock.view',
+            $key === 'tables.users' => 'users.view',
+            str_contains($key, 'profit-loss') => 'reports.profit',
+            str_contains($key, 'stock-valuation'), str_contains($key, 'inventory-summary') => 'reports.stock',
+            str_contains($key, 'purchase'), str_contains($key, 'supplier') => 'reports.purchases',
+            str_contains($key, 'expense') => 'reports.expenses',
+            str_contains($key, 'sale') => 'reports.sales',
+            default => 'reports.export',
+        };
+
+        abort_unless($request->user()?->can('reports.export') && $request->user()?->can($permission), 403);
+    }
+
     private function purchases(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
         $rows = Purchase::with(['supplier', 'items.product', 'items.purchaseUnit', 'items.stockUnit'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('purchase_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('purchase_date', '<=', $to))->when($search, fn ($q) => $q->where('reference_number', 'like', "%{$search}%")->orWhereHas('supplier', fn ($s) => $s->where('name', 'like', "%{$search}%")))->latest()->get();
@@ -367,6 +401,8 @@ class ReportExportService
 
     private function products(Request $request, ?int $branchId, string $search): array
     {
+        $canViewBuyingPrice = $request->user()?->can('products.view_buying_price') ?? false;
+        $canViewSellingPrice = $request->user()?->can('products.view_selling_price') ?? false;
         $rows = Product::with(['category', 'measurementType', 'unit', 'branch', 'size'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('categoryFilter'), fn ($q, $id) => $q->where('category_id', $id))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%")))->orderBy('name')->get();
 
         $hasSizes = $rows->contains(fn (Product $product) => filled($product->sizeLabel()));
@@ -376,9 +412,16 @@ class ReportExportService
             $headers[] = 'Size';
         }
 
-        array_push($headers, 'SKU', 'Category', 'Unit', 'Buying Price', 'Retail Price', 'Wholesale Price', 'Status');
+        array_push($headers, 'SKU', 'Category', 'Unit');
+        if ($canViewBuyingPrice) {
+            $headers[] = 'Buying Price';
+        }
+        if ($canViewSellingPrice) {
+            array_push($headers, 'Retail Price', 'Wholesale Price');
+        }
+        $headers[] = 'Status';
 
-        $exportRows = $rows->map(function (Product $product) use ($hasSizes): array {
+        $exportRows = $rows->map(function (Product $product) use ($hasSizes, $canViewBuyingPrice, $canViewSellingPrice): array {
             $row = [
                 $product->displayName(),
                 $product->measurementType?->name ?? str($product->measurementCode())->title()->toString(),
@@ -388,16 +431,14 @@ class ReportExportService
                 $row[] = $product->sizeLabel() ?: '—';
             }
 
-            array_push(
-                $row,
-                $product->sku,
-                $product->category?->name,
-                $product->unit?->short_name,
-                $this->formatCurrency($product->buying_price),
-                $this->formatCurrency($product->selling_price),
-                $this->formatCurrency($product->wholesale_price),
-                ucfirst($product->status),
-            );
+            array_push($row, $product->sku, $product->category?->name, $product->unit?->short_name);
+            if ($canViewBuyingPrice) {
+                $row[] = $this->formatCurrency($product->buying_price);
+            }
+            if ($canViewSellingPrice) {
+                array_push($row, $this->formatCurrency($product->selling_price), $this->formatCurrency($product->wholesale_price));
+            }
+            $row[] = ucfirst($product->status);
 
             return $row;
         })->all();
@@ -421,19 +462,14 @@ class ReportExportService
         }
 
         $locationQuery = StockLocation::query()
-            ->where('status', 'active')
-            ->where('is_active', true)
-            ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
+            ->whereIn('id', AuthorizationScope::stockLocationIds($user))
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId));
-
-        if (! $user?->can('view all stock locations')) {
-            $locationQuery->whereIn('id', $user?->stockLocations()->wherePivot('can_view', true)->pluck('stock_locations.id') ?? []);
-        }
 
         $allowedLocationIds = $locationQuery->pluck('id')->all();
         $stockExpression = "SUM(CASE WHEN stock_movements.quantity_in <> 0 OR stock_movements.quantity_out <> 0 THEN stock_movements.quantity_in - stock_movements.quantity_out WHEN stock_movements.movement_type IN ('sale_out','transfer_out','adjustment_out','damage_out','purchase_receipt_reversal') THEN -stock_movements.quantity ELSE stock_movements.quantity END)";
-        $costNumerator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)";
-        $costDenominator = "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)";
+        $canViewValue = $user?->can('stock.view_value') ?? false;
+        $costNumerator = $canViewValue ? "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)" : '0';
+        $costDenominator = $canViewValue ? "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)" : '0';
         $productNameExpression = DB::connection()->getDriverName() === 'sqlite'
             ? "products.name || ' - ' || product_sizes.symbol"
             : "CONCAT(products.name, ' - ', product_sizes.symbol)";
@@ -501,27 +537,29 @@ class ReportExportService
             ->orderBy('stock_locations.name')
             ->get();
 
+        $headers = ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Location Type', 'Quantity'];
+        if ($canViewValue) {
+            array_push($headers, 'Average Cost', 'Stock Value');
+        }
+        array_push($headers, 'Reorder Level', 'Status');
+
         return [
             'Stock by Location',
-            ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Location Type', 'Quantity', 'Average Cost', 'Stock Value', 'Reorder Level', 'Status'],
-            $rows->map(fn ($row) => [
-                $row->product_name,
-                $row->sku,
-                $row->category_name,
-                $row->unit_name,
-                $row->location_name,
-                str($row->location_type)->replace('_', ' ')->title()->toString(),
-                $this->formatQuantity($row->quantity),
-                $this->formatCurrency($row->average_cost),
-                $this->formatCurrency($row->stock_value),
-                $this->formatQuantity($row->reorder_level),
-                str($row->stock_status)->replace('_', ' ')->title()->toString(),
-            ])->all(),
-            [
+            $headers,
+            $rows->map(function ($row) use ($canViewValue): array {
+                $data = [$row->product_name, $row->sku, $row->category_name, $row->unit_name, $row->location_name, str($row->location_type)->replace('_', ' ')->title()->toString(), $this->formatQuantity($row->quantity)];
+                if ($canViewValue) {
+                    array_push($data, $this->formatCurrency($row->average_cost), $this->formatCurrency($row->stock_value));
+                }
+                array_push($data, $this->formatQuantity($row->reorder_level), str($row->stock_status)->replace('_', ' ')->title()->toString());
+
+                return $data;
+            })->all(),
+            array_filter([
                 'Total Quantity' => $this->formatQuantity($rows->sum('quantity')),
-                'Total Stock Value' => $this->formatCurrency($rows->sum('stock_value')),
+                'Total Stock Value' => $canViewValue ? $this->formatCurrency($rows->sum('stock_value')) : null,
                 'Active Locations' => count($allowedLocationIds),
-            ],
+            ], fn ($value) => $value !== null),
         ];
     }
 
@@ -564,9 +602,20 @@ class ReportExportService
 
     private function stockMovements(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $rows = StockMovement::with(['product.size', 'stockLocation', 'createdBy'])->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('stock_location_id'), fn ($q, $id) => $q->where('stock_location_id', $id))->when($from, fn ($q) => $q->whereDate('movement_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('movement_date', '<=', $to))->when($search, fn ($q) => $q->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))->latest()->get();
+        $canViewCost = $request->user()?->can('stock.view_value') ?? false;
+        $rows = StockMovement::with(['product.size', 'stockLocation', 'createdBy'])->whereIn('stock_location_id', AuthorizationScope::stockLocationIds($request->user()))->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('stock_location_id'), fn ($q, $id) => $q->where('stock_location_id', $id))->when($from, fn ($q) => $q->whereDate('movement_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('movement_date', '<=', $to))->when($search, fn ($q) => $q->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))->latest()->get();
 
-        return ['Stock Movement Report', ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Cost', 'Created By'], $rows->map(fn ($m) => [$this->formatDate($m->movement_date), $m->product?->displayNameWithSize(), $m->stockLocation?->name, $m->movement_type, $m->quantity, $this->formatCurrency($m->unit_cost), $m->createdBy?->name])->all(), []];
+        $headers = $canViewCost ? ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Cost', 'Created By'] : ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Created By'];
+
+        return ['Stock Movement Report', $headers, $rows->map(function ($movement) use ($canViewCost): array {
+            $row = [$this->formatDate($movement->movement_date), $movement->product?->displayNameWithSize(), $movement->stockLocation?->name, $movement->movement_type, $movement->quantity];
+            if ($canViewCost) {
+                $row[] = $this->formatCurrency($movement->unit_cost);
+            }
+            $row[] = $movement->createdBy?->name;
+
+            return $row;
+        })->all(), []];
     }
 
     private function stockTransfers(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array

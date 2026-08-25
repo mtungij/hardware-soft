@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\DocumentSequence;
 use App\Models\GoodsReceivingNote;
 use App\Models\Product;
+use App\Models\ProductUnitConversion;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\Sale;
@@ -17,9 +18,11 @@ use App\Models\StockTransferItem;
 use App\Models\User;
 use App\Support\InventorySettings;
 use App\Support\UiText;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class InventoryService
@@ -205,43 +208,208 @@ class InventoryService
 
     public function directStockIn(array $data, int $createdBy): StockMovement
     {
+        $data['stock_in_lines'] ??= [[
+            'product_unit_conversion_id' => $data['product_unit_conversion_id'] ?? null,
+            'quantity' => $data['quantity'] ?? null,
+            'buying_price' => $data['cost_price'] ?? null,
+            'selling_price' => $data['selling_price'] ?? null,
+        ]];
+
+        return $this->directStockInBatch($data, $createdBy)->firstOrFail();
+    }
+
+    /**
+     * @return EloquentCollection<int, StockMovement>
+     */
+    public function directStockInBatch(array $data, int $createdBy): EloquentCollection
+    {
         return DB::transaction(function () use ($data, $createdBy) {
-            $product = Product::query()->whereKey($data['product_id'])->lockForUpdate()->firstOrFail();
+            $product = Product::query()->with(['unit.measurementType'])->whereKey($data['product_id'])->lockForUpdate()->firstOrFail();
             $location = StockLocation::query()->whereKey($data['stock_location_id'])->lockForUpdate()->firstOrFail();
-            $quantity = (float) $data['quantity'];
+            $companyId = (int) $product->company_id;
+            $idempotencyKey = filled($data['idempotency_key'] ?? null) ? (string) $data['idempotency_key'] : null;
 
-            if ($quantity <= 0) {
-                throw ValidationException::withMessages(['quantity' => 'Quantity must be greater than zero.']);
-            }
+            if ($idempotencyKey) {
+                $existing = StockMovement::withoutGlobalScopes()
+                    ->where('company_id', $companyId)
+                    ->where('idempotency_key', $idempotencyKey)
+                    ->first();
 
-            if (! $product->acceptsStockQuantity($quantity)) {
-                throw ValidationException::withMessages(['quantity' => $product->displayNameWithSize().' must use a whole base quantity.']);
+                if ($existing) {
+                    if ($existing->movement_type !== 'direct_stock_in'
+                        || (int) $existing->product_id !== (int) $product->id
+                        || (int) $existing->stock_location_id !== (int) $location->id) {
+                        throw ValidationException::withMessages(['idempotency_key' => 'This submission key has already been used for another stock entry.']);
+                    }
+
+                    return filled($existing->posting_reference)
+                        ? StockMovement::withoutGlobalScopes()
+                            ->where('company_id', $companyId)
+                            ->where('movement_type', 'direct_stock_in')
+                            ->where('posting_reference', $existing->posting_reference)
+                            ->orderBy('id')
+                            ->get()
+                        : new EloquentCollection([$existing]);
+                }
             }
 
             if ($location->status !== 'active') {
                 throw ValidationException::withMessages(['stock_location_id' => 'Stock location must be active.']);
             }
 
-            if (array_key_exists('selling_price', $data) && filled($data['selling_price'])) {
-                $product->update(['selling_price' => (float) $data['selling_price']]);
+            $lines = $data['stock_in_lines'] ?? [];
+
+            if (! is_array($lines) || $lines === []) {
+                throw ValidationException::withMessages(['stock_in_lines' => 'Add at least one stock quantity row.']);
             }
 
-            return StockMovement::create([
-                'branch_id' => (int) $data['branch_id'],
-                'product_id' => $product->id,
-                'stock_location_id' => $location->id,
-                'movement_type' => 'direct_stock_in',
-                'quantity' => $quantity,
-                'quantity_in' => $quantity,
-                'quantity_out' => 0,
-                'unit_cost' => (float) $data['cost_price'],
-                'unit_price' => filled($data['selling_price'] ?? null) ? (float) $data['selling_price'] : (float) $product->selling_price,
-                'reference_type' => null,
-                'reference_id' => null,
-                'notes' => trim(($data['reason'] ?? 'Direct Stock In').($data['notes'] ? ' - '.$data['notes'] : '')),
-                'created_by' => $createdBy,
-                'movement_date' => $data['movement_date'] ?? now()->toDateString(),
-            ]);
+            foreach ($lines as $index => $line) {
+                if (! is_array($line)) {
+                    throw ValidationException::withMessages(["stock_in_lines.{$index}" => 'The stock quantity row is invalid.']);
+                }
+            }
+
+            $lines = array_values(array_filter(
+                $lines,
+                fn (array $line): bool => filled($line['quantity'] ?? null),
+            ));
+
+            if ($lines === []) {
+                throw ValidationException::withMessages(['stock_in_lines' => 'Enter a quantity greater than zero for at least one stock unit.']);
+            }
+
+            $prepared = [];
+            $usedUnits = [];
+
+            foreach (array_values($lines) as $index => $line) {
+                $rawConversionId = $line['product_unit_conversion_id'] ?? null;
+
+                if ($index > 0 && ! filled($rawConversionId)) {
+                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => 'Select a configured purchase unit for this row.']);
+                }
+
+                if (filled($rawConversionId) && filter_var($rawConversionId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => 'Select a valid stock-in unit.']);
+                }
+
+                $unitKey = filled($rawConversionId) ? 'conversion:'.(int) $rawConversionId : 'base';
+
+                if (isset($usedUnits[$unitKey])) {
+                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => 'Each stock-in unit may only be added once.']);
+                }
+
+                $usedUnits[$unitKey] = true;
+
+                try {
+                    $normalized = app(ProductUnitConversionService::class)->normalizePurchase(
+                        $product,
+                        filled($rawConversionId) ? (int) $rawConversionId : null,
+                        $line['quantity'] ?? null,
+                        $line['buying_price'] ?? null,
+                        true,
+                    );
+                } catch (ValidationException $exception) {
+                    $messages = [];
+
+                    foreach ($exception->errors() as $field => $fieldMessages) {
+                        $target = in_array($field, ['quantity', 'cost_price'], true)
+                            ? ($field === 'cost_price' ? 'buying_price' : $field)
+                            : 'product_unit_conversion_id';
+                        $messages["stock_in_lines.{$index}.{$target}"] = $fieldMessages;
+                    }
+
+                    throw ValidationException::withMessages($messages);
+                }
+
+                /** @var ProductUnitConversion|null $conversion */
+                $conversion = $normalized['conversion'];
+                $transactionUnitPrice = null;
+                $baseUnitPrice = (float) $product->selling_price;
+
+                if (array_key_exists('selling_price', $line) && filled($line['selling_price'])) {
+                    if (! is_numeric($line['selling_price']) || (float) $line['selling_price'] < 0) {
+                        throw ValidationException::withMessages(["stock_in_lines.{$index}.selling_price" => 'Selling Price must be zero or greater.']);
+                    }
+
+                    $transactionUnitPrice = (float) $line['selling_price'];
+
+                    if ($conversion && ! $conversion->can_sell) {
+                        throw ValidationException::withMessages(["stock_in_lines.{$index}.selling_price" => 'The selected unit is not enabled for selling.']);
+                    }
+
+                    $baseUnitPrice = $conversion
+                        ? round($transactionUnitPrice / $normalized['conversion_factor'], 4)
+                        : $transactionUnitPrice;
+                } elseif ($conversion?->can_sell && $conversion->retail_price !== null) {
+                    $transactionUnitPrice = (float) $conversion->retail_price;
+                    $baseUnitPrice = round($transactionUnitPrice / $normalized['conversion_factor'], 4);
+                } elseif (! $conversion) {
+                    $transactionUnitPrice = (float) $product->selling_price;
+                }
+
+                $prepared[] = [
+                    'normalized' => $normalized,
+                    'conversion' => $conversion,
+                    'transaction_unit' => $conversion?->unit ?: $product->unit,
+                    'transaction_unit_price' => $transactionUnitPrice,
+                    'base_unit_price' => $baseUnitPrice,
+                ];
+            }
+
+            foreach ($prepared as $row) {
+                /** @var ProductUnitConversion|null $conversion */
+                $conversion = $row['conversion'];
+
+                if ($row['transaction_unit_price'] === null) {
+                    continue;
+                }
+
+                if ($conversion) {
+                    $conversion->update(['retail_price' => $row['transaction_unit_price']]);
+                } else {
+                    $product->update(['selling_price' => $row['transaction_unit_price']]);
+                }
+            }
+
+            $reference = 'DSI-'.now()->format('Ymd').'-'.strtoupper(str_replace('-', '', $idempotencyKey ?: (string) Str::uuid()));
+            $movements = new EloquentCollection;
+
+            foreach ($prepared as $index => $row) {
+                $normalized = $row['normalized'];
+                /** @var ProductUnitConversion|null $conversion */
+                $conversion = $row['conversion'];
+                $transactionUnit = $row['transaction_unit'];
+
+                $movements->push(StockMovement::create([
+                    'company_id' => $companyId,
+                    'branch_id' => (int) $data['branch_id'],
+                    'product_id' => $product->id,
+                    'product_unit_conversion_id' => $conversion?->id,
+                    'transaction_unit_id' => $transactionUnit?->id,
+                    'transaction_unit_name_snapshot' => $transactionUnit?->name,
+                    'transaction_unit_code_snapshot' => $transactionUnit?->short_name,
+                    'stock_location_id' => $location->id,
+                    'movement_type' => 'direct_stock_in',
+                    'quantity' => $normalized['base_quantity'],
+                    'quantity_in' => $normalized['base_quantity'],
+                    'quantity_out' => 0,
+                    'transaction_quantity' => $normalized['transaction_quantity'],
+                    'conversion_factor_snapshot' => $normalized['conversion_factor'],
+                    'unit_cost' => $normalized['base_unit_cost'],
+                    'transaction_unit_cost' => $normalized['transaction_unit_cost'],
+                    'unit_price' => $row['base_unit_price'],
+                    'transaction_unit_price' => $row['transaction_unit_price'],
+                    'reference_type' => null,
+                    'reference_id' => null,
+                    'posting_reference' => $reference,
+                    'idempotency_key' => $index === 0 ? $idempotencyKey : null,
+                    'notes' => trim(($data['reason'] ?? 'Direct Stock In').(filled($data['notes'] ?? null) ? ' - '.$data['notes'] : '')),
+                    'created_by' => $createdBy,
+                    'movement_date' => $data['movement_date'] ?? now()->toDateString(),
+                ]));
+            }
+
+            return $movements;
         });
     }
 

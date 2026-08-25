@@ -70,6 +70,7 @@ state([
 ]);
 
 mount(function (Product $product) {
+    abort_unless(auth()->user()->can('products.edit'), 403);
     abort_unless(
         auth()->user()->is_system_owner || (int) $product->company_id === (int) auth()->user()->company_id,
         404,
@@ -100,9 +101,9 @@ mount(function (Product $product) {
     $this->requires_quality_control = (bool) $product->requires_quality_control;
     $this->requires_pre_release_inspection = (bool) $product->requires_pre_release_inspection;
     $this->quality_notes = (string) ($product->quality_notes ?: '');
-    $this->buying_price = (string) $product->buying_price;
-    $this->selling_price = (string) $product->selling_price;
-    $this->wholesale_price = (string) $product->wholesale_price;
+    $this->buying_price = auth()->user()->can('products.view_buying_price') ? (string) $product->buying_price : '';
+    $this->selling_price = auth()->user()->can('products.view_selling_price') ? (string) $product->selling_price : '';
+    $this->wholesale_price = auth()->user()->can('products.view_selling_price') ? (string) $product->wholesale_price : '';
     $this->conversion_factor = (string) ($product->conversion_factor ?: 1);
     $this->allow_fractional_sale = (bool) $product->allow_fractional_sale;
     $this->minimum_sale_quantity = (string) ($product->minimum_sale_quantity ?: 1);
@@ -118,9 +119,9 @@ mount(function (Product $product) {
     $this->unit_conversions = $product->unitConversions()->orderBy('id')->get()->map(fn ($conversion) => [
         'unit_id' => (string) $conversion->unit_id,
         'conversion_factor' => (string) $conversion->conversion_factor,
-        'retail_price' => $conversion->retail_price === null ? '' : (string) $conversion->retail_price,
-        'wholesale_price' => $conversion->wholesale_price === null ? '' : (string) $conversion->wholesale_price,
-        'purchase_price' => $conversion->purchase_price === null ? '' : (string) $conversion->purchase_price,
+        'retail_price' => auth()->user()->can('products.view_selling_price') && $conversion->retail_price !== null ? (string) $conversion->retail_price : '',
+        'wholesale_price' => auth()->user()->can('products.view_selling_price') && $conversion->wholesale_price !== null ? (string) $conversion->wholesale_price : '',
+        'purchase_price' => auth()->user()->can('products.view_buying_price') && $conversion->purchase_price !== null ? (string) $conversion->purchase_price : '',
         'can_purchase' => (bool) $conversion->can_purchase,
         'can_sell' => (bool) $conversion->can_sell,
         'active' => (bool) $conversion->active,
@@ -368,7 +369,14 @@ $rules = fn () => [
         Rule::in($this->sellingUnits()->pluck('id')->map(fn ($id) => (int) $id)->all()),
     ],
     'name' => ['required', 'string', 'max:255'],
-    'sku' => ['nullable', 'string', 'max:100', Rule::unique('products', 'sku')->ignore($this->product->id)],
+    'sku' => [
+        'nullable',
+        'string',
+        'max:100',
+        Rule::unique('products', 'sku')
+            ->where(fn ($query) => $query->where('company_id', $this->product->company_id))
+            ->ignore($this->product->id),
+    ],
     'barcode' => ['nullable', 'string', 'max:100', Rule::unique('products', 'barcode')->ignore($this->product->id)],
     'brand' => ['nullable', 'string', 'max:255'],
     'model_size' => ['nullable', 'string', 'max:255'],
@@ -390,8 +398,8 @@ $rules = fn () => [
     'requires_quality_control' => ['boolean'],
     'requires_pre_release_inspection' => ['boolean'],
     'quality_notes' => ['nullable', 'string', 'max:5000'],
-    'buying_price' => ['required', 'numeric', 'min:0'],
-    'selling_price' => ['required', 'numeric', 'min:0'],
+    'buying_price' => [auth()->user()->can('products.edit_buying_price') ? 'required' : 'nullable', 'numeric', 'min:0'],
+    'selling_price' => [auth()->user()->can('products.edit_selling_price') ? 'required' : 'nullable', 'numeric', 'min:0'],
     'wholesale_price' => ['nullable', 'numeric', 'min:0'],
     'conversion_factor' => [$this->requiresUnitConversion() ? 'required' : 'nullable', 'numeric', 'gt:0'],
     'allow_fractional_sale' => ['boolean'],
@@ -414,6 +422,7 @@ $rules = fn () => [
 ];
 
 $save = function () {
+    abort_unless(auth()->user()->can('products.edit'), 403);
     $validated = $this->validate($this->rules());
     $imageUpload = $validated['image_upload'] ?? null;
     $unitConversions = $validated['unit_conversions'] ?? [];
@@ -450,6 +459,27 @@ $save = function () {
     $validated['sku'] = $validated['sku'] ?: null;
     $validated['barcode'] = $validated['barcode'] ?: null;
     $validated['wholesale_price'] = $validated['wholesale_price'] === '' ? null : $validated['wholesale_price'];
+
+    if (! auth()->user()->can('products.edit_buying_price')) {
+        unset($validated['buying_price']);
+        $purchasePrices = $this->product->unitConversions()->pluck('purchase_price', 'unit_id');
+        foreach ($unitConversions as &$conversionRow) {
+            $conversionRow['purchase_price'] = $purchasePrices->get((int) ($conversionRow['unit_id'] ?? 0));
+        }
+        unset($conversionRow);
+    }
+
+    if (! auth()->user()->can('products.edit_selling_price')) {
+        unset($validated['selling_price'], $validated['wholesale_price']);
+        $retailPrices = $this->product->unitConversions()->pluck('retail_price', 'unit_id');
+        $wholesalePrices = $this->product->unitConversions()->pluck('wholesale_price', 'unit_id');
+        foreach ($unitConversions as &$conversionRow) {
+            $unitId = (int) ($conversionRow['unit_id'] ?? 0);
+            $conversionRow['retail_price'] = $retailPrices->get($unitId);
+            $conversionRow['wholesale_price'] = $wholesalePrices->get($unitId);
+        }
+        unset($conversionRow);
+    }
 
     $validated['selling_unit_id'] = $validated['selling_unit_id'] ?: $validated['unit_id'];
     $validated['purchase_conversion_factor'] = $this->requiresPurchaseConversion()

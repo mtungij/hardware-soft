@@ -12,11 +12,11 @@ class GenericExportController extends Controller
         abort_unless(in_array($format, ['pdf', 'excel'], true), 404);
 
         if ($format === 'pdf') {
-            abort_unless($request->user()?->can('export pdf'), 403);
+            abort_unless($request->user()?->can('reports.export') || $request->user()?->can('export pdf'), 403);
         }
 
         if ($format === 'excel') {
-            abort_unless($request->user()?->can('export excel'), 403);
+            abort_unless($request->user()?->can('reports.export') || $request->user()?->can('export excel'), 403);
         }
 
         $payload = $service->build($export, $request);

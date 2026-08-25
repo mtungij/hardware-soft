@@ -3,6 +3,7 @@
 use App\Models\Product;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
+use App\Support\AuthorizationScope;
 use Livewire\WithPagination;
 
 use function Livewire\Volt\layout;
@@ -31,7 +32,7 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
             </select>
             <select wire:model.live="locationFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">All locations</option>
-                @foreach (StockLocation::orderBy('name')->get() as $location)
+                @foreach (StockLocation::whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))->orderBy('name')->get() as $location)
                     <option value="{{ $location->id }}">{{ $location->name }}</option>
                 @endforeach
             </select>
@@ -48,6 +49,7 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
         @php
             $movements = StockMovement::query()
                 ->with(['product', 'stockLocation', 'branch', 'creator'])
+                ->whereIn('stock_location_id', AuthorizationScope::stockLocationIds(auth()->user()))
                 ->when($productFilter, fn ($query) => $query->where('product_id', $productFilter))
                 ->when($locationFilter, fn ($query) => $query->where('stock_location_id', $locationFilter))
                 ->when($typeFilter, fn ($query) => $query->where('movement_type', $typeFilter))
@@ -57,7 +59,8 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
                 ->paginate(15);
         @endphp
 
-        <x-table :headers="['Date', 'Product', 'Location', 'Type', 'Qty In', 'Qty Out', 'Cost', 'Reference', 'Created By']">
+        @php $canViewCost = auth()->user()->can('stock.view_value'); @endphp
+        <x-table :headers="$canViewCost ? ['Date', 'Product', 'Location', 'Type', 'Qty In', 'Qty Out', 'Cost', 'Reference', 'Created By'] : ['Date', 'Product', 'Location', 'Type', 'Qty In', 'Qty Out', 'Reference', 'Created By']">
             @forelse ($movements as $movement)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3">{{ $movement->movement_date->format('d M Y') }}</td>
@@ -66,12 +69,14 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
                     <td class="px-4 py-3"><span class="badge-info">{{ $movement->movement_type }}</span></td>
                     <td class="px-4 py-3 text-emerald-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::POSITIVE_TYPES, true) ? \App\Support\NumberFormatter::quantity($movement->quantity) : '-' }}</td>
                     <td class="px-4 py-3 text-red-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::NEGATIVE_TYPES, true) ? \App\Support\NumberFormatter::quantity($movement->quantity) : '-' }}</td>
-                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>
+                    @if ($canViewCost)
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>
+                    @endif
                     <td class="px-4 py-3 text-xs">{{ class_basename($movement->reference_type) }} #{{ $movement->reference_id }}</td>
                     <td class="px-4 py-3">{{ $movement->creator?->name }}</td>
                 </tr>
             @empty
-                <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No stock movements found.</td></tr>
+                <tr><td colspan="{{ $canViewCost ? 9 : 8 }}" class="px-4 py-8 text-center text-slate-500">No stock movements found.</td></tr>
             @endforelse
         </x-table>
 

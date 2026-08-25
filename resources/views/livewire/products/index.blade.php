@@ -52,7 +52,8 @@ mount(function () {
     $this->created_to = request('created_to', $this->created_to);
 });
 
-$canManage = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin']);
+$canManage = fn () => auth()->user()->canAny(['products.create', 'products.edit', 'products.delete']);
+$canViewBuyingPrice = fn () => auth()->user()->can('products.view_buying_price');
 
 $resetProductForm = function () {
     $this->reset([
@@ -79,14 +80,14 @@ $resetProductForm = function () {
 };
 
 $openCreateProduct = function () {
-    abort_unless($this->canManage(), 403);
+    abort_unless(auth()->user()->can('products.create'), 403);
 
     $this->resetProductForm();
     $this->dispatch('open-modal', 'product-form');
 };
 
 $openEditProduct = function (int $productId) {
-    abort_unless($this->canManage(), 403);
+    abort_unless(auth()->user()->can('products.edit'), 403);
 
     $product = Product::findOrFail($productId);
 
@@ -101,7 +102,7 @@ $openEditProduct = function (int $productId) {
     $this->brand = $product->brand;
     $this->model_size = $product->model_size;
     $this->image = $product->image;
-    $this->buying_price = (string) $product->buying_price;
+    $this->buying_price = $this->canViewBuyingPrice() ? (string) $product->buying_price : '';
     $this->selling_price = (string) $product->selling_price;
     $this->wholesale_price = $product->wholesale_price === null ? '' : (string) $product->wholesale_price;
     $this->reorder_level = (string) $product->reorder_level;
@@ -113,7 +114,7 @@ $openEditProduct = function (int $productId) {
 };
 
 $saveProduct = function () {
-    abort_unless($this->canManage(), 403);
+    abort_unless(auth()->user()->can($this->editing_product_id ? 'products.edit' : 'products.create'), 403);
 
     $validated = $this->validate([
         'branch_id' => ['nullable', 'exists:branches,id'],
@@ -126,7 +127,7 @@ $saveProduct = function () {
         'brand' => ['nullable', 'string', 'max:255'],
         'model_size' => ['nullable', 'string', 'max:255'],
         'image' => ['nullable', 'string', 'max:255'],
-        'buying_price' => ['required', 'numeric', 'min:0'],
+        'buying_price' => [auth()->user()->can('products.edit_buying_price') ? 'required' : 'nullable', 'numeric', 'min:0'],
         'selling_price' => ['required', 'numeric', 'min:0'],
         'wholesale_price' => ['nullable', 'numeric', 'min:0'],
         'reorder_level' => ['required', 'numeric', 'min:0'],
@@ -140,6 +141,14 @@ $saveProduct = function () {
     $validated['barcode'] = $validated['barcode'] ?: null;
     $validated['wholesale_price'] = $validated['wholesale_price'] === '' ? null : $validated['wholesale_price'];
 
+    if (! auth()->user()->can('products.edit_buying_price')) {
+        if ($this->editing_product_id) {
+            unset($validated['buying_price']);
+        } else {
+            $validated['buying_price'] = 0;
+        }
+    }
+
     $product = $this->editing_product_id
         ? Product::findOrFail($this->editing_product_id)
         : new Product();
@@ -152,7 +161,7 @@ $saveProduct = function () {
 };
 
 $toggleStatus = function (int $productId) {
-    abort_unless($this->canManage(), 403);
+    abort_unless(auth()->user()->can('products.edit'), 403);
 
     $product = Product::findOrFail($productId);
     $product->update(['status' => $product->status === 'active' ? 'inactive' : 'active']);
@@ -161,7 +170,7 @@ $toggleStatus = function (int $productId) {
 };
 
 $deleteProduct = function (int $productId) {
-    abort_unless($this->canManage(), 403);
+    abort_unless(auth()->user()->can('products.delete'), 403);
 
     Product::findOrFail($productId)->delete();
 
@@ -169,14 +178,14 @@ $deleteProduct = function (int $productId) {
 };
 
 $confirmDeleteProduct = function (int $productId) {
-    abort_unless($this->canManage(), 403);
+    abort_unless(auth()->user()->can('products.delete'), 403);
 
     $this->deleting_product_id = $productId;
     $this->dispatch('open-modal', 'delete-product');
 };
 
 $deleteConfirmedProduct = function () {
-    abort_unless($this->canManage(), 403);
+    abort_unless(auth()->user()->can('products.delete'), 403);
 
     Product::findOrFail($this->deleting_product_id)->delete();
     $this->deleting_product_id = null;
@@ -246,7 +255,11 @@ $deleteConfirmedProduct = function () {
             if ($hasProductSizes) {
                 $productHeaders[] = 'Size';
             }
-            array_push($productHeaders, 'SKU', 'Barcode', 'Category', 'Purchase Unit', 'Stock Unit', 'Selling Unit', 'Stock', 'Buying', 'Selling', 'Reorder', 'Status', 'Actions');
+            array_push($productHeaders, 'SKU', 'Barcode', 'Category', 'Purchase Unit', 'Stock Unit', 'Selling Unit', 'Stock');
+            if ($this->canViewBuyingPrice()) {
+                $productHeaders[] = 'Buying';
+            }
+            array_push($productHeaders, 'Selling', 'Reorder', 'Status', 'Actions');
         @endphp
 
         <x-table data-tour="products-list" :headers="$productHeaders">
@@ -274,7 +287,9 @@ $deleteConfirmedProduct = function () {
                     <td class="px-4 py-3 font-bold">
                         {{ \App\Support\NumberFormatter::quantity(app(\App\Services\InventoryService::class)->getProductTotalStock($product->id, (int) ($product->branch_id ?: auth()->user()->branch_id ?: \App\Models\Branch::where('code', 'MAIN')->value('id')))) }}
                     </td>
-                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($product->buying_price) }}</td>
+                    @if ($this->canViewBuyingPrice())
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($product->buying_price) }}</td>
+                    @endif
                     <td class="px-4 py-3 font-bold">TZS {{ \App\Support\NumberFormatter::money($product->selling_price) }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($product->reorder_level) }}</td>
                     <td class="px-4 py-3"><span class="{{ $product->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($product->status) }}</span></td>
@@ -349,7 +364,13 @@ $deleteConfirmedProduct = function () {
 
                     <x-form-input label="Brand" name="brand" wire:model="brand" />
                     <x-form-input label="Model / Size" name="model_size" wire:model="model_size" />
-                    <x-money-input label="Buying Price" name="buying_price" value="{{ $buying_price }}" wire:model="buying_price" required />
+                    @if (auth()->user()->can('products.view_buying_price'))
+                        @if (auth()->user()->can('products.edit_buying_price'))
+                            <x-money-input label="Buying Price" name="buying_price" value="{{ $buying_price }}" wire:model="buying_price" required />
+                        @else
+                            <div><span class="text-xs text-slate-500">Buying Price</span><p class="font-bold">TZS {{ \App\Support\NumberFormatter::money($buying_price) }}</p></div>
+                        @endif
+                    @endif
                     <x-money-input label="Selling Price" name="selling_price" value="{{ $selling_price }}" wire:model="selling_price" required />
                     <x-money-input label="Wholesale Price" name="wholesale_price" value="{{ $wholesale_price }}" wire:model="wholesale_price" />
                     <x-form-input label="Reorder Level" name="reorder_level" type="number" step="0.01" wire:model="reorder_level" required />

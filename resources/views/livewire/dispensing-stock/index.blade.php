@@ -7,6 +7,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Services\InventoryService;
+use App\Support\AuthorizationScope;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\state;
@@ -39,7 +40,10 @@ state(['search' => '', 'categoryFilter' => '', 'statusFilter' => '']);
 
         @php
             $branchId = auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id');
-            $location = StockLocation::where('branch_id', $branchId)->where('type', 'dispensing')->first();
+            $location = StockLocation::where('branch_id', $branchId)
+                ->where('type', 'dispensing')
+                ->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))
+                ->first();
             $inventory = app(InventoryService::class);
             $rows = Product::with(['category', 'unit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))

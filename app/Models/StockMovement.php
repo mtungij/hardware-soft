@@ -13,6 +13,10 @@ use LogicException;
     'company_id',
     'branch_id',
     'product_id',
+    'product_unit_conversion_id',
+    'transaction_unit_id',
+    'transaction_unit_name_snapshot',
+    'transaction_unit_code_snapshot',
     'stock_location_id',
     'source_location_id',
     'destination_location_id',
@@ -20,13 +24,18 @@ use LogicException;
     'quantity',
     'quantity_in',
     'quantity_out',
+    'transaction_quantity',
+    'conversion_factor_snapshot',
     'unit_cost',
+    'transaction_unit_cost',
     'unit_price',
+    'transaction_unit_price',
     'reference_type',
     'reference_id',
     'production_curing_batch_id',
     'production_curing_release_id',
     'posting_reference',
+    'idempotency_key',
     'notes',
     'created_by',
     'movement_date',
@@ -61,6 +70,16 @@ class StockMovement extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function productUnitConversion(): BelongsTo
+    {
+        return $this->belongsTo(ProductUnitConversion::class);
+    }
+
+    public function transactionUnit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class, 'transaction_unit_id');
     }
 
     public function stockLocation(): BelongsTo
@@ -110,8 +129,12 @@ class StockMovement extends Model
             'quantity' => 'decimal:4',
             'quantity_in' => 'decimal:4',
             'quantity_out' => 'decimal:4',
+            'transaction_quantity' => 'decimal:4',
+            'conversion_factor_snapshot' => 'decimal:4',
             'unit_cost' => 'decimal:2',
+            'transaction_unit_cost' => 'decimal:2',
             'unit_price' => 'decimal:2',
+            'transaction_unit_price' => 'decimal:2',
             'movement_date' => 'date',
         ];
     }

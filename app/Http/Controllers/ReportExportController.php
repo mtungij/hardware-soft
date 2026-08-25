@@ -17,7 +17,7 @@ class ReportExportController extends Controller
         $payload = $service->build('reports.'.$report, $request);
 
         if ($format === 'pdf') {
-            abort_unless($request->user()?->can('export pdf'), 403);
+            abort_unless($request->user()?->can('reports.export') || $request->user()?->can('export pdf'), 403);
 
             return response($service->generatePdf($payload['title'], $payload, $payload['filters']), 200, [
                 'Content-Type' => 'application/pdf',
@@ -25,7 +25,7 @@ class ReportExportController extends Controller
             ]);
         }
 
-        abort_unless($request->user()?->can('export excel'), 403);
+        abort_unless($request->user()?->can('reports.export') || $request->user()?->can('export excel'), 403);
 
         return $service->generateExcel($payload['title'], $payload, $payload['filters']);
     }

@@ -65,24 +65,40 @@
                         <span class="mt-1 block text-[11px] font-medium text-slate-500">{{ $alternativeUnitLabel ? 'Enter how many '.$baseUnitLabel.' are contained in one '.$alternativeUnitLabel.'.' : 'Select a unit, then enter how many '.$baseUnitLabel.' it contains.' }}</span>
                         @error("unit_conversions.{$index}.conversion_factor")<span class="block text-xs text-red-600">{{ $message }}</span>@enderror
                     </div>
-                    <label data-price-field="purchase" data-enabled="{{ $canPurchase ? 'true' : 'false' }}" class="text-xs font-bold {{ $canPurchase ? '' : 'opacity-50' }}">Purchase Price{{ $alternativeUnitLabel ? ' / '.$alternativeUnitLabel : '' }}
-                        <input type="number" min="0" step="0.01" wire:model.live.debounce.300ms="unit_conversions.{{ $index }}.purchase_price" @disabled(! $canPurchase) class="mt-1 block w-full rounded-lg border-slate-200 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:disabled:bg-slate-800">
-                        @if ($purchaseEquivalent !== null && $alternativeUnitLabel)<span class="mt-1 block text-[11px] font-medium text-slate-500">Base-cost equivalent: TZS {{ \App\Support\NumberFormatter::money($purchaseEquivalent) }} / {{ $alternativeUnitLabel }}</span>@endif
-                        @if ($purchaseMismatch)<span class="mt-1 block rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">This means an effective cost of TZS {{ \App\Support\NumberFormatter::money((float) $conversion['purchase_price'] / $factor) }} / {{ $basePriceUnitLabel }}, while the Base Unit buying price is TZS {{ \App\Support\NumberFormatter::money($baseBuyingPrice) }} / {{ $basePriceUnitLabel }}. Please confirm.</span>@endif
-                        @error("unit_conversions.{$index}.purchase_price")<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
-                    </label>
-                    <label data-price-field="retail" data-enabled="{{ $canSell ? 'true' : 'false' }}" class="text-xs font-bold {{ $canSell ? '' : 'opacity-50' }}">Retail Price{{ $alternativeUnitLabel ? ' / '.$alternativeUnitLabel : '' }}
-                        <input type="number" min="0" step="0.01" wire:model.live.debounce.300ms="unit_conversions.{{ $index }}.retail_price" @disabled(! $canSell) class="mt-1 block w-full rounded-lg border-slate-200 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:disabled:bg-slate-800">
-                        @if ($retailEquivalent !== null && $alternativeUnitLabel)<span class="mt-1 block text-[11px] font-medium text-slate-500">Base-price equivalent: TZS {{ \App\Support\NumberFormatter::money($retailEquivalent) }} / {{ $alternativeUnitLabel }}</span>@endif
-                        @if ($retailMismatch)<span class="mt-1 block rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">This means an effective retail price of TZS {{ \App\Support\NumberFormatter::money((float) $conversion['retail_price'] / $factor) }} / {{ $basePriceUnitLabel }}, while the Base Unit retail price is TZS {{ \App\Support\NumberFormatter::money($baseRetailPrice) }} / {{ $basePriceUnitLabel }}. Please confirm.</span>@endif
-                        @error("unit_conversions.{$index}.retail_price")<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
-                    </label>
-                    <label data-price-field="wholesale" data-enabled="{{ $canSell ? 'true' : 'false' }}" class="text-xs font-bold {{ $canSell ? '' : 'opacity-50' }}">Wholesale Price{{ $alternativeUnitLabel ? ' / '.$alternativeUnitLabel : '' }}
-                        <input type="number" min="0" step="0.01" wire:model.live.debounce.300ms="unit_conversions.{{ $index }}.wholesale_price" @disabled(! $canSell) class="mt-1 block w-full rounded-lg border-slate-200 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:disabled:bg-slate-800">
-                        @if ($wholesaleEquivalent !== null && $alternativeUnitLabel)<span class="mt-1 block text-[11px] font-medium text-slate-500">Base-price equivalent: TZS {{ \App\Support\NumberFormatter::money($wholesaleEquivalent) }} / {{ $alternativeUnitLabel }}</span>@endif
-                        @if ($wholesaleMismatch)<span class="mt-1 block rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">This means an effective wholesale price of TZS {{ \App\Support\NumberFormatter::money((float) $conversion['wholesale_price'] / $factor) }} / {{ $basePriceUnitLabel }}, while the Base Unit wholesale price is TZS {{ \App\Support\NumberFormatter::money($baseWholesalePrice) }} / {{ $basePriceUnitLabel }}. Please confirm.</span>@endif
-                        @error("unit_conversions.{$index}.wholesale_price")<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
-                    </label>
+                    @if (auth()->user()->can('products.view_buying_price'))
+                        <label data-price-field="purchase" data-enabled="{{ $canPurchase ? 'true' : 'false' }}" class="text-xs font-bold {{ $canPurchase ? '' : 'opacity-50' }}">Purchase Price{{ $alternativeUnitLabel ? ' / '.$alternativeUnitLabel : '' }}
+                            @if (auth()->user()->can('products.edit_buying_price'))
+                                <input type="number" min="0" step="0.01" wire:model.live.debounce.300ms="unit_conversions.{{ $index }}.purchase_price" @disabled(! $canPurchase) class="mt-1 block w-full rounded-lg border-slate-200 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:disabled:bg-slate-800">
+                            @else
+                                <span class="mt-1 block">TZS {{ \App\Support\NumberFormatter::money($conversion['purchase_price'] ?? 0) }}</span>
+                            @endif
+                            @if ($purchaseEquivalent !== null && $alternativeUnitLabel)<span class="mt-1 block text-[11px] font-medium text-slate-500">Base-cost equivalent: TZS {{ \App\Support\NumberFormatter::money($purchaseEquivalent) }} / {{ $alternativeUnitLabel }}</span>@endif
+                            @if ($purchaseMismatch)<span class="mt-1 block rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">This means an effective cost of TZS {{ \App\Support\NumberFormatter::money((float) $conversion['purchase_price'] / $factor) }} / {{ $basePriceUnitLabel }}, while the Base Unit buying price is TZS {{ \App\Support\NumberFormatter::money($baseBuyingPrice) }} / {{ $basePriceUnitLabel }}. Please confirm.</span>@endif
+                            @error("unit_conversions.{$index}.purchase_price")<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
+                        </label>
+                    @endif
+                    @if (auth()->user()->can('products.view_selling_price'))
+                        <label data-price-field="retail" data-enabled="{{ $canSell ? 'true' : 'false' }}" class="text-xs font-bold {{ $canSell ? '' : 'opacity-50' }}">Retail Price{{ $alternativeUnitLabel ? ' / '.$alternativeUnitLabel : '' }}
+                            @if (auth()->user()->can('products.edit_selling_price'))
+                                <input type="number" min="0" step="0.01" wire:model.live.debounce.300ms="unit_conversions.{{ $index }}.retail_price" @disabled(! $canSell) class="mt-1 block w-full rounded-lg border-slate-200 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:disabled:bg-slate-800">
+                            @else
+                                <span class="mt-1 block">TZS {{ \App\Support\NumberFormatter::money($conversion['retail_price'] ?? 0) }}</span>
+                            @endif
+                            @if ($retailEquivalent !== null && $alternativeUnitLabel)<span class="mt-1 block text-[11px] font-medium text-slate-500">Base-price equivalent: TZS {{ \App\Support\NumberFormatter::money($retailEquivalent) }} / {{ $alternativeUnitLabel }}</span>@endif
+                            @if ($retailMismatch)<span class="mt-1 block rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">This means an effective retail price of TZS {{ \App\Support\NumberFormatter::money((float) $conversion['retail_price'] / $factor) }} / {{ $basePriceUnitLabel }}, while the Base Unit retail price is TZS {{ \App\Support\NumberFormatter::money($baseRetailPrice) }} / {{ $basePriceUnitLabel }}. Please confirm.</span>@endif
+                            @error("unit_conversions.{$index}.retail_price")<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
+                        </label>
+                        <label data-price-field="wholesale" data-enabled="{{ $canSell ? 'true' : 'false' }}" class="text-xs font-bold {{ $canSell ? '' : 'opacity-50' }}">Wholesale Price{{ $alternativeUnitLabel ? ' / '.$alternativeUnitLabel : '' }}
+                            @if (auth()->user()->can('products.edit_selling_price'))
+                                <input type="number" min="0" step="0.01" wire:model.live.debounce.300ms="unit_conversions.{{ $index }}.wholesale_price" @disabled(! $canSell) class="mt-1 block w-full rounded-lg border-slate-200 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:disabled:bg-slate-800">
+                            @else
+                                <span class="mt-1 block">TZS {{ \App\Support\NumberFormatter::money($conversion['wholesale_price'] ?? 0) }}</span>
+                            @endif
+                            @if ($wholesaleEquivalent !== null && $alternativeUnitLabel)<span class="mt-1 block text-[11px] font-medium text-slate-500">Base-price equivalent: TZS {{ \App\Support\NumberFormatter::money($wholesaleEquivalent) }} / {{ $alternativeUnitLabel }}</span>@endif
+                            @if ($wholesaleMismatch)<span class="mt-1 block rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">This means an effective wholesale price of TZS {{ \App\Support\NumberFormatter::money((float) $conversion['wholesale_price'] / $factor) }} / {{ $basePriceUnitLabel }}, while the Base Unit wholesale price is TZS {{ \App\Support\NumberFormatter::money($baseWholesalePrice) }} / {{ $basePriceUnitLabel }}. Please confirm.</span>@endif
+                            @error("unit_conversions.{$index}.wholesale_price")<span class="mt-1 block text-xs text-red-600">{{ $message }}</span>@enderror
+                        </label>
+                    @endif
                 </div>
                 <div class="mt-3 flex flex-wrap items-center gap-5 text-xs font-bold">
                     <label title="Available on Purchase Orders and Receiving"><input type="checkbox" wire:model.live="unit_conversions.{{ $index }}.can_purchase" class="mr-2 rounded">Can Purchase</label>

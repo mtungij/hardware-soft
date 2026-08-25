@@ -159,6 +159,7 @@
                     ['label' => __('messages.staff.nav.settings'), 'route' => 'settings.index', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.company_settings'), 'route' => 'settings.company', 'icon' => 'branch', 'roles' => ['Super Admin', 'Admin'], 'permission' => 'company-settings.update'],
                     ['label' => __('messages.staff.nav.inventory_settings'), 'route' => 'settings.inventory', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
+                    ['label' => 'WhatsApp Notifications', 'route' => 'settings.whatsapp', 'icon' => 'message', 'permission' => 'whatsapp.view_settings'],
                     ['label' => __('messages.staff.nav.email_settings'), 'route' => 'email-settings.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager']],
                     ['label' => __('messages.staff.nav.email_logs'), 'route' => 'purchase-email-logs.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager'], 'show' => $warehouseEnabled],
                 ]],

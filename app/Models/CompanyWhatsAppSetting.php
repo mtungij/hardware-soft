@@ -1,0 +1,47 @@
+<?php
+
+namespace App\Models;
+
+use App\Models\Concerns\HasCompany;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+#[Fillable(['company_id', 'enabled', 'sending_paused', 'device_id', 'timezone', 'daily_summary_time', 'attach_daily_summary_pdf', 'quiet_hours_start', 'quiet_hours_end', 'enabled_categories', 'minimum_send_interval_seconds', 'maximum_messages_per_minute', 'maximum_messages_per_hour', 'low_stock_cooldown_hours', 'test_recipient', 'last_device_state', 'last_checked_at'])]
+class CompanyWhatsAppSetting extends Model
+{
+    use HasCompany;
+
+    protected $table = 'company_whatsapp_settings';
+
+    public const DEFAULT_CATEGORIES = [
+        'daily_summary', 'stock_alerts', 'sales', 'security', 'customer_payments',
+        'customer_debt', 'purchases', 'customer_materials', 'production',
+    ];
+
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function ready(): bool
+    {
+        return $this->enabled && ! $this->sending_paused && filled($this->device_id) && $this->last_device_state === 'logged_in';
+    }
+
+    public function categoryEnabled(string $category): bool
+    {
+        return in_array($category, $this->enabled_categories ?: self::DEFAULT_CATEGORIES, true);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'enabled' => 'boolean',
+            'sending_paused' => 'boolean',
+            'attach_daily_summary_pdf' => 'boolean',
+            'enabled_categories' => 'array',
+            'last_checked_at' => 'datetime',
+        ];
+    }
+}

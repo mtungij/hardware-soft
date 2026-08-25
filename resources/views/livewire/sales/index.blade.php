@@ -10,6 +10,7 @@ use App\Models\SalePayment;
 use App\Models\StockLocation;
 use App\Models\User;
 use App\Support\InventorySettings;
+use App\Support\AuthorizationScope;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 use function Livewire\Volt\layout;
@@ -59,7 +60,7 @@ mount(function () {
         $t = fn (string $key): string => __('messages.sales_items.'.$key);
         $money = fn ($value): string => 'TZS '.\App\Support\NumberFormatter::money($value);
         $quantity = fn ($value): string => \App\Support\NumberFormatter::quantity($value);
-        $canViewProfit = auth()->user()?->can('view sales profit') ?? false;
+        $canViewProfit = auth()->user()?->can('sales.view_profit') ?? false;
         $canExportPdf = auth()->user()?->can('export pdf') ?? false;
         $canExportExcel = auth()->user()?->can('export excel') ?? false;
         $allowedViews = ['items', 'product', 'customer', 'cashier', 'stock_location'];
@@ -69,8 +70,8 @@ mount(function () {
         $cashierLabel = fn ($sale): string => $sale?->soldBy?->name ?: ($sale?->createdBy?->name ?: '-');
         $paymentLabel = fn (string $method): string => $t('method_'.$method);
         $saleTypeLabel = fn (string $type): string => $type === 'wholesale' ? $t('wholesale') : $t('retail');
-        $lineCost = fn (SaleItem $item): float => (float) $item->quantity * (float) $item->unit_cost;
-        $lineProfit = fn (SaleItem $item): float => (float) ($item->profit_amount ?? ((float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost)));
+        $lineCost = fn (SaleItem $item): float => $canViewProfit ? (float) $item->quantity * (float) $item->unit_cost : 0.0;
+        $lineProfit = fn (SaleItem $item): float => $canViewProfit ? (float) ($item->profit_amount ?? ((float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost))) : 0.0;
         $paymentMethods = ['cash', 'mobile_money', 'bank', 'credit'];
         $exportParams = compact('search', 'status', 'payment_status', 'sale_type', 'stock_location_id', 'customer_id', 'product_id', 'category_id', 'cashier_id', 'branch_id', 'payment_method', 'view', 'date_from', 'date_to');
 
@@ -78,7 +79,8 @@ mount(function () {
             return SaleItem::query()
                 ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'sale.branch', 'product.unit', 'product.category', 'product.size', 'stockLocation'])
                 ->whereHas('sale', function ($query) use ($customer_id, $cashier_id, $branch_id, $payment_method, $date_from, $date_to) {
-                    $query->where('status', 'completed')
+                    AuthorizationScope::sales($query, auth()->user())
+                        ->where('status', 'completed')
                         ->when($customer_id, fn ($q) => $q->where('customer_id', $customer_id))
                         ->when($cashier_id, fn ($q) => $q->where(fn ($cashierQuery) => $cashierQuery->where('sold_by', $cashier_id)->orWhere('created_by', $cashier_id)))
                         ->when($branch_id, fn ($q) => $q->where('branch_id', $branch_id))
@@ -454,7 +456,7 @@ mount(function () {
         @endif
     @else
         @php
-            $sales = Sale::query()
+            $sales = AuthorizationScope::sales(Sale::query(), auth()->user())
                 ->with(['customer', 'soldBy', 'createdBy', 'items.stockLocation'])
                 ->when($search, fn ($query) => $query->where(function ($q) use ($search) {
                     $q->where('sale_number', 'like', "%{$search}%")

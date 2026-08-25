@@ -67,6 +67,7 @@ state([
 ]);
 
 mount(function (): void {
+    abort_unless(auth()->user()->can('products.create'), 403);
     if (CompanyFeatures::manufacturingEnabled() && CompanyFeatures::companyId()) {
         ProductFamily::ensureDefaultsForCompany((int) CompanyFeatures::companyId());
     }
@@ -286,7 +287,13 @@ $rules = fn () => [
         )),
     ],
     'name' => ['required', 'string', 'max:255'],
-    'sku' => ['nullable', 'string', 'max:100', 'unique:products,sku'],
+    'sku' => [
+        'nullable',
+        'string',
+        'max:100',
+        Rule::unique('products', 'sku')
+            ->where(fn ($query) => $query->where('company_id', CompanyFeatures::companyId())),
+    ],
     'barcode' => ['nullable', 'string', 'max:100', 'unique:products,barcode'],
     'brand' => ['nullable', 'string', 'max:255'],
     'model_size' => ['nullable', 'string', 'max:255'],
@@ -309,8 +316,8 @@ $rules = fn () => [
     'requires_quality_control' => ['boolean'],
     'requires_pre_release_inspection' => ['boolean'],
     'quality_notes' => ['nullable', 'string', 'max:5000'],
-    'buying_price' => ['required', 'numeric', 'min:0'],
-    'selling_price' => ['required', 'numeric', 'min:0'],
+    'buying_price' => [auth()->user()->can('products.edit_buying_price') ? 'required' : 'nullable', 'numeric', 'min:0'],
+    'selling_price' => [auth()->user()->can('products.edit_selling_price') ? 'required' : 'nullable', 'numeric', 'min:0'],
     'wholesale_price' => ['nullable', 'numeric', 'min:0'],
     'conversion_factor' => [$this->requiresUnitConversion() ? 'required' : 'nullable', 'numeric', 'gt:0'],
     'allow_fractional_sale' => ['boolean'],
@@ -333,6 +340,7 @@ $rules = fn () => [
 ];
 
 $save = function () {
+    abort_unless(auth()->user()->can('products.create'), 403);
     $validated = $this->validate($this->rules());
     $imageUpload = $validated['image_upload'] ?? null;
     $unitConversions = $validated['unit_conversions'] ?? [];
@@ -367,6 +375,24 @@ $save = function () {
     $validated['sku'] = $validated['sku'] ?: null;
     $validated['barcode'] = $validated['barcode'] ?: null;
     $validated['wholesale_price'] = $validated['wholesale_price'] === '' ? null : $validated['wholesale_price'];
+
+    if (! auth()->user()->can('products.edit_buying_price')) {
+        $validated['buying_price'] = 0;
+        foreach ($unitConversions as &$conversionRow) {
+            $conversionRow['purchase_price'] = null;
+        }
+        unset($conversionRow);
+    }
+
+    if (! auth()->user()->can('products.edit_selling_price')) {
+        $validated['selling_price'] = 0;
+        $validated['wholesale_price'] = null;
+        foreach ($unitConversions as &$conversionRow) {
+            $conversionRow['retail_price'] = null;
+            $conversionRow['wholesale_price'] = null;
+        }
+        unset($conversionRow);
+    }
 
     $validated['selling_unit_id'] = $validated['selling_unit_id'] ?: $validated['unit_id'];
     $validated['purchase_conversion_factor'] = $this->requiresPurchaseConversion()

@@ -2,6 +2,7 @@
 
 use App\Models\Customer;
 use App\Models\Sale;
+use App\Support\AuthorizationScope;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -19,11 +20,13 @@ state([
 ]);
 
 mount(function (Sale $sale) {
+    AuthorizationScope::authorizeSale(auth()->user(), $sale);
     $this->sale = $sale->load(['customer', 'payments']);
     $this->amount = (string) $sale->balance_amount;
 });
 
 $receivePayment = function () {
+    abort_unless(auth()->user()->can('sales.edit') || auth()->user()->can('receive sale payments'), 403);
     $this->validate([
         'payment_method' => ['required', 'in:cash,mobile_money,bank'],
         'amount' => ['required', 'numeric', 'gt:0'],

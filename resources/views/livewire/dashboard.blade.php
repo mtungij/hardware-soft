@@ -18,6 +18,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\User;
+use App\Support\AuthorizationScope;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +50,8 @@ $dateRange = function (): array {
     };
 };
 
-$canViewAllBranches = fn (): bool => Schema::hasTable('branches') && auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Accountant']);
+$canViewAllBranches = fn (): bool => Schema::hasTable('branches')
+    && AuthorizationScope::scopeFor(auth()->user(), 'report_scope', AuthorizationScope::BRANCH) === AuthorizationScope::COMPANY;
 
 $activeBranchId = function (): ?int {
     if ($this->canViewAllBranches()) {
@@ -62,7 +64,7 @@ $activeBranchId = function (): ?int {
 $completedSalesQuery = function () {
     [$from, $to] = $this->dateRange();
 
-    return Sale::query()
+    return AuthorizationScope::sales(Sale::query(), auth()->user())
         ->where('status', 'completed')
         ->whereBetween('sale_date', [$from->toDateString(), $to->toDateString()])
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId));
@@ -86,8 +88,11 @@ $expenseQuery = function () {
 };
 
 $stockQuantityFor = function (int $productId, ?int $locationId = null): float {
+    $allowedLocationIds = AuthorizationScope::stockLocationIds(auth()->user());
+
     return (float) StockMovement::query()
         ->where('product_id', $productId)
+        ->whereIn('stock_location_id', $allowedLocationIds)
         ->when($locationId, fn ($query) => $query->where('stock_location_id', $locationId))
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
         ->get()
@@ -95,8 +100,11 @@ $stockQuantityFor = function (int $productId, ?int $locationId = null): float {
 };
 
 $averageCostFor = function (int $productId, ?int $locationId = null): float {
+    $allowedLocationIds = AuthorizationScope::stockLocationIds(auth()->user());
+
     $incoming = StockMovement::query()
         ->where('product_id', $productId)
+        ->whereIn('stock_location_id', $allowedLocationIds)
         ->whereIn('movement_type', StockMovement::POSITIVE_TYPES)
         ->whereNotNull('unit_cost')
         ->when($locationId, fn ($query) => $query->where('stock_location_id', $locationId))
@@ -111,8 +119,13 @@ $averageCostFor = function (int $productId, ?int $locationId = null): float {
 };
 
 $stockValueByLocationType = function (string $type): float {
+    if (! auth()->user()->can('dashboard.stock_value')) {
+        return 0.0;
+    }
+
     $locations = StockLocation::query()
         ->where('type', $type)
+        ->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
         ->pluck('id');
 
@@ -134,6 +147,7 @@ $stockValueByLocationType = function (string $type): float {
 $stockItemsByLocationType = function (string $type): int {
     $locations = StockLocation::query()
         ->where('type', $type)
+        ->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
         ->pluck('id');
 
@@ -154,7 +168,11 @@ $branchOptions = computed(function () {
 });
 
 $todaySales = computed(function (): float {
-    return (float) Sale::query()
+    if (! auth()->user()->can('dashboard.sales_summary')) {
+        return 0.0;
+    }
+
+    return (float) AuthorizationScope::sales(Sale::query(), auth()->user())
         ->where('status', 'completed')
         ->whereDate('sale_date', today())
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
@@ -162,7 +180,11 @@ $todaySales = computed(function (): float {
 });
 
 $monthlySales = computed(function (): float {
-    return (float) Sale::query()
+    if (! auth()->user()->can('dashboard.sales_summary')) {
+        return 0.0;
+    }
+
+    return (float) AuthorizationScope::sales(Sale::query(), auth()->user())
         ->where('status', 'completed')
         ->whereMonth('sale_date', now()->month)
         ->whereYear('sale_date', now()->year)
@@ -171,18 +193,28 @@ $monthlySales = computed(function (): float {
 });
 
 $totalProfit = computed(function (): float {
+    if (! auth()->user()->can('dashboard.profit')) {
+        return 0.0;
+    }
+
     return (float) SaleItem::query()
         ->whereHas('sale', fn ($query) => $this->completedSalesQuery()->whereColumn('sales.id', 'sale_items.sale_id'))
         ->get()
         ->sum(fn (SaleItem $item) => (float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost));
 });
 
-$totalPurchases = computed(fn (): float => (float) $this->purchaseQuery()->sum('total_amount'));
+$totalPurchases = computed(fn (): float => auth()->user()->can('dashboard.purchase_summary') ? (float) $this->purchaseQuery()->sum('total_amount') : 0.0);
 $mainStoreStockValue = computed(fn (): float => $this->stockValueByLocationType('store'));
 $dispensingStockValue = computed(fn (): float => $this->stockValueByLocationType('dispensing'));
-$customerDebts = computed(fn (): float => (float) Sale::query()->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))->sum('balance_amount'));
+$customerDebts = computed(fn (): float => auth()->user()->can('dashboard.receivables')
+    ? (float) AuthorizationScope::sales(Sale::query(), auth()->user())->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))->sum('balance_amount')
+    : 0.0);
 
 $productStockRows = computed(function (): Collection {
+    if (! auth()->user()->can('dashboard.stock_summary')) {
+        return collect();
+    }
+
     return Product::query()
         ->with('category')
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where(fn ($q) => $q->whereNull('branch_id')->orWhere('branch_id', $branchId)))
@@ -191,6 +223,7 @@ $productStockRows = computed(function (): Collection {
         ->map(function (Product $product) {
             $stock = $this->stockQuantityFor($product->id);
             $locations = StockLocation::query()
+                ->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))
                 ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
                 ->get()
                 ->map(fn (StockLocation $location) => [
@@ -212,6 +245,10 @@ $lowStockProducts = computed(fn (): Collection => $this->productStockRows->filte
 $lowStockAlerts = computed(fn (): int => $this->lowStockProducts->count());
 
 $inventorySummary = computed(function (): array {
+    if (! auth()->user()->can('dashboard.stock_summary')) {
+        return ['total_products' => 0, 'active_products' => 0, 'out_of_stock_products' => 0, 'low_stock_products' => 0, 'main_store_stock_items' => 0, 'dispensing_stock_items' => 0];
+    }
+
     $rows = $this->productStockRows;
 
     return [
@@ -225,10 +262,14 @@ $inventorySummary = computed(function (): array {
 });
 
 $salesTrendChart = computed(function (): Collection {
+    if (! auth()->user()->can('dashboard.sales_summary')) {
+        return collect();
+    }
+
     $period = collect(CarbonPeriod::create(today()->subDays(6), today()))
         ->mapWithKeys(fn ($date) => [$date->toDateString() => ['date' => $date->format('M d'), 'sales' => 0.0, 'profit' => 0.0]]);
 
-    $sales = Sale::query()
+    $sales = AuthorizationScope::sales(Sale::query(), auth()->user())
         ->where('status', 'completed')
         ->whereBetween('sale_date', [today()->subDays(6)->toDateString(), today()->toDateString()])
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
@@ -244,7 +285,9 @@ $salesTrendChart = computed(function (): Collection {
 
         $row = $period->get($key);
         $row['sales'] += (float) $sale->total_amount;
-        $row['profit'] += $sale->items->sum(fn (SaleItem $item) => (float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost));
+        if (auth()->user()->can('dashboard.profit')) {
+            $row['profit'] += $sale->items->sum(fn (SaleItem $item) => (float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost));
+        }
 
         $period->put($key, $row);
     }
@@ -253,11 +296,16 @@ $salesTrendChart = computed(function (): Collection {
 });
 
 $salesByCategoryChart = computed(function (): Collection {
+    if (! auth()->user()->can('dashboard.sales_summary')) {
+        return collect();
+    }
+
     return SaleItem::query()
         ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
         ->join('products', 'products.id', '=', 'sale_items.product_id')
         ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
         ->where('sales.status', 'completed')
+        ->whereIn('sales.id', AuthorizationScope::sales(Sale::query()->select('id'), auth()->user()))
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('sales.branch_id', $branchId))
         ->selectRaw("coalesce(categories.name, 'Uncategorized') as category_name, sum(sale_items.line_total) as total_sales")
         ->groupBy('category_name')
@@ -267,7 +315,12 @@ $salesByCategoryChart = computed(function (): Collection {
 });
 
 $stockDistributionChart = computed(function (): Collection {
+    if (! auth()->user()->can('dashboard.stock_summary')) {
+        return collect();
+    }
+
     return StockLocation::query()
+        ->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
         ->orderBy('type')
         ->get()
@@ -286,24 +339,26 @@ $monthlyRevenueExpenseChart = computed(function (): Collection {
         ->map(function (int $monthsBack) {
             $month = now()->subMonths($monthsBack);
 
-            $sales = Sale::query()
+            $sales = auth()->user()->can('dashboard.sales_summary') ? AuthorizationScope::sales(Sale::query(), auth()->user())
                 ->where('status', 'completed')
                 ->whereMonth('sale_date', $month->month)
                 ->whereYear('sale_date', $month->year)
                 ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
-                ->sum('total_amount');
+                ->sum('total_amount') : 0;
 
             $purchases = Purchase::query()
                 ->where('status', '!=', 'cancelled')
                 ->whereMonth('purchase_date', $month->month)
                 ->whereYear('purchase_date', $month->year)
                 ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
+                ->when(! auth()->user()->can('dashboard.purchase_summary'), fn ($query) => $query->whereRaw('1 = 0'))
                 ->sum('total_amount');
 
             $expenses = Expense::query()
                 ->whereMonth('expense_date', $month->month)
                 ->whereYear('expense_date', $month->year)
                 ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
+                ->when(! auth()->user()->can('dashboard.expenses'), fn ($query) => $query->whereRaw('1 = 0'))
                 ->sum('amount');
 
             return ['month' => $month->format('M'), 'sales' => (float) $sales, 'purchases' => (float) $purchases, 'expenses' => (float) $expenses];
@@ -311,11 +366,20 @@ $monthlyRevenueExpenseChart = computed(function (): Collection {
 });
 
 $topSellingProducts = computed(function (): Collection {
+    if (! auth()->user()->can('dashboard.sales_summary')) {
+        return collect();
+    }
+
+    $profitExpression = auth()->user()->can('dashboard.profit')
+        ? 'sum(sale_items.line_total - (sale_items.quantity * sale_items.unit_cost))'
+        : '0';
+
     return SaleItem::query()
         ->join('sales', 'sales.id', '=', 'sale_items.sale_id')
         ->where('sales.status', 'completed')
+        ->whereIn('sales.id', AuthorizationScope::sales(Sale::query()->select('id'), auth()->user()))
         ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('sales.branch_id', $branchId))
-        ->selectRaw('sale_items.product_id, sum(sale_items.quantity) as quantity_sold, sum(sale_items.line_total) as total_sales, sum(sale_items.line_total - (sale_items.quantity * sale_items.unit_cost)) as profit_amount')
+        ->selectRaw("sale_items.product_id, sum(sale_items.quantity) as quantity_sold, sum(sale_items.line_total) as total_sales, {$profitExpression} as profit_amount")
         ->groupBy('sale_items.product_id')
         ->orderByDesc('quantity_sold')
         ->with('product')
@@ -328,56 +392,56 @@ $recentTransactions = computed(function (): Collection {
     $branchId = $this->activeBranchId();
     $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
 
-    $sales = Sale::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Sale $sale) => [
+    $sales = auth()->user()->can('dashboard.sales_summary') ? AuthorizationScope::sales(Sale::query(), auth()->user())->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Sale $sale) => [
         'type' => 'Sale',
         'reference' => $sale->sale_number,
         'amount' => (float) $sale->total_amount,
         'status' => $sale->status,
         'date' => $sale->created_at,
         'route' => route('sales.show', $sale),
-    ])->toBase();
+    ])->toBase() : collect();
 
-    $purchases = Purchase::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Purchase $purchase) => [
+    $purchases = auth()->user()->can('dashboard.purchase_summary') ? Purchase::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Purchase $purchase) => [
         'type' => 'Purchase',
         'reference' => $purchase->reference_number,
         'amount' => (float) $purchase->total_amount,
         'status' => $purchase->status,
         'date' => $purchase->created_at,
         'route' => route('purchases.show', $purchase),
-    ])->toBase();
+    ])->toBase() : collect();
 
-    $transfers = StockTransfer::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (StockTransfer $transfer) => [
+    $transfers = auth()->user()->can('dashboard.stock_summary') ? StockTransfer::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (StockTransfer $transfer) => [
         'type' => 'Transfer',
         'reference' => $transfer->transfer_number,
         'amount' => null,
         'status' => $transfer->status,
         'date' => $transfer->created_at,
         'route' => route('stock-transfers.show', $transfer),
-    ])->toBase();
+    ])->toBase() : collect();
 
-    $expenses = Expense::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Expense $expense) => [
+    $expenses = auth()->user()->can('dashboard.expenses') ? Expense::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Expense $expense) => [
         'type' => 'Expense',
         'reference' => $expense->reference_number ?: $expense->category?->name,
         'amount' => (float) $expense->amount,
         'status' => $expense->payment_method,
         'date' => $expense->created_at,
         'route' => route('expenses.index'),
-    ])->toBase();
+    ])->toBase() : collect();
 
-    $customerPayments = CustomerPayment::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (CustomerPayment $payment) => [
+    $customerPayments = auth()->user()->can('dashboard.receivables') ? CustomerPayment::query()->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (CustomerPayment $payment) => [
         'type' => 'Customer Payment',
         'reference' => $payment->reference_number ?: $payment->customer?->name,
         'amount' => (float) $payment->amount,
         'status' => $payment->payment_method,
         'date' => $payment->created_at,
         'route' => route('customer-balances.show', $payment->customer_id),
-    ])->toBase();
+    ])->toBase() : collect();
 
     return $sales
-        ->merge($warehouseEnabled ? $purchases : collect())
-        ->merge($warehouseEnabled ? $transfers : collect())
-        ->merge($expenses)
-        ->merge($customerPayments)
+        ->merge($warehouseEnabled && auth()->user()->can('dashboard.purchase_summary') ? $purchases : collect())
+        ->merge($warehouseEnabled && auth()->user()->can('dashboard.stock_summary') ? $transfers : collect())
+        ->merge(auth()->user()->can('dashboard.expenses') ? $expenses : collect())
+        ->merge(auth()->user()->can('dashboard.receivables') ? $customerPayments : collect())
         ->filter(fn (array $row) => $row['date']->between($from, $to) || $this->dateFilter === 'today')
         ->sortByDesc('date')
         ->take(12)
@@ -396,11 +460,27 @@ $recentTransactions = computed(function (): Collection {
         $monthStart = now()->startOfMonth()->toDateString();
         $monthEnd = today()->toDateString();
         $user = auth()->user();
-        $canSeeCard = fn (array $roles): bool => $user?->hasRole('Super Admin') || $user?->hasAnyRole($roles);
+        $canSeeCard = function (array $card) use ($user): bool {
+            $label = strtolower($card['label']);
+            $ability = match (true) {
+                str_contains($label, 'profit') => 'dashboard.profit',
+                str_contains($label, 'stock value') => 'dashboard.stock_value',
+                str_contains($label, 'expense') => 'dashboard.expenses',
+                str_contains($label, 'purchase'), str_contains($label, 'supplier'), str_contains($label, 'email') => 'dashboard.purchase_summary',
+                str_contains($label, 'stock'), str_contains($label, 'product') => 'dashboard.stock_summary',
+                str_contains($label, 'credit'), str_contains($label, 'payment'), str_contains($label, 'deposit') => 'dashboard.receivables',
+                str_contains($label, 'sale'), str_contains($label, 'wholesale') => 'dashboard.sales_summary',
+                str_contains($label, 'customer') => 'dashboard.receivables',
+                str_contains($label, 'announcement'), str_contains($label, 'message') => 'settings.manage',
+                default => 'dashboard.view',
+            };
+
+            return $user?->can($ability) ?? false;
+        };
         $maxTrend = max(1, $this->salesTrendChart->max('sales') ?: 1);
         $maxCategory = max(1, $this->salesByCategoryChart->max('total_sales') ?: 1);
-        $maxStock = max(1, $this->stockDistributionChart->max('quantity') ?: 1);
-        $maxMonthly = max(1, $this->monthlyRevenueExpenseChart->map(fn ($row) => max($row['sales'], $row['purchases'], $row['expenses']))->max() ?: 1);
+        $maxStock = $user->can('dashboard.stock_summary') ? max(1, $this->stockDistributionChart->max('quantity') ?: 1) : 1;
+        $maxMonthly = $user->canAny(['dashboard.purchase_summary', 'dashboard.expenses']) ? max(1, $this->monthlyRevenueExpenseChart->map(fn ($row) => max($row['sales'], $row['purchases'], $row['expenses']))->max() ?: 1) : 1;
         $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
         $settings = Setting::query()->first();
         $emailSettingsConfigured = filled($settings?->mail_host)
@@ -408,61 +488,68 @@ $recentTransactions = computed(function (): Collection {
             && filled($settings?->mail_password)
             && filled($settings?->mail_port);
         $branchId = $this->activeBranchId();
-        $profitForRange = function (string $from, string $to) use ($branchId): float {
+        $profitForRange = function (string $from, string $to) use ($branchId, $user): float {
+            if (! $user->can('dashboard.profit')) {
+                return 0.0;
+            }
+
             return (float) SaleItem::query()
                 ->whereHas('sale', fn ($query) => $query
                     ->where('status', 'completed')
                     ->whereBetween('sale_date', [$from, $to])
+                    ->whereIn('id', AuthorizationScope::sales(Sale::query()->select('id'), $user))
                     ->when($branchId, fn ($saleQuery) => $saleQuery->where('branch_id', $branchId)))
                 ->get()
                 ->sum(fn (SaleItem $item) => (float) $item->line_total - ((float) $item->quantity * (float) $item->unit_cost));
         };
-        $salesByTypeForRange = function (string $type, string $from, string $to) use ($branchId): float {
+        $salesByTypeForRange = function (string $type, string $from, string $to) use ($branchId, $user): float {
             return (float) SaleItem::query()
                 ->where('sale_type', $type)
                 ->whereHas('sale', fn ($query) => $query
                     ->where('status', 'completed')
                     ->whereBetween('sale_date', [$from, $to])
+                    ->whereIn('id', AuthorizationScope::sales(Sale::query()->select('id'), $user))
                     ->when($branchId, fn ($saleQuery) => $saleQuery->where('branch_id', $branchId)))
                 ->sum('line_total');
         };
-        $topWholesaleCustomers = Customer::query()
+        $topWholesaleCustomers = $user->can('dashboard.sales_summary') ? Customer::query()
             ->select('customers.id', 'customers.name')
             ->join('sales', 'sales.customer_id', '=', 'customers.id')
             ->join('sale_items', 'sale_items.sale_id', '=', 'sales.id')
             ->where('sales.status', 'completed')
             ->where('sale_items.sale_type', 'wholesale')
+            ->whereIn('sales.id', AuthorizationScope::sales(Sale::query()->select('id'), $user))
             ->when($branchId, fn ($query) => $query->where('sales.branch_id', $branchId))
             ->selectRaw('sum(sale_items.line_total) as wholesale_total')
             ->groupBy('customers.id', 'customers.name')
             ->orderByDesc('wholesale_total')
             ->limit(5)
-            ->get();
-        $topWholesaleProducts = SaleItem::query()
+            ->get() : collect();
+        $topWholesaleProducts = $user->can('dashboard.sales_summary') ? SaleItem::query()
             ->where('sale_type', 'wholesale')
-            ->whereHas('sale', fn ($query) => $query->where('status', 'completed')->when($branchId, fn ($saleQuery) => $saleQuery->where('branch_id', $branchId)))
+            ->whereHas('sale', fn ($query) => $query->where('status', 'completed')->whereIn('id', AuthorizationScope::sales(Sale::query()->select('id'), $user))->when($branchId, fn ($saleQuery) => $saleQuery->where('branch_id', $branchId)))
             ->selectRaw('product_id, sum(quantity) as quantity_sold, sum(line_total) as wholesale_total')
             ->groupBy('product_id')
             ->orderByDesc('wholesale_total')
             ->with('product')
             ->limit(5)
-            ->get();
-        $purchaseValueForDate = fn (string $date): float => (float) Purchase::query()
+            ->get() : collect();
+        $purchaseValueForDate = fn (string $date): float => ! $user->can('dashboard.purchase_summary') ? 0.0 : (float) Purchase::query()
             ->where('status', '!=', 'cancelled')
             ->whereDate('purchase_date', $date)
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
             ->sum('total_amount');
-        $customerDebt = (float) Customer::query()
+        $customerDebt = $user->can('dashboard.receivables') ? (float) Customer::query()
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
-            ->sum('balance_amount');
-        $supplierDebt = (float) Purchase::query()
+            ->sum('balance_amount') : 0.0;
+        $supplierDebt = $user->can('dashboard.purchase_summary') ? (float) Purchase::query()
             ->where('status', '!=', 'cancelled')
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
-            ->sum('balance_amount');
-        $customerDepositBalance = (float) CustomerDeposit::query()
+            ->sum('balance_amount') : 0.0;
+        $customerDepositBalance = $user->can('dashboard.receivables') ? (float) CustomerDeposit::query()
             ->whereIn('status', ['approved', 'partial'])
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
-            ->sum('balance_amount');
+            ->sum('balance_amount') : 0.0;
         $cards = collect([
             ['label' => "Today's Sales", 'value' => $formatMoney($this->todaySales), 'tone' => 'text-emerald-600', 'hint' => 'Click to see every product sold today', 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $today, 'date_to' => $today, 'view' => 'items']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
             ['label' => 'Retail Sales Today', 'value' => $formatMoney($salesByTypeForRange('retail', $today, $today)), 'tone' => 'text-blue-600', 'hint' => 'Retail item sales today', 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'retail', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
@@ -472,9 +559,9 @@ $recentTransactions = computed(function (): Collection {
             ['label' => 'Wholesale Sales This Month', 'value' => $formatMoney($salesByTypeForRange('wholesale', $monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => now()->format('F Y'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'wholesale', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
             ['label' => "Today's Profit", 'value' => $formatMoney($profitForRange($today, $today)), 'tone' => 'text-emerald-600', 'hint' => 'Profit from sales today', 'url' => route('reports.profit-loss', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ['label' => 'Monthly Profit', 'value' => $formatMoney($profitForRange($monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => 'This month net sales profit', 'url' => route('reports.profit-loss', ['date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant']],
-            ...($warehouseEnabled ? [['label' => 'Pending Purchases', 'value' => number_format(Purchase::query()->whereIn('status', ['draft', 'ordered', 'partial'])->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-amber-600', 'hint' => 'Purchases waiting for receiving', 'url' => route('purchases.index', ['status' => 'ordered']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
-            ...($warehouseEnabled ? [['label' => 'Stock Received Today', 'value' => $formatQuantity(StockMovement::query()->whereIn('movement_type', ['purchase_in'])->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('quantity')), 'tone' => 'text-emerald-600', 'hint' => 'Received into Main Store today', 'url' => route('stock-movements.index', ['movement_type' => 'purchase_in']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
-            ...($warehouseEnabled ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation', 'url' => route('reports.stock-valuation', ['search' => 'Main Store']), 'roles' => ['Admin', 'Manager', 'Accountant']]] : []),
+            ...($warehouseEnabled && $user->can('dashboard.purchase_summary') ? [['label' => 'Pending Purchases', 'value' => number_format(Purchase::query()->whereIn('status', ['draft', 'ordered', 'partial'])->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-amber-600', 'hint' => 'Purchases waiting for receiving', 'url' => route('purchases.index', ['status' => 'ordered']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
+            ...($warehouseEnabled && $user->can('dashboard.stock_summary') ? [['label' => 'Stock Received Today', 'value' => $formatQuantity(StockMovement::query()->whereIn('movement_type', ['purchase_in'])->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('quantity')), 'tone' => 'text-emerald-600', 'hint' => 'Received into Main Store today', 'url' => route('stock-movements.index', ['movement_type' => 'purchase_in']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
+            ...($warehouseEnabled && $user->can('dashboard.stock_value') ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation', 'url' => route('reports.stock-valuation', ['search' => 'Main Store']), 'roles' => ['Admin', 'Manager', 'Accountant']]] : []),
             ['label' => 'Dispensing Stock Value', 'value' => $formatMoney($this->dispensingStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => $warehouseEnabled ? 'Sales counter valuation' : 'Direct stock and POS valuation', 'url' => route('reports.stock-valuation', ['search' => 'Dispensing']), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ...(! $warehouseEnabled ? [['label' => 'Direct Stock In Today', 'value' => number_format(StockMovement::where('movement_type', 'direct_stock_in')->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Direct stock entries today', 'url' => route('direct-stock-in.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper']]] : []),
             ...(! $warehouseEnabled ? [['label' => 'Products In Stock', 'value' => number_format(Product::query()->where('status', 'active')->whereHas('stockMovements', fn ($query) => $query->when($branchId, fn ($movementQuery) => $movementQuery->where('branch_id', $branchId)))->count()), 'tone' => 'text-emerald-600', 'hint' => 'Products with stock movement history', 'url' => route('dispensing-stock.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper', 'Cashier']]] : []),
@@ -497,7 +584,7 @@ $recentTransactions = computed(function (): Collection {
             ['label' => 'Announcements Sent', 'value' => number_format(CustomerNotification::where('type', 'announcement')->count()), 'tone' => 'text-cyan-600', 'hint' => 'Portal announcement deliveries', 'url' => route('admin.announcements.index'), 'roles' => ['Admin', 'Manager']],
             ['label' => 'Unread Customer Messages', 'value' => number_format(CustomerNotification::whereIn('type', ['announcement', 'customer_message'])->whereNull('read_at')->count()), 'tone' => 'text-amber-600', 'hint' => 'Waiting for customer read', 'url' => route('admin.customer-notifications.index'), 'roles' => ['Admin', 'Manager']],
             ['label' => 'Customers Reached', 'value' => number_format(CustomerNotification::whereIn('type', ['announcement', 'customer_message'])->distinct('customer_id')->count('customer_id')), 'tone' => 'text-emerald-600', 'hint' => 'Unique customers notified', 'url' => route('admin.sent-messages.index'), 'roles' => ['Admin', 'Manager']],
-        ])->filter(fn (array $card) => $canSeeCard($card['roles']))->values();
+        ])->filter(fn (array $card) => $canSeeCard($card))->values();
         $recentAnnouncements = Announcement::query()->latest()->limit(5)->get();
     @endphp
 
@@ -507,8 +594,12 @@ $recentTransactions = computed(function (): Collection {
         :breadcrumbs="['Dashboard' => null]"
     >
         <div class="flex flex-wrap gap-2">
-            <a href="{{ route('pos.index') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ $t('Open POS') }}</a>
-            <a href="{{ route('reports.profit-loss') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">{{ $t('Profit Report') }}</a>
+            @can('sales.create')
+                <a href="{{ route('pos.index') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ $t('Open POS') }}</a>
+            @endcan
+            @can('reports.profit')
+                <a href="{{ route('reports.profit-loss') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">{{ $t('Profit Report') }}</a>
+            @endcan
         </div>
     </x-page-header>
 
@@ -559,7 +650,7 @@ $recentTransactions = computed(function (): Collection {
         @endforeach
     </div>
 
-    @if (! $emailSettingsConfigured && $canSeeCard(['Admin', 'Manager', 'Accountant']))
+    @if (! $emailSettingsConfigured && $user->can('dashboard.purchase_summary'))
         <!-- <div wire:loading.remove.delay class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -590,6 +681,7 @@ $recentTransactions = computed(function (): Collection {
     </div>
 
     <div data-tour="dashboard-charts" class="grid min-w-0 gap-6 xl:grid-cols-2">
+        @can('settings.manage')
         <x-card title="Recent Announcements" description="Latest customer notices and read progress.">
             <div class="space-y-3">
                 @forelse ($recentAnnouncements as $announcement)
@@ -607,8 +699,10 @@ $recentTransactions = computed(function (): Collection {
                 @endforelse
             </div>
         </x-card>
+        @endcan
 
-        <x-card title="Interactive Sales Trend" description="Chart.js view of sales and profit for the last 7 days.">
+        @can('dashboard.sales_summary')
+        <x-card title="Interactive Sales Trend" :description="$user->can('dashboard.profit') ? 'Chart.js view of sales and profit for the last 7 days.' : 'Chart.js view of your authorized sales for the last 7 days.'">
             <div
                 class="h-72 min-w-0 overflow-hidden"
                 x-data="{
@@ -619,7 +713,9 @@ $recentTransactions = computed(function (): Collection {
                                 labels: @js($this->salesTrendChart->pluck('date')->values()),
                                 datasets: [
                                     { label: @js($t('Sales')), data: @js($this->salesTrendChart->pluck('sales')->values()), borderColor: buildMartThemeColor(), backgroundColor: buildMartThemeColorAlpha(0.14), tension: 0.35, fill: true },
-                                    { label: @js($t('Profit')), data: @js($this->salesTrendChart->pluck('profit')->values()), borderColor: '#059669', backgroundColor: 'rgba(5, 150, 105, 0.12)', tension: 0.35, fill: true }
+                                    @if ($user->can('dashboard.profit'))
+                                        { label: @js($t('Profit')), data: @js($this->salesTrendChart->pluck('profit')->values()), borderColor: '#059669', backgroundColor: 'rgba(5, 150, 105, 0.12)', tension: 0.35, fill: true }
+                                    @endif
                                 ]
                             }
                         });
@@ -630,7 +726,9 @@ $recentTransactions = computed(function (): Collection {
                 <canvas class="max-w-full" x-ref="canvas" aria-label="Sales trend chart"></canvas>
             </div>
         </x-card>
+        @endcan
 
+        @if ($user->canAny(['dashboard.purchase_summary', 'dashboard.expenses']))
         <x-card title="Revenue vs Expenses" description="Monthly revenue, purchases, and expenses from database records.">
             <div
                 class="h-72 min-w-0 overflow-hidden"
@@ -654,7 +752,9 @@ $recentTransactions = computed(function (): Collection {
                 <canvas class="max-w-full" x-ref="canvas" aria-label="Monthly revenue versus expenses chart"></canvas>
             </div>
         </x-card>
+        @endif
 
+        @can('dashboard.sales_summary')
         <x-card title="Category Performance" description="Sales amount grouped by product category.">
             <div
                 class="h-72 min-w-0 overflow-hidden"
@@ -675,7 +775,9 @@ $recentTransactions = computed(function (): Collection {
                 <canvas class="max-w-full" x-ref="canvas" aria-label="Sales by category chart"></canvas>
             </div>
         </x-card>
+        @endcan
 
+        @can('dashboard.stock_summary')
         <x-card title="Stock Distribution" description="Current stock quantity grouped by stock location.">
             <div
                 class="h-72 min-w-0 overflow-hidden"
@@ -696,10 +798,12 @@ $recentTransactions = computed(function (): Collection {
                 <canvas class="max-w-full" x-ref="canvas" aria-label="Stock distribution chart"></canvas>
             </div>
         </x-card>
+        @endcan
     </div>
 
     <div class="grid min-w-0 gap-6 xl:grid-cols-2">
-        <x-card title="Sales Trend" description="Completed sales total and profit for the last 7 days.">
+        @can('dashboard.sales_summary')
+        <x-card title="Sales Trend" :description="$user->can('dashboard.profit') ? 'Completed sales total and profit for the last 7 days.' : 'Your authorized completed sales for the last 7 days.'">
             @if ($this->salesTrendChart->isEmpty())
                 <p class="py-10 text-center text-sm text-slate-500">{{ $t('No sales trend data available.') }}</p>
             @else
@@ -709,14 +813,16 @@ $recentTransactions = computed(function (): Collection {
                             <p class="text-xs font-bold text-slate-500">{{ $row['date'] }}</p>
                             <div>
                                 <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-build-orange" style="width: {{ min(100, ($row['sales'] / $maxTrend) * 100) }}%"></div></div>
-                                <p class="mt-1 text-xs text-slate-500">{{ $t('Sales') }} {{ $formatMoney($row['sales']) }} / {{ $t('Profit') }} {{ $formatMoney($row['profit']) }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ $t('Sales') }} {{ $formatMoney($row['sales']) }} @if ($user->can('dashboard.profit')) / {{ $t('Profit') }} {{ $formatMoney($row['profit']) }} @endif</p>
                             </div>
                         </div>
                     @endforeach
                 </div>
             @endif
         </x-card>
+        @endcan
 
+        @if ($user->canAny(['dashboard.purchase_summary', 'dashboard.expenses']))
         <x-card title="Monthly Revenue vs Expenses" description="Sales revenue, purchases, and operating expenses by month.">
             <div class="space-y-4">
                 @foreach ($this->monthlyRevenueExpenseChart as $row)
@@ -732,7 +838,9 @@ $recentTransactions = computed(function (): Collection {
                 @endforeach
             </div>
         </x-card>
+        @endif
 
+        @can('dashboard.sales_summary')
         <x-card title="Sales by Category" description="Category revenue from sold items.">
             @forelse ($this->salesByCategoryChart as $row)
                 <div class="mb-4">
@@ -743,7 +851,9 @@ $recentTransactions = computed(function (): Collection {
                 <p class="py-10 text-center text-sm text-slate-500">{{ $t('No category sales found.') }}</p>
             @endforelse
         </x-card>
+        @endcan
 
+        @can('dashboard.stock_summary')
         <x-card title="Stock Distribution" description="Current stock quantities by location.">
             @forelse ($this->stockDistributionChart as $row)
                 <div class="mb-4">
@@ -754,8 +864,10 @@ $recentTransactions = computed(function (): Collection {
                 <p class="py-10 text-center text-sm text-slate-500">{{ $t('No stock movement data found.') }}</p>
             @endforelse
         </x-card>
+        @endcan
     </div>
 
+    @can('dashboard.stock_summary')
     <div class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <div class="space-y-6">
             <x-card title="Inventory Summary">
@@ -827,7 +939,9 @@ $recentTransactions = computed(function (): Collection {
             </x-table>
         </x-card>
     </div>
+    @endcan
 
+    @can('dashboard.sales_summary')
     <div class="grid min-w-0 gap-6 xl:grid-cols-2">
         <x-card title="Top Wholesale Customers">
             <x-table :headers="['Customer', 'Wholesale Total']">
@@ -856,8 +970,10 @@ $recentTransactions = computed(function (): Collection {
             </x-table>
         </x-card>
     </div>
+    @endcan
 
     <div class="grid min-w-0 gap-6 xl:grid-cols-2">
+        @can('dashboard.sales_summary')
         <x-card title="Top Selling Products">
             <x-table>
                 <x-slot:head>
@@ -866,7 +982,9 @@ $recentTransactions = computed(function (): Collection {
                         <th class="px-4 py-3 text-left">{{ $t('SKU') }}</th>
                         <th class="px-4 py-3 text-right">{{ $t('Qty Sold') }}</th>
                         <th class="px-4 py-3 text-right">{{ $t('Sales') }}</th>
-                        <th class="px-4 py-3 text-right">{{ $t('Profit') }}</th>
+                        @if ($user->can('dashboard.profit'))
+                            <th class="px-4 py-3 text-right">{{ $t('Profit') }}</th>
+                        @endif
                     </tr>
                 </x-slot:head>
                 @forelse ($this->topSellingProducts as $row)
@@ -880,13 +998,16 @@ $recentTransactions = computed(function (): Collection {
                         <td class="px-4 py-3">{{ $row->product?->sku }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatQuantity($row->quantity_sold) }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatMoney($row->total_sales) }}</td>
-                        <td class="px-4 py-3 text-right font-bold text-emerald-600">{{ $formatMoney($row->profit_amount) }}</td>
+                        @if ($user->can('dashboard.profit'))
+                            <td class="px-4 py-3 text-right font-bold text-emerald-600">{{ $formatMoney($row->profit_amount) }}</td>
+                        @endif
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No completed sales yet.') }}</td></tr>
+                    <tr><td colspan="{{ $user->can('dashboard.profit') ? 5 : 4 }}" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No completed sales yet.') }}</td></tr>
                 @endforelse
             </x-table>
         </x-card>
+        @endcan
 
         <x-card title="Recent Transactions" description="Latest sales, purchases, transfers, expenses, and customer payments.">
             <div class="space-y-3">
