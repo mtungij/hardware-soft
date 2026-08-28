@@ -541,6 +541,12 @@ $completeSale = function (InventoryService $inventory) {
             if (blank($item['stock_location_id'] ?? null) && $fallbackLocationId) {
                 $this->cart[$index]['stock_location_id'] = $fallbackLocationId;
             }
+
+            // Base/default selling unit is represented as null, never an empty string,
+            // so the "nullable" rule below actually skips the exists check for it.
+            if (($item['product_unit_conversion_id'] ?? null) === '') {
+                $this->cart[$index]['product_unit_conversion_id'] = null;
+            }
         }
         $this->validate([
             'stock_location_id' => ['nullable', 'exists:stock_locations,id'],
@@ -613,13 +619,23 @@ $completeSale = function (InventoryService $inventory) {
         $this->resetCompletedSale();
         $this->redirectRoute('sales.receipt', $sale, navigate: true);
     } catch (ValidationException $exception) {
-        session()->flash(
-            'error',
-            $exception->validator->errors()->first()
-                ?: 'Mauzo hayajakamilika. Tafadhali rekebisha tatizo lililoonyeshwa.'
-        );
+        $message = $exception->validator->errors()->first()
+            ?: 'Mauzo hayajakamilika. Tafadhali rekebisha tatizo lililoonyeshwa.';
 
-        throw $exception;
+        // Re-declare the field errors ourselves (instead of letting the exception
+        // propagate) so we can also guarantee a "sale" fallback error: Livewire's
+        // own ValidationException handling replaces the *entire* error bag with
+        // $exception->validator->errors(), which would silently drop it.
+        foreach ($exception->validator->errors()->messages() as $key => $messages) {
+            foreach ($messages as $fieldMessage) {
+                $this->addError($key, $fieldMessage);
+            }
+        }
+        $this->addError('sale', $message);
+
+        // session flash alone is invisible here: it renders in the layout, which is
+        // outside the Livewire component's DOM and isn't touched by this AJAX response.
+        session()->flash('error', $message);
     } catch (\Throwable $exception) {
         report($exception);
         $message = 'Mauzo hayajakamilika. '.$exception->getMessage();
@@ -855,6 +871,7 @@ $completeSale = function (InventoryService $inventory) {
                                 @endforeach
                             </select>
                             @error("cart.{$index}.unit_price")<span class="mt-1 block text-xs font-semibold normal-case text-red-600">{{ $message }}</span>@enderror
+                            @error("cart.{$index}.product_unit_conversion_id")<span class="mt-1 block text-xs font-semibold normal-case text-red-600">{{ $message }}</span>@enderror
                         </label>
                         <label class="mt-3 block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                             Selling From

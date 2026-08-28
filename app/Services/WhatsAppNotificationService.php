@@ -15,6 +15,7 @@ class WhatsAppNotificationService
 {
     /**
      * @param  string|callable(WhatsAppRecipient): string  $message
+     * @param  null|callable(WhatsAppRecipient): bool  $recipientFilter
      * @return array<int, WhatsAppNotification>
      */
     public function queueForRecipients(
@@ -27,6 +28,7 @@ class WhatsAppNotificationService
         ?string $attachmentPath = null,
         ?string $attachmentType = null,
         array $metadata = [],
+        ?callable $recipientFilter = null,
     ): array {
         $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $company->id)->first();
 
@@ -35,11 +37,15 @@ class WhatsAppNotificationService
         }
 
         $recipients = WhatsAppRecipient::withoutGlobalScopes()
-            ->with('user.roles')
+            ->with(['user' => fn ($query) => $query->withoutGlobalScopes()->with('roles')])
             ->where('company_id', $company->id)
             ->where('active', true)
             ->get()
             ->filter(fn (WhatsAppRecipient $recipient): bool => $recipient->accepts($category, $branchId));
+
+        if ($recipientFilter) {
+            $recipients = $recipients->filter($recipientFilter);
+        }
 
         return $recipients->map(function (WhatsAppRecipient $recipient) use ($setting, $company, $branchId, $notificationType, $category, $eventKey, $message, $attachmentPath, $attachmentType, $metadata): WhatsAppNotification {
             return $this->create(
@@ -80,6 +86,20 @@ class WhatsAppNotificationService
         array $metadata = [],
     ): WhatsAppNotification {
         return $this->create($company, $setting, $recipient->phone, $notificationType, $category, $eventKey, $message, $branchId, $recipient, $attachmentPath, $attachmentType, $metadata);
+    }
+
+    public function queuePhone(
+        Company $company,
+        CompanyWhatsAppSetting $setting,
+        string $phone,
+        string $category,
+        string $notificationType,
+        string $eventKey,
+        string $message,
+        ?int $branchId = null,
+        array $metadata = [],
+    ): WhatsAppNotification {
+        return $this->create($company, $setting, $phone, $notificationType, $category, $eventKey, $message, $branchId, metadata: $metadata);
     }
 
     public function afterCommit(callable $callback): void

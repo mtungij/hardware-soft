@@ -7,9 +7,9 @@ use App\Models\User;
 use App\Models\WhatsAppRecipient;
 use App\Models\WhatsAppTemplate;
 use App\Services\Gowa;
+use App\Services\WhatsAppAuditService;
 use App\Services\WhatsAppNotificationService;
 use App\Services\WhatsAppTemplateService;
-use App\Services\WhatsAppAuditService;
 use App\Support\WhatsAppPhone;
 use Illuminate\Validation\Rule;
 
@@ -27,6 +27,13 @@ state([
     'timezone' => 'Africa/Dar_es_Salaam',
     'daily_summary_time' => '20:00',
     'attach_daily_summary_pdf' => false,
+    'debt_reminders_enabled' => false,
+    'debt_due_tomorrow_enabled' => true,
+    'debt_due_today_enabled' => true,
+    'debt_overdue_enabled' => true,
+    'debt_reminder_time' => '08:00',
+    'debt_overdue_interval_days' => 3,
+    'attach_debt_summary_pdf' => false,
     'quiet_hours_start' => '',
     'quiet_hours_end' => '',
     'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES,
@@ -58,9 +65,12 @@ mount(function (): void {
         ['timezone' => $company->timezone ?: 'Africa/Dar_es_Salaam', 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES]
     );
 
-    foreach (['enabled', 'sending_paused', 'device_id', 'timezone', 'daily_summary_time', 'attach_daily_summary_pdf', 'quiet_hours_start', 'quiet_hours_end', 'enabled_categories', 'minimum_send_interval_seconds', 'maximum_messages_per_minute', 'maximum_messages_per_hour', 'low_stock_cooldown_hours', 'test_recipient', 'last_device_state', 'last_checked_at'] as $field) {
+    foreach (['enabled', 'sending_paused', 'device_id', 'timezone', 'daily_summary_time', 'attach_daily_summary_pdf', 'debt_reminders_enabled', 'debt_due_tomorrow_enabled', 'debt_due_today_enabled', 'debt_overdue_enabled', 'debt_reminder_time', 'debt_overdue_interval_days', 'attach_debt_summary_pdf', 'quiet_hours_start', 'quiet_hours_end', 'enabled_categories', 'minimum_send_interval_seconds', 'maximum_messages_per_minute', 'maximum_messages_per_hour', 'low_stock_cooldown_hours', 'test_recipient', 'last_device_state', 'last_checked_at'] as $field) {
         $value = $setting->{$field};
-        $this->{$field} = $value instanceof \DateTimeInterface ? $value->format('d M Y H:i') : ($value ?? $this->{$field});
+        if (in_array($field, ['daily_summary_time', 'debt_reminder_time', 'quiet_hours_start', 'quiet_hours_end'], true) && is_string($value)) {
+            $value = substr($value, 0, 5);
+        }
+        $this->{$field} = $value instanceof DateTimeInterface ? $value->format('d M Y H:i') : ($value ?? $this->{$field});
     }
 });
 
@@ -83,6 +93,13 @@ $save = function (Gowa $gowa, WhatsAppAuditService $audit): void {
         'device_id' => ['nullable', 'string', 'max:255'],
         'timezone' => ['required', 'timezone'], 'daily_summary_time' => ['required', 'date_format:H:i'],
         'attach_daily_summary_pdf' => ['boolean'],
+        'debt_reminders_enabled' => ['boolean'],
+        'debt_due_tomorrow_enabled' => ['boolean'],
+        'debt_due_today_enabled' => ['boolean'],
+        'debt_overdue_enabled' => ['boolean'],
+        'debt_reminder_time' => ['required', 'date_format:H:i'],
+        'debt_overdue_interval_days' => ['required', 'integer', 'min:1', 'max:365'],
+        'attach_debt_summary_pdf' => ['boolean'],
         'quiet_hours_start' => ['nullable', 'date_format:H:i'], 'quiet_hours_end' => ['nullable', 'date_format:H:i'],
         'enabled_categories' => ['array'], 'enabled_categories.*' => [Rule::in(array_keys($this->categories()))],
         'minimum_send_interval_seconds' => ['required', 'integer', 'min:5', 'max:3600'],
@@ -99,12 +116,14 @@ $save = function (Gowa $gowa, WhatsAppAuditService $audit): void {
         $data['test_recipient'] = filled($data['test_recipient']) ? WhatsAppPhone::normalize($data['test_recipient']) : null;
     } catch (Throwable $exception) {
         $this->addError('test_recipient', $exception->getMessage());
+
         return;
     }
 
     if ($data['enabled']) {
         if (blank($data['device_id'])) {
             $this->addError('device_id', 'A Device ID is required before enabling WhatsApp notifications.');
+
             return;
         }
 
@@ -113,10 +132,12 @@ $save = function (Gowa $gowa, WhatsAppAuditService $audit): void {
         } catch (Throwable $exception) {
             report($exception);
             $this->addError('device_id', 'Could not verify the WhatsApp device. Check the Device ID and GOWA service.');
+
             return;
         }
         if ($state !== 'logged_in') {
             $this->addError('device_id', 'WhatsApp device is not connected. Re-link the device before enabling notifications.');
+
             return;
         }
         $data['last_device_state'] = $state;
@@ -169,6 +190,7 @@ $addRecipient = function (WhatsAppAuditService $audit): void {
     ]);
     if ($data['recipient_scope'] === 'branch' && blank($data['recipient_branch_id'])) {
         $this->addError('recipient_branch_id', 'Select a branch for a branch-scoped recipient.');
+
         return;
     }
 
@@ -176,6 +198,7 @@ $addRecipient = function (WhatsAppAuditService $audit): void {
         $phone = WhatsAppPhone::normalize($data['recipient_phone']);
     } catch (Throwable $exception) {
         $this->addError('recipient_phone', $exception->getMessage());
+
         return;
     }
 
@@ -243,6 +266,13 @@ $saveTemplates = function (WhatsAppAuditService $audit): void {
                     <x-form-input label="Timezone" name="timezone" wire:model="timezone" />
                     <x-form-input label="Daily Summary Time" name="daily_summary_time" type="time" wire:model="daily_summary_time" />
                     <label class="flex items-center gap-2 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="attach_daily_summary_pdf" class="rounded text-build-orange"> Attach permission-filtered daily PDF</label>
+                    <label class="flex items-center gap-2 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="debt_reminders_enabled" class="rounded text-build-orange"> Enable transactional debt reminders</label>
+                    <x-form-input label="Debt Reminder Time" name="debt_reminder_time" type="time" wire:model="debt_reminder_time" />
+                    <x-form-input label="Overdue Reminder Interval (Days)" name="debt_overdue_interval_days" type="number" wire:model="debt_overdue_interval_days" />
+                    <label class="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="debt_due_tomorrow_enabled" class="rounded text-build-orange"> Due tomorrow</label>
+                    <label class="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="debt_due_today_enabled" class="rounded text-build-orange"> Due today</label>
+                    <label class="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="debt_overdue_enabled" class="rounded text-build-orange"> Overdue</label>
+                    <label class="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="attach_debt_summary_pdf" class="rounded text-build-orange"> Attach scoped debtor PDF to management summary</label>
                     <x-form-input label="Quiet Hours Start" name="quiet_hours_start" type="time" wire:model="quiet_hours_start" />
                     <x-form-input label="Quiet Hours End" name="quiet_hours_end" type="time" wire:model="quiet_hours_end" />
                     <x-form-input label="Minimum Seconds Between Messages" name="minimum_send_interval_seconds" type="number" wire:model="minimum_send_interval_seconds" />

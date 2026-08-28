@@ -46,15 +46,15 @@ return new class extends Migration
 
         Schema::create('production_quality_attachments', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('production_quality_inspection_id')->constrained('production_quality_inspections')->restrictOnDelete();
+            $table->foreignId('company_id')->constrained('companies', 'id', 'pqa_company_fk')->cascadeOnDelete();
+            $table->foreignId('production_quality_inspection_id')->constrained('production_quality_inspections', 'id', 'pqa_inspection_fk')->restrictOnDelete();
             $table->string('category', 30);
             $table->string('original_name');
             $table->string('storage_disk', 30)->default('local');
             $table->string('storage_path');
             $table->string('mime_type', 150);
             $table->unsignedBigInteger('size_bytes');
-            $table->foreignId('uploaded_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('uploaded_by')->nullable()->constrained('users', 'id', 'pqa_uploaded_by_fk')->nullOnDelete();
             $table->timestamp('uploaded_at');
             $table->timestamps();
             $table->index(['company_id', 'production_quality_inspection_id'], 'qc_attachment_inspection_ix');
@@ -62,14 +62,14 @@ return new class extends Migration
 
         Schema::create('production_quality_audit_events', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('production_quality_inspection_id')->constrained('production_quality_inspections')->restrictOnDelete();
+            $table->foreignId('company_id')->constrained('companies', 'id', 'pqae_company_fk')->cascadeOnDelete();
+            $table->foreignId('production_quality_inspection_id')->constrained('production_quality_inspections', 'id', 'pqae_inspection_fk')->restrictOnDelete();
             $table->string('event_type', 50);
             $table->string('reference_number', 80);
             $table->json('previous_state')->nullable();
             $table->json('new_state')->nullable();
             $table->text('reason')->nullable();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('created_by')->nullable()->constrained('users', 'id', 'pqae_created_by_fk')->nullOnDelete();
             $table->timestamp('occurred_at');
             $table->timestamps();
             $table->index(['production_quality_inspection_id', 'occurred_at'], 'qc_audit_timeline_ix');

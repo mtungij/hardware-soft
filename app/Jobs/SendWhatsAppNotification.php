@@ -5,6 +5,8 @@ namespace App\Jobs;
 use App\Models\CompanyWhatsAppSetting;
 use App\Models\WhatsAppNotification;
 use App\Services\Gowa;
+use App\Services\WhatsAppDebtPdfService;
+use App\Services\WhatsAppDebtReminderService;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -15,6 +17,7 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
 
@@ -73,6 +76,10 @@ class SendWhatsAppNotification implements ShouldQueue
             $notification->update(['status' => 'queued', 'available_at' => now()->addSeconds($delay)]);
             $this->release($delay);
 
+            return;
+        }
+
+        if (! $this->revalidateDebt($notification, $setting)) {
             return;
         }
 
@@ -182,7 +189,64 @@ class SendWhatsAppNotification implements ShouldQueue
             throw new RuntimeException('WhatsApp attachment path is missing.');
         }
 
-        return str_starts_with($path, DIRECTORY_SEPARATOR) ? $path : storage_path('app/'.$path);
+        return str_starts_with($path, DIRECTORY_SEPARATOR) ? $path : Storage::disk('local')->path($path);
+    }
+
+    private function revalidateDebt(WhatsAppNotification $notification, CompanyWhatsAppSetting $setting): bool
+    {
+        if (! str_starts_with($notification->notification_type, 'debt_') && $notification->notification_type !== 'management_debt_summary') {
+            return true;
+        }
+
+        if (! $setting->debt_reminders_enabled || ! $setting->categoryEnabled('customer_debt')) {
+            $this->suppress($notification, 'Debt reminders were disabled before delivery.');
+
+            return false;
+        }
+
+        $debts = app(WhatsAppDebtReminderService::class);
+        $company = $setting->company()->withoutGlobalScopes()->first();
+        if (! $company) {
+            $this->suppress($notification, 'Debt reminder company no longer exists.');
+
+            return false;
+        }
+        $setting->setRelation('company', $company);
+
+        if (str_starts_with($notification->notification_type, 'debt_')) {
+            $message = $debts->revalidateCustomerNotification($notification, $setting);
+            if ($message === null) {
+                $this->suppress($notification, 'Debt was settled, disabled, or its due state changed before delivery.');
+
+                return false;
+            }
+            if ($message !== $notification->message) {
+                $notification->update(['message' => $message]);
+            }
+        }
+
+        if ($notification->notification_type === 'management_debt_summary') {
+            $recipient = $notification->recipient()->with(['user.roles', 'branch'])->first();
+            if (! $recipient || ! $debts->canReceiveManagementSummary($recipient->user)) {
+                $this->suppress($notification, 'Management recipient no longer has receivables permission.');
+
+                return false;
+            }
+            $date = CarbonImmutable::parse(data_get($notification->metadata, 'summary_date'), $setting->timezone);
+            $rows = $debts->enabledRows($debts->managementDebts($company, $recipient, $date), $setting, $date);
+            if ($rows->isEmpty()) {
+                $this->suppress($notification, 'All debts in this management summary were settled before delivery.');
+
+                return false;
+            }
+            $updates = ['message' => $debts->managementMessage($rows, $date)];
+            if ($notification->attachment_type === 'file') {
+                $updates['attachment_path'] = app(WhatsAppDebtPdfService::class)->generate($company, $recipient, $date, $rows);
+            }
+            $notification->update($updates);
+        }
+
+        return true;
     }
 
     private function suppress(WhatsAppNotification $notification, string $reason): void

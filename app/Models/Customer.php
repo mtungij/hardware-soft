@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'opening_balance',
     'balance_amount',
     'status',
+    'whatsapp_debt_reminders_enabled',
     'is_system_customer',
     'is_unassigned_credit_customer',
 ])]
@@ -87,6 +88,7 @@ class Customer extends Model
             'opening_balance' => 'decimal:2',
             'balance_amount' => 'decimal:2',
             'is_system_customer' => 'boolean',
+            'whatsapp_debt_reminders_enabled' => 'boolean',
             'is_unassigned_credit_customer' => 'boolean',
         ];
     }

@@ -22,6 +22,7 @@ state([
     'customer_type' => 'cash',
     'opening_balance' => '0',
     'status' => 'active',
+    'whatsapp_debt_reminders_enabled' => true,
 ]);
 
 mount(function (Customer $customer) {
@@ -38,6 +39,7 @@ mount(function (Customer $customer) {
     $this->customer_type = $customer->customer_type;
     $this->opening_balance = (string) $customer->opening_balance;
     $this->status = $customer->status;
+    $this->whatsapp_debt_reminders_enabled = $customer->whatsapp_debt_reminders_enabled;
 });
 
 rules([
@@ -51,6 +53,7 @@ rules([
     'customer_type' => ['required', 'in:cash,credit,contractor,wholesale'],
     'opening_balance' => ['required', 'numeric', 'min:0'],
     'status' => ['required', 'in:active,inactive'],
+    'whatsapp_debt_reminders_enabled' => ['boolean'],
 ]);
 
 $updatedRegion = function () {
@@ -107,6 +110,11 @@ $save = function () {
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                 </select>
+            </label>
+
+            <label class="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700">
+                <input type="checkbox" wire:model="whatsapp_debt_reminders_enabled" class="rounded text-build-orange">
+                Allow transactional WhatsApp debt reminders
             </label>
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">

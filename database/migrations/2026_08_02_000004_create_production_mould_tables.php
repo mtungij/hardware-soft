@@ -11,8 +11,8 @@ return new class extends Migration
     {
         Schema::create('production_moulds', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('product_family_id')->constrained('product_families')->restrictOnDelete();
+            $table->foreignId('company_id')->constrained(indexName: 'pm_company_fk')->cascadeOnDelete();
+            $table->foreignId('product_family_id')->constrained('product_families', indexName: 'pm_family_fk')->restrictOnDelete();
             $table->string('code', 100);
             $table->string('name');
             $table->decimal('expected_output_per_cycle', 24, 12)->nullable();
@@ -21,20 +21,20 @@ return new class extends Migration
             $table->boolean('under_maintenance')->default(false);
             $table->text('description')->nullable();
             $table->text('notes')->nullable();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('created_by')->nullable()->constrained('users', indexName: 'pm_created_by_fk')->nullOnDelete();
+            $table->foreignId('updated_by')->nullable()->constrained('users', indexName: 'pm_updated_by_fk')->nullOnDelete();
             $table->timestamps();
 
-            $table->unique(['company_id', 'code']);
+            $table->unique(['company_id', 'code'], 'pm_company_code_uq');
             $table->index(['company_id', 'active', 'under_maintenance'], 'mould_availability_ix');
             $table->index(['company_id', 'product_family_id'], 'mould_family_ix');
         });
 
         Schema::create('production_machine_mould', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('machine_id')->constrained('machines')->cascadeOnDelete();
-            $table->foreignId('production_mould_id')->constrained('production_moulds')->cascadeOnDelete();
+            $table->foreignId('company_id')->constrained(indexName: 'pmm_company_fk')->cascadeOnDelete();
+            $table->foreignId('machine_id')->constrained('machines', indexName: 'pmm_machine_fk')->cascadeOnDelete();
+            $table->foreignId('production_mould_id')->constrained('production_moulds', indexName: 'pmm_mould_fk')->cascadeOnDelete();
             $table->timestamps();
 
             $table->unique(['machine_id', 'production_mould_id'], 'machine_mould_compatibility_uq');
@@ -43,32 +43,32 @@ return new class extends Migration
 
         Schema::create('production_mould_installations', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('machine_id')->constrained('machines')->restrictOnDelete();
-            $table->foreignId('production_mould_id')->constrained('production_moulds')->restrictOnDelete();
-            $table->foreignId('current_machine_id')->nullable()->constrained('machines')->restrictOnDelete();
-            $table->foreignId('current_mould_id')->nullable()->constrained('production_moulds')->restrictOnDelete();
+            $table->foreignId('company_id')->constrained(indexName: 'pmi_company_fk')->cascadeOnDelete();
+            $table->foreignId('machine_id')->constrained('machines', indexName: 'pmi_machine_fk')->restrictOnDelete();
+            $table->foreignId('production_mould_id')->constrained('production_moulds', indexName: 'pmi_mould_fk')->restrictOnDelete();
+            $table->foreignId('current_machine_id')->nullable()->constrained('machines', indexName: 'pmi_current_machine_fk')->restrictOnDelete();
+            $table->foreignId('current_mould_id')->nullable()->constrained('production_moulds', indexName: 'pmi_current_mould_fk')->restrictOnDelete();
             $table->timestamp('installed_at');
             $table->timestamp('removed_at')->nullable();
             $table->string('removal_reason', 40)->nullable();
             $table->text('notes')->nullable();
-            $table->foreignId('installed_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('removed_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('installed_by')->nullable()->constrained('users', indexName: 'pmi_installed_by_fk')->nullOnDelete();
+            $table->foreignId('removed_by')->nullable()->constrained('users', indexName: 'pmi_removed_by_fk')->nullOnDelete();
             $table->timestamps();
 
-            $table->unique('current_machine_id');
-            $table->unique('current_mould_id');
+            $table->unique('current_machine_id', 'pmi_current_machine_uq');
+            $table->unique('current_mould_id', 'pmi_current_mould_uq');
             $table->index(['company_id', 'machine_id', 'installed_at'], 'mould_install_machine_history_ix');
             $table->index(['company_id', 'production_mould_id', 'installed_at'], 'mould_install_mould_history_ix');
         });
 
         Schema::table('production_machine_assignments', function (Blueprint $table): void {
             $table->foreignId('production_mould_id')->nullable()->after('machine_id')
-                ->constrained('production_moulds')->restrictOnDelete();
+                ->constrained('production_moulds', indexName: 'pma_mould_fk')->restrictOnDelete();
             $table->foreignId('production_mould_installation_id')->nullable()->after('production_mould_id')
-                ->constrained('production_mould_installations')->restrictOnDelete();
+                ->constrained('production_mould_installations', indexName: 'pma_mould_install_fk')->restrictOnDelete();
             $table->foreignId('production_recipe_id')->nullable()->after('product_id')
-                ->constrained('production_recipes')->restrictOnDelete();
+                ->constrained('production_recipes', indexName: 'pma_recipe_fk')->restrictOnDelete();
         });
 
         $now = now();
@@ -136,9 +136,10 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('production_machine_assignments', function (Blueprint $table): void {
-            $table->dropConstrainedForeignId('production_recipe_id');
-            $table->dropConstrainedForeignId('production_mould_installation_id');
-            $table->dropConstrainedForeignId('production_mould_id');
+            $table->dropForeign('pma_recipe_fk');
+            $table->dropForeign('pma_mould_install_fk');
+            $table->dropForeign('pma_mould_fk');
+            $table->dropColumn(['production_recipe_id', 'production_mould_installation_id', 'production_mould_id']);
         });
         Schema::dropIfExists('production_mould_installations');
         Schema::dropIfExists('production_machine_mould');

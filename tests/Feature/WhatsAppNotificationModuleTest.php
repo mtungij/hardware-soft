@@ -16,6 +16,7 @@ use App\Observers\CustomerPaymentWhatsAppObserver;
 use App\Observers\ProductionOrderWhatsAppObserver;
 use App\Observers\SaleWhatsAppObserver;
 use App\Services\Gowa;
+use App\Services\WhatsAppDailySummaryService;
 use App\Services\WhatsAppMessageFactory;
 use App\Services\WhatsAppNotificationService;
 use App\Support\WhatsAppPhone;
@@ -56,6 +57,17 @@ function whatsappRecipient(Company $company, array $overrides = []): WhatsAppRec
     return WhatsAppRecipient::withoutGlobalScopes()->create(array_merge([
         'company_id' => $company->id, 'name' => 'Owner', 'phone' => '255764123456',
         'scope' => 'company', 'active' => true, 'categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES,
+    ], $overrides));
+}
+
+function whatsappCreditSale(Company $company, Branch $branch, User $user, Customer $customer, array $overrides = []): Sale
+{
+    return Sale::withoutGlobalScopes()->create(array_merge([
+        'company_id' => $company->id, 'branch_id' => $branch->id, 'customer_id' => $customer->id,
+        'sale_number' => 'WA-DEBT-'.str()->random(8), 'sale_date' => today(),
+        'expected_payment_date' => today(), 'subtotal' => 500000, 'discount_amount' => 0, 'tax_amount' => 0,
+        'total_amount' => 500000, 'paid_amount' => 0, 'balance_amount' => 500000, 'change_amount' => 0,
+        'payment_status' => 'unpaid', 'status' => 'completed', 'created_by' => $user->id, 'sold_by' => $user->id,
     ], $overrides));
 }
 
@@ -388,4 +400,221 @@ test('production completion observer records accepted and rejected output', func
 
     $alert = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'production_completed')->firstOrFail();
     expect($alert->message)->toContain('WA-PROD-1')->toContain('Accepted: 80.0000')->toContain('Rejected: 5.0000');
+});
+
+test('daily summary dataset never loads financial fields for cashier or phone only recipients', function () {
+    $company = whatsappCompany();
+    $branch = Branch::query()->firstOrFail();
+    $cashier = User::factory()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'status' => 'active']);
+    $cashier->assignRole('Cashier');
+    $admin = User::query()->where('company_id', $company->id)->whereHas('roles', fn ($query) => $query->whereIn('name', ['Admin', 'Super Admin']))->firstOrFail();
+    $restricted = whatsappRecipient($company, ['phone' => '255764123470', 'user_id' => $cashier->id, 'branch_id' => $branch->id, 'scope' => 'branch']);
+    $phoneOnly = whatsappRecipient($company, ['phone' => '255764123471']);
+    $authorized = whatsappRecipient($company, ['phone' => '255764123472', 'user_id' => $admin->id]);
+    $summaries = app(WhatsAppDailySummaryService::class);
+
+    expect($summaries->build($company, $restricted, today()))->not->toHaveKeys(['financial', 'stock_valuation'])
+        ->and($summaries->build($company, $phoneOnly, today()))->not->toHaveKeys(['financial', 'stock_valuation', 'receivables', 'purchases', 'stock'])
+        ->and($summaries->build($company, $authorized, today()))->toHaveKeys(['financial', 'stock_valuation']);
+});
+
+test('daily summary respects own and branch sales scopes', function () {
+    $company = whatsappCompany();
+    $branches = Branch::withoutGlobalScopes()->where('company_id', $company->id)->take(2)->get();
+    if ($branches->count() < 2) {
+        $branches->push(Branch::withoutGlobalScopes()->create(['company_id' => $company->id, 'name' => 'Second', 'code' => 'SECOND', 'status' => 'active']));
+    }
+    $cashier = User::factory()->create(['company_id' => $company->id, 'branch_id' => $branches[0]->id, 'status' => 'active']);
+    $cashier->assignRole('Cashier');
+    $other = User::factory()->create(['company_id' => $company->id, 'branch_id' => $branches[0]->id, 'status' => 'active']);
+    $other->assignRole('Cashier');
+    $manager = User::factory()->create(['company_id' => $company->id, 'branch_id' => $branches[0]->id, 'status' => 'active']);
+    $manager->assignRole('Manager');
+    $customer = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branches[0]->id, 'name' => 'Scoped Customer', 'phone' => '255764123473', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 0, 'status' => 'active']);
+    whatsappCreditSale($company, $branches[0], $cashier, $customer, ['total_amount' => 100, 'balance_amount' => 0]);
+    whatsappCreditSale($company, $branches[0], $other, $customer, ['total_amount' => 200, 'balance_amount' => 0]);
+    whatsappCreditSale($company, $branches[1], $other, $customer, ['total_amount' => 400, 'balance_amount' => 0]);
+    $ownRecipient = whatsappRecipient($company, ['phone' => '255764123474', 'user_id' => $cashier->id, 'branch_id' => $branches[0]->id, 'scope' => 'branch']);
+    $branchRecipient = whatsappRecipient($company, ['phone' => '255764123475', 'user_id' => $manager->id, 'branch_id' => $branches[0]->id, 'scope' => 'branch']);
+    $summaries = app(WhatsAppDailySummaryService::class);
+
+    expect($summaries->build($company, $ownRecipient, today())['sales']['total'])->toBe(100.0)
+        ->and($summaries->build($company, $branchRecipient, today())['sales']['total'])->toBe(300.0);
+});
+
+test('daily summary company isolation excludes another company before aggregation', function () {
+    $company = whatsappCompany();
+    $branch = Branch::query()->firstOrFail();
+    $admin = User::query()->where('company_id', $company->id)->whereHas('roles')->firstOrFail();
+    $recipient = whatsappRecipient($company, ['user_id' => $admin->id]);
+    $customer = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => 'Company A', 'phone' => '255764123476', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 0, 'status' => 'active']);
+    whatsappCreditSale($company, $branch, $admin, $customer, ['total_amount' => 125, 'balance_amount' => 0]);
+
+    $otherCompany = Company::query()->create(['company_name' => 'Other Company Secret', 'business_type' => 'hardware', 'phone' => '255700000001', 'whatsapp_number' => '255700000001']);
+    $otherBranch = Branch::withoutGlobalScopes()->create(['company_id' => $otherCompany->id, 'name' => 'Other Branch', 'code' => 'OTHER-SECRET', 'status' => 'active']);
+    $otherUser = User::factory()->create(['company_id' => $otherCompany->id, 'branch_id' => $otherBranch->id, 'status' => 'active']);
+    $otherCustomer = Customer::withoutGlobalScopes()->create(['company_id' => $otherCompany->id, 'branch_id' => $otherBranch->id, 'name' => 'Other Debtor Secret', 'phone' => '255764123477', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 999999, 'status' => 'active']);
+    whatsappCreditSale($otherCompany, $otherBranch, $otherUser, $otherCustomer, ['total_amount' => 999999, 'balance_amount' => 0]);
+
+    $data = app(WhatsAppDailySummaryService::class)->build($company, $recipient, today());
+    expect($data['sales']['total'])->toBe(125.0)
+        ->and(json_encode($data))->not->toContain('Other Company Secret')->not->toContain('Other Debtor Secret');
+});
+
+test('daily pdf is queued once and delivered through the existing gowa file endpoint', function () {
+    Queue::fake();
+    Storage::fake('local');
+    $company = whatsappCompany();
+    $admin = User::query()->where('company_id', $company->id)->whereHas('roles', fn ($query) => $query->whereIn('name', ['Admin', 'Super Admin']))->firstOrFail();
+    whatsappSetting($company, ['attach_daily_summary_pdf' => true, 'minimum_send_interval_seconds' => 1]);
+    whatsappRecipient($company, ['user_id' => $admin->id]);
+
+    $this->artisan('whatsapp:daily-summary', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    $this->artisan('whatsapp:daily-summary', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    $notification = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'daily_management_summary')->firstOrFail();
+    expect($notification->attachment_type)->toBe('file');
+    Storage::disk('local')->assertExists($notification->attachment_path);
+
+    Http::fake([
+        '*/user/check*' => Http::response(['code' => 'SUCCESS', 'results' => ['is_on_whatsapp' => true]]),
+        '*/send/file' => Http::response(['code' => 'SUCCESS', 'results' => ['message_id' => 'PDF-1']]),
+    ]);
+    (new SendWhatsAppNotification($notification->id))->handle(app(Gowa::class));
+    expect($notification->refresh()->status)->toBe('sent');
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/send/file'));
+});
+
+test('debt command creates one aggregate and customer specific due tomorrow today and overdue reminders', function () {
+    Queue::fake();
+    $company = whatsappCompany();
+    $branch = Branch::query()->firstOrFail();
+    $admin = User::query()->where('company_id', $company->id)->whereHas('roles', fn ($query) => $query->whereIn('name', ['Admin', 'Super Admin']))->firstOrFail();
+    whatsappSetting($company, ['debt_reminders_enabled' => true]);
+    whatsappRecipient($company, ['user_id' => $admin->id]);
+    foreach ([today()->addDay(), today(), today()->subDays(2)] as $index => $due) {
+        $customer = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => 'Debt Customer '.$index, 'phone' => '25576412348'.$index, 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 500000, 'status' => 'active']);
+        whatsappCreditSale($company, $branch, $admin, $customer, ['expected_payment_date' => $due]);
+    }
+
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+
+    expect(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'management_debt_summary')->count())->toBe(1)
+        ->and(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_due_tomorrow')->count())->toBe(1)
+        ->and(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_due_today')->count())->toBe(1)
+        ->and(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_overdue')->count())->toBe(1);
+    $management = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'management_debt_summary')->firstOrFail();
+    expect($management->message)->toContain('DUE TOMORROW')->toContain('DUE TODAY')->toContain('OVERDUE');
+    WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'like', 'debt_%')->get()->each(function ($notification): void {
+        expect($notification->message)->not->toContain('Highest Outstanding')->not->toContain('HARDEX CREDIT ALERT');
+    });
+});
+
+test('phone only management recipient receives no debtor summary', function () {
+    Queue::fake();
+    $company = whatsappCompany();
+    $branch = Branch::query()->firstOrFail();
+    $admin = User::query()->where('company_id', $company->id)->firstOrFail();
+    whatsappSetting($company, ['debt_reminders_enabled' => true]);
+    whatsappRecipient($company);
+    $customer = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => 'Private Debtor', 'phone' => '255764123490', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 500000, 'status' => 'active']);
+    whatsappCreditSale($company, $branch, $admin, $customer);
+
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    expect(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'management_debt_summary')->count())->toBe(0);
+});
+
+test('branch management debt summary excludes another branch debtors', function () {
+    Queue::fake();
+    $company = whatsappCompany();
+    $branches = Branch::withoutGlobalScopes()->where('company_id', $company->id)->take(2)->get();
+    if ($branches->count() < 2) {
+        $branches->push(Branch::withoutGlobalScopes()->create(['company_id' => $company->id, 'name' => 'Debt Other', 'code' => 'DEBT-OTHER', 'status' => 'active']));
+    }
+    $manager = User::factory()->create(['company_id' => $company->id, 'branch_id' => $branches[0]->id, 'status' => 'active']);
+    $manager->assignRole('Manager');
+    whatsappSetting($company, ['debt_reminders_enabled' => true]);
+    whatsappRecipient($company, ['user_id' => $manager->id, 'branch_id' => $branches[0]->id, 'scope' => 'branch']);
+    foreach ([[$branches[0], 'Allowed Debtor', '255764123491'], [$branches[1], 'Secret Debtor', '255764123492']] as [$branch, $name, $phone]) {
+        $customer = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => $name, 'phone' => $phone, 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 500000, 'status' => 'active']);
+        whatsappCreditSale($company, $branch, $manager, $customer);
+    }
+
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    $message = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'management_debt_summary')->firstOrFail()->message;
+    expect($message)->toContain('Allowed Debtor')->not->toContain('Secret Debtor');
+});
+
+test('settled queued customer debt is suppressed before any gowa request', function () {
+    Queue::fake();
+    $company = whatsappCompany();
+    $branch = Branch::query()->firstOrFail();
+    $admin = User::query()->where('company_id', $company->id)->firstOrFail();
+    whatsappSetting($company, ['debt_reminders_enabled' => true, 'minimum_send_interval_seconds' => 1]);
+    $customer = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => 'Settled Customer', 'phone' => '255764123493', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 500000, 'status' => 'active']);
+    $sale = whatsappCreditSale($company, $branch, $admin, $customer);
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    $notification = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_due_today')->firstOrFail();
+    $sale->update(['balance_amount' => 0, 'paid_amount' => 500000, 'payment_status' => 'paid']);
+    Http::fake();
+
+    (new SendWhatsAppNotification($notification->id))->handle(app(Gowa::class));
+    expect($notification->refresh()->status)->toBe('suppressed')->and($notification->failure_reason)->toContain('settled');
+    Http::assertNothingSent();
+});
+
+test('partial payment refreshes the customer only message before delivery', function () {
+    Queue::fake();
+    $company = whatsappCompany();
+    $branch = Branch::query()->firstOrFail();
+    $admin = User::query()->where('company_id', $company->id)->firstOrFail();
+    whatsappSetting($company, ['debt_reminders_enabled' => true, 'minimum_send_interval_seconds' => 1]);
+    $customer = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => 'Partial Customer', 'phone' => '255764123494', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 500000, 'status' => 'active']);
+    $sale = whatsappCreditSale($company, $branch, $admin, $customer);
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    $notification = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_due_today')->firstOrFail();
+    $sale->update(['balance_amount' => 200000, 'paid_amount' => 300000, 'payment_status' => 'partial']);
+    Http::fake([
+        '*/user/check*' => Http::response(['code' => 'SUCCESS', 'results' => ['is_on_whatsapp' => true]]),
+        '*/send/message' => Http::response(['code' => 'SUCCESS', 'results' => ['message_id' => 'DEBT-PARTIAL']]),
+    ]);
+
+    (new SendWhatsAppNotification($notification->id))->handle(app(Gowa::class));
+    expect($notification->refresh()->status)->toBe('sent')->and($notification->message)->toContain('200,000')->not->toContain('500,000');
+});
+
+test('customer debt opt out and invalid phones prevent unsafe delivery', function () {
+    Queue::fake();
+    $company = whatsappCompany();
+    $branch = Branch::query()->firstOrFail();
+    $admin = User::query()->where('company_id', $company->id)->firstOrFail();
+    whatsappSetting($company, ['debt_reminders_enabled' => true]);
+    $optedOut = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => 'Opted Out', 'phone' => '255764123495', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 500000, 'status' => 'active', 'whatsapp_debt_reminders_enabled' => false]);
+    $invalid = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => 'Invalid Phone', 'phone' => '1234', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 500000, 'status' => 'active']);
+    whatsappCreditSale($company, $branch, $admin, $optedOut);
+    whatsappCreditSale($company, $branch, $admin, $invalid);
+
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    expect(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_due_today')->count())->toBe(1);
+    $notification = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_due_today')->firstOrFail();
+    expect($notification->status)->toBe('suppressed')->and($notification->failure_reason)->not->toBeNull();
+});
+
+test('overdue reminder interval reuses one outbox entry throughout each cooldown cycle', function () {
+    Queue::fake();
+    $company = whatsappCompany();
+    $branch = Branch::query()->firstOrFail();
+    $admin = User::query()->where('company_id', $company->id)->firstOrFail();
+    whatsappSetting($company, ['debt_reminders_enabled' => true, 'debt_overdue_interval_days' => 3]);
+    $customer = Customer::withoutGlobalScopes()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'name' => 'Cooldown Customer', 'phone' => '255764123496', 'customer_type' => 'credit', 'opening_balance' => 0, 'balance_amount' => 500000, 'status' => 'active']);
+    whatsappCreditSale($company, $branch, $admin, $customer, ['expected_payment_date' => today()->subDay()]);
+
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    $this->travel(2)->days();
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    expect(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_overdue')->count())->toBe(1);
+
+    $this->travel(1)->day();
+    $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
+    expect(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_overdue')->count())->toBe(2);
 });

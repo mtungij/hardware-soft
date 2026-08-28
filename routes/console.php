@@ -54,4 +54,4 @@ Artisan::command('pwa:icons', function () {
 Schedule::command('whatsapp:check-devices')->everyFiveMinutes()->withoutOverlapping();
 Schedule::command('whatsapp:daily-summary')->everyMinute()->withoutOverlapping();
 Schedule::command('whatsapp:stock-alerts')->everyThirtyMinutes()->withoutOverlapping();
-Schedule::command('whatsapp:debt-reminders')->hourly()->withoutOverlapping();
+Schedule::command('whatsapp:debt-reminders')->everyMinute()->withoutOverlapping();

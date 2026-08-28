@@ -32,7 +32,21 @@ Scheduled tasks:
 - device health check every five minutes;
 - company-timezone daily summaries every minute (only the configured minute creates an idempotent outbox entry);
 - aggregated low/out-of-stock checks every thirty minutes.
-- grouped due/overdue debt reminders hourly (only 08:00 in each company timezone creates an idempotent outbox entry).
+- grouped debt summaries and customer due/overdue reminders every minute (only the company-configured minute creates idempotent outbox entries).
+
+The Laravel scheduler itself must be invoked once per minute in production. When `schedule:work` is not managed as a persistent process, use the standard cron entry:
+
+```cron
+* * * * * cd /path/to/hardex && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## Daily PDFs and debt reminders
+
+- Daily PDF data is built separately for every recipient. Company isolation is applied first, then the linked user's sales/report scope and existing permissions. Phone-only recipients get only the restrictive operational dataset and never inherit financial permissions.
+- Debt reminders use the existing completed credit sale `balance_amount` and `expected_payment_date`; customer payments already update that balance transactionally through `AccountingService` and `CustomerPaymentAllocation`.
+- Management summaries require a linked HARDEX user with an existing receivables permission and are aggregated into one message per recipient/day. An optional debtor PDF uses the same scoped rows.
+- Customer messages are one-receivable transactional reminders. Due-tomorrow, due-today, overdue, reminder time, and overdue interval are company configurable. Customers can be opted out on their customer record.
+- The worker reloads the authoritative sale immediately before delivery. Settled, disabled, rescheduled, or no-longer-due reminders are suppressed; partially paid balances cause the customer-only message to be rebuilt with the current remainder.
 
 ## Operational behavior
 

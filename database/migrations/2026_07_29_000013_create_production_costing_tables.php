@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('production_order_costings', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('production_order_id')->constrained('production_orders')->restrictOnDelete();
+            $table->foreignId('company_id')->constrained(indexName: 'poc_company_fk')->cascadeOnDelete();
+            $table->foreignId('production_order_id')->constrained('production_orders', indexName: 'poc_order_fk')->restrictOnDelete();
             $table->string('costing_number', 60);
             $table->string('currency_code', 10)->nullable();
             $table->decimal('planned_inventory_material_cost', 24, 4)->default(0);
@@ -43,8 +43,8 @@ return new class extends Migration
             $table->unsignedInteger('calculation_version')->default(0);
             $table->timestamp('calculated_at')->nullable();
             $table->timestamp('finalized_at')->nullable();
-            $table->foreignId('calculated_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('finalized_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('calculated_by')->nullable()->constrained('users', indexName: 'poc_calculated_by_fk')->nullOnDelete();
+            $table->foreignId('finalized_by')->nullable()->constrained('users', indexName: 'poc_finalized_by_fk')->nullOnDelete();
             $table->text('notes')->nullable();
             $table->timestamps();
 
@@ -55,14 +55,14 @@ return new class extends Migration
 
         Schema::create('production_order_costing_lines', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('production_order_costing_id')->constrained('production_order_costings')->cascadeOnDelete();
-            $table->foreignId('production_order_material_id')->nullable()->constrained('production_order_materials')->restrictOnDelete();
+            $table->foreignId('company_id')->constrained(indexName: 'pocl_company_fk')->cascadeOnDelete();
+            $table->foreignId('production_order_costing_id')->constrained('production_order_costings', indexName: 'pocl_costing_fk')->cascadeOnDelete();
+            $table->foreignId('production_order_material_id')->nullable()->constrained('production_order_materials', indexName: 'pocl_order_material_fk')->restrictOnDelete();
             $table->string('line_type', 40);
             $table->string('cost_basis', 30);
             $table->string('name');
-            $table->foreignId('product_id')->nullable()->constrained('products')->restrictOnDelete();
-            $table->foreignId('unit_id')->nullable()->constrained('units')->restrictOnDelete();
+            $table->foreignId('product_id')->nullable()->constrained('products', indexName: 'pocl_product_fk')->restrictOnDelete();
+            $table->foreignId('unit_id')->nullable()->constrained('units', indexName: 'pocl_unit_fk')->restrictOnDelete();
             $table->decimal('planned_quantity', 24, 12)->nullable();
             $table->decimal('actual_quantity', 24, 12)->nullable();
             $table->decimal('planned_unit_cost', 24, 8)->nullable();
@@ -83,12 +83,12 @@ return new class extends Migration
 
         Schema::create('production_order_costing_events', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('company_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('production_order_costing_id')->constrained('production_order_costings')->restrictOnDelete();
+            $table->foreignId('company_id')->constrained(indexName: 'poce_company_fk')->cascadeOnDelete();
+            $table->foreignId('production_order_costing_id')->constrained('production_order_costings', indexName: 'poce_costing_fk')->restrictOnDelete();
             $table->string('event_type', 30);
             $table->text('reason')->nullable();
             $table->json('snapshot')->nullable();
-            $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('created_by')->nullable()->constrained('users', indexName: 'poce_created_by_fk')->nullOnDelete();
             $table->timestamps();
 
             $table->index(['production_order_costing_id', 'event_type'], 'prd_cost_event_type_ix');

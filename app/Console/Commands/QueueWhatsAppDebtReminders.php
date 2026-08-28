@@ -4,10 +4,10 @@ namespace App\Console\Commands;
 
 use App\Models\Company;
 use App\Models\CompanyWhatsAppSetting;
-use App\Models\Sale;
 use App\Models\WhatsAppRecipient;
+use App\Services\WhatsAppDebtPdfService;
+use App\Services\WhatsAppDebtReminderService;
 use App\Services\WhatsAppNotificationService;
-use App\Support\AuthorizationScope;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Command;
 
@@ -15,59 +15,102 @@ class QueueWhatsAppDebtReminders extends Command
 {
     protected $signature = 'whatsapp:debt-reminders {--company=} {--force}';
 
-    protected $description = 'Queue grouped due and overdue customer debt reminders for management recipients';
+    protected $description = 'Queue grouped management debt summaries and customer due/overdue reminders';
 
-    public function handle(WhatsAppNotificationService $notifications): int
-    {
-        CompanyWhatsAppSetting::withoutGlobalScopes()->where('enabled', true)->where('sending_paused', false)
+    public function handle(
+        WhatsAppNotificationService $notifications,
+        WhatsAppDebtReminderService $debts,
+        WhatsAppDebtPdfService $pdfs,
+    ): int {
+        CompanyWhatsAppSetting::withoutGlobalScopes()
+            ->where('enabled', true)
+            ->where('sending_paused', false)
+            ->where('debt_reminders_enabled', true)
             ->when($this->option('company'), fn ($query, $company) => $query->where('company_id', $company))
-            ->get()->each(function (CompanyWhatsAppSetting $setting) use ($notifications): void {
-                $now = CarbonImmutable::now($setting->timezone);
-                if (! $this->option('force') && $now->format('H') !== '08') {
+            ->get()->each(function (CompanyWhatsAppSetting $setting) use ($notifications, $debts, $pdfs): void {
+                if (! $setting->categoryEnabled('customer_debt')) {
                     return;
                 }
+
+                $now = CarbonImmutable::now($setting->timezone);
+                if (! $this->option('force') && $now->format('H:i') !== substr($setting->debt_reminder_time, 0, 5)) {
+                    return;
+                }
+
                 $company = Company::query()->find($setting->company_id);
                 if (! $company) {
                     return;
                 }
+                $setting->setRelation('company', $company);
 
-                WhatsAppRecipient::withoutGlobalScopes()->with(['user.roles', 'branch'])
-                    ->where('company_id', $company->id)->where('active', true)->get()
-                    ->filter(fn (WhatsAppRecipient $recipient): bool => $recipient->accepts('customer_debt', null))
-                    ->each(function (WhatsAppRecipient $recipient) use ($notifications, $setting, $company, $now): void {
-                        $query = Sale::withoutGlobalScopes()->with('customer')->where('company_id', $company->id)
-                            ->where('status', 'completed')->where('balance_amount', '>', 0)
-                            ->whereNotNull('expected_payment_date')->whereDate('expected_payment_date', '<=', $now->addDay());
-                        if ($recipient->user) {
-                            AuthorizationScope::sales($query, $recipient->user);
-                        } elseif ($recipient->scope === 'branch') {
-                            $query->where('branch_id', $recipient->branch_id);
-                        }
-                        $debts = $query->orderBy('expected_payment_date')->limit(50)->get();
-                        if ($debts->isEmpty()) {
-                            return;
-                        }
-
-                        $canSeeDetails = $recipient->user?->hasAnyPermission(['reports.receivables', 'accounting.view', 'customer-balances.view']) ?? false;
-                        $lines = ['HARDEX CUSTOMER DEBT ALERT', $debts->count().' debts are due or overdue.'];
-                        if ($canSeeDetails) {
-                            foreach ($debts as $index => $sale) {
-                                $status = $sale->expected_payment_date->isPast() && ! $sale->expected_payment_date->isToday() ? 'OVERDUE' : ($sale->expected_payment_date->isToday() ? 'DUE TODAY' : 'DUE TOMORROW');
-                                $lines[] = ($index + 1).'. '.($sale->customer?->name ?: $sale->temporary_customer_name ?: $sale->sale_number).' — TZS '.number_format((float) $sale->balance_amount, 0).' ('.$status.')';
-                            }
-                        } else {
-                            $lines[] = 'Open HARDEX with an authorized account to view customer and balance details.';
-                        }
-
-                        $state = $debts->map(fn (Sale $sale) => [$sale->id, (string) $sale->balance_amount, optional($sale->expected_payment_date)->toDateString()])->toJson();
-                        $notifications->queueRecipient(
-                            $company, $setting, $recipient, 'customer_debt', 'customer_debt_reminder',
-                            'customer-debt:'.$now->toDateString().':'.hash('sha256', $state), implode("\n", $lines),
-                            $recipient->scope === 'branch' ? (int) $recipient->branch_id : null,
-                        );
-                    });
+                $this->queueManagementSummaries($company, $setting, $now, $notifications, $debts, $pdfs);
+                $this->queueCustomerReminders($company, $setting, $now, $notifications, $debts);
             });
 
         return self::SUCCESS;
+    }
+
+    private function queueManagementSummaries(
+        Company $company,
+        CompanyWhatsAppSetting $setting,
+        CarbonImmutable $now,
+        WhatsAppNotificationService $notifications,
+        WhatsAppDebtReminderService $debts,
+        WhatsAppDebtPdfService $pdfs,
+    ): void {
+        WhatsAppRecipient::withoutGlobalScopes()->with(['user.roles', 'branch'])
+            ->where('company_id', $company->id)->where('active', true)->get()
+            ->filter(fn (WhatsAppRecipient $recipient): bool => $recipient->accepts('customer_debt', null)
+                && $debts->canReceiveManagementSummary($recipient->user))
+            ->each(function (WhatsAppRecipient $recipient) use ($company, $setting, $now, $notifications, $debts, $pdfs): void {
+                $rows = $debts->enabledRows($debts->managementDebts($company, $recipient, $now), $setting, $now);
+                if ($rows->isEmpty()) {
+                    return;
+                }
+
+                $attachment = $setting->attach_debt_summary_pdf ? $pdfs->generate($company, $recipient, $now, $rows) : null;
+                $notifications->queueRecipient(
+                    $company, $setting, $recipient, 'customer_debt', 'management_debt_summary',
+                    'management-debt-summary:'.$now->toDateString(),
+                    $debts->managementMessage($rows, $now),
+                    $recipient->scope === 'branch' ? (int) $recipient->branch_id : null,
+                    $attachment, $attachment ? 'file' : null,
+                    ['summary_date' => $now->toDateString(), 'receivable_ids' => $rows->pluck('id')->all(), 'scope' => $recipient->scope],
+                );
+            });
+    }
+
+    private function queueCustomerReminders(
+        Company $company,
+        CompanyWhatsAppSetting $setting,
+        CarbonImmutable $now,
+        WhatsAppNotificationService $notifications,
+        WhatsAppDebtReminderService $debts,
+    ): void {
+        $debts->authoritativeReceivables($company)
+            ->with('customer')
+            ->whereDate('expected_payment_date', '<=', $now->addDay()->toDateString())
+            ->orderBy('id')
+            ->chunkById(100, function ($sales) use ($company, $setting, $now, $notifications, $debts): void {
+                foreach ($sales as $sale) {
+                    $customer = $sale->customer;
+                    $kind = $debts->kind($sale, $now);
+                    if (! $customer || $customer->status !== 'active' || ! $customer->whatsapp_debt_reminders_enabled || blank($customer->phone)
+                        || ! $kind || ! $debts->enabledForKind($setting, $kind)) {
+                        continue;
+                    }
+
+                    $cycle = $kind === 'overdue'
+                        ? ':cycle-'.$debts->overdueCycle($sale, $now, $setting->debt_overdue_interval_days)
+                        : ':'.$now->toDateString();
+                    $notifications->queuePhone(
+                        $company, $setting, $customer->phone, 'customer_debt', 'debt_'.$kind,
+                        'customer-debt:'.$customer->id.':'.$sale->id.':'.$kind.$cycle,
+                        $debts->customerMessage($company, $sale, $kind, $now),
+                        (int) $sale->branch_id,
+                        ['receivable_id' => $sale->id, 'customer_id' => $customer->id, 'debt_kind' => $kind, 'due_date' => $sale->expected_payment_date->toDateString()],
+                    );
+                }
+            });
     }
 }

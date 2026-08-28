@@ -8,6 +8,7 @@ use App\Models\WhatsAppTemplate;
 class WhatsAppTemplateService
 {
     public const DEFAULTS = [
+        'sale_completed' => ['sales', 'New Sale', "*NEW SALE*\n\nInvoice: {{sale_number}}\nDate: {{date}}\nBranch: {{branch}}\nCashier: {{cashier}}\nCustomer: {{customer}}\n\nItems: {{items}}\nTotal: {{currency}} {{total}}\nPaid: {{currency}} {{paid}}\nBalance: {{currency}} {{balance}}\n\nPayment: {{payment}}\n\nHARDEX POS"],
         'sale_cancelled' => ['security', 'Sale Cancelled', "HARDEX SECURITY ALERT\nSale {{sale_number}} was cancelled.\nBranch: {{branch}}\nAmount: TZS {{amount}}\nCancelled by: {{actor}}\nTime: {{time}}"],
         'customer_payment_received' => ['customer_payments', 'Customer Payment Received', "HARDEX CUSTOMER PAYMENT\nPayment received from {{customer}}.\nAmount: TZS {{amount}}\nReference: {{reference}}\nBranch: {{branch}}\nReceived by: {{actor}}"],
         'production_completed' => ['production', 'Production Completed', "HARDEX PRODUCTION COMPLETED\nOrder: {{order_number}}\nProduct: {{product}}\nAccepted: {{accepted}}\nRejected: {{rejected}}\nBranch: {{branch}}"],
