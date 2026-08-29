@@ -47,6 +47,9 @@
                 : collect();
             $navItems = [
                 ['label' => __('messages.nav.dashboard'), 'route' => 'customer.dashboard', 'tour' => 'customer-dashboard'],
+                ['label' => 'Purchase Requests', 'route' => 'customer.purchase-requests.index', 'tour' => 'customer-requests'],
+                ['label' => 'Quotations', 'route' => 'customer.quotations.index', 'tour' => 'customer-quotations'],
+                ['label' => 'Invoices', 'route' => 'customer.invoices.index', 'tour' => 'customer-invoices'],
                 ['label' => __('messages.nav.debts'), 'route' => 'customer.debts.index', 'tour' => 'customer-debts'],
                 ['label' => __('messages.nav.upload_receipt'), 'route' => 'customer.receipts.create', 'tour' => 'upload-receipt'],
                 ['label' => __('messages.nav.deposits'), 'route' => 'customer.deposits.index', 'tour' => 'customer-deposits'],

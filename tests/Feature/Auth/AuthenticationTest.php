@@ -8,7 +8,7 @@ test('login screen can be rendered', function () {
 
     $response
         ->assertOk()
-        ->assertSeeVolt('pages.auth.login');
+        ->assertSeeVolt('auth.login');
 });
 
 test('users can authenticate using the login screen', function () {

@@ -7,9 +7,11 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('customer')->middleware('throttle:customer-api')->group(function () {
     Route::post('login', [CustomerAuthController::class, 'login'])->name('api.customer.login');
     Route::post('register', [CustomerAuthController::class, 'register'])->name('api.customer.register');
+    Route::post('forgot-password', [CustomerAuthController::class, 'forgotPassword'])->name('api.customer.forgot-password');
 
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('logout', [CustomerAuthController::class, 'logout'])->name('api.customer.logout');
+        Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->name('api.customer.change-password');
 
         Route::middleware('customer.api.active')->group(function () {
             Route::get('dashboard', [CustomerPortalApiController::class, 'dashboard'])->name('api.customer.dashboard');

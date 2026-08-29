@@ -73,6 +73,16 @@ class Company extends Model
         return $this->hasMany(Branch::class);
     }
 
+    public function paymentMethods(): HasMany
+    {
+        return $this->hasMany(CompanyPaymentMethod::class);
+    }
+
+    public function additionalChargeTypes(): HasMany
+    {
+        return $this->hasMany(AdditionalChargeType::class);
+    }
+
     public function machines(): HasMany
     {
         return $this->hasMany(Machine::class);

@@ -32,6 +32,13 @@ class EnsureCustomerApiAccountIsActive
             ], 403);
         }
 
+        if ($account->must_change_password) {
+            return response()->json([
+                'message' => 'Password change required.',
+                'status' => 'password_change_required',
+            ], 428);
+        }
+
         return $next($request);
     }
 }

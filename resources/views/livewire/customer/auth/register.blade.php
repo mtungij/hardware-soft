@@ -3,7 +3,11 @@
 use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\CustomerAccount;
+use App\Models\Company;
+use App\Services\CustomerPortalCredentialService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -19,7 +23,7 @@ rules(fn () => [
     'name' => ['required', 'string', 'max:255'],
     'phone' => ['required', 'string', 'max:30'],
     'business_name' => ['nullable', 'string', 'max:255'],
-    'email' => ['required', 'email', 'max:255', 'unique:customer_accounts,email'],
+    'email' => ['nullable', 'email', 'max:255', 'unique:customer_accounts,email'],
     'region' => ['nullable', 'string', 'max:255'],
     'district' => ['nullable', 'string', 'max:255'],
     'password' => ['required', 'confirmed', Password::defaults()],
@@ -31,47 +35,62 @@ $updatedRegion = function () {
     $this->district = '';
 };
 
-$register = function () {
+$register = function (CustomerPortalCredentialService $credentials) {
     $data = $this->validate();
+    $phone = $credentials->normalizePhone($data['phone']);
 
-    $customer = Customer::query()
-        ->where('email', $data['email'])
-        ->orWhere('phone', $data['phone'])
+    $existingAccount = CustomerAccount::withoutGlobalScopes()->where('login_phone', $phone)->first();
+    if ($existingAccount) {
+        throw ValidationException::withMessages(['phone' => __('messages.auth.already_exists')]);
+    }
+
+    $customer = Customer::withoutGlobalScopes()
+        ->whereIn('phone', [$phone, '+'.$phone, '0'.substr($phone, 3)])
         ->first();
 
     if ($customer?->portalAccounts()->exists()) {
-        throw ValidationException::withMessages(['email' => __('messages.auth.already_exists')]);
+        throw ValidationException::withMessages(['phone' => __('messages.auth.already_exists')]);
     }
 
-    if (! $customer) {
-        $customer = Customer::create([
-            'branch_id' => Branch::query()->where('status', 'active')->value('id') ?? Branch::query()->value('id'),
-            'name' => $data['business_name'] ?: $data['name'],
-            'phone' => $data['phone'],
-            'email' => $data['email'],
-            'address' => $data['branch_name'],
-            'region' => $data['region'] ?: null,
-            'district' => $data['district'] ?: null,
-            'customer_type' => 'credit',
-            'credit_limit' => 0,
-            'opening_balance' => 0,
-            'balance_amount' => 0,
-            'status' => 'active',
+    $account = DB::transaction(function () use ($data, $phone, $customer) {
+        if (! $customer) {
+            $company = Company::current();
+            abort_unless($company, 503);
+            $branchId = Branch::withoutGlobalScopes()->where('company_id', $company->id)->where('status', 'active')->value('id')
+                ?? Branch::withoutGlobalScopes()->where('company_id', $company->id)->value('id');
+            $customer = Customer::withoutGlobalScopes()->create([
+                'company_id' => $company->id,
+                'branch_id' => $branchId,
+                'name' => $data['business_name'] ?: $data['name'],
+                'phone' => $phone,
+                'email' => ($data['email'] ?? null) ?: null,
+                'address' => $data['branch_name'],
+                'region' => $data['region'] ?: null,
+                'district' => $data['district'] ?: null,
+                'customer_type' => 'credit',
+                'credit_limit' => 0,
+                'opening_balance' => 0,
+                'balance_amount' => 0,
+                'status' => 'active',
+            ]);
+        }
+
+        return CustomerAccount::withoutGlobalScopes()->create([
+            'company_id' => $customer->company_id,
+            'customer_id' => $customer->id,
+            'name' => $data['name'],
+            'phone' => $phone,
+            'login_phone' => $phone,
+            'email' => ($data['email'] ?? null) ?: null,
+            'password' => $data['password'],
+            'status' => 'pending',
+            'preferred_locale' => app()->getLocale() ?: 'sw',
+            'must_change_password' => false,
         ]);
-    }
-
-    $account = CustomerAccount::create([
-        'customer_id' => $customer->id,
-        'name' => $data['name'],
-        'phone' => $data['phone'],
-        'email' => $data['email'],
-        'password' => $data['password'],
-        'status' => 'pending',
-        'preferred_locale' => app()->getLocale() ?: 'sw',
-    ]);
+    });
 
     Auth::guard('customer')->login($account);
-    request()->session()->regenerate();
+    Session::regenerate();
 
     $this->redirectRoute('customer.pending', navigate: true);
 };
@@ -102,7 +121,7 @@ $register = function () {
                 <x-form-input :label="__('messages.auth.full_name')" name="name" wire:model="name" required />
                 <x-form-input :label="__('messages.auth.phone')" name="phone" wire:model="phone" required />
                 <x-form-input :label="__('messages.auth.business_name')" name="business_name" wire:model="business_name" />
-                <x-form-input :label="__('messages.auth.email')" name="email" wire:model="email" type="email" required />
+                <x-form-input :label="__('messages.auth.email').' (Optional)'" name="email" wire:model="email" type="email" />
                 <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
                 <x-form-input :label="__('messages.auth.password')" name="password" wire:model="password" type="password" required />
                 <x-form-input :label="__('messages.auth.confirm_password')" name="password_confirmation" wire:model="password_confirmation" type="password" required />

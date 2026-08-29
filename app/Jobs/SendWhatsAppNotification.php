@@ -95,10 +95,11 @@ class SendWhatsAppNotification implements ShouldQueue
         $notification->update(['status' => 'sending', 'attempts' => $notification->attempts + 1, 'failure_reason' => null]);
 
         try {
+            $message = $notification->resolvedDeliveryMessage();
             $response = match ($notification->attachment_type) {
-                'file' => $gowa->sendFile($setting->device_id, $notification->phone, $this->attachmentPath($notification), $notification->message),
-                'image' => $gowa->sendImage($setting->device_id, $notification->phone, $this->attachmentPath($notification), $notification->message),
-                default => $gowa->sendText($setting->device_id, $notification->phone, $notification->message),
+                'file' => $gowa->sendFile($setting->device_id, $notification->phone, $this->attachmentPath($notification), $message),
+                'image' => $gowa->sendImage($setting->device_id, $notification->phone, $this->attachmentPath($notification), $message),
+                default => $gowa->sendText($setting->device_id, $notification->phone, $message),
             };
 
             $notification->update([

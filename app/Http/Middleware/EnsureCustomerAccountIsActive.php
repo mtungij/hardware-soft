@@ -21,6 +21,10 @@ class EnsureCustomerAccountIsActive
             return redirect()->route('customer.pending');
         }
 
+        if ($customer->must_change_password && ! $request->routeIs('customer.change-password')) {
+            return redirect()->route('customer.change-password');
+        }
+
         if ($customer->status === 'suspended') {
             Auth::guard('customer')->logout();
             $request->session()->invalidate();

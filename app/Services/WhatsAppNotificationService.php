@@ -98,8 +98,24 @@ class WhatsAppNotificationService
         string $message,
         ?int $branchId = null,
         array $metadata = [],
+        ?string $attachmentPath = null,
+        ?string $attachmentType = null,
+        bool $sensitive = false,
     ): WhatsAppNotification {
-        return $this->create($company, $setting, $phone, $notificationType, $category, $eventKey, $message, $branchId, metadata: $metadata);
+        return $this->create(
+            $company,
+            $setting,
+            $phone,
+            $notificationType,
+            $category,
+            $eventKey,
+            $sensitive ? WhatsAppNotification::SENSITIVE_MESSAGE_PLACEHOLDER : $message,
+            $branchId,
+            attachmentPath: $attachmentPath,
+            attachmentType: $attachmentType,
+            metadata: $metadata,
+            encryptedMessage: $sensitive ? encrypt($message) : null,
+        );
     }
 
     public function afterCommit(callable $callback): void
@@ -143,6 +159,7 @@ class WhatsAppNotificationService
         ?string $attachmentPath = null,
         ?string $attachmentType = null,
         array $metadata = [],
+        ?string $encryptedMessage = null,
     ): WhatsAppNotification {
         try {
             $phone = WhatsAppPhone::normalize($phone);
@@ -167,6 +184,7 @@ class WhatsAppNotificationService
                 'notification_type' => $notificationType,
                 'category' => $category,
                 'message' => $message,
+                'encrypted_message' => $encryptedMessage,
                 'attachment_path' => $attachmentPath,
                 'attachment_type' => $attachmentType,
                 'status' => $suppression ? 'suppressed' : 'queued',

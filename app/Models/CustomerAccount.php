@@ -23,8 +23,14 @@ class CustomerAccount extends Authenticatable
         'customer_id',
         'name',
         'phone',
+        'login_phone',
         'email',
         'password',
+        'must_change_password',
+        'credential_version',
+        'last_credential_operation_key',
+        'last_credentials_notification_id',
+        'last_credentials_sent_at',
         'status',
         'preferred_locale',
         'approved_at',
@@ -42,6 +48,9 @@ class CustomerAccount extends Authenticatable
         return [
             'approved_at' => 'datetime',
             'last_login_at' => 'datetime',
+            'last_credentials_sent_at' => 'datetime',
+            'must_change_password' => 'boolean',
+            'credential_version' => 'integer',
             'password' => 'hashed',
         ];
     }

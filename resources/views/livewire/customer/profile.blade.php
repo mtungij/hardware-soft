@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\CustomerPortalCredentialService;
 use Illuminate\Validation\Rules\Password;
 
 use function Livewire\Volt\layout;
@@ -9,16 +10,17 @@ use function Livewire\Volt\state;
 
 layout('layouts.customer');
 
-state(['name' => '', 'phone' => '', 'email' => '', 'region' => '', 'district' => '', 'preferred_locale' => 'sw', 'password' => '', 'password_confirmation' => '']);
+state(['name' => '', 'phone' => '', 'email' => '', 'region' => '', 'district' => '', 'preferred_locale' => 'sw', 'current_password' => '', 'password' => '', 'password_confirmation' => '']);
 
 rules(fn () => [
     'name' => ['required', 'string', 'max:255'],
-    'phone' => ['nullable', 'string', 'max:30'],
-    'email' => ['required', 'email', 'max:255', 'unique:customer_accounts,email,'.auth('customer')->id()],
+    'phone' => ['required', 'string', 'max:30'],
+    'email' => ['nullable', 'email', 'max:255', 'unique:customer_accounts,email,'.auth('customer')->id()],
     'region' => ['nullable', 'string', 'max:255'],
     'district' => ['nullable', 'string', 'max:255'],
     'preferred_locale' => ['required', 'in:sw,en'],
     'password' => ['nullable', 'confirmed', Password::defaults()],
+    'current_password' => ['required_with:password', 'nullable', 'string'],
 ]);
 
 mount(function () {
@@ -35,28 +37,30 @@ $updatedRegion = function () {
     $this->district = '';
 };
 
-$save = function () {
+$save = function (CustomerPortalCredentialService $credentials) {
     $data = $this->validate();
     $account = auth('customer')->user();
     $account->fill([
         'name' => $data['name'],
-        'phone' => $data['phone'],
-        'email' => $data['email'],
+        'email' => $data['email'] ?: null,
         'preferred_locale' => $data['preferred_locale'],
     ]);
 
-    if ($data['password']) {
-        $account->password = $data['password'];
-    }
-
     $account->save();
+    $normalized = $credentials->updateLoginPhone($account->customer, $data['phone'], $account);
+    $account->forceFill(['phone' => $normalized, 'login_phone' => $normalized])->save();
     $account->customer()->update([
-        'phone' => $data['phone'],
-        'email' => $data['email'],
+        'phone' => $normalized,
+        'email' => $data['email'] ?: null,
         'region' => $data['region'] ?: null,
         'district' => $data['district'] ?: null,
     ]);
 
+    if ($data['password']) {
+        $credentials->changePassword($account, $data['current_password'], $data['password']);
+    }
+
+    $this->current_password = '';
     $this->password = '';
     $this->password_confirmation = '';
     session()->put('customer_locale', $data['preferred_locale']);
@@ -73,8 +77,8 @@ $save = function () {
     <x-card class="max-w-2xl">
         <form wire:submit="save" class="space-y-4">
             <x-form-input :label="__('messages.auth.full_name')" name="name" wire:model="name" required />
-            <x-form-input :label="__('messages.auth.phone')" name="phone" wire:model="phone" />
-            <x-form-input :label="__('messages.auth.email')" name="email" wire:model="email" type="email" required />
+            <x-form-input :label="__('messages.auth.phone')" name="phone" wire:model="phone" required />
+            <x-form-input :label="__('messages.auth.email').' (Optional)'" name="email" wire:model="email" type="email" />
             <div class="grid gap-4 sm:grid-cols-2">
                 <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
             </div>
@@ -87,6 +91,7 @@ $save = function () {
                 @error('preferred_locale') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
             <div class="grid gap-4 sm:grid-cols-2">
+                <x-form-input label="Current Password" name="current_password" wire:model="current_password" type="password" />
                 <x-form-input :label="__('messages.profile.new_password')" name="password" wire:model="password" type="password" />
                 <x-form-input :label="__('messages.auth.confirm_password')" name="password_confirmation" wire:model="password_confirmation" type="password" />
             </div>

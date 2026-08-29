@@ -2,6 +2,11 @@
 
 use App\Models\Branch;
 use App\Models\Customer;
+use App\Models\CustomerAccount;
+use App\Models\WhatsAppNotification;
+use App\Services\CustomerPortalCredentialService;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -23,6 +28,7 @@ state([
     'opening_balance' => '0',
     'status' => 'active',
     'whatsapp_debt_reminders_enabled' => true,
+    'credential_operation_key' => '',
 ]);
 
 mount(function (Customer $customer) {
@@ -40,6 +46,7 @@ mount(function (Customer $customer) {
     $this->opening_balance = (string) $customer->opening_balance;
     $this->status = $customer->status;
     $this->whatsapp_debt_reminders_enabled = $customer->whatsapp_debt_reminders_enabled;
+    $this->credential_operation_key = (string) Str::uuid();
 });
 
 rules([
@@ -60,15 +67,44 @@ $updatedRegion = function () {
     $this->district = '';
 };
 
-$save = function () {
+$save = function (CustomerPortalCredentialService $credentials) {
     $validated = $this->validate();
     $validated['branch_id'] = $validated['branch_id'] ?: null;
     $validated['credit_limit'] = 0;
+    $phone = $validated['phone'];
+    unset($validated['phone']);
 
-    $this->customer->update($validated);
+    DB::transaction(function () use ($validated, $phone, $credentials): void {
+        $this->customer->update($validated);
+        $normalized = $credentials->updateLoginPhone($this->customer, $phone, auth()->user());
+        CustomerAccount::withoutGlobalScopes()->where('customer_id', $this->customer->id)->update([
+            'name' => $validated['name'],
+            'email' => $validated['email'] ?: null,
+            'phone' => $normalized,
+            'login_phone' => $normalized,
+        ]);
+    });
 
     session()->flash('success', 'Customer updated successfully.');
     $this->redirectRoute('customers.index', navigate: true);
+};
+
+$enablePortal = function (CustomerPortalCredentialService $credentials) {
+    abort_unless(auth()->user()->can('customers.manage_portal_access'), 403);
+    $account = $credentials->enableOrReset($this->customer, auth()->user(), $this->credential_operation_key);
+    $this->credential_operation_key = (string) Str::uuid();
+    session()->flash($account->last_credentials_notification_id ? 'success' : 'error', $account->last_credentials_notification_id
+        ? 'Portal access enabled. Credentials were queued for WhatsApp delivery.'
+        : 'Portal access was enabled, but credentials could not be queued. Please retry.');
+};
+
+$resetPortalPassword = function (CustomerPortalCredentialService $credentials) {
+    abort_unless(auth()->user()->can('customers.manage_portal_access'), 403);
+    $account = $credentials->enableOrReset($this->customer, auth()->user(), $this->credential_operation_key, true);
+    $this->credential_operation_key = (string) Str::uuid();
+    session()->flash($account->last_credentials_notification_id ? 'success' : 'error', $account->last_credentials_notification_id
+        ? 'A new temporary password was generated and queued for WhatsApp delivery.'
+        : 'The password was reset, but credentials could not be queued. Please retry immediately.');
 };
 
 ?>
@@ -80,7 +116,7 @@ $save = function () {
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
             <x-form-input label="Customer Name" name="name" wire:model="name" required />
             <x-form-input label="Phone" name="phone" wire:model="phone" required />
-            <x-form-input label="Email" name="email" type="email" wire:model="email" />
+            <x-form-input label="Email (Optional)" name="email" type="email" wire:model="email" />
             <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
             <x-money-input label="Opening Balance" name="opening_balance" wire:model="opening_balance" required />
 
@@ -127,5 +163,45 @@ $save = function () {
                 <a href="{{ route('customers.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
             </div>
         </form>
+    </x-card>
+
+    <x-card title="Commercial Actions" class="mt-6">
+        <p class="text-sm text-slate-500">Create a document or final sale directly for this customer, or review their history.</p>
+        <div class="mt-4 flex flex-wrap gap-2">
+            @can('quotations.create')
+                <a href="{{ route('quotations.create', ['customer' => $customer->id, 'type' => 'quotation']) }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Create Quotation</a>
+                <a href="{{ route('quotations.create', ['customer' => $customer->id, 'type' => 'proforma']) }}" wire:navigate class="rounded-xl border px-4 py-2.5 text-sm font-black">Create Proforma</a>
+            @endcan
+            @if(auth()->user()->can('sales.create') && auth()->user()->can('invoices.send'))
+                <a href="{{ route('direct-sales.create', ['customer' => $customer->id]) }}" wire:navigate class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white">Create Final Sale</a>
+            @endif
+            @can('quotations.view')<a href="{{ route('quotations.index', ['customer_id' => $customer->id]) }}" wire:navigate class="rounded-xl border px-4 py-2.5 text-sm font-black">View Quotations</a>@endcan
+            @can('invoices.view')<a href="{{ route('invoices.index', ['customer_id' => $customer->id]) }}" wire:navigate class="rounded-xl border px-4 py-2.5 text-sm font-black">View Invoices</a>@endcan
+        </div>
+    </x-card>
+
+    @php
+        $portalAccount = CustomerAccount::withoutGlobalScopes()->where('customer_id', $customer->id)->oldest('id')->first();
+        $credentialNotification = $portalAccount?->last_credentials_notification_id
+            ? WhatsAppNotification::withoutGlobalScopes()->find($portalAccount->last_credentials_notification_id)
+            : null;
+    @endphp
+    <x-card title="Portal Access" class="mt-6">
+        <dl class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div><dt class="text-xs font-black uppercase text-slate-400">Portal Access</dt><dd class="font-bold">{{ $portalAccount?->login_phone ? 'Enabled' : 'Disabled' }}</dd></div>
+            <div><dt class="text-xs font-black uppercase text-slate-400">Login Phone</dt><dd class="font-bold">{{ $portalAccount?->login_phone ?: '-' }}</dd></div>
+            <div><dt class="text-xs font-black uppercase text-slate-400">Credential Delivery</dt><dd class="font-bold">{{ $credentialNotification ? str($credentialNotification->status)->title() : 'Not queued' }}</dd></div>
+            <div><dt class="text-xs font-black uppercase text-slate-400">Last Credentials Queued</dt><dd class="font-bold">{{ $credentialNotification?->created_at?->format('d M Y H:i') ?: '-' }}</dd></div>
+        </dl>
+        <p class="mt-4 text-xs text-slate-500">Passwords and password hashes are never displayed.</p>
+        @can('customers.manage_portal_access')
+            <div class="mt-4 flex flex-wrap gap-2">
+                @if (! $portalAccount?->login_phone)
+                    <button wire:click="enablePortal" wire:confirm="Enable portal access and send new credentials?" class="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-black text-white">Enable Portal Access</button>
+                @else
+                    <button wire:click="resetPortalPassword" wire:confirm="Invalidate the current password and send a new temporary password?" class="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-black text-white">Reset &amp; Send Portal Password</button>
+                @endif
+            </div>
+        @endcan
     </x-card>
 </div>

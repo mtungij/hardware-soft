@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'subtotal',
     'discount_amount',
     'tax_amount',
+    'additional_charge_amount',
     'total_amount',
     'paid_amount',
     'balance_amount',
@@ -120,6 +121,11 @@ class Sale extends Model
         return $this->hasMany(SalePayment::class);
     }
 
+    public function additionalCharges(): HasMany
+    {
+        return $this->hasMany(SaleAdditionalCharge::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function customerPaymentAllocations(): HasMany
     {
         return $this->hasMany(CustomerPaymentAllocation::class);
@@ -136,6 +142,7 @@ class Sale extends Model
             'subtotal' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'tax_amount' => 'decimal:2',
+            'additional_charge_amount' => 'decimal:2',
             'total_amount' => 'decimal:2',
             'paid_amount' => 'decimal:2',
             'balance_amount' => 'decimal:2',

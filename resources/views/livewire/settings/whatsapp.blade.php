@@ -41,6 +41,7 @@ state([
     'maximum_messages_per_minute' => 3,
     'maximum_messages_per_hour' => 60,
     'low_stock_cooldown_hours' => 24,
+    'attach_stock_alert_pdf' => true,
     'test_recipient' => '',
     'last_device_state' => 'unknown',
     'last_checked_at' => null,
@@ -65,7 +66,7 @@ mount(function (): void {
         ['timezone' => $company->timezone ?: 'Africa/Dar_es_Salaam', 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES]
     );
 
-    foreach (['enabled', 'sending_paused', 'device_id', 'timezone', 'daily_summary_time', 'attach_daily_summary_pdf', 'debt_reminders_enabled', 'debt_due_tomorrow_enabled', 'debt_due_today_enabled', 'debt_overdue_enabled', 'debt_reminder_time', 'debt_overdue_interval_days', 'attach_debt_summary_pdf', 'quiet_hours_start', 'quiet_hours_end', 'enabled_categories', 'minimum_send_interval_seconds', 'maximum_messages_per_minute', 'maximum_messages_per_hour', 'low_stock_cooldown_hours', 'test_recipient', 'last_device_state', 'last_checked_at'] as $field) {
+    foreach (['enabled', 'sending_paused', 'device_id', 'timezone', 'daily_summary_time', 'attach_daily_summary_pdf', 'debt_reminders_enabled', 'debt_due_tomorrow_enabled', 'debt_due_today_enabled', 'debt_overdue_enabled', 'debt_reminder_time', 'debt_overdue_interval_days', 'attach_debt_summary_pdf', 'quiet_hours_start', 'quiet_hours_end', 'enabled_categories', 'minimum_send_interval_seconds', 'maximum_messages_per_minute', 'maximum_messages_per_hour', 'low_stock_cooldown_hours', 'attach_stock_alert_pdf', 'test_recipient', 'last_device_state', 'last_checked_at'] as $field) {
         $value = $setting->{$field};
         if (in_array($field, ['daily_summary_time', 'debt_reminder_time', 'quiet_hours_start', 'quiet_hours_end'], true) && is_string($value)) {
             $value = substr($value, 0, 5);
@@ -84,6 +85,11 @@ $categories = fn (): array => [
     'purchases' => 'Purchases / Goods Received',
     'customer_materials' => 'Customer Material Accounts',
     'production' => 'Production / Curing',
+    'customer_requests' => 'Customer Request Alerts',
+    'quotations' => 'Quotation Sent to Customer',
+    'quotation_acceptance' => 'Quotation Accepted',
+        'customer_invoices' => 'Final Invoice to Customer',
+        'customer_portal' => 'Customer Portal Credentials',
 ];
 
 $save = function (Gowa $gowa, WhatsAppAuditService $audit): void {
@@ -106,6 +112,7 @@ $save = function (Gowa $gowa, WhatsAppAuditService $audit): void {
         'maximum_messages_per_minute' => ['required', 'integer', 'min:1', 'max:60'],
         'maximum_messages_per_hour' => ['required', 'integer', 'min:1', 'max:1000'],
         'low_stock_cooldown_hours' => ['required', 'integer', 'min:1', 'max:720'],
+        'attach_stock_alert_pdf' => ['boolean'],
         'test_recipient' => ['nullable', 'string', 'max:30'],
     ]);
 
@@ -279,6 +286,7 @@ $saveTemplates = function (WhatsAppAuditService $audit): void {
                     <x-form-input label="Maximum Messages / Minute" name="maximum_messages_per_minute" type="number" wire:model="maximum_messages_per_minute" />
                     <x-form-input label="Maximum Messages / Hour" name="maximum_messages_per_hour" type="number" wire:model="maximum_messages_per_hour" />
                     <x-form-input label="Low Stock Cooldown (Hours)" name="low_stock_cooldown_hours" type="number" wire:model="low_stock_cooldown_hours" />
+                    <label class="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="attach_stock_alert_pdf" class="rounded text-build-orange"> Attach Low / Out of Stock PDF</label>
                 </div>
                 <div><div class="mb-2 text-sm font-black">Enabled Categories</div><div class="grid gap-2 md:grid-cols-2">@foreach($this->categories() as $key => $label)<label class="flex gap-2 text-sm"><input type="checkbox" value="{{ $key }}" wire:model="enabled_categories" class="rounded text-build-orange"> {{ $label }}</label>@endforeach</div></div>
                 <div class="flex gap-3"><button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save Settings</button><a href="{{ route('settings.whatsapp.logs') }}" class="rounded-xl border px-4 py-2.5 text-sm font-black">Notification Log</a></div>

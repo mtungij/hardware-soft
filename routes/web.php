@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\B2bDocumentController;
 use App\Http\Controllers\CompletePosReceiptController;
 use App\Http\Controllers\CustomerPortal\CustomerFileDownloadController;
 use App\Http\Controllers\GenericExportController;
@@ -177,6 +178,7 @@ Route::middleware('customer.locale')->group(function () {
     Route::middleware('guest:customer')->group(function () {
         Volt::route('customer/login', 'customer.auth.login')->name('customer.login');
         Volt::route('customer/register', 'customer.auth.register')->name('customer.register');
+        Volt::route('customer/forgot-password', 'customer.auth.forgot-password')->name('customer.forgot-password');
     });
 
     Route::middleware('auth:customer')->group(function () {
@@ -189,6 +191,7 @@ Route::middleware('customer.locale')->group(function () {
         })->name('customer.logout');
 
         Volt::route('customer/pending', 'customer.pending')->name('customer.pending');
+        Volt::route('customer/change-password', 'customer.auth.change-password')->name('customer.change-password');
 
         Route::middleware('customer.active')->group(function () {
             Volt::route('customer/dashboard', 'customer.dashboard')->name('customer.dashboard');
@@ -204,6 +207,14 @@ Route::middleware('customer.locale')->group(function () {
             Volt::route('customer/notifications', 'customer.notifications.index')->name('customer.notifications.index');
             Volt::route('customer/profile', 'customer.profile')->name('customer.profile');
             Volt::route('customer/help-center', 'customer.help-center')->name('customer.help-center');
+            Volt::route('customer/purchase-requests', 'customer.purchase-requests.index')->name('customer.purchase-requests.index');
+            Volt::route('customer/purchase-requests/create', 'customer.purchase-requests.create')->name('customer.purchase-requests.create');
+            Volt::route('customer/purchase-requests/{customerPurchaseRequest}', 'customer.purchase-requests.show')->name('customer.purchase-requests.show');
+            Volt::route('customer/quotations', 'customer.quotations.index')->name('customer.quotations.index');
+            Volt::route('customer/quotations/{quotation}', 'customer.quotations.show')->name('customer.quotations.show');
+            Route::get('customer/quotations/{quotation}/pdf', [B2bDocumentController::class, 'quotation'])->name('customer.quotations.pdf');
+            Volt::route('customer/invoices', 'customer.invoices.index')->name('customer.invoices.index');
+            Route::get('customer/invoices/{invoice}/pdf', [B2bDocumentController::class, 'invoice'])->name('customer.invoices.pdf');
         });
     });
 });
@@ -231,6 +242,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('sales/{sale}/receipt/complete', CompletePosReceiptController::class)->middleware('can:sales.view')->name('sales.receipt.complete');
     Volt::route('sales/{sale}/payments', 'sales.payments')->middleware('can:sales.view')->name('sales.payments');
     Volt::route('sales/{sale}/cancel', 'sales.cancel')->middleware('can:sales.cancel')->name('sales.cancel');
+    Volt::route('customer-requests', 'customer-requests.index')->middleware('can:customer_requests.view')->name('customer-requests.index');
+    Volt::route('customer-requests/{customerPurchaseRequest}', 'customer-requests.show')->middleware('can:customer_requests.view')->name('customer-requests.show');
+    Volt::route('quotations', 'quotations.index')->middleware('can:quotations.view')->name('quotations.index');
+    Volt::route('quotations/create', 'quotations.create')->middleware('can:quotations.create')->name('quotations.create');
+    Volt::route('quotations/{quotation}', 'quotations.show')->middleware('can:quotations.view')->name('quotations.show');
+    Route::get('quotations/{quotation}/pdf', [B2bDocumentController::class, 'quotation'])->middleware('can:quotations.view')->name('quotations.pdf');
+    Volt::route('direct-customer-sales/create', 'direct-sales.create')->middleware(['can:sales.create', 'can:invoices.send'])->name('direct-sales.create');
+    Volt::route('invoices', 'invoices.index')->middleware('can:invoices.view')->name('invoices.index');
+    Route::get('invoices/{invoice}/pdf', [B2bDocumentController::class, 'invoice'])->middleware('can:invoices.view')->name('invoices.pdf');
     Volt::route('store-stock', 'store-stock.index')->middleware(['warehouse.enabled', 'can:stock.view'])->name('store-stock.index');
     Volt::route('dispensing-stock', 'dispensing-stock.index')->middleware('can:stock.view')->name('dispensing-stock.index');
     Volt::route('inventory-summary', 'inventory-summary.index')->middleware('can:stock.view')->name('inventory-summary.index');
@@ -341,6 +361,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('settings/company', 'settings.company')
         ->middleware('company-settings.update')
         ->name('settings.company');
+    Volt::route('settings/commercial-documents', 'settings.commercial-documents')
+        ->middleware('can:payment_methods.view')
+        ->name('settings.commercial-documents');
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper')->group(function () {
         Volt::route('purchases/create', 'purchases.create')->middleware('warehouse.enabled')->name('purchases.create');

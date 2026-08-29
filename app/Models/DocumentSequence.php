@@ -36,6 +36,14 @@ class DocumentSequence extends Model
 
     public const CUSTOMER_MATERIAL_ISSUE = 'customer_material_issue';
 
+    public const CUSTOMER_PURCHASE_REQUEST = 'customer_purchase_request';
+
+    public const QUOTATION = 'quotation';
+
+    public const PROFORMA = 'proforma';
+
+    public const SALES_INVOICE = 'sales_invoice';
+
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);

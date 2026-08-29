@@ -1,16 +1,11 @@
 <?php
 
 use App\Models\Branch;
-use App\Models\Company;
-use App\Models\Customer;
-use App\Models\CustomerAccount;
-use App\Models\Setting;
-use App\Mail\CustomerPortalAccountCreatedMail;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
+use App\Services\CustomerPortalCredentialService;
+use Illuminate\Support\Str;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\rules;
 use function Livewire\Volt\state;
 
@@ -27,13 +22,18 @@ state([
     'customer_type' => 'cash',
     'opening_balance' => '0',
     'status' => 'active',
+    'operation_key' => '',
 ]);
+
+mount(function () {
+    $this->operation_key = (string) Str::uuid();
+});
 
 rules([
     'branch_id' => ['nullable', 'exists:branches,id'],
     'name' => ['required', 'string', 'max:255'],
     'phone' => ['required', 'string', 'max:30'],
-    'email' => ['required', 'email', 'max:255', 'unique:customer_accounts,email'],
+    'email' => ['nullable', 'email', 'max:255', 'unique:customer_accounts,email'],
     'address' => ['nullable', 'string', 'max:1000'],
     'region' => ['nullable', 'string', 'max:255'],
     'district' => ['nullable', 'string', 'max:255'],
@@ -46,81 +46,18 @@ $updatedRegion = function () {
     $this->district = '';
 };
 
-$temporaryPassword = function (): string {
-    $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
-
-    return collect(range(1, 12))
-        ->map(fn () => $alphabet[random_int(0, strlen($alphabet) - 1)])
-        ->join('');
-};
-
-$portalUrl = function (): string {
-    return rtrim((string) config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', 'https://customer.buildcore.site')), '/').'/customer/login';
-};
-
-$configureMailer = function (?Setting $settings): ?string {
-    if (! $settings?->mail_host) {
-        return null;
-    }
-
-    Config::set('mail.mailers.buildmart_smtp', [
-        'transport' => 'smtp',
-        'scheme' => $settings->mail_encryption === 'ssl' ? 'smtps' : 'smtp',
-        'url' => null,
-        'host' => $settings->mail_host,
-        'port' => $settings->mail_port ?: 587,
-        'username' => $settings->mail_username,
-        'password' => $settings->mail_password,
-        'timeout' => 30,
-        'local_domain' => parse_url((string) config('app.url'), PHP_URL_HOST),
-    ]);
-    Config::set('mail.from.address', $settings->mail_from_email ?: config('mail.from.address'));
-    Config::set('mail.from.name', $settings->mail_from_name ?: ($settings->company_name ?: config('app.name')));
-    Mail::forgetMailers();
-
-    return 'buildmart_smtp';
-};
-
-$save = function () {
+$save = function (CustomerPortalCredentialService $credentials) {
     $validated = $this->validate();
     $validated['branch_id'] = $validated['branch_id'] ?: null;
     $validated['credit_limit'] = 0;
-    $password = $this->temporaryPassword();
-    $settings = Setting::query()->first();
-    $company = Company::current();
-    $portalUrl = $this->portalUrl();
+    $result = $credentials->createCustomer($validated, auth()->user(), $this->operation_key);
 
-    [$customer, $account] = DB::transaction(function () use ($validated, $password) {
-        $customer = Customer::create($validated);
-
-        $account = CustomerAccount::create([
-            'customer_id' => $customer->id,
-            'name' => $customer->name,
-            'phone' => $customer->phone,
-            'email' => $customer->email,
-            'password' => $password,
-            'status' => 'active',
-            'preferred_locale' => 'sw',
-            'approved_at' => now(),
-            'approved_by' => auth()->id(),
-        ]);
-
-        return [$customer, $account];
-    });
-
-    try {
-        $mailer = $this->configureMailer($settings);
-        $message = new CustomerPortalAccountCreatedMail($customer, $account, $password, $portalUrl, $company, $settings);
-
-        $mailer
-            ? Mail::mailer($mailer)->to($account->email)->send($message)
-            : Mail::to($account->email)->send($message);
-
-        session()->flash('success', 'Customer created successfully. A Swahili welcome email with customer portal instructions was sent to '.$account->email.'.');
-    } catch (\Throwable $exception) {
-        report($exception);
-
-        session()->flash('error', 'Customer and portal account were created, but the email could not be sent: '.$exception->getMessage());
+    if ($validated['status'] !== 'active') {
+        session()->flash('success', 'Customer created successfully. Portal access can be enabled after activation.');
+    } elseif ($result['account']?->last_credentials_notification_id) {
+        session()->flash('success', 'Customer created successfully. Portal credentials were queued for WhatsApp delivery.');
+    } else {
+        session()->flash('error', 'Customer and portal account were created, but credentials could not be queued. Use Reset & Send Portal Password to retry.');
     }
 
     $this->redirectRoute('customers.index', navigate: true);
@@ -135,7 +72,7 @@ $save = function () {
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
             <x-form-input label="Customer Name" name="name" wire:model="name" required />
             <x-form-input label="Phone" name="phone" wire:model="phone" required />
-            <x-form-input label="Email" name="email" type="email" wire:model="email" required />
+            <x-form-input label="Email (Optional)" name="email" type="email" wire:model="email" />
             <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
             <x-money-input label="Opening Balance" name="opening_balance" wire:model="opening_balance" required />
 

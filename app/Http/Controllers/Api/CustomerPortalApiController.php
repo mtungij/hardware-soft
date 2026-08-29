@@ -8,6 +8,7 @@ use App\Models\CustomerNotification;
 use App\Models\CustomerReceipt;
 use App\Models\Sale;
 use App\Services\AccountingService;
+use App\Services\CustomerPortalCredentialService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -179,23 +180,25 @@ class CustomerPortalApiController extends Controller
         ]);
     }
 
-    public function updateProfile(Request $request): JsonResponse
+    public function updateProfile(Request $request, CustomerPortalCredentialService $credentials): JsonResponse
     {
         $account = $request->user();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
-            'email' => ['required', 'email', 'max:255', 'unique:customer_accounts,email,'.$account->id],
+            'phone' => ['required', 'string', 'max:30'],
+            'email' => ['nullable', 'email', 'max:255', 'unique:customer_accounts,email,'.$account->id],
             'preferred_locale' => ['nullable', 'in:sw,en'],
         ]);
 
+        $phone = $credentials->updateLoginPhone($account->customer, $data['phone'], $account);
         $account->update([
             'name' => $data['name'],
-            'phone' => $data['phone'] ?? null,
-            'email' => $data['email'],
+            'phone' => $phone,
+            'login_phone' => $phone,
+            'email' => ($data['email'] ?? null) ?: null,
             'preferred_locale' => $data['preferred_locale'] ?? $account->preferred_locale ?? 'sw',
         ]);
-        $account->customer()->update(['phone' => $data['phone'], 'email' => $data['email']]);
+        $account->customer()->update(['phone' => $phone, 'email' => ($data['email'] ?? null) ?: null]);
 
         return $this->profile($request);
     }

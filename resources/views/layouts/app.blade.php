@@ -123,6 +123,10 @@
                 ['label' => __('messages.staff.nav.sales_group'), 'icon' => 'sales', 'items' => [
                     ['label' => __('messages.staff.nav.pos'), 'route' => 'pos.index', 'icon' => 'pos', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Cashier']],
                     ['label' => __('messages.staff.nav.sales'), 'route' => 'sales.index', 'icon' => 'sales', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Cashier', 'Store Keeper', 'Accountant']],
+                    ['label' => 'Customer Requests', 'route' => 'customer-requests.index', 'icon' => 'receipt', 'permission' => 'customer_requests.view'],
+                    ['label' => 'Quotations & Proformas', 'route' => 'quotations.index', 'icon' => 'receipt', 'permission' => 'quotations.view'],
+                    ['label' => 'New Customer Sale', 'route' => 'direct-sales.create', 'icon' => 'sales', 'permissions' => ['sales.create', 'invoices.send']],
+                    ['label' => 'Customer Invoices', 'route' => 'invoices.index', 'icon' => 'receipt', 'permission' => 'invoices.view'],
                     ['label' => __('messages.staff.nav.customers'), 'route' => 'customers.index', 'icon' => 'customer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                     ['label' => __('messages.staff.nav.credit_sales'), 'route' => 'customer-balances.index', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
                     ['label' => 'Customer Material Accounts', 'route' => 'customer-material-accounts.index', 'icon' => 'bank', 'permission' => 'customer_material_accounts.view'],
@@ -158,6 +162,7 @@
                     ['label' => __('messages.staff.nav.customer_notifications'), 'route' => 'admin.customer-notifications.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.settings'), 'route' => 'settings.index', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.company_settings'), 'route' => 'settings.company', 'icon' => 'branch', 'roles' => ['Super Admin', 'Admin'], 'permission' => 'company-settings.update'],
+                    ['label' => 'Commercial Documents', 'route' => 'settings.commercial-documents', 'icon' => 'receipt', 'permission' => 'payment_methods.view'],
                     ['label' => __('messages.staff.nav.inventory_settings'), 'route' => 'settings.inventory', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => 'WhatsApp Notifications', 'route' => 'settings.whatsapp', 'icon' => 'message', 'permission' => 'whatsapp.view_settings'],
                     ['label' => __('messages.staff.nav.email_settings'), 'route' => 'email-settings.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager']],

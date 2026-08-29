@@ -14,7 +14,7 @@ $sections = fn () => [
     ['title' => 'Amana Zangu', 'items' => ['Tazama amana ulizoweka kwa matumizi ya baadaye.', 'Angalia salio la amana.']],
     ['title' => 'Taarifa za Akaunti', 'items' => ['Pakua statement yako.', 'Tazama historia ya manunuzi na malipo.']],
     ['title' => 'Taarifa', 'items' => ['Pokea matangazo, promosheni, na ujumbe muhimu kutoka kampuni.']],
-    ['title' => 'Maswali Yanayoulizwa Mara kwa Mara', 'items' => ['Kama huwezi kuingia, hakikisha email na password ni sahihi.', 'Kama deni halijapungua, subiri risiti ihakikiwe na staff.']],
+    ['title' => 'Maswali Yanayoulizwa Mara kwa Mara', 'items' => ['Kama huwezi kuingia, hakikisha namba ya simu iliyosajiliwa na password ni sahihi.', 'Kama deni halijapungua, subiri risiti ihakikiwe na staff.']],
 ];
 
 ?>

@@ -2,6 +2,7 @@
 
 use App\Jobs\SendWhatsAppNotification;
 use App\Models\Branch;
+use App\Models\Category;
 use App\Models\Company;
 use App\Models\CompanyWhatsAppSetting;
 use App\Models\Customer;
@@ -9,7 +10,11 @@ use App\Models\CustomerPayment;
 use App\Models\Product;
 use App\Models\ProductionOrder;
 use App\Models\Sale;
+use App\Models\StockLocation;
+use App\Models\StockMovement;
+use App\Models\Unit;
 use App\Models\User;
+use App\Models\UserStockLocation;
 use App\Models\WhatsAppNotification;
 use App\Models\WhatsAppRecipient;
 use App\Observers\CustomerPaymentWhatsAppObserver;
@@ -19,6 +24,8 @@ use App\Services\Gowa;
 use App\Services\WhatsAppDailySummaryService;
 use App\Services\WhatsAppMessageFactory;
 use App\Services\WhatsAppNotificationService;
+use App\Services\WhatsAppStockAlertPdfService;
+use App\Services\WhatsAppStockAlertService;
 use App\Support\WhatsAppPhone;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
@@ -69,6 +76,52 @@ function whatsappCreditSale(Company $company, Branch $branch, User $user, Custom
         'total_amount' => 500000, 'paid_amount' => 0, 'balance_amount' => 500000, 'change_amount' => 0,
         'payment_status' => 'unpaid', 'status' => 'completed', 'created_by' => $user->id, 'sold_by' => $user->id,
     ], $overrides));
+}
+
+function whatsappStockAlertContext(int $products = 1): array
+{
+    $company = Company::query()->create([
+        'company_name' => 'Stock Alert Hardware', 'business_type' => 'hardware',
+        'phone' => '255700100100', 'whatsapp_number' => '255700100100',
+        'timezone' => 'Africa/Dar_es_Salaam',
+    ]);
+    $branch = Branch::withoutGlobalScopes()->create([
+        'company_id' => $company->id, 'name' => 'Stock Main Branch',
+        'code' => 'STOCK-'.str()->random(8), 'status' => 'active',
+    ]);
+    $user = User::factory()->create(['company_id' => $company->id, 'branch_id' => $branch->id, 'status' => 'active']);
+    $category = Category::withoutGlobalScopes()->create([
+        'company_id' => $company->id, 'branch_id' => $branch->id,
+        'name' => 'Stock Alerts', 'code' => 'STA-'.str()->random(8), 'status' => 'active',
+    ]);
+    $unit = Unit::query()->firstOrFail();
+    $location = StockLocation::withoutGlobalScopes()->create([
+        'company_id' => $company->id, 'branch_id' => $branch->id,
+        'name' => 'Alert Main Store', 'code' => 'ALERT-MAIN', 'type' => 'store',
+        'status' => 'active', 'is_active' => true, 'can_receive_stock' => true,
+        'can_issue_stock' => true, 'can_sell' => true,
+    ]);
+    $createdProducts = collect();
+    for ($index = 1; $index <= $products; $index++) {
+        $product = Product::withoutGlobalScopes()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'category_id' => $category->id, 'unit_id' => $unit->id, 'purchase_unit_id' => $unit->id,
+            'name' => sprintf('Scoped Stock Product %02d', $index),
+            'sku' => 'SSP-'.str_pad((string) $index, 3, '0', STR_PAD_LEFT).'-'.$company->id,
+            'buying_price' => 0, 'selling_price' => 0, 'reorder_level' => 5, 'status' => 'active',
+        ]);
+        $quantity = $index <= 40 ? 0 : 2.5;
+        StockMovement::withoutGlobalScopes()->create([
+            'company_id' => $company->id, 'branch_id' => $branch->id,
+            'product_id' => $product->id, 'stock_location_id' => $location->id,
+            'movement_type' => 'adjustment_in', 'quantity' => $quantity,
+            'quantity_in' => $quantity, 'quantity_out' => 0,
+            'created_by' => $user->id, 'movement_date' => today(),
+        ]);
+        $createdProducts->push($product);
+    }
+
+    return compact('company', 'branch', 'user', 'category', 'unit', 'location', 'createdProducts');
 }
 
 test('gowa sends text with basic auth and the explicit device header', function () {
@@ -334,8 +387,138 @@ test('low stock command aggregates products into a controlled recipient message'
     $alerts = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'low_stock_aggregate')->get();
     expect($alerts->count())->toBeLessThanOrEqual(1);
     if ($alerts->isNotEmpty()) {
-        expect($alerts->first()->message)->toContain('HARDEX STOCK ALERT')->toContain('products require attention');
+        expect($alerts->first()->message)->toContain('HARDEX STOCK ALERT')->toContain('stock items require attention');
     }
+});
+
+test('45 stock rows queue one concise aggregate with a complete scoped pdf', function () {
+    Queue::fake();
+    Storage::fake('local');
+    $context = whatsappStockAlertContext(45);
+    $company = $context['company'];
+    $recipient = whatsappRecipient($company);
+    whatsappSetting($company, ['attach_stock_alert_pdf' => true]);
+
+    $this->artisan('whatsapp:stock-alerts', ['--company' => $company->id])->assertSuccessful();
+    $this->artisan('whatsapp:stock-alerts', ['--company' => $company->id])->assertSuccessful();
+
+    $alerts = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $company->id)
+        ->where('notification_type', 'low_stock_aggregate')->get();
+    expect($alerts)->toHaveCount(1);
+    $alert = $alerts->first();
+    expect($alert->message)
+        ->toContain('45 stock items require attention.')
+        ->toContain('Out of Stock: 40')
+        ->toContain('Low Stock: 5')
+        ->not->toContain('Scoped Stock Product 01')
+        ->and($alert->attachment_type)->toBe('file')
+        ->and($alert->metadata['total_count'])->toBe(45);
+    Storage::disk('local')->assertExists($alert->attachment_path);
+
+    $rows = app(WhatsAppStockAlertService::class)->rows($company, $recipient);
+    $html = view('pdf.whatsapp-stock-alert', [
+        'company' => $company, 'recipient' => $recipient->load('branch'),
+        'generatedAt' => now(), 'rows' => $rows,
+        'scopeLabel' => app(WhatsAppStockAlertService::class)->scopeLabel($company, $recipient),
+    ])->render();
+    expect($rows)->toHaveCount(45)
+        ->and(substr_count($html, 'Scoped Stock Product'))->toBe(45)
+        ->and($html)->toContain('OUT OF STOCK')->toContain('LOW STOCK')
+        ->not->toContain('Buying Price')->not->toContain('Profit')->not->toContain('COGS');
+});
+
+test('stock alert attachment setting supports text only and existing gowa file delivery', function () {
+    Queue::fake();
+    Storage::fake('local');
+    $context = whatsappStockAlertContext();
+    $company = $context['company'];
+    whatsappRecipient($company);
+    whatsappSetting($company, ['attach_stock_alert_pdf' => false, 'minimum_send_interval_seconds' => 1]);
+
+    $this->artisan('whatsapp:stock-alerts', ['--company' => $company->id])->assertSuccessful();
+    $textOnly = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $company->id)->firstOrFail();
+    expect($textOnly->attachment_type)->toBeNull()->and($textOnly->attachment_path)->toBeNull();
+
+    WhatsAppNotification::withoutGlobalScopes()->whereKey($textOnly->id)->delete();
+    whatsappSetting($company, ['attach_stock_alert_pdf' => true, 'minimum_send_interval_seconds' => 1]);
+    $this->artisan('whatsapp:stock-alerts', ['--company' => $company->id])->assertSuccessful();
+    $withPdf = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $company->id)->firstOrFail();
+    Http::fake([
+        '*/user/check*' => Http::response(['code' => 'SUCCESS', 'results' => ['is_on_whatsapp' => true]]),
+        '*/send/file' => Http::response(['code' => 'SUCCESS', 'results' => ['message_id' => 'STOCK-PDF-1']]),
+    ]);
+    (new SendWhatsAppNotification($withPdf->id))->handle(app(Gowa::class));
+    expect($withPdf->refresh()->status)->toBe('sent');
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/send/file'));
+});
+
+test('stock alert rows enforce branch assigned location and company scope before rendering', function () {
+    $context = whatsappStockAlertContext();
+    $company = $context['company'];
+    $branch = $context['branch'];
+    $user = $context['user'];
+    $service = app(WhatsAppStockAlertService::class);
+
+    $otherBranch = Branch::withoutGlobalScopes()->create([
+        'company_id' => $company->id, 'name' => 'Secret Other Branch',
+        'code' => 'OTHER-'.str()->random(8), 'status' => 'active',
+    ]);
+    $otherLocation = StockLocation::withoutGlobalScopes()->create([
+        'company_id' => $company->id, 'branch_id' => $otherBranch->id,
+        'name' => 'Other Location', 'code' => 'OTHER-LOC', 'type' => 'store',
+        'status' => 'active', 'is_active' => true, 'can_receive_stock' => true,
+        'can_issue_stock' => true, 'can_sell' => true,
+    ]);
+    $product = $context['createdProducts']->first();
+    StockMovement::withoutGlobalScopes()->create([
+        'company_id' => $company->id, 'branch_id' => $otherBranch->id,
+        'product_id' => $product->id, 'stock_location_id' => $otherLocation->id,
+        'movement_type' => 'adjustment_in', 'quantity' => 0, 'quantity_in' => 0, 'quantity_out' => 0,
+        'created_by' => $user->id, 'movement_date' => today(),
+    ]);
+
+    $branchRecipient = whatsappRecipient($company, ['phone' => '255764123457', 'scope' => 'branch', 'branch_id' => $branch->id]);
+    expect($service->rows($company, $branchRecipient)->pluck('location')->all())->toBe(['Alert Main Store']);
+
+    $user->assignRole('Cashier');
+    UserStockLocation::withoutGlobalScopes()->create([
+        'company_id' => $company->id, 'branch_id' => $branch->id, 'user_id' => $user->id,
+        'stock_location_id' => $context['location']->id, 'can_view' => true,
+    ]);
+    $assignedRecipient = whatsappRecipient($company, ['phone' => '255764123458', 'user_id' => $user->id]);
+    expect($service->rows($company, $assignedRecipient)->pluck('location')->all())->toBe(['Alert Main Store']);
+
+    $otherContext = whatsappStockAlertContext();
+    $otherContext['createdProducts']->first()->update(['name' => 'Other Company Secret Product']);
+    expect($service->rows($company, $assignedRecipient)->pluck('name')->all())->not->toContain('Other Company Secret Product');
+});
+
+test('stock quantity display removes trailing zeros and preserves meaningful fractions', function () {
+    $service = app(WhatsAppStockAlertService::class);
+    expect($service->quantity('0.0000'))->toBe('0')
+        ->and($service->quantity('2.0000'))->toBe('2')
+        ->and($service->quantity('5.5000'))->toBe('5.5')
+        ->and($service->quantity('12.2500'))->toBe('12.25');
+});
+
+test('stock pdf failure queues the summary without changing inventory', function () {
+    Queue::fake();
+    $context = whatsappStockAlertContext();
+    $company = $context['company'];
+    whatsappRecipient($company);
+    whatsappSetting($company, ['attach_stock_alert_pdf' => true]);
+    $before = StockMovement::withoutGlobalScopes()->where('company_id', $company->id)->get(['quantity_in', 'quantity_out'])->toArray();
+    $this->mock(WhatsAppStockAlertPdfService::class)
+        ->shouldReceive('generate')->once()->andThrow(new RuntimeException('PDF unavailable'));
+
+    $this->artisan('whatsapp:stock-alerts', ['--company' => $company->id])->assertSuccessful();
+
+    $notification = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $company->id)->firstOrFail();
+    expect($notification->status)->toBe('queued')
+        ->and($notification->attachment_path)->toBeNull()
+        ->and($notification->message)->toContain('could not be attached')
+        ->and($notification->metadata['pdf_generation_failure'])->not->toBeNull()
+        ->and(StockMovement::withoutGlobalScopes()->where('company_id', $company->id)->get(['quantity_in', 'quantity_out'])->toArray())->toBe($before);
 });
 
 test('customer payment observer records an idempotent alert after payment creation', function () {

@@ -417,9 +417,9 @@ class InventoryService
      * @param  array<int, array<string, mixed>>  $cart
      * @param  array<int, array<string, mixed>>  $payments
      */
-    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = [], ?string $idempotencyKey = null): Sale
+    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = [], ?string $idempotencyKey = null, bool $useApprovedSnapshotPrices = false, array $additionalCharges = []): Sale
     {
-        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails, $idempotencyKey) {
+        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails, $idempotencyKey, $useApprovedSnapshotPrices, $additionalCharges) {
             if ($cart === []) {
                 throw ValidationException::withMessages(['cart' => 'Cart is required.']);
             }
@@ -513,6 +513,12 @@ class InventoryService
                 $unitPrice = $selectedConversion
                     ? $selectedConversion->priceFor($saleType)
                     : (float) ($saleType === 'wholesale' ? $product->wholesale_price : $product->selling_price);
+                if ($useApprovedSnapshotPrices) {
+                    if (! is_numeric($row['approved_unit_price'] ?? null) || (float) $row['approved_unit_price'] < 0) {
+                        throw ValidationException::withMessages(["cart.{$index}.approved_unit_price" => 'The approved quotation price is invalid.']);
+                    }
+                    $unitPrice = (float) $row['approved_unit_price'];
+                }
                 $discountPerUnit = (float) ($row['discount_per_unit'] ?? $row['discount_amount'] ?? 0);
                 $taxPerUnit = (float) ($row['tax_amount'] ?? 0);
                 $allowsDecimalQuantity = $product->allowsDecimalQuantities();
@@ -522,6 +528,14 @@ class InventoryService
                 $baseQuantity = $selectedConversion
                     ? $selectedConversion->baseQuantity($quantity)
                     : ($explicitBaseUnit ? round($quantity, 4) : $product->baseQuantityForSale($quantity));
+                if ($useApprovedSnapshotPrices) {
+                    if (! is_numeric($row['approved_conversion_factor'] ?? null) || (float) $row['approved_conversion_factor'] <= 0
+                        || ! is_numeric($row['approved_base_quantity'] ?? null) || (float) $row['approved_base_quantity'] <= 0) {
+                        throw ValidationException::withMessages(["cart.{$index}.approved_base_quantity" => 'The approved quotation quantity snapshot is invalid.']);
+                    }
+                    $conversionFactor = (float) $row['approved_conversion_factor'];
+                    $baseQuantity = (float) $row['approved_base_quantity'];
+                }
                 $minimumSaleQuantity = $allowsDecimalQuantity ? (float) ($product->minimum_sale_quantity ?: 1) : 1.0;
                 $quantityStep = $allowsDecimalQuantity ? (float) ($product->quantity_step ?: 1) : 1.0;
 
@@ -562,7 +576,7 @@ class InventoryService
                     ? $baseUnitCost * $conversionFactor
                     : $baseUnitCost / $conversionFactor;
 
-                if ($unitPrice < $sellingUnitCost) {
+                if (! $useApprovedSnapshotPrices && $unitPrice < $sellingUnitCost) {
                     throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' price cannot be below buying price.']);
                 }
 
@@ -627,7 +641,25 @@ class InventoryService
                 ];
             }
 
-            $total = max(0, $subtotal - $discount + $tax);
+            $preparedCharges = collect($additionalCharges)->values()->map(function (array $charge, int $index) use ($companyId): array {
+                $name = trim((string) ($charge['charge_name_snapshot'] ?? ''));
+                $amount = (float) ($charge['amount'] ?? 0);
+                if ($name === '' || $amount <= 0) {
+                    throw ValidationException::withMessages(["additional_charges.{$index}" => 'Each additional charge requires a name and positive amount.']);
+                }
+
+                return [
+                    'company_id' => $companyId,
+                    'quotation_additional_charge_id' => $charge['quotation_additional_charge_id'] ?? null,
+                    'additional_charge_type_id' => $charge['additional_charge_type_id'] ?? null,
+                    'charge_name_snapshot' => $name,
+                    'description_snapshot' => filled($charge['description_snapshot'] ?? null) ? trim((string) $charge['description_snapshot']) : null,
+                    'amount' => $amount,
+                    'sort_order' => (int) ($charge['sort_order'] ?? $index),
+                ];
+            });
+            $additionalChargeTotal = (float) $preparedCharges->sum('amount');
+            $total = max(0, $subtotal - $discount + $tax + $additionalChargeTotal);
             $paid = collect($payments)
                 ->reject(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit')
                 ->sum(fn ($payment) => (float) ($payment['amount'] ?? 0));
@@ -679,6 +711,7 @@ class InventoryService
                 'subtotal' => $subtotal,
                 'discount_amount' => $discount,
                 'tax_amount' => $tax,
+                'additional_charge_amount' => $additionalChargeTotal,
                 'total_amount' => $total,
                 'paid_amount' => min($paid, $total),
                 'balance_amount' => $balance,
@@ -689,6 +722,10 @@ class InventoryService
                 'created_by' => $createdBy,
                 'sold_by' => $createdBy,
             ]);
+
+            foreach ($preparedCharges as $charge) {
+                $sale->additionalCharges()->create($charge);
+            }
 
             foreach ($preparedItems as $item) {
                 /** @var StockLocation $location */

@@ -12,9 +12,11 @@ beforeEach(function () {
 function apiCustomerAccount(string $status = 'active'): CustomerAccount
 {
     $email = fake()->unique()->safeEmail();
+    $branch = Branch::query()->firstOrFail();
 
     $customer = Customer::create([
-        'branch_id' => Branch::query()->value('id'),
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
         'name' => 'API Customer',
         'phone' => '+255700000002',
         'email' => $email,
@@ -26,9 +28,11 @@ function apiCustomerAccount(string $status = 'active'): CustomerAccount
     ]);
 
     return CustomerAccount::create([
+        'company_id' => $branch->company_id,
         'customer_id' => $customer->id,
         'name' => 'API Customer',
         'phone' => '+255700000002',
+        'login_phone' => '255700000002',
         'email' => $email,
         'password' => 'password',
         'status' => $status,
@@ -39,7 +43,7 @@ test('customer api login returns sanctum token and dashboard data', function () 
     $account = apiCustomerAccount();
 
     $login = $this->postJson('/api/customer/login', [
-        'login' => $account->email,
+        'login' => '0700000002',
         'password' => 'password',
         'device_name' => 'Feature Test',
     ])->assertOk()

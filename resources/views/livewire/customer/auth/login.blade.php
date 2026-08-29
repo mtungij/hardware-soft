@@ -1,6 +1,9 @@
 <?php
 
+use App\Support\WhatsAppPhone;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\ValidationException;
 
 use function Livewire\Volt\layout;
@@ -9,34 +12,46 @@ use function Livewire\Volt\state;
 
 layout('layouts.auth');
 
-state(['email' => '', 'password' => '', 'remember' => false]);
+state(['phone' => '', 'password' => '', 'remember' => false]);
 
 rules([
-    'email' => ['required', 'email'],
+    'phone' => ['required', 'string', 'max:30'],
     'password' => ['required', 'string'],
 ]);
 
 $login = function () {
-    $credentials = $this->validate();
+    $this->validate();
     $remember = (bool) $this->remember;
-    unset($credentials['remember']);
-
-    if (! Auth::guard('customer')->attempt($credentials, $remember)) {
-        throw ValidationException::withMessages(['email' => __('messages.auth.invalid_credentials')]);
+    try {
+        $phone = WhatsAppPhone::normalize($this->phone);
+    } catch (\Throwable) {
+        $phone = preg_replace('/\D+/', '', $this->phone) ?: 'invalid';
     }
+    $throttleKey = 'customer-login:'.hash('sha256', $phone.'|'.request()->ip());
+
+    if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+        throw ValidationException::withMessages(['phone' => 'Too many login attempts. Please try again in '.RateLimiter::availableIn($throttleKey).' seconds.']);
+    }
+
+    if (! Auth::guard('customer')->attempt(['login_phone' => $phone, 'password' => $this->password], $remember)) {
+        RateLimiter::hit($throttleKey, 60);
+        throw ValidationException::withMessages(['phone' => 'Invalid phone number or password.']);
+    }
+
+    RateLimiter::clear($throttleKey);
 
     $account = Auth::guard('customer')->user();
 
     if ($account->isSuspended()) {
         Auth::guard('customer')->logout();
-        request()->session()->regenerateToken();
-        throw ValidationException::withMessages(['email' => __('messages.auth.suspended')]);
+        Session::regenerateToken();
+        throw ValidationException::withMessages(['phone' => __('messages.auth.suspended')]);
     }
 
-    request()->session()->regenerate();
+    Session::regenerate();
     $account->forceFill(['last_login_at' => now()])->save();
 
-    $this->redirectRoute($account->isPending() ? 'customer.pending' : 'customer.dashboard', navigate: true);
+    $this->redirectRoute($account->must_change_password ? 'customer.change-password' : ($account->isPending() ? 'customer.pending' : 'customer.dashboard'), navigate: true);
 };
 
 ?>
@@ -81,10 +96,10 @@ $login = function () {
                     <x-pwa-install-button />
                 </div>
                 <h1 class="text-2xl font-black text-navy-900 dark:text-white">{{ __('messages.auth.login') }}</h1>
-                <p class="mt-1 text-sm font-semibold text-slate-500">{{ __('messages.auth.login_intro') }}</p>
+                <p class="mt-1 text-sm font-semibold text-slate-500">{{ app()->getLocale() === 'sw' ? 'Ingia kwa kutumia namba ya simu iliyosajiliwa.' : 'Sign in using your registered phone number.' }}</p>
 
                 <form wire:submit="login" class="mt-6 space-y-4">
-                    <x-form-input :label="__('messages.auth.email')" name="email" wire:model="email" type="email" required autofocus />
+                    <x-form-input :label="__('messages.auth.phone')" name="phone" wire:model="phone" placeholder="0629 364 847" required autofocus />
                     <x-form-input :label="__('messages.auth.password')" name="password" wire:model="password" type="password" required />
                     <label class="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                         <input wire:model="remember" type="checkbox" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
@@ -94,6 +109,10 @@ $login = function () {
                         <span wire:loading.remove>{{ __('messages.auth.login_button') }}</span><span wire:loading>{{ __('messages.auth.signing_in') }}</span>
                     </button>
                 </form>
+
+                <div class="mt-4 text-center">
+                    <a href="{{ route('customer.forgot-password') }}" wire:navigate class="text-sm font-black text-build-orange">{{ __('messages.auth.forgot_password') }}</a>
+                </div>
 
                 <div class="mt-6 text-center text-sm font-semibold text-slate-500">
                     {{ __('messages.auth.no_account') }}

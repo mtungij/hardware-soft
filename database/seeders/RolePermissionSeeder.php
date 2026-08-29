@@ -117,6 +117,19 @@ class RolePermissionSeeder extends Seeder
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
+        $b2bPermissions = [
+            'customer_requests.view', 'customer_requests.review', 'customer_requests.create_quotation', 'customer_requests.convert_to_sale',
+            'quotations.view', 'quotations.create', 'quotations.edit', 'quotations.send', 'quotations.cancel', 'quotations.convert',
+            'invoices.view', 'invoices.send', 'invoices.export',
+            'payment_methods.view', 'payment_methods.manage',
+            'additional_charge_types.view', 'additional_charge_types.manage', 'commercial_charges.apply',
+        ];
+        foreach ($b2bPermissions as $permissionName) {
+            Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
+        }
+
+        Permission::query()->firstOrCreate(['name' => 'customers.manage_portal_access', 'guard_name' => $this->guard]);
+
         $customizedRolePermissions = Role::query()
             ->where('guard_name', $this->guard)
             ->with('permissions')
