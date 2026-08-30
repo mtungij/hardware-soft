@@ -179,11 +179,14 @@ class ReportExportService
 
     private function salesItems(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $canViewProfit = $request->user()?->can('view sales profit') ?? false;
+        $canViewProfit = $request->user()?->can('sales.view_profit') ?? false;
+        $assignedLocationIds = AuthorizationScope::scopeFor($request->user(), 'stock_scope', AuthorizationScope::ASSIGNED_LOCATIONS) === AuthorizationScope::ASSIGNED_LOCATIONS
+            ? AuthorizationScope::stockLocationIds($request->user())
+            : null;
         $lineCost = fn (SaleItem $item): float => $item->base_unit_cost !== null
             ? (float) $item->base_quantity * (float) $item->base_unit_cost
             : (float) $item->quantity * (float) $item->unit_cost;
-        $lineProfit = fn (SaleItem $item): float => (float) ($item->profit_amount ?? ((float) $item->line_total - $lineCost($item)));
+        $lineProfit = fn (SaleItem $item): float => (float) $item->line_total - $lineCost($item);
         $tr = fn (string $key): string => __('messages.sales_items.'.$key);
         $paymentLabel = fn (string $method): string => $tr('method_'.$method);
 
@@ -200,6 +203,7 @@ class ReportExportService
                     ->when($to, fn ($q) => $q->whereDate('sale_date', '<=', $to));
             })
             ->when($request->string('sale_type')->toString(), fn ($query, $type) => $query->where('sale_type', $type))
+            ->when($assignedLocationIds !== null, fn ($query) => $query->whereIn('stock_location_id', $assignedLocationIds))
             ->when($request->integer('stock_location_id'), fn ($query, $id) => $query->where('stock_location_id', $id))
             ->when($request->integer('product_id'), fn ($query, $id) => $query->where('product_id', $id))
             ->when($request->integer('category_id'), fn ($query, $id) => $query->whereHas('product', fn ($productQuery) => $productQuery->where('category_id', $id)))
@@ -221,7 +225,7 @@ class ReportExportService
                 $stockSources = $items->map(fn ($item) => $item->sold_from_label ?: $item->stockLocation?->name)->filter()->unique()->values();
                 $paymentMethods = $sale?->payments?->pluck('payment_method')->filter()->unique()->values() ?? collect();
                 $cost = $items->sum(fn ($item) => $lineCost($item));
-                $sales = (float) ($sale?->total_amount ?? $items->sum('line_total'));
+                $sales = (float) $items->sum('line_total');
 
                 return [
                     'sale' => $sale,
@@ -240,13 +244,19 @@ class ReportExportService
             ->sortByDesc(fn ($row) => $row['sale']?->created_at)
             ->values();
 
-        $headers = [$tr('sale_no'), $tr('customer'), $tr('products_sold'), $tr('total_quantity')];
+        $headers = [$tr('sale_no'), $tr('sale_time'), $tr('customer'), $tr('product_name'), $tr('sku'), $tr('quantity_sold'), $tr('unit')];
 
         if ($canViewProfit) {
-            $headers[] = $tr('buying_cost');
+            $headers[] = $tr('buying_price_unit');
         }
 
-        $headers[] = $tr('selling_amount');
+        $headers[] = $tr('selling_price_unit');
+
+        if ($canViewProfit) {
+            $headers[] = $tr('total_cost');
+        }
+
+        $headers[] = $tr('total_sales');
 
         if ($canViewProfit) {
             $headers[] = $tr('profit');
@@ -254,39 +264,60 @@ class ReportExportService
 
         array_push($headers, $tr('sale_type'), $tr('payment_method'), $tr('stock_location'), $tr('cashier'));
 
-        $exportRows = $invoiceRows->map(function (array $invoice) use ($canViewProfit) {
+        $exportRows = $rows->map(function (SaleItem $item) use ($canViewProfit, $lineCost, $lineProfit, $paymentLabel, $tr): array {
+            $sale = $item->sale;
+            $paymentMethods = $sale?->payments?->pluck('payment_method')->filter()->unique()->values() ?? collect();
+            $method = $sale?->payment_status === 'partial'
+                ? $tr('partial')
+                : ($paymentMethods->count() > 1 ? $tr('mixed') : ($paymentMethods->isEmpty() ? '-' : $paymentLabel((string) $paymentMethods->first())));
             $row = [
-                $invoice['sale']?->sale_number,
-                $invoice['customer'],
-                $invoice['items']->map(fn ($item) => $item->productDisplayNameWithSize().' x '.$this->formatQuantity($item->quantity).' '.($item->sellingUnit?->short_name ?: $item->product?->sellingUnit?->short_name))->join("\n"),
-                $this->formatQuantity($invoice['total_quantity']),
+                $sale?->sale_number,
+                $sale?->created_at?->format('H:i'),
+                $sale?->customer?->name ?: $tr('walk_in_customer'),
+                $item->productDisplayNameWithSize(),
+                $item->product?->sku,
+                $this->formatQuantity($item->quantity),
+                $item->selling_unit_code_snapshot ?: ($item->selling_unit_name_snapshot ?: $item->sellingUnit?->short_name),
             ];
 
             if ($canViewProfit) {
-                $row[] = $this->formatCurrency($invoice['cost']);
+                $row[] = $this->formatCurrency($item->unit_cost);
             }
 
-            $row[] = $this->formatCurrency($invoice['sales']);
+            $row[] = $this->formatCurrency($item->unit_price);
 
             if ($canViewProfit) {
-                $row[] = $this->formatCurrency($invoice['profit']);
+                $row[] = $this->formatCurrency($lineCost($item));
             }
 
-            array_push($row, $invoice['sale_type'], $invoice['payment_method'], $invoice['stock_source'], $invoice['cashier']);
+            $row[] = $this->formatCurrency($item->line_total);
+
+            if ($canViewProfit) {
+                $row[] = $this->formatCurrency($lineProfit($item));
+            }
+
+            array_push(
+                $row,
+                $item->sale_type === 'wholesale' ? $tr('wholesale') : $tr('retail'),
+                $method,
+                $item->sold_from_label ?: $item->stockLocation?->name,
+                $sale?->soldBy?->name ?? $sale?->createdBy?->name,
+            );
 
             return $row;
         })->all();
 
         $totals = [
-            $tr('total_sales') => $this->formatCurrency($invoiceRows->sum('sales')),
+            $tr('total_sales') => $this->formatCurrency($rows->sum('line_total')),
             $tr('total_customers') => number_format($invoiceRows->pluck('sale.customer_id')->filter()->unique()->count() + ($invoiceRows->contains(fn ($row) => blank($row['sale']?->customer_id)) ? 1 : 0)),
-            $tr('total_invoices') => number_format($invoiceRows->count()),
+            $tr('total_invoices') => number_format($rows->pluck('sale_id')->unique()->count()),
+            $tr('total_products_sold') => $this->formatQuantity($rows->sum('quantity')),
             $tr('cash_sales_total') => $this->formatCurrency(SalePayment::whereIn('sale_id', $rows->pluck('sale_id')->unique())->where('payment_method', 'cash')->sum('amount')),
             $tr('credit_sales_total') => $this->formatCurrency(SalePayment::whereIn('sale_id', $rows->pluck('sale_id')->unique())->where('payment_method', 'credit')->sum('amount')),
         ];
 
         if ($canViewProfit) {
-            $totals = [$tr('total_cost') => $this->formatCurrency($invoiceRows->sum('cost')), $tr('total_profit') => $this->formatCurrency($invoiceRows->sum('profit')), ...$totals];
+            $totals = [$tr('total_cost') => $this->formatCurrency($rows->sum(fn (SaleItem $item) => $lineCost($item))), $tr('total_profit') => $this->formatCurrency($rows->sum(fn (SaleItem $item) => $lineProfit($item))), ...$totals];
         }
 
         return [$tr('todays_sales_summary'), $headers, $exportRows, $totals];
