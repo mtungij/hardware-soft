@@ -107,6 +107,13 @@ test('sales report defaults to visible item rows using historical snapshots with
     $html = $component->html();
 
     expect(substr_count($html, 'data-sale-item-row='))->toBe(3)
+        ->and(substr_count($html, 'data-item-heading='))->toBe(10)
+        ->and($html)->toContain('<thead')
+        ->toContain('data-item-report-scroll')
+        ->toContain('overflow-x-auto')
+        ->toContain('min-w-[1400px]')
+        ->toContain('Sale / Invoice', 'Customer', 'Product Name', 'Quantity Sold', 'Unit', 'Buying Price / Unit', 'Selling Price / Unit', 'Total Cost', 'Total Sales', 'Profit')
+        ->toMatch('/data-item-heading="sale".*data-item-heading="customer".*data-item-heading="product".*data-item-heading="quantity".*data-item-heading="unit".*data-item-heading="buying-price".*data-item-heading="selling-price".*data-item-heading="total-cost".*data-item-heading="total-sales".*data-item-heading="profit"/s')
         ->and($html)->toContain('Report Hammer')->toContain('REPORT-HAMMER')
         ->toContain('Report Cement')->toContain('REPORT-CEMENT')
         ->toContain('Report Crated Tiles')->toContain('REPORT-CRATE')
@@ -117,6 +124,10 @@ test('sales report defaults to visible item rows using historical snapshots with
         ->toMatch('/data-sales-summary="total-cost"[^>]*>.*?TZS 3,110/s')
         ->toMatch('/data-sales-summary="total-profit"[^>]*>.*?TZS 4,890/s')
         ->toMatch('/data-sales-summary="total-invoices"[^>]*>.*?>1</s');
+
+    preg_match('/<tr[^>]*data-sale-item-row=.*?<\/tr>/s', $html, $firstItemRow);
+    expect($firstItemRow)->not->toBeEmpty()
+        ->and(substr_count($firstItemRow[0], '<td'))->toBe(10);
 
     $component->set('view', 'sales')->assertSee('Expand')->assertSee($this->mainSale->sale_number);
 });
@@ -213,7 +224,15 @@ test('branch and assigned stock-location scopes remain enforced for item rows', 
     $html = Volt::test('sales.index')->html();
 
     expect($html)->toContain('REPORT-ASSIGNED')->not->toContain('REPORT-UNASSIGNED')
+        ->and(substr_count($html, 'data-item-heading='))->toBe(7)
+        ->and($html)->toContain('min-w-[980px]')
+        ->toContain('data-item-heading="sale"', 'data-item-heading="customer"', 'data-item-heading="product"', 'data-item-heading="quantity"', 'data-item-heading="unit"', 'data-item-heading="selling-price"', 'data-item-heading="total-sales"')
+        ->not->toContain('data-item-heading="buying-price"', 'data-item-heading="total-cost"', 'data-item-heading="profit"')
         ->not->toContain('Buying Price / Unit')->not->toContain('Total Cost')->not->toContain('Profit');
+
+    preg_match('/<tr[^>]*data-sale-item-row=.*?<\/tr>/s', $html, $firstItemRow);
+    expect($firstItemRow)->not->toBeEmpty()
+        ->and(substr_count($firstItemRow[0], '<td'))->toBe(7);
 });
 
 function salesReportProduct(object $test, string $name, string $sku, int $categoryId, ?int $branchId = null): Product

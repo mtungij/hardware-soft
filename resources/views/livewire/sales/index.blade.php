@@ -255,67 +255,58 @@ mount(function () {
                 $itemRows = new LengthAwarePaginator($summaryItems->sortByDesc(fn ($item) => $item->sale?->created_at)->forPage($page, 25)->values(), $summaryItems->count(), 25, $page, ['path' => request()->url(), 'query' => request()->query()]);
             @endphp
             <x-card class="mt-6">
-                <x-table>
-                    <x-slot:head>
+                <div class="max-w-full overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900" data-item-report-scroll>
+                    <table class="{{ $canViewProfit ? 'min-w-[1400px]' : 'min-w-[980px]' }} w-full divide-y divide-slate-200 text-sm dark:divide-slate-700" data-item-report-table>
+                        <thead class="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         <tr>
-                            <th class="px-3 py-3 text-left">{{ $t('sale_no') }} / {{ $t('sale_time') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('customer') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('product_name') }} / {{ $t('sku') }}</th>
-                            <th class="px-3 py-3 text-right">{{ $t('quantity_sold') }}</th>
-                            <th class="px-3 py-3 text-left">{{ $t('unit') }}</th>
+                            <th class="w-[13%] whitespace-nowrap px-3 py-3 text-left" data-item-heading="sale">Sale / Invoice</th>
+                            <th class="w-[12%] px-3 py-3 text-left" data-item-heading="customer">{{ $t('customer') }}</th>
+                            <th class="w-[18%] px-3 py-3 text-left" data-item-heading="product">{{ $t('product_name') }}</th>
+                            <th class="w-[8%] whitespace-nowrap px-3 py-3 text-right" data-item-heading="quantity">{{ $t('quantity_sold') }}</th>
+                            <th class="w-[7%] px-3 py-3 text-left" data-item-heading="unit">{{ $t('unit') }}</th>
                             @if ($canViewProfit)
-                                <th class="px-3 py-3 text-right">{{ $t('buying_price_unit') }}</th>
+                                <th class="w-[10%] whitespace-nowrap px-3 py-3 text-right" data-item-heading="buying-price">{{ $t('buying_price_unit') }}</th>
                             @endif
-                            <th class="px-3 py-3 text-right">{{ $t('selling_price_unit') }}</th>
+                            <th class="w-[10%] whitespace-nowrap px-3 py-3 text-right" data-item-heading="selling-price">{{ $t('selling_price_unit') }}</th>
                             @if ($canViewProfit)
-                                <th class="px-3 py-3 text-right">{{ $t('total_cost') }}</th>
+                                <th class="w-[9%] whitespace-nowrap px-3 py-3 text-right" data-item-heading="total-cost">{{ $t('total_cost') }}</th>
                             @endif
-                            <th class="px-3 py-3 text-right">{{ $t('total_sales') }}</th>
+                            <th class="w-[9%] whitespace-nowrap px-3 py-3 text-right" data-item-heading="total-sales">{{ $t('total_sales') }}</th>
                             @if ($canViewProfit)
-                                <th class="px-3 py-3 text-right">{{ $t('profit') }}</th>
+                                <th class="w-[9%] whitespace-nowrap px-3 py-3 text-right" data-item-heading="profit">{{ $t('profit') }}</th>
                             @endif
-                            <th class="hidden px-3 py-3 text-left lg:table-cell">{{ $t('sale_type') }}</th>
-                            <th class="hidden px-3 py-3 text-left xl:table-cell">{{ $t('payment_method') }}</th>
-                            <th class="hidden px-3 py-3 text-left xl:table-cell">{{ $t('stock_location') }}</th>
-                            <th class="hidden px-3 py-3 text-left lg:table-cell">{{ $t('cashier') }}</th>
                         </tr>
-                    </x-slot:head>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 bg-white dark:divide-slate-800 dark:bg-slate-900">
                     @forelse ($itemRows as $item)
                         @php
                             $sale = $item->sale;
-                            $methods = $sale?->payments?->pluck('payment_method')->filter()->unique()->values() ?? collect();
-                            $method = $sale?->payment_status === 'partial'
-                                ? $t('partial')
-                                : ($methods->count() > 1 ? $t('mixed') : ($methods->isEmpty() ? '-' : $paymentLabel((string) $methods->first())));
                             $unit = $item->selling_unit_code_snapshot ?: ($item->selling_unit_name_snapshot ?: $item->sellingUnit?->short_name);
-                            $stockSource = $item->sold_from_label ?: ($item->stockLocation ? InventorySettings::stockLocationLabel($item->stockLocation) : '-');
                         @endphp
                         <tr class="align-top text-xs" data-sale-item-row="{{ $item->id }}">
-                            <td class="whitespace-nowrap px-3 py-3"><p class="font-black">{{ $sale?->sale_number }}</p><p class="mt-1 text-slate-500">{{ $sale?->created_at?->format('H:i') }}</p></td>
-                            <td class="px-3 py-3 font-semibold">{{ $customerLabel($sale?->customer) }}</td>
-                            <td class="px-3 py-3"><p class="font-black">{{ $item->productDisplayNameWithSize() }}</p><p class="mt-1 font-mono text-slate-500">{{ $item->product?->sku }}</p></td>
-                            <td class="px-3 py-3 text-right font-bold">{{ $quantity($item->quantity) }}</td>
-                            <td class="px-3 py-3">{{ $unit ?: '-' }}</td>
+                            <td class="w-[13%] whitespace-nowrap px-3 py-3"><p class="font-black">{{ $sale?->sale_number }}</p><p class="mt-1 text-slate-500">{{ $sale?->created_at?->format('H:i') }}</p></td>
+                            <td class="w-[12%] px-3 py-3 font-semibold">{{ $customerLabel($sale?->customer) }}</td>
+                            <td class="w-[18%] px-3 py-3"><p class="font-black">{{ $item->productDisplayNameWithSize() }}</p><p class="mt-1 font-mono text-slate-500">{{ $item->product?->sku }}</p></td>
+                            <td class="w-[8%] px-3 py-3 text-right font-bold">{{ $quantity($item->quantity) }}</td>
+                            <td class="w-[7%] px-3 py-3">{{ $unit ?: '-' }}</td>
                             @if ($canViewProfit)
-                                <td class="px-3 py-3 text-right">{{ $money($item->unit_cost) }}</td>
+                                <td class="w-[10%] px-3 py-3 text-right">{{ $money($item->unit_cost) }}</td>
                             @endif
-                            <td class="px-3 py-3 text-right">{{ $money($item->unit_price) }}</td>
+                            <td class="w-[10%] px-3 py-3 text-right">{{ $money($item->unit_price) }}</td>
                             @if ($canViewProfit)
-                                <td class="px-3 py-3 text-right">{{ $money($lineCost($item)) }}</td>
+                                <td class="w-[9%] px-3 py-3 text-right">{{ $money($lineCost($item)) }}</td>
                             @endif
-                            <td class="px-3 py-3 text-right font-bold">{{ $money($item->line_total) }}</td>
+                            <td class="w-[9%] px-3 py-3 text-right font-black text-slate-900 dark:text-white">{{ $money($item->line_total) }}</td>
                             @if ($canViewProfit)
-                                <td class="px-3 py-3 text-right font-bold {{ $lineProfit($item) >= 0 ? 'text-emerald-600' : 'text-red-600' }}">{{ $money($lineProfit($item)) }}</td>
+                                <td class="w-[9%] px-3 py-3 text-right font-bold {{ $lineProfit($item) >= 0 ? 'text-emerald-600' : 'text-red-600' }}">{{ $money($lineProfit($item)) }}</td>
                             @endif
-                            <td class="hidden px-3 py-3 lg:table-cell">{{ $saleTypeLabel((string) ($item->sale_type ?: 'retail')) }}</td>
-                            <td class="hidden px-3 py-3 xl:table-cell">{{ $method }}</td>
-                            <td class="hidden px-3 py-3 xl:table-cell">{{ $stockSource }}</td>
-                            <td class="hidden px-3 py-3 lg:table-cell">{{ $cashierLabel($sale) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="{{ $canViewProfit ? 14 : 10 }}" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('no_sales_found') }}</td></tr>
+                        <tr><td colspan="{{ $canViewProfit ? 10 : 7 }}" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('no_sales_found') }}</td></tr>
                     @endforelse
-                </x-table>
+                        </tbody>
+                    </table>
+                </div>
                 <div class="mt-4">{{ $itemRows->links() }}</div>
             </x-card>
         @elseif ($view === 'sales')
