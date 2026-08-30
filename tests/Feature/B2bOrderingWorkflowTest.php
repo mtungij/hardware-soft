@@ -14,6 +14,7 @@ use App\Models\Product;
 use App\Models\ProductUnitConversion;
 use App\Models\Quotation;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\SalePayment;
 use App\Models\SalesInvoice;
 use App\Models\StockLocation;
@@ -498,6 +499,21 @@ test('changing selling location reactively toggles availability and conversion e
 });
 
 test('company can configure document-specific payment instructions without recording payments', function () {
+    $sale = app(InventoryService::class)->completeSale(
+        [[
+            'product_id' => $this->product->id,
+            'quantity' => 1,
+            'unit_price' => 20,
+            'discount_amount' => 0,
+            'tax_amount' => 0,
+        ]],
+        [['payment_method' => 'cash', 'amount' => 5, 'reference_number' => 'REAL-PAYMENT']],
+        $this->customer->id,
+        $this->location->id,
+        $this->branch->id,
+        $this->admin->id,
+    );
+    $saleState = $sale->only(['paid_amount', 'balance_amount', 'payment_status']);
     $beforePayments = SalePayment::withoutGlobalScopes()->count();
     Volt::test('settings.commercial-documents')
         ->set('payment_type', 'bank')
@@ -512,10 +528,48 @@ test('company can configure document-specific payment instructions without recor
         ->assertHasNoErrors();
 
     $method = CompanyPaymentMethod::withoutGlobalScopes()->where('display_name', 'HARDEX CRDB Account')->firstOrFail();
-    expect(CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $this->company->id)->forDocument('quotation')->pluck('id'))->toContain($method->id)
-        ->and(CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $this->company->id)->forDocument('proforma')->pluck('id'))->not->toContain($method->id)
-        ->and(CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $this->company->id)->forDocument('invoice')->pluck('id'))->toContain($method->id)
+    $mobile = CompanyPaymentMethod::withoutGlobalScopes()->create([
+        'company_id' => $this->company->id, 'type' => 'mobile_money', 'display_name' => 'HARDEX M-Pesa',
+        'phone_or_business_number' => '123456', 'is_active' => true, 'sort_order' => 2,
+        'show_on_quotation' => true, 'show_on_proforma' => true, 'show_on_invoice' => false,
+    ]);
+    $inactive = CompanyPaymentMethod::withoutGlobalScopes()->create([
+        'company_id' => $this->company->id, 'type' => 'other', 'display_name' => 'Inactive Internal Method',
+        'instructions' => 'NEVER-EXPOSE-INACTIVE', 'is_active' => false,
+        'show_on_quotation' => true, 'show_on_proforma' => true, 'show_on_invoice' => true,
+    ]);
+    $otherCompany = Company::query()->create([
+        'company_name' => 'Other Payment Company', 'business_type' => 'hardware',
+        'phone' => '255700999222', 'whatsapp_number' => '255700999222',
+    ]);
+    $outside = CompanyPaymentMethod::withoutGlobalScopes()->create([
+        'company_id' => $otherCompany->id, 'type' => 'bank', 'display_name' => 'Other Company Secret Bank',
+        'account_number' => 'NEVER-EXPOSE-OTHER-COMPANY', 'is_active' => true,
+        'show_on_quotation' => true, 'show_on_proforma' => true, 'show_on_invoice' => true,
+    ]);
+    $quotationMethods = CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $this->company->id)->forDocument('quotation')->get();
+    $proformaMethods = CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $this->company->id)->forDocument('proforma')->get();
+    $invoiceMethods = CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $this->company->id)->forDocument('invoice')->get();
+    $invoice = SalesInvoice::withoutGlobalScopes()->create([
+        'sale_id' => $sale->id, 'company_id' => $this->company->id, 'customer_id' => $this->customer->id,
+        'source_type' => 'direct_sale', 'invoice_number' => 'INV-PAYMENT-INSTRUCTIONS',
+    ]);
+    $invoiceHtml = view('pdf.b2b-sales-invoice', [
+        'invoice' => $invoice->load(['company', 'customer', 'sale.branch', 'sale.createdBy', 'sale.payments', 'sale.items.product', 'sale.additionalCharges']),
+        'paymentMethods' => $invoiceMethods,
+    ])->render();
+
+    expect($quotationMethods->pluck('id'))->toContain($method->id, $mobile->id)
+        ->not->toContain($inactive->id, $outside->id)
+        ->and($proformaMethods->pluck('id'))->toContain($mobile->id)
+        ->not->toContain($method->id, $inactive->id, $outside->id)
+        ->and($invoiceMethods->pluck('id'))->toContain($method->id)
+        ->not->toContain($mobile->id, $inactive->id, $outside->id)
         ->and(SalePayment::withoutGlobalScopes()->count())->toBe($beforePayments)
+        ->and($sale->refresh()->only(['paid_amount', 'balance_amount', 'payment_status']))->toBe($saleState)
+        ->and($invoiceHtml)->toContain('HARDEX CRDB Account')->toContain('INV-PAYMENT-INSTRUCTIONS')->toContain('Paid')->toContain('Balance')
+        ->not->toContain('HARDEX M-Pesa')->not->toContain('Inactive Internal Method')->not->toContain('Other Company Secret Bank')
+        ->not->toContain('Buying Price')->not->toContain('COGS')->not->toContain('Average Cost')->not->toContain('Profit')
         ->and(CommercialConfigurationEvent::withoutGlobalScopes()->where('subject_id', $method->id)->where('event', 'created')->exists())->toBeTrue();
 });
 
@@ -523,38 +577,83 @@ test('quotation additional charges are non-inventory snapshots included in total
     $transport = AdditionalChargeType::withoutGlobalScopes()->create([
         'company_id' => $this->company->id, 'name' => 'Transport to Site', 'description' => 'Delivery charge', 'is_active' => true, 'sort_order' => 1,
     ]);
+    $delivery = AdditionalChargeType::withoutGlobalScopes()->create([
+        'company_id' => $this->company->id, 'name' => 'Delivery Coordination', 'description' => 'Site contact coordination', 'is_active' => true, 'sort_order' => 2,
+    ]);
     CompanyPaymentMethod::withoutGlobalScopes()->create([
         'company_id' => $this->company->id, 'type' => 'mobile_money', 'display_name' => 'M-Pesa Business',
         'provider' => 'Vodacom', 'phone_or_business_number' => '123456', 'is_active' => true,
         'show_on_quotation' => true, 'show_on_proforma' => false, 'show_on_invoice' => true,
     ]);
     $beforeStock = app(InventoryService::class)->getProductStock($this->product->id, $this->location->id, $this->branch->id);
+    $beforeMovements = StockMovement::withoutGlobalScopes()->count();
+    $beforeSaleItems = SaleItem::withoutGlobalScopes()->count();
     $quotation = app(B2bQuotationService::class)->createDirect(
         $this->customer, $this->admin, $this->branch->id,
         [['product_id' => $this->product->id, 'product_unit_conversion_id' => $this->conversion->id, 'quantity' => 2]],
         'quotation', today()->addWeek(), (string) str()->uuid(), additionalCharges: [
             ['additional_charge_type_id' => $transport->id, 'amount' => 350, 'description' => 'Project delivery'],
+            ['additional_charge_type_id' => $delivery->id, 'amount' => 75, 'description' => 'Call site foreman'],
         ],
     );
 
     expect((float) $quotation->subtotal)->toBe(4000.0)
-        ->and((float) $quotation->additional_charge_amount)->toBe(350.0)
-        ->and((float) $quotation->total_amount)->toBe(4350.0)
-        ->and($quotation->additionalCharges)->toHaveCount(1)
+        ->and((float) $quotation->additional_charge_amount)->toBe(425.0)
+        ->and((float) $quotation->total_amount)->toBe(4425.0)
+        ->and((float) $quotation->total_amount)->toBe((float) $quotation->subtotal - (float) $quotation->discount_amount + (float) $quotation->tax_amount + (float) $quotation->additionalCharges->sum('amount'))
+        ->and($quotation->additionalCharges)->toHaveCount(2)
         ->and($quotation->additionalCharges->first()->charge_name_snapshot)->toBe('Transport to Site')
+        ->and($quotation->additionalCharges->pluck('description_snapshot')->all())->toBe(['Project delivery', 'Call site foreman'])
         ->and(app(InventoryService::class)->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($beforeStock)
+        ->and(StockMovement::withoutGlobalScopes()->count())->toBe($beforeMovements)
+        ->and(SaleItem::withoutGlobalScopes()->count())->toBe($beforeSaleItems)
         ->and(Sale::withoutGlobalScopes()->where('company_id', $this->company->id)->count())->toBe(0);
 
     $html = view('pdf.b2b-quotation', [
         'quotation' => $quotation->load(['company', 'customer', 'creator', 'items', 'additionalCharges']),
         'paymentMethods' => CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $this->company->id)->forDocument('quotation')->get(),
     ])->render();
-    expect($html)->toContain('Transport to Site')->toContain('Project delivery')->toContain('M-Pesa Business')->toContain($quotation->quotation_number)
+    expect($html)->toContain('Transport to Site')->toContain('Project delivery')->toContain('Delivery Coordination')->toContain('Call site foreman')
+        ->toContain('M-Pesa Business')->toContain($quotation->quotation_number)->toContain('Grand Total')->toContain('4,425')
         ->not->toContain('Buying Price')->not->toContain('COGS');
 
     $sent = app(B2bQuotationService::class)->send($quotation, $this->admin);
     $this->actingAs($this->account, 'customer')->get(route('customer.quotations.show', $sent))
-        ->assertOk()->assertSee('Transport to Site')->assertSee('M-Pesa Business')->assertSee($sent->quotation_number);
+        ->assertOk()->assertSee('Transport to Site')->assertSee('Delivery Coordination')->assertSee('M-Pesa Business')->assertSee($sent->quotation_number)
+        ->assertDontSee('Buying Price')->assertDontSee('COGS')->assertDontSee('Average Cost')->assertDontSee('Profit');
+});
+
+test('proforma renders only allowed instructions with charges and its document number as reference', function () {
+    $chargeType = AdditionalChargeType::withoutGlobalScopes()->create([
+        'company_id' => $this->company->id, 'name' => 'Delivery', 'description' => 'Proforma delivery', 'is_active' => true,
+    ]);
+    CompanyPaymentMethod::withoutGlobalScopes()->create([
+        'company_id' => $this->company->id, 'type' => 'bank', 'display_name' => 'Proforma Bank',
+        'account_number' => 'PROFORMA-ACCOUNT', 'is_active' => true,
+        'show_on_quotation' => false, 'show_on_proforma' => true, 'show_on_invoice' => false,
+    ]);
+    CompanyPaymentMethod::withoutGlobalScopes()->create([
+        'company_id' => $this->company->id, 'type' => 'bank', 'display_name' => 'Quotation Only Bank',
+        'account_number' => 'QUOTATION-ONLY', 'is_active' => true,
+        'show_on_quotation' => true, 'show_on_proforma' => false, 'show_on_invoice' => false,
+    ]);
+    $proforma = app(B2bQuotationService::class)->createDirect(
+        $this->customer, $this->admin, $this->branch->id,
+        [['product_id' => $this->product->id, 'quantity' => 1]],
+        'proforma', today()->addWeek(), (string) str()->uuid(), additionalCharges: [
+            ['additional_charge_type_id' => $chargeType->id, 'amount' => 80, 'description' => 'Deliver after confirmation'],
+        ],
+    );
+    $paymentMethods = CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $this->company->id)->forDocument('proforma')->get();
+    $html = view('pdf.b2b-quotation', [
+        'quotation' => $proforma->load(['company', 'customer', 'creator', 'items', 'additionalCharges']),
+        'paymentMethods' => $paymentMethods,
+    ])->render();
+
+    expect($html)->toContain('PROFORMA INVOICE')->toContain('Delivery')->toContain('Deliver after confirmation')
+        ->toContain('Grand Total')->toContain('100')->toContain('Proforma Bank')->toContain('PROFORMA-ACCOUNT')
+        ->toContain($proforma->quotation_number)->not->toContain('Quotation Only Bank')->not->toContain('QUOTATION-ONLY')
+        ->not->toContain('Buying Price')->not->toContain('COGS')->not->toContain('Average Cost')->not->toContain('Profit');
 });
 
 test('conversion preserves charge snapshots and idempotently deducts only product stock', function () {

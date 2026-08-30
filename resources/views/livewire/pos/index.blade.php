@@ -886,7 +886,7 @@ $completeSale = function (InventoryService $inventory) {
                         <div class="mt-3 grid gap-2 sm:grid-cols-4">
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Qty') }} ({{ $sellingUnitLabel ?: '-' }})
-                                <input wire:model.live.debounce.75ms="cart.{{ $index }}.quantity" wire:loading.attr="disabled" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
+                                <input wire:model.live.debounce.400ms="cart.{{ $index }}.quantity" wire:loading.attr="disabled" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
                             </label>
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Unit Price') }}

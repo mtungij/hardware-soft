@@ -73,6 +73,126 @@ test('checkout succeeds for a default/base selling unit added through the real P
         ->toBe($startingStock - 1.0);
 });
 
+test('quantity input uses a moderate live debounce instead of aggressive or blur-only updates', function () {
+    $template = file_get_contents(resource_path('views/livewire/pos/index.blade.php'));
+
+    expect($template)
+        ->toContain('wire:model.live.debounce.400ms="cart.{{ $index }}.quantity"')
+        ->not->toContain('wire:model.live.debounce.75ms="cart.{{ $index }}.quantity"')
+        ->not->toContain('wire:model.blur="cart.{{ $index }}.quantity"');
+});
+
+test('multi-digit quantities commit with recalculated line grand and automatic payment totals', function () {
+    $component = Volt::test('pos.index')
+        ->set('stock_location_id', (string) $this->location->id)
+        ->call('addProduct', $this->product->id)
+        ->set('cart.0.quantity', '20')
+        ->assertSet('cart.0.quantity', '20')
+        ->assertSet('payments.0.amount', '3000');
+
+    expect(substr_count($component->html(), 'TZS 3,000'))->toBeGreaterThanOrEqual(3);
+
+    $component
+        ->set('cart.0.quantity', '100')
+        ->assertSet('cart.0.quantity', '100')
+        ->assertSet('payments.0.amount', '15000');
+
+    expect(substr_count($component->html(), 'TZS 15,000'))->toBeGreaterThanOrEqual(3);
+});
+
+test('fractional quantity commits without losing its decimal and recalculates totals', function () {
+    $this->product->update([
+        'allow_fractional_sale' => true,
+        'minimum_sale_quantity' => 0.25,
+        'quantity_step' => 0.25,
+    ]);
+
+    $component = Volt::test('pos.index')
+        ->set('stock_location_id', (string) $this->location->id)
+        ->call('addProduct', $this->product->id)
+        ->set('cart.0.quantity', '12.5')
+        ->assertSet('cart.0.quantity', '12.5')
+        ->assertSet('payments.0.amount', '1875');
+
+    expect(substr_count($component->html(), 'TZS 1,875'))->toBeGreaterThanOrEqual(3);
+});
+
+test('committed base-unit quantity checks out with the correct total and stock deduction', function () {
+    $startingStock = $this->inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id);
+
+    Volt::test('pos.index')
+        ->set('stock_location_id', (string) $this->location->id)
+        ->call('addProduct', $this->product->id)
+        ->call('changeLineUnit', 0, 'base')
+        ->set('cart.0.quantity', '20')
+        ->call('completeSale')
+        ->assertHasNoErrors();
+
+    $sale = Sale::query()->latest('id')->firstOrFail();
+    $item = $sale->items()->firstOrFail();
+
+    expect((float) $sale->total_amount)->toBe(3000.0)
+        ->and((float) $item->quantity)->toBe(20.0)
+        ->and((float) $item->base_quantity)->toBe(20.0)
+        ->and($this->inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($startingStock - 20.0);
+});
+
+test('committed conversion-unit quantity preserves transaction and normalized base quantities', function () {
+    $crate = Unit::create([
+        'company_id' => $this->branch->company_id,
+        'measurement_type_id' => $this->product->unit?->measurement_type_id,
+        'name' => 'Crate',
+        'short_name' => 'crate-qty-ux',
+        'status' => 'active',
+    ]);
+    $conversion = ProductUnitConversion::create([
+        'company_id' => $this->branch->company_id,
+        'product_id' => $this->product->id,
+        'unit_id' => $crate->id,
+        'conversion_factor' => 24,
+        'retail_price' => 3600,
+        'wholesale_price' => 3120,
+        'can_purchase' => false,
+        'can_sell' => true,
+        'active' => true,
+    ]);
+    $startingStock = $this->inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id);
+
+    Volt::test('pos.index')
+        ->set('stock_location_id', (string) $this->location->id)
+        ->call('addProduct', $this->product->id)
+        ->call('changeLineUnit', 0, (string) $conversion->id)
+        ->set('cart.0.quantity', '2')
+        ->assertSet('payments.0.amount', '7200')
+        ->call('completeSale')
+        ->assertHasNoErrors();
+
+    $sale = Sale::query()->latest('id')->firstOrFail();
+    $item = $sale->items()->firstOrFail();
+
+    expect((float) $sale->total_amount)->toBe(7200.0)
+        ->and((float) $item->quantity)->toBe(2.0)
+        ->and((float) $item->base_quantity)->toBe(48.0)
+        ->and($item->product_unit_conversion_id)->toBe($conversion->id)
+        ->and($this->inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($startingStock - 48.0);
+});
+
+test('quantity beyond available stock remains blocked by authoritative checkout', function () {
+    $saleCount = Sale::query()->count();
+    $startingStock = $this->inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id);
+
+    Volt::test('pos.index')
+        ->set('stock_location_id', (string) $this->location->id)
+        ->call('addProduct', $this->product->id)
+        ->set('cart.0.quantity', (string) ($startingStock + 1))
+        ->assertHasErrors(['cart.0.quantity'])
+        ->call('completeSale')
+        ->assertHasErrors(['cart.0.quantity']);
+
+    expect(Sale::query()->count())->toBe($saleCount)
+        ->and($this->inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($startingStock);
+});
+
 test('checkout succeeds for an explicit unit conversion selected through the real POS flow', function () {
     $conversion = ProductUnitConversion::create([
         'company_id' => $this->branch->company_id,
