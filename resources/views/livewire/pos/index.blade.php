@@ -667,7 +667,7 @@ $completeSale = function (InventoryService $inventory) {
         <div class="space-y-5">
             <x-card>
                 <div class="grid gap-3 md:grid-cols-3">
-                    <input wire:model.live.debounce.300ms="search" wire:loading.attr="disabled" wire:target="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}">
+                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}">
                     <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Barcode input') }}" @disabled(! $locationReady)>
                     @if ($allowedLocations->count() > 1)
                         <label class="block text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400" for="selling-location">
@@ -886,7 +886,7 @@ $completeSale = function (InventoryService $inventory) {
                         <div class="mt-3 grid gap-2 sm:grid-cols-4">
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Qty') }} ({{ $sellingUnitLabel ?: '-' }})
-                                <input wire:model.live.debounce.400ms="cart.{{ $index }}.quantity" wire:loading.attr="disabled" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
+                                <input wire:model.live.debounce.400ms="cart.{{ $index }}.quantity" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
                             </label>
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Unit Price') }}
@@ -970,7 +970,7 @@ $completeSale = function (InventoryService $inventory) {
                     type="button"
                     wire:click="completeSale"
                     wire:loading.attr="disabled"
-                    wire:target="completeSale,continueWithoutCustomer"
+                    wire:target="completeSale,continueWithoutCustomer,cart,payments"
                     @disabled($processing)
                     class="w-full rounded-xl bg-build-orange px-4 py-3 font-black text-white shadow-lg shadow-orange-500/20 disabled:cursor-wait disabled:opacity-60"
                 >
@@ -986,7 +986,7 @@ $completeSale = function (InventoryService $inventory) {
             type="button"
             wire:click="completeSale"
             wire:loading.attr="disabled"
-            wire:target="completeSale,continueWithoutCustomer"
+            wire:target="completeSale,continueWithoutCustomer,cart,payments"
             @disabled($processing)
             class="flex w-full items-center justify-between rounded-xl bg-build-orange px-4 py-3 font-black text-white disabled:cursor-wait disabled:opacity-60"
         >
