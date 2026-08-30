@@ -155,13 +155,52 @@ mount(function (Sale $sale) {
             font-weight: 700;
         }
 
-        .product-name,
         .receipt-header,
         .receipt-summary {
             font-weight: 600;
         }
 
-        .item-values,
+        .receipt-item-name {
+            color: #000 !important;
+            font-size: 13px;
+            font-weight: 700 !important;
+            line-height: 1.25;
+            overflow-wrap: anywhere;
+            white-space: normal;
+        }
+
+        .receipt-item-detail {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) max-content;
+            align-items: baseline;
+            column-gap: 2mm;
+            color: #000 !important;
+            font-size: 11.5px;
+            font-weight: 600 !important;
+            line-height: 1.3;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .receipt-item-pricing {
+            min-width: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .receipt-item-total {
+            color: #000 !important;
+            font-weight: 700 !important;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        .receipt-item-location,
+        .receipt-item-discount {
+            color: #000 !important;
+            font-size: 11px;
+            font-weight: 600 !important;
+            line-height: 1.25;
+        }
+
         .summary-row {
             display: flex;
             align-items: baseline;
@@ -169,7 +208,6 @@ mount(function (Sale $sale) {
             gap: 4px;
         }
 
-        .item-values span:last-child,
         .summary-row span:last-child {
             flex-shrink: 0;
             text-align: right;
@@ -271,6 +309,30 @@ mount(function (Sale $sale) {
                 visibility: visible !important;
             }
 
+            #customer-receipt .receipt-item-name {
+                color: #000 !important;
+                font-size: 13px !important;
+                font-weight: 700 !important;
+            }
+
+            #customer-receipt .receipt-item-detail {
+                color: #000 !important;
+                font-size: 11.5px !important;
+                font-weight: 600 !important;
+            }
+
+            #customer-receipt .receipt-item-location,
+            #customer-receipt .receipt-item-discount {
+                color: #000 !important;
+                font-size: 11px !important;
+                font-weight: 600 !important;
+            }
+
+            #customer-receipt .receipt-item-total {
+                color: #000 !important;
+                font-weight: 700 !important;
+            }
+
             .no-print,
             .receipt-no-print {
                 display: none !important;
@@ -329,30 +391,32 @@ mount(function (Sale $sale) {
             @foreach ($sale->items as $item)
                 @php
                     $discountPerUnit = (float) ($item->discount_per_unit ?? 0);
-                    $sellingUnit = $item->sellingUnit?->short_name
+                    $sellingUnit = $item->selling_unit_code_snapshot
+                        ?: $item->selling_unit_name_snapshot
+                        ?: $item->sellingUnit?->short_name
                         ?: $item->product?->sellingUnit?->short_name
                         ?: $item->product?->unit?->short_name;
                 @endphp
                 <div class="receipt-item border-b border-dashed border-slate-400 py-[2mm]">
-                    <p class="product-name">
+                    <p class="product-name receipt-item-name">
                         {{ $item->product?->displayName() }}
                         @if ($item->sizeLabel())
                             {{ $item->sizeLabel() }}
                         @endif
                     </p>
-                    <div class="item-values mt-0.5">
-                        <span>
+                    <div class="item-values receipt-item-detail mt-0.5">
+                        <span class="receipt-item-pricing">
                             {{ \App\Support\NumberFormatter::quantity($item->quantity) }}
                             {{ $sellingUnit }}
-                            × {{ \App\Support\NumberFormatter::money($item->unit_price) }}
+                            x {{ \App\Support\NumberFormatter::money($item->unit_price) }}
                         </span>
-                        <span class="shrink-0 font-bold">{{ \App\Support\NumberFormatter::money($item->line_total) }}</span>
+                        <span class="receipt-item-total">{{ \App\Support\NumberFormatter::money($item->line_total) }}</span>
                     </div>
                     @if($item->sold_from_label || $item->stockLocation)
-                        <p class="mt-0.5 text-[0.9em]">From: {{ $item->sold_from_label ?: \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) }}</p>
+                        <p class="receipt-item-location mt-0.5">{{ $item->sold_from_label ?: \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) }}</p>
                     @endif
                     @if ($discountPerUnit > 0)
-                        <p class="mt-0.5 text-[0.9em]">Discount: {{ \App\Support\NumberFormatter::money($discountPerUnit) }} each</p>
+                        <p class="receipt-item-discount mt-0.5">Discount: {{ \App\Support\NumberFormatter::money($discountPerUnit) }} each</p>
                     @endif
                 </div>
             @endforeach

@@ -55,7 +55,8 @@ test('cash customer receipt includes customer-facing product payment and source 
         ->assertDontSee('Stock Source')
         ->assertDontSee('Stock location')
         ->assertDontSee('Sehemu ya Stock')
-        ->assertSee('From: Main Warehouse')
+        ->assertSee('Main Warehouse')
+        ->assertDontSee('From: Main Warehouse')
         ->assertDontSee('Base Quantity Deducted')
         ->assertDontSee('Selling Quantity')
         ->assertDontSee('Conversion')
@@ -192,6 +193,51 @@ test('receipt offers compact printable 58mm and 80mm paper layouts', function ()
         ->assertSee('window.print()', false);
 });
 
+test('80mm receipt prints item transactions with strong typography and snapshot units', function () {
+    $piece = Unit::where('short_name', 'pcs')->firstOrFail();
+    $sale = makeCustomerReceiptSale($this->branch, $this->admin, [
+        'subtotal' => 9000,
+        'total_amount' => 9000,
+        'paid_amount' => 9000,
+    ], [
+        'product_name' => 'Mabati Corrugated Roofing Sheet Gauge 28',
+        'selling_unit_id' => $piece->id,
+        'selling_unit_name_snapshot' => 'Box',
+        'selling_unit_code_snapshot' => 'box',
+        'quantity' => 0.25,
+        'base_quantity' => 6,
+        'unit_price' => 36000,
+        'line_total' => 9000,
+        'sold_from_label' => 'Dispensing Area',
+    ]);
+
+    $response = $this->get(route('sales.receipt', ['sale' => $sale, 'paper' => 80]))
+        ->assertOk()
+        ->assertSee('data-paper-size="80"', false)
+        ->assertSee('Mabati Corrugated Roofing Sheet Gauge 28')
+        ->assertSee('0.25')
+        ->assertSee('box')
+        ->assertDontSee('0.25 pcs')
+        ->assertSee('36,000')
+        ->assertSee('9,000')
+        ->assertSee('Dispensing Area')
+        ->assertSee('class="product-name receipt-item-name"', false)
+        ->assertSee('class="item-values receipt-item-detail mt-0.5"', false)
+        ->assertSee('class="receipt-item-pricing"', false)
+        ->assertSee('class="receipt-item-total"', false)
+        ->assertSee('class="receipt-item-location mt-0.5"', false);
+
+    $html = $response->getContent();
+
+    expect($html)->toMatch('/0\.25\s+box\s+x\s+36,000/s')
+        ->toContain('grid-template-columns: minmax(0, 1fr) max-content')
+        ->toContain('overflow-wrap: anywhere')
+        ->toMatch('/\.receipt-item-name\s*\{.*?color: #000 !important;.*?font-size: 13px;.*?font-weight: 700 !important;/s')
+        ->toMatch('/\.receipt-item-detail\s*\{.*?color: #000 !important;.*?font-size: 11\.5px;.*?font-weight: 600 !important;/s')
+        ->toMatch('/\.receipt-item-location,.*?color: #000 !important;.*?font-size: 11px;.*?font-weight: 600 !important;/s')
+        ->toMatch('/\.receipt-item-total\s*\{.*?color: #000 !important;.*?font-weight: 700 !important;/s');
+});
+
 test('receipt header displays configured company branding in business identity order', function () {
     $branding = [
         'company_name' => 'Kariakoo Hardware',
@@ -313,7 +359,7 @@ test('58mm print DOM starts with the receipt and uses compact high-contrast ther
         ->assertSee('font-family: "Courier New", Courier, monospace', false)
         ->assertSee('color: #000 !important', false)
         ->assertSee('-webkit-print-color-adjust: exact', false)
-        ->assertSee('.item-values,', false)
+        ->assertSee('.receipt-item-detail', false)
         ->assertSee('.summary-row', false)
         ->assertSee('gap: 4px', false)
         ->assertSee('white-space: nowrap', false)
