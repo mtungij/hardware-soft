@@ -267,7 +267,7 @@ $salesTrendChart = computed(function (): Collection {
     }
 
     $period = collect(CarbonPeriod::create(today()->subDays(6), today()))
-        ->mapWithKeys(fn ($date) => [$date->toDateString() => ['date' => $date->format('M d'), 'sales' => 0.0, 'profit' => 0.0]]);
+        ->mapWithKeys(fn ($date) => [$date->toDateString() => ['date' => $date->locale(app()->getLocale())->translatedFormat('M d'), 'sales' => 0.0, 'profit' => 0.0]]);
 
     $sales = AuthorizationScope::sales(Sale::query(), auth()->user())
         ->where('status', 'completed')
@@ -361,7 +361,7 @@ $monthlyRevenueExpenseChart = computed(function (): Collection {
                 ->when(! auth()->user()->can('dashboard.expenses'), fn ($query) => $query->whereRaw('1 = 0'))
                 ->sum('amount');
 
-            return ['month' => $month->format('M'), 'sales' => (float) $sales, 'purchases' => (float) $purchases, 'expenses' => (float) $expenses];
+            return ['month' => $month->locale(app()->getLocale())->translatedFormat('M'), 'sales' => (float) $sales, 'purchases' => (float) $purchases, 'expenses' => (float) $expenses];
         });
 });
 
@@ -551,14 +551,14 @@ $recentTransactions = computed(function (): Collection {
             ->when($branchId, fn ($query) => $query->where('branch_id', $branchId))
             ->sum('balance_amount') : 0.0;
         $cards = collect([
-            ['label' => "Today's Sales", 'value' => $formatMoney($this->todaySales), 'tone' => 'text-emerald-600', 'hint' => 'Click to see every product sold today', 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $today, 'date_to' => $today, 'view' => 'items']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
-            ['label' => 'Retail Sales Today', 'value' => $formatMoney($salesByTypeForRange('retail', $today, $today)), 'tone' => 'text-blue-600', 'hint' => 'Retail item sales today', 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'retail', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
-            ['label' => 'Wholesale Sales Today', 'value' => $formatMoney($salesByTypeForRange('wholesale', $today, $today)), 'tone' => 'text-emerald-600', 'hint' => 'Wholesale item sales today', 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'wholesale', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
-            ['label' => 'Monthly Sales', 'value' => $formatMoney($this->monthlySales), 'tone' => 'text-navy-900 dark:text-white', 'hint' => now()->format('F Y'), 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
-            ['label' => 'Retail Sales This Month', 'value' => $formatMoney($salesByTypeForRange('retail', $monthStart, $monthEnd)), 'tone' => 'text-blue-600', 'hint' => now()->format('F Y'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'retail', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
-            ['label' => 'Wholesale Sales This Month', 'value' => $formatMoney($salesByTypeForRange('wholesale', $monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => now()->format('F Y'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'wholesale', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
-            ['label' => "Today's Profit", 'value' => $formatMoney($profitForRange($today, $today)), 'tone' => 'text-emerald-600', 'hint' => 'Profit from sales today', 'url' => route('reports.profit-loss', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
-            ['label' => 'Monthly Profit', 'value' => $formatMoney($profitForRange($monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => 'This month net sales profit', 'url' => route('reports.profit-loss', ['date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ['label' => "Today's Sales", 'display_label' => __('dashboard.sales_today'), 'value' => $formatMoney($this->todaySales), 'tone' => 'text-emerald-600', 'display_hint' => __('dashboard.sales_today_help'), 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $today, 'date_to' => $today, 'view' => 'items']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Retail Sales Today', 'display_label' => __('dashboard.retail_sales_today'), 'value' => $formatMoney($salesByTypeForRange('retail', $today, $today)), 'tone' => 'text-blue-600', 'display_hint' => __('dashboard.retail_sales_today_help'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'retail', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Wholesale Sales Today', 'display_label' => __('dashboard.wholesale_sales_today'), 'value' => $formatMoney($salesByTypeForRange('wholesale', $today, $today)), 'tone' => 'text-emerald-600', 'display_hint' => __('dashboard.wholesale_sales_today_help'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'wholesale', 'date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Monthly Sales', 'display_label' => __('dashboard.monthly_sales'), 'value' => $formatMoney($this->monthlySales), 'tone' => 'text-navy-900 dark:text-white', 'hint' => now()->locale(app()->getLocale())->translatedFormat('M Y'), 'url' => route('sales.index', ['status' => 'completed', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Retail Sales This Month', 'display_label' => __('dashboard.retail_sales_this_month'), 'value' => $formatMoney($salesByTypeForRange('retail', $monthStart, $monthEnd)), 'tone' => 'text-blue-600', 'hint' => now()->locale(app()->getLocale())->translatedFormat('M Y'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'retail', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => 'Wholesale Sales This Month', 'display_label' => __('dashboard.wholesale_sales_this_month'), 'value' => $formatMoney($salesByTypeForRange('wholesale', $monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'hint' => now()->locale(app()->getLocale())->translatedFormat('M Y'), 'url' => route('sales.index', ['status' => 'completed', 'sale_type' => 'wholesale', 'date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Cashier']],
+            ['label' => "Today's Profit", 'display_label' => __('dashboard.profit_today'), 'value' => $formatMoney($profitForRange($today, $today)), 'tone' => 'text-emerald-600', 'display_hint' => __('dashboard.profit_today_help'), 'url' => route('reports.profit-loss', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ['label' => 'Monthly Profit', 'display_label' => __('dashboard.monthly_profit'), 'value' => $formatMoney($profitForRange($monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'display_hint' => __('dashboard.monthly_profit_help'), 'url' => route('reports.profit-loss', ['date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ...($warehouseEnabled && $user->can('dashboard.purchase_summary') ? [['label' => 'Pending Purchases', 'value' => number_format(Purchase::query()->whereIn('status', ['draft', 'ordered', 'partial'])->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-amber-600', 'hint' => 'Purchases waiting for receiving', 'url' => route('purchases.index', ['status' => 'ordered']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
             ...($warehouseEnabled && $user->can('dashboard.stock_summary') ? [['label' => 'Stock Received Today', 'value' => $formatQuantity(StockMovement::query()->whereIn('movement_type', ['purchase_in'])->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('quantity')), 'tone' => 'text-emerald-600', 'hint' => 'Received into Main Store today', 'url' => route('stock-movements.index', ['movement_type' => 'purchase_in']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
             ...($warehouseEnabled && $user->can('dashboard.stock_value') ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation', 'url' => route('reports.stock-valuation', ['search' => 'Main Store']), 'roles' => ['Admin', 'Manager', 'Accountant']]] : []),
@@ -595,10 +595,10 @@ $recentTransactions = computed(function (): Collection {
     >
         <div class="flex flex-wrap gap-2">
             @can('sales.create')
-                <a href="{{ route('pos.index') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ $t('Open POS') }}</a>
+                <a href="{{ route('pos.index') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ __('dashboard.open_pos') }}</a>
             @endcan
             @can('reports.profit')
-                <a href="{{ route('reports.profit-loss') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">{{ $t('Profit Report') }}</a>
+                <a href="{{ route('reports.profit-loss') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">{{ __('dashboard.profit_report') }}</a>
             @endcan
         </div>
     </x-page-header>
@@ -669,10 +669,10 @@ $recentTransactions = computed(function (): Collection {
             <a href="{{ $card['url'] }}" wire:navigate class="group block rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:scale-[1.01] hover:border-cyan-400 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-cyan-400 dark:border-slate-800 dark:bg-navy-900 dark:hover:border-cyan-400">
                 <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
-                        <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ $t($card['label']) }}</p>
+                        <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">{{ $card['display_label'] ?? $t($card['label']) }}</p>
                         <p class="mt-3 text-2xl font-black {{ $card['tone'] }}">{{ $card['value'] }}</p>
-                        <p class="mt-2 text-xs text-slate-500">{{ $t($card['hint']) }}</p>
-                        <p class="mt-4 text-xs font-black text-cyan-600 transition group-hover:text-cyan-500 dark:text-cyan-300">{{ $t('View Details') }} -></p>
+                        <p class="mt-2 text-xs text-slate-500">{{ $card['display_hint'] ?? $t($card['hint']) }}</p>
+                        <p class="mt-4 text-xs font-black text-cyan-600 transition group-hover:text-cyan-500 dark:text-cyan-300">{{ __('dashboard.view_details') }} -></p>
                     </div>
                     <span class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 text-sm font-black text-white shadow-lg shadow-cyan-500/20">{{ collect(explode(' ', $card['label']))->map(fn ($word) => $word[0])->take(2)->join('') }}</span>
                 </div>
@@ -723,7 +723,7 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas class="max-w-full" x-ref="canvas" aria-label="Sales trend chart"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t('Sales trend chart') }}"></canvas>
             </div>
         </x-card>
         @endcan
@@ -749,7 +749,7 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas class="max-w-full" x-ref="canvas" aria-label="Monthly revenue versus expenses chart"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t('Monthly revenue versus expenses chart') }}"></canvas>
             </div>
         </x-card>
         @endif
@@ -763,7 +763,7 @@ $recentTransactions = computed(function (): Collection {
                         buildMartChart($refs.canvas, {
                             type: 'doughnut',
                             data: {
-                                labels: @js($this->salesByCategoryChart->pluck('category_name')->values()),
+                                labels: @js($this->salesByCategoryChart->map(fn ($row) => $row->category_name === 'Uncategorized' ? $t('Uncategorized') : $row->category_name)->values()),
                                 datasets: [{ label: @js($t('Sales')), data: @js($this->salesByCategoryChart->pluck('total_sales')->values()), backgroundColor: [buildMartThemeColor(), '#0d2e50', '#059669', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#14b8a6'] }]
                             },
                             options: { scales: { x: { display: false }, y: { display: false } } }
@@ -772,7 +772,7 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas class="max-w-full" x-ref="canvas" aria-label="Sales by category chart"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t('Sales by category chart') }}"></canvas>
             </div>
         </x-card>
         @endcan
@@ -795,7 +795,7 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas class="max-w-full" x-ref="canvas" aria-label="Stock distribution chart"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t('Stock distribution chart') }}"></canvas>
             </div>
         </x-card>
         @endcan
@@ -844,7 +844,7 @@ $recentTransactions = computed(function (): Collection {
         <x-card title="Sales by Category" description="Category revenue from sold items.">
             @forelse ($this->salesByCategoryChart as $row)
                 <div class="mb-4">
-                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row->category_name }}</span><span class="shrink-0">{{ $formatMoney($row->total_sales) }}</span></div>
+                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row->category_name === 'Uncategorized' ? $t('Uncategorized') : $row->category_name }}</span><span class="shrink-0">{{ $formatMoney($row->total_sales) }}</span></div>
                     <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-build-orange" style="width: {{ min(100, ((float) $row->total_sales / $maxCategory) * 100) }}%"></div></div>
                 </div>
             @empty
@@ -1015,7 +1015,7 @@ $recentTransactions = computed(function (): Collection {
                     <a href="{{ $transaction['route'] }}" wire:navigate class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 transition hover:border-build-orange/40 hover:bg-orange-50/40 dark:border-slate-800 dark:hover:bg-orange-500/10">
                         <div class="min-w-0">
                             <p class="font-bold">{{ $t($transaction['type']) }} · {{ $transaction['reference'] }}</p>
-                            <p class="text-xs text-slate-500">{{ $transaction['date']->format('M d, Y H:i') }} · {{ $t((string) str($transaction['status'])->replace('_', ' ')->title()) }}</p>
+                            <p class="text-xs text-slate-500">{{ $transaction['date']->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }} · {{ $t((string) str($transaction['status'])->replace('_', ' ')->title()) }}</p>
                         </div>
                         <p class="shrink-0 text-sm font-black">{{ is_null($transaction['amount']) ? '-' : $formatMoney($transaction['amount']) }}</p>
                     </a>
