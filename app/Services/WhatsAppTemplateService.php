@@ -14,6 +14,8 @@ class WhatsAppTemplateService
         'production_completed' => ['production', 'Production Completed', "HARDEX PRODUCTION COMPLETED\nOrder: {{order_number}}\nProduct: {{product}}\nAccepted: {{accepted}}\nRejected: {{rejected}}\nBranch: {{branch}}"],
     ];
 
+    public function __construct(private WhatsAppLocalization $localization) {}
+
     public function seedDefaults(Company $company): void
     {
         foreach (self::DEFAULTS as $key => [$category, $name, $body]) {
@@ -26,8 +28,11 @@ class WhatsAppTemplateService
 
     public function render(Company $company, string $key, array $variables): string
     {
-        $default = self::DEFAULTS[$key][2] ?? '';
-        $body = WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $company->id)->where('key', $key)->where('active', true)->value('body') ?: $default;
+        $language = $this->localization->language($company);
+        $default = $this->localization->get($company, 'templates.'.$key);
+        $body = $language === 'en'
+            ? (WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $company->id)->where('key', $key)->where('active', true)->value('body') ?: $default)
+            : $default;
 
         return preg_replace_callback('/{{\s*([a-zA-Z0-9_]+)\s*}}/', fn (array $matches): string => array_key_exists($matches[1], $variables) ? (string) $variables[$matches[1]] : '', $body) ?: '';
     }

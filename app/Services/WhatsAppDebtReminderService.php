@@ -16,6 +16,8 @@ use Illuminate\Support\Collection;
 
 class WhatsAppDebtReminderService
 {
+    public function __construct(private WhatsAppLocalization $localization) {}
+
     public function canReceiveManagementSummary(?User $user): bool
     {
         return $user?->hasAnyPermission(['dashboard.receivables', 'reports.receivables', 'accounting.view', 'customer-balances.view']) ?? false;
@@ -38,30 +40,31 @@ class WhatsAppDebtReminderService
         return $query->orderBy('expected_payment_date')->orderByDesc('balance_amount')->get();
     }
 
-    public function managementMessage(Collection $debts, CarbonInterface $date): string
+    public function managementMessage(Company $company, Collection $debts, CarbonInterface $date): string
     {
         $tomorrow = $debts->filter(fn (Sale $sale): bool => $sale->expected_payment_date?->isSameDay($date->copy()->addDay()));
         $today = $debts->filter(fn (Sale $sale): bool => $sale->expected_payment_date?->isSameDay($date));
         $overdue = $debts->filter(fn (Sale $sale): bool => $sale->expected_payment_date?->lt($date->copy()->startOfDay()));
         $top = $debts->groupBy(fn (Sale $sale): string => (string) ($sale->customer_id ?: 'sale-'.$sale->id))
             ->map(fn (Collection $rows): array => [
-                'name' => $rows->first()->customer?->name ?: $rows->first()->temporary_customer_name ?: 'Customer',
+                'name' => $rows->first()->customer?->name ?: $rows->first()->temporary_customer_name ?: $this->localization->get($company, 'common.customer'),
                 'amount' => (float) $rows->sum('balance_amount'),
             ])->sortByDesc('amount')->take(5)->values();
 
-        $lines = ['HARDEX CREDIT ALERT', $date->format('d M Y'), ''];
-        foreach ([['DUE TOMORROW', $tomorrow], ['DUE TODAY', $today], ['OVERDUE', $overdue]] as [$label, $rows]) {
+        $lines = [$this->localization->get($company, 'debt.management_title'), $this->localization->date($company, $date), ''];
+        foreach ([['due_tomorrow', $tomorrow], ['due_today', $today], ['overdue', $overdue]] as [$key, $rows]) {
+            $label = $this->localization->get($company, 'debt.'.$key);
             $lines[] = $label;
-            $lines[] = 'Customers: '.$rows->map(fn (Sale $sale): string => (string) ($sale->customer_id ?: 'sale-'.$sale->id))->unique()->count();
-            $lines[] = 'Total: TZS '.$this->money($rows->sum('balance_amount'));
+            $lines[] = $this->localization->get($company, 'debt.customers').': '.$rows->map(fn (Sale $sale): string => (string) ($sale->customer_id ?: 'sale-'.$sale->id))->unique()->count();
+            $lines[] = $this->localization->get($company, 'debt.total').': TZS '.$this->money($rows->sum('balance_amount'));
             $lines[] = '';
         }
-        $lines[] = 'Highest Outstanding:';
+        $lines[] = $this->localization->get($company, 'debt.highest_outstanding').':';
         foreach ($top as $index => $row) {
             $lines[] = ($index + 1).'. '.$row['name'].' — TZS '.$this->money($row['amount']);
         }
         $lines[] = '';
-        $lines[] = 'Open HARDEX for the complete debtor report.';
+        $lines[] = $this->localization->get($company, 'debt.open_report');
 
         return implode("\n", $lines);
     }
@@ -69,18 +72,32 @@ class WhatsAppDebtReminderService
     public function customerMessage(Company $company, Sale $sale, string $kind, CarbonInterface $now): string
     {
         $customer = $sale->customer;
-        $name = $customer?->name ?: $sale->temporary_customer_name ?: 'Mteja';
-        $due = $sale->expected_payment_date?->format('d M Y') ?: '-';
+        $name = $customer?->name ?: $sale->temporary_customer_name ?: $this->localization->get($company, 'common.customer');
+        $due = $this->localization->date($company, $sale->expected_payment_date);
         $reference = $sale->sale_number;
         $amount = $this->money($sale->balance_amount);
 
         if ($kind === 'overdue') {
             $days = max(1, $sale->expected_payment_date?->startOfDay()->diffInDays($now->copy()->startOfDay()) ?? 1);
 
-            return "Habari {$name},\n\nKumbusho kutoka {$company->company_name}.\n\nDeni lako la TZS {$amount} lilipaswa kulipwa tarehe {$due} na sasa limechelewa kwa siku {$days}.\n\nReference: {$reference}\n\nTafadhali wasiliana nasi kwa maelezo zaidi.\n\nAsante.";
+            return implode("\n\n", [
+                $this->localization->get($company, 'debt.greeting', ['name' => $name]),
+                $this->localization->get($company, 'debt.reminder_from', ['company' => $company->company_name]),
+                $this->localization->get($company, 'debt.overdue_body', ['amount' => $amount, 'date' => $due, 'days' => $days]),
+                $this->localization->get($company, 'debt.reference').': '.$reference,
+                $this->localization->get($company, 'debt.contact'),
+                $this->localization->get($company, 'debt.thanks'),
+            ]);
         }
 
-        return "Habari {$name},\n\nKumbusho kutoka {$company->company_name}.\n\nUna deni la TZS {$amount} linalotarajiwa kulipwa {$due}.\n\nReference: {$reference}\n\nKama tayari umelipa, tafadhali wasiliana nasi.\n\nAsante.";
+        return implode("\n\n", [
+            $this->localization->get($company, 'debt.greeting', ['name' => $name]),
+            $this->localization->get($company, 'debt.reminder_from', ['company' => $company->company_name]),
+            $this->localization->get($company, 'debt.due_body', ['amount' => $amount, 'date' => $due]),
+            $this->localization->get($company, 'debt.reference').': '.$reference,
+            $this->localization->get($company, 'debt.paid_contact'),
+            $this->localization->get($company, 'debt.thanks'),
+        ]);
     }
 
     public function kind(Sale $sale, CarbonInterface $date): ?string

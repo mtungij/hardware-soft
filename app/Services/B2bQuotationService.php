@@ -210,8 +210,15 @@ class B2bQuotationService
         $quotation->loadMissing(['company', 'customer']);
         $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $quotation->company_id)->first();
         if ($setting?->enabled && $setting->categoryEnabled('quotations') && filled($quotation->customer->phone)) {
-            $label = $quotation->document_type === 'proforma' ? 'Proforma Invoice' : 'Quotation';
-            $message = "Habari {$quotation->customer->name},\n\n{$label} yako {$quotation->quotation_number} kutoka {$quotation->company->company_name} imeandaliwa.\n\nJumla: TZS ".NumberFormatter::money($quotation->total_amount)."\nValid Until: {$quotation->valid_until->format('d M Y')}\n\nPDF imeambatanishwa.\n\nAsante.";
+            $localization = app(WhatsAppLocalization::class);
+            $document = $localization->get($quotation->company, 'b2b.'.($quotation->document_type === 'proforma' ? 'proforma_document' : 'quotation_document'));
+            $message = implode("\n\n", [
+                $localization->get($quotation->company, 'b2b.hello', ['name' => $quotation->customer->name]),
+                $localization->get($quotation->company, 'b2b.quotation_ready', ['document' => $document, 'reference' => $quotation->quotation_number, 'company' => $quotation->company->company_name]),
+                $localization->get($quotation->company, 'b2b.total').': TZS '.NumberFormatter::money($quotation->total_amount)."\n".$localization->get($quotation->company, 'b2b.valid_until').': '.$localization->date($quotation->company, $quotation->valid_until),
+                $localization->get($quotation->company, 'b2b.pdf_attached'),
+                $localization->get($quotation->company, 'b2b.thanks'),
+            ]);
             $this->notifications->afterCommit(fn (WhatsAppNotificationService $notifications) => $notifications->queuePhone(
                 $quotation->company, $setting, $quotation->customer->phone, 'quotations', 'quotation_sent',
                 'quotation:'.$quotation->id.':sent', $message, (int) $quotation->branch_id,
@@ -444,7 +451,12 @@ class B2bQuotationService
         if ($accept) {
             $company = Company::query()->find($quotation->company_id);
             if ($company) {
-                $message = "*QUOTATION ACCEPTED*\n\nCustomer: {$quotation->customer->name}\nQuotation: {$quotation->quotation_number}\nAmount: TZS ".NumberFormatter::money($quotation->total_amount)."\n\nCustomer accepted the quotation through HARDEX Customer Portal.";
+                $localization = app(WhatsAppLocalization::class);
+                $message = '*'.$localization->get($company, 'b2b.quotation_accepted_title')."*\n\n"
+                    .$localization->get($company, 'b2b.customer').": {$quotation->customer->name}\n"
+                    .$localization->get($company, 'b2b.quotation').": {$quotation->quotation_number}\n"
+                    .$localization->get($company, 'b2b.amount').': TZS '.NumberFormatter::money($quotation->total_amount)."\n\n"
+                    .$localization->get($company, 'b2b.accepted_note');
                 $this->notifications->afterCommit(fn (WhatsAppNotificationService $notifications) => $notifications->queueForRecipients(
                     $company, 'quotation_acceptance', 'quotation_accepted', 'quotation:'.$quotation->id.':accepted',
                     $message, (int) $quotation->branch_id, metadata: ['quotation_id' => $quotation->id],
@@ -470,7 +482,16 @@ class B2bQuotationService
                 return;
             }
             $sale = $invoice->sale;
-            $message = "Habari {$invoice->customer->name},\n\nMauzo yako {$invoice->invoice_number} yamekamilika.\n\nJumla: TZS ".NumberFormatter::money($sale->total_amount)."\nMalipo: TZS ".NumberFormatter::money($sale->paid_amount)."\nSalio: TZS ".NumberFormatter::money($sale->balance_amount)."\n\nInvoice imeambatanishwa.\n\nAsante kwa kununua {$invoice->company->company_name}.";
+            $localization = app(WhatsAppLocalization::class);
+            $message = implode("\n\n", [
+                $localization->get($invoice->company, 'b2b.hello', ['name' => $invoice->customer->name]),
+                $localization->get($invoice->company, 'b2b.sale_complete', ['reference' => $invoice->invoice_number]),
+                $localization->get($invoice->company, 'b2b.total').': TZS '.NumberFormatter::money($sale->total_amount)."\n"
+                    .$localization->get($invoice->company, 'b2b.paid').': TZS '.NumberFormatter::money($sale->paid_amount)."\n"
+                    .$localization->get($invoice->company, 'b2b.balance').': TZS '.NumberFormatter::money($sale->balance_amount),
+                $localization->get($invoice->company, 'b2b.invoice_attached'),
+                $localization->get($invoice->company, 'b2b.purchase_thanks', ['company' => $invoice->company->company_name]),
+            ]);
             $this->notifications->queuePhone(
                 $invoice->company, $setting, $invoice->customer->phone, 'customer_invoices', 'customer_sales_invoice',
                 'sale:'.$sale->id.':invoice:customer', $message, (int) $sale->branch_id,

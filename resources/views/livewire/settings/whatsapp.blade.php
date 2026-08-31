@@ -9,6 +9,7 @@ use App\Models\WhatsAppTemplate;
 use App\Services\Gowa;
 use App\Services\WhatsAppAuditService;
 use App\Services\WhatsAppNotificationService;
+use App\Services\WhatsAppLocalization;
 use App\Services\WhatsAppTemplateService;
 use App\Support\WhatsAppPhone;
 use Illuminate\Validation\Rule;
@@ -25,6 +26,7 @@ state([
     'sending_paused' => false,
     'device_id' => '',
     'timezone' => 'Africa/Dar_es_Salaam',
+    'whatsapp_notification_language' => 'en',
     'daily_summary_time' => '20:00',
     'attach_daily_summary_pdf' => false,
     'debt_reminders_enabled' => false,
@@ -63,10 +65,10 @@ mount(function (): void {
     $this->template_bodies = WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $company->id)->pluck('body', 'key')->all();
     $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->firstOrCreate(
         ['company_id' => $company->id],
-        ['timezone' => $company->timezone ?: 'Africa/Dar_es_Salaam', 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES]
+        ['timezone' => $company->timezone ?: 'Africa/Dar_es_Salaam', 'whatsapp_notification_language' => 'en', 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES]
     );
 
-    foreach (['enabled', 'sending_paused', 'device_id', 'timezone', 'daily_summary_time', 'attach_daily_summary_pdf', 'debt_reminders_enabled', 'debt_due_tomorrow_enabled', 'debt_due_today_enabled', 'debt_overdue_enabled', 'debt_reminder_time', 'debt_overdue_interval_days', 'attach_debt_summary_pdf', 'quiet_hours_start', 'quiet_hours_end', 'enabled_categories', 'minimum_send_interval_seconds', 'maximum_messages_per_minute', 'maximum_messages_per_hour', 'low_stock_cooldown_hours', 'attach_stock_alert_pdf', 'test_recipient', 'last_device_state', 'last_checked_at'] as $field) {
+    foreach (['enabled', 'sending_paused', 'device_id', 'timezone', 'whatsapp_notification_language', 'daily_summary_time', 'attach_daily_summary_pdf', 'debt_reminders_enabled', 'debt_due_tomorrow_enabled', 'debt_due_today_enabled', 'debt_overdue_enabled', 'debt_reminder_time', 'debt_overdue_interval_days', 'attach_debt_summary_pdf', 'quiet_hours_start', 'quiet_hours_end', 'enabled_categories', 'minimum_send_interval_seconds', 'maximum_messages_per_minute', 'maximum_messages_per_hour', 'low_stock_cooldown_hours', 'attach_stock_alert_pdf', 'test_recipient', 'last_device_state', 'last_checked_at'] as $field) {
         $value = $setting->{$field};
         if (in_array($field, ['daily_summary_time', 'debt_reminder_time', 'quiet_hours_start', 'quiet_hours_end'], true) && is_string($value)) {
             $value = substr($value, 0, 5);
@@ -98,6 +100,7 @@ $save = function (Gowa $gowa, WhatsAppAuditService $audit): void {
         'enabled' => ['boolean'], 'sending_paused' => ['boolean'],
         'device_id' => ['nullable', 'string', 'max:255'],
         'timezone' => ['required', 'timezone'], 'daily_summary_time' => ['required', 'date_format:H:i'],
+        'whatsapp_notification_language' => ['required', Rule::in(['en', 'sw'])],
         'attach_daily_summary_pdf' => ['boolean'],
         'debt_reminders_enabled' => ['boolean'],
         'debt_due_tomorrow_enabled' => ['boolean'],
@@ -180,7 +183,8 @@ $testMessage = function (WhatsAppNotificationService $notifications): void {
     abort_unless(auth()->user()->can('whatsapp.manage_settings'), 403);
     $this->validate(['test_recipient' => ['required', 'string', 'max:30']]);
     $company = Company::query()->findOrFail($this->companyId);
-    $notification = $notifications->queueTest($company, $this->test_recipient, "HARDEX WhatsApp test\n{$company->company_name}\n".now()->format('d M Y H:i'));
+    $localization = app(WhatsAppLocalization::class);
+    $notification = $notifications->queueTest($company, $this->test_recipient, $localization->get($company, 'test.title')."\n{$company->company_name}\n".$localization->date($company, now(), true));
     session()->flash($notification->status === 'queued' ? 'success' : 'error', $notification->status === 'queued' ? 'Test message queued. Check the notification log for delivery status.' : $notification->failure_reason);
 };
 
@@ -271,6 +275,15 @@ $saveTemplates = function (WhatsAppAuditService $audit): void {
                         <button type="button" wire:click="testConnection" wire:loading.attr="disabled" class="mt-2 rounded-lg border px-3 py-1.5 text-xs font-black">Test Connection</button>
                     </div>
                     <x-form-input label="Timezone" name="timezone" wire:model="timezone" />
+                    <label class="block text-sm font-bold">
+                        Notification Language
+                        <select wire:model="whatsapp_notification_language" class="mt-1 w-full rounded-lg border-slate-200 dark:bg-navy-950">
+                            <option value="en">English</option>
+                            <option value="sw">Kiswahili</option>
+                        </select>
+                        <span class="mt-1 block text-xs font-normal text-slate-500">Controls the language used for automatic WhatsApp notifications and report captions.</span>
+                        @error('whatsapp_notification_language')<span class="text-xs text-red-600">{{ $message }}</span>@enderror
+                    </label>
                     <x-form-input label="Daily Summary Time" name="daily_summary_time" type="time" wire:model="daily_summary_time" />
                     <label class="flex items-center gap-2 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="attach_daily_summary_pdf" class="rounded text-build-orange"> Attach permission-filtered daily PDF</label>
                     <label class="flex items-center gap-2 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-700"><input type="checkbox" wire:model="debt_reminders_enabled" class="rounded text-build-orange"> Enable transactional debt reminders</label>

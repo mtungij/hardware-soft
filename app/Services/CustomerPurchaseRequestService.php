@@ -105,16 +105,18 @@ class CustomerPurchaseRequestService
             if (! $company) {
                 return;
             }
+            $localization = app(WhatsAppLocalization::class);
+            $label = fn (string $key): string => $localization->get($company, 'b2b.'.$key);
             $estimated = $request->items->sum(fn ($item): float => (float) $item->transaction_quantity * (float) $item->display_unit_price_snapshot);
             $message = implode("\n", [
-                '*NEW CUSTOMER REQUEST*', '',
-                'Request: '.$request->request_number,
-                'Customer: '.$request->customer->name,
-                'Branch: '.$request->branch->name,
-                'Items: '.$request->items->count(),
-                'Estimated Value: TZS '.NumberFormatter::money($estimated), '',
-                'A new purchase request was submitted through the HARDEX Customer Portal.', '',
-                'Open HARDEX to review and prepare quotation.',
+                '*'.$label('request_title').'*', '',
+                $label('request').': '.$request->request_number,
+                $label('customer').': '.$request->customer->name,
+                $label('branch').': '.$request->branch->name,
+                $label('items').': '.$request->items->count(),
+                $label('estimated_value').': TZS '.NumberFormatter::money($estimated), '',
+                $label('request_submitted'), '',
+                $label('review_request'),
             ]);
             $this->notifications->queueForRecipients(
                 $company, 'customer_requests', 'customer_purchase_request_submitted',

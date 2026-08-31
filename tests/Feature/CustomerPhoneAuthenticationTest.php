@@ -64,7 +64,7 @@ function createPhoneCustomer(string $operation = 'create-operation'): array
 function temporaryPasswordFor(CustomerAccount $account): string
 {
     $notification = WhatsAppNotification::withoutGlobalScopes()->findOrFail($account->last_credentials_notification_id);
-    preg_match('/Password ya Muda:\n([^\n]+)/', $notification->resolvedDeliveryMessage(), $matches);
+    preg_match('/Temporary Password:\n([^\n]+)/', $notification->resolvedDeliveryMessage(), $matches);
 
     return $matches[1];
 }
@@ -108,7 +108,7 @@ test('credential job reloads and decrypts the real onboarding message only at th
         ->and($rawEncryptedMessage)->not->toBeNull()->not->toContain($temporaryPassword)
         ->and(json_encode($notification->metadata))->not->toContain($temporaryPassword)
         ->and($jobPayload)->toContain('notificationId')->toContain((string) $notification->id)
-        ->and($jobPayload)->not->toContain($temporaryPassword)->not->toContain('Password ya Muda')
+        ->and($jobPayload)->not->toContain($temporaryPassword)->not->toContain('Temporary Password')
         ->and(CustomerPortalSecurityEvent::withoutGlobalScopes()->get()->toJson())->not->toContain($temporaryPassword)
         ->and(Hash::check($temporaryPassword, $account->password))->toBeTrue()
         ->and($account->getRawOriginal('password'))->not->toContain($temporaryPassword);
@@ -132,7 +132,7 @@ test('credential job reloads and decrypts the real onboarding message only at th
         && str_contains($request['message'], '255629364847')
         && str_contains($request['message'], $temporaryPassword)
         && str_contains($request['message'], '/customer/login')
-        && str_contains($request['message'], 'badilisha password')
+        && str_contains($request['message'], 'change your password')
         && ! str_contains($request['message'], 'Encrypted customer portal credential notification.'));
 
     expect($notification->refresh()->status)->toBe('sent')
@@ -225,7 +225,7 @@ test('all credential sources resolve real protected messages while ordinary noti
         expect($credentialNotification->failure_reason)->toBeNull()
             ->and($credentialNotification->status)->toBe('sent')
             ->and($credentialNotification->message)->toBe('Encrypted customer portal credential notification.')
-            ->and($credentialNotification->resolvedDeliveryMessage())->toContain('Password ya Muda')->not->toContain('Encrypted customer portal credential notification.');
+            ->and($credentialNotification->resolvedDeliveryMessage())->toContain('Temporary Password')->not->toContain('Encrypted customer portal credential notification.');
     }
 
     $ordinary = app(WhatsAppNotificationService::class)->queuePhone(

@@ -72,7 +72,7 @@ class QueueWhatsAppDebtReminders extends Command
                 $notifications->queueRecipient(
                     $company, $setting, $recipient, 'customer_debt', 'management_debt_summary',
                     'management-debt-summary:'.$now->toDateString(),
-                    $debts->managementMessage($rows, $now),
+                    $debts->managementMessage($company, $rows, $now),
                     $recipient->scope === 'branch' ? (int) $recipient->branch_id : null,
                     $attachment, $attachment ? 'file' : null,
                     ['summary_date' => $now->toDateString(), 'receivable_ids' => $rows->pluck('id')->all(), 'scope' => $recipient->scope],

@@ -14,6 +14,7 @@ class WhatsAppMessageFactory
     public function __construct(
         private WhatsAppTemplateService $templates,
         private WhatsAppDailySummaryService $dailySummaries,
+        private WhatsAppLocalization $localization,
     ) {}
 
     public function saleCompleted(Sale $sale): string
@@ -24,15 +25,15 @@ class WhatsAppMessageFactory
         $timezone = $sale->company?->timezone ?: config('app.timezone');
         $customer = $sale->temporary_customer_name
             ?: $sale->customer?->name
-            ?: 'Walk-in Customer';
+            ?: $this->localization->get($sale->company, 'common.walk_in_customer');
         $payment = $sale->payments->pluck('payment_method')->filter()->unique()
-            ->map(fn (string $method): string => str($method)->replace('_', ' ')->title()->toString())
+            ->map(fn (string $method): string => $this->paymentMethod($sale->company, $method))
             ->join(', ');
         $itemQuantity = (float) $sale->items->sum('quantity');
 
         return $this->templates->render($sale->company, 'sale_completed', [
             'sale_number' => $sale->sale_number,
-            'date' => $sale->created_at?->clone()->timezone($timezone)->format('d M Y H:i') ?: '-',
+            'date' => $this->localization->date($sale->company, $sale->created_at?->clone()->timezone($timezone), true),
             'branch' => $sale->branch?->name ?: '-',
             'cashier' => $sale->soldBy?->name ?: $sale->createdBy?->name ?: '-',
             'customer' => $customer,
@@ -52,7 +53,7 @@ class WhatsAppMessageFactory
         return $this->templates->render($sale->company, 'sale_cancelled', [
             'sale_number' => $sale->sale_number, 'branch' => $sale->branch?->name ?: '-',
             'amount' => $this->money($sale->total_amount), 'actor' => $sale->cancelledBy?->name ?: '-',
-            'time' => optional($sale->cancelled_at)->format('d M Y H:i'),
+            'time' => $this->localization->date($sale->company, $sale->cancelled_at, true),
         ]);
     }
 
@@ -61,7 +62,7 @@ class WhatsAppMessageFactory
         $payment->loadMissing(['customer', 'branch', 'receivedBy']);
 
         return $this->templates->render($payment->company, 'customer_payment_received', [
-            'customer' => $payment->customer?->name ?: 'Customer', 'amount' => $this->money($payment->amount),
+            'customer' => $payment->customer?->name ?: $this->localization->get($payment->company, 'common.customer'), 'amount' => $this->money($payment->amount),
             'reference' => $payment->receipt_number ?: $payment->reference_number ?: '-',
             'branch' => $payment->branch?->name ?: '-', 'actor' => $payment->receivedBy?->name ?: '-',
         ]);
@@ -86,5 +87,13 @@ class WhatsAppMessageFactory
     private function money(mixed $amount): string
     {
         return number_format((float) $amount, 0);
+    }
+
+    private function paymentMethod(Company $company, string $method): string
+    {
+        $key = 'whatsapp.common.payment_methods.'.$method;
+        $translated = __($key, [], $this->localization->language($company));
+
+        return $translated === $key ? str($method)->replace('_', ' ')->title()->toString() : $translated;
     }
 }

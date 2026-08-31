@@ -1,0 +1,65 @@
+<?php
+
+return [
+    'months' => ['short' => [1 => 'Jan', 2 => 'Feb', 3 => 'Mac', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun', 7 => 'Jul', 8 => 'Ago', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des']],
+    'common' => [
+        'branch' => 'Tawi', 'scope' => 'Eneo', 'all_authorized_locations' => 'Maeneo yote yaliyoruhusiwa',
+        'own_activity' => 'Shughuli zako — :name', 'customer' => 'Mteja', 'walk_in_customer' => 'Mteja wa Moja kwa Moja',
+        'payment_methods' => ['cash' => 'Cash', 'credit' => 'Mkopo', 'bank' => 'Benki', 'mobile_money' => 'Pesa ya Simu', 'card' => 'Kadi'],
+    ],
+    'daily_summary' => [
+        'title' => 'MUHTASARI WA SIKU - HARDEX', 'sales' => 'Mauzo', 'transactions' => 'Idadi ya Miamala',
+        'cash_sales' => 'Mauzo ya Cash', 'credit_sales' => 'Mauzo ya Mkopo', 'payments_received' => 'Malipo Yaliyopokelewa',
+        'top_product' => 'Bidhaa Iliyouzwa Zaidi', 'low_stock' => 'Stock Ndogo', 'out_of_stock' => 'Zilizoisha Stock',
+        'cogs' => 'Gharama ya Bidhaa Zilizouzwa', 'gross_profit' => 'Faida Ghafi', 'expenses' => 'Matumizi', 'net_profit' => 'Faida Halisi',
+        'profit_margin' => 'Asilimia ya Faida', 'stock_value' => 'Thamani ya Stock',
+    ],
+    'stock_alert' => [
+        'title' => 'TAARIFA YA STOCK - HARDEX', 'items_attention' => 'Bidhaa :count zinahitaji uangalizi.',
+        'out_of_stock' => 'Zilizoisha Stock', 'low_stock' => 'Stock Ndogo', 'generated' => 'Imetengenezwa',
+        'attachment_note' => 'Ripoti kamili ya bidhaa zenye stock ndogo au zilizoisha imeambatanishwa.',
+        'attachment_failed' => 'Ripoti kamili haikuweza kuambatanishwa; fungua HARDEX POS kwa maelezo.',
+        'attachment_disabled' => 'Kiambatisho cha PDF kimezimwa; fungua HARDEX POS kwa maelezo.',
+    ],
+    'templates' => [
+        'sale_completed' => "*MAUZO MAPYA*\n\nAnkara: {{sale_number}}\nTarehe: {{date}}\nTawi: {{branch}}\nMuuzaji: {{cashier}}\nMteja: {{customer}}\n\nBidhaa: {{items}}\nJumla: {{currency}} {{total}}\nIliyolipwa: {{currency}} {{paid}}\nSalio: {{currency}} {{balance}}\n\nMalipo: {{payment}}\n\nHARDEX POS",
+        'sale_cancelled' => "TAHADHARI YA USALAMA - HARDEX\nMauzo {{sale_number}} yamefutwa.\nTawi: {{branch}}\nKiasi: TZS {{amount}}\nYamefutwa na: {{actor}}\nMuda: {{time}}",
+        'customer_payment_received' => "MALIPO YA MTEJA - HARDEX\nMalipo yamepokelewa kutoka kwa {{customer}}.\nKiasi: TZS {{amount}}\nKumbukumbu: {{reference}}\nTawi: {{branch}}\nYamepokelewa na: {{actor}}",
+        'production_completed' => "UZALISHAJI UMEKAMILIKA - HARDEX\nOda: {{order_number}}\nBidhaa: {{product}}\nZilizokubaliwa: {{accepted}}\nZilizokataliwa: {{rejected}}\nTawi: {{branch}}",
+    ],
+    'debt' => [
+        'management_title' => 'TAARIFA YA MADENI - HARDEX', 'due_tomorrow' => 'YANAYOTAKIWA KESHO', 'due_today' => 'YANAYOTAKIWA LEO',
+        'overdue' => 'YALIYOCHELEWA', 'customers' => 'Wateja', 'total' => 'Jumla', 'highest_outstanding' => 'Madeni Makubwa Zaidi',
+        'open_report' => 'Fungua HARDEX kuona ripoti kamili ya wadaiwa.',
+        'greeting' => 'Habari :name,', 'reminder_from' => 'Kumbusho kutoka :company.',
+        'overdue_body' => 'Deni lako la TZS :amount lilipaswa kulipwa tarehe :date na sasa limechelewa kwa siku :days.',
+        'due_body' => 'Una deni la TZS :amount linalotarajiwa kulipwa tarehe :date.', 'reference' => 'Kumbukumbu',
+        'contact' => 'Tafadhali wasiliana nasi kwa maelezo zaidi.', 'paid_contact' => 'Kama tayari umelipa, tafadhali wasiliana nasi.', 'thanks' => 'Asante.',
+    ],
+    'operational' => [
+        'goods_received_title' => 'BIDHAA ZIMEPOKELEWA - HARDEX', 'supplier' => 'Msambazaji', 'branch' => 'Tawi', 'received' => 'Zimepokelewa',
+        'material_deposit_title' => 'AMANA YA VIFAA - HARDEX', 'account' => 'Akaunti', 'customer' => 'Mteja', 'reference' => 'Kumbukumbu', 'amount' => 'Kiasi',
+        'material_issue_title' => 'UTOAJI WA VIFAA - HARDEX', 'value' => 'Thamani',
+        'curing_release_title' => 'UTOAJI WA BIDHAA ZILIZOKAUKA - HARDEX', 'curing_damage_title' => 'UHARIBIFU WA BIDHAA ZINAZOKAUKA - HARDEX',
+        'batch' => 'Kundi', 'product' => 'Bidhaa', 'quantity' => 'Kiasi', 'destination' => 'Zinakopelekwa', 'reason' => 'Sababu',
+    ],
+    'b2b' => [
+        'request_title' => 'OMBI JIPYA LA MTEJA', 'request' => 'Ombi', 'customer' => 'Mteja', 'branch' => 'Tawi', 'items' => 'Bidhaa',
+        'estimated_value' => 'Thamani Iliyokadiriwa', 'request_submitted' => 'Ombi jipya la ununuzi limetumwa kupitia HARDEX Customer Portal.',
+        'review_request' => 'Fungua HARDEX kukagua na kuandaa quotation.', 'quotation_accepted_title' => 'QUOTATION IMEKUBALIWA',
+        'quotation' => 'Quotation', 'amount' => 'Kiasi', 'accepted_note' => 'Mteja amekubali quotation kupitia HARDEX Customer Portal.',
+        'hello' => 'Habari :name,', 'quotation_ready' => ':document yako :reference kutoka :company imeandaliwa.', 'total' => 'Jumla',
+        'valid_until' => 'Inatumika Hadi', 'pdf_attached' => 'PDF imeambatanishwa.', 'thanks' => 'Asante.',
+        'quotation_document' => 'Quotation', 'proforma_document' => 'Proforma Invoice',
+        'sale_complete' => 'Mauzo yako :reference yamekamilika.', 'paid' => 'Malipo', 'balance' => 'Salio',
+        'invoice_attached' => 'Invoice imeambatanishwa.', 'purchase_thanks' => 'Asante kwa kununua :company.',
+    ],
+    'portal' => [
+        'title' => 'HARDEX CUSTOMER PORTAL', 'hello' => 'Habari :name,', 'registered' => 'Umesajiliwa kama mteja wa :company.',
+        'login_intro' => 'Unaweza kuingia kwenye Customer Portal kwa taarifa zifuatazo:', 'phone' => 'Namba ya Simu',
+        'temporary_password' => 'Password ya Muda', 'security' => 'Kwa usalama, tafadhali badilisha password baada ya kuingia mara ya kwanza.',
+        'features_intro' => 'Kupitia portal unaweza:', 'features' => ['Kuangalia madeni na malipo', 'Kuangalia invoices na receipts', 'Kuangalia taarifa ya akaunti', 'Kutuma ombi la ununuzi', 'Kupokea na kukubali quotation/proforma', 'Kuangalia invoices zako'],
+        'thanks' => 'Asante kwa kutumia :company.', 'phone_changed' => 'Namba yako ya kuingia Customer Portal imebadilishwa kuwa :phone. Password yako haijabadilishwa.',
+    ],
+    'test' => ['title' => 'Jaribio la WhatsApp la HARDEX'],
+];

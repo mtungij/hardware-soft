@@ -19,6 +19,8 @@ use Illuminate\Support\Facades\DB;
 
 class WhatsAppDailySummaryService
 {
+    public function __construct(private WhatsAppLocalization $localization) {}
+
     /**
      * Build only the fields the recipient is authorized to receive. Sensitive
      * queries are deliberately not executed when their permission is absent.
@@ -41,6 +43,7 @@ class WhatsAppDailySummaryService
 
         $data = [
             'company_name' => $company->company_name,
+            'notification_language' => $this->localization->language($company),
             'scope_label' => $this->scopeLabel($company, $recipient),
             'report_date' => $date->toDateString(),
             'sales' => [
@@ -149,41 +152,43 @@ class WhatsAppDailySummaryService
     public function message(array $data): string
     {
         $sales = $data['sales'];
+        $language = $data['notification_language'] ?? 'en';
+        $label = fn (string $key): string => $this->localization->getForLanguage($language, 'daily_summary.'.$key);
         $lines = [
-            'HARDEX DAILY SUMMARY',
+            $label('title'),
             $data['scope_label'],
-            CarbonImmutable::parse($data['report_date'])->format('d M Y'), '',
-            'Sales: TZS '.$this->money($sales['total']),
-            'Transactions: '.$sales['transactions'],
-            'Cash Sales: TZS '.$this->money($sales['cash']),
-            'Credit Sales: TZS '.$this->money($sales['credit']),
+            $this->localization->dateForLanguage($language, CarbonImmutable::parse($data['report_date'])), '',
+            $label('sales').': TZS '.$this->money($sales['total']),
+            $label('transactions').': '.$sales['transactions'],
+            $label('cash_sales').': TZS '.$this->money($sales['cash']),
+            $label('credit_sales').': TZS '.$this->money($sales['credit']),
         ];
 
         if (isset($data['receivables'])) {
-            $lines[] = 'Payments Received: TZS '.$this->money($data['receivables']['payments_received']);
+            $lines[] = $label('payments_received').': TZS '.$this->money($data['receivables']['payments_received']);
         }
 
         $top = $data['top_products'][0] ?? null;
-        $lines[] = 'Top Product: '.($top ? $top['name'].' — TZS '.$this->money($top['amount']) : '-');
+        $lines[] = $label('top_product').': '.($top ? $top['name'].' — TZS '.$this->money($top['amount']) : '-');
 
         if (isset($data['stock'])) {
-            $lines[] = 'Low Stock: '.$data['stock']['low'];
-            $lines[] = 'Out of Stock: '.$data['stock']['out'];
+            $lines[] = $label('low_stock').': '.$data['stock']['low'];
+            $lines[] = $label('out_of_stock').': '.$data['stock']['out'];
         }
 
         if (isset($data['financial'])) {
             $financial = $data['financial'];
             array_push($lines, '',
-                'COGS: TZS '.$this->money($financial['cogs']),
-                'Gross Profit: TZS '.$this->money($financial['gross_profit']),
-                'Expenses: TZS '.$this->money($financial['expenses']),
-                'Net Profit: TZS '.$this->money($financial['net_profit']),
-                'Profit Margin: '.number_format($financial['profit_margin'], 1).'%',
+                $label('cogs').': TZS '.$this->money($financial['cogs']),
+                $label('gross_profit').': TZS '.$this->money($financial['gross_profit']),
+                $label('expenses').': TZS '.$this->money($financial['expenses']),
+                $label('net_profit').': TZS '.$this->money($financial['net_profit']),
+                $label('profit_margin').': '.number_format($financial['profit_margin'], 1).'%',
             );
         }
 
         if (array_key_exists('stock_valuation', $data)) {
-            $lines[] = 'Stock Value: TZS '.$this->money($data['stock_valuation']);
+            $lines[] = $label('stock_value').': TZS '.$this->money($data['stock_valuation']);
         }
 
         return implode("\n", $lines);
@@ -259,16 +264,16 @@ class WhatsAppDailySummaryService
     private function scopeLabel(Company $company, WhatsAppRecipient $recipient): string
     {
         if (! $recipient->user) {
-            return $recipient->scope === 'branch' ? ($recipient->branch?->name ?: 'Branch') : $company->company_name;
+            return $recipient->scope === 'branch' ? ($recipient->branch?->name ?: $this->localization->get($company, 'common.branch')) : $company->company_name;
         }
 
         $salesScope = AuthorizationScope::scopeFor($recipient->user, 'sales_scope', AuthorizationScope::BRANCH);
         $reportScope = AuthorizationScope::scopeFor($recipient->user, 'report_scope', AuthorizationScope::BRANCH);
         if ($salesScope === AuthorizationScope::OWN || $reportScope === AuthorizationScope::OWN) {
-            return 'Own activity — '.$recipient->user->name;
+            return $this->localization->get($company, 'common.own_activity', ['name' => $recipient->user->name]);
         }
         if ($salesScope !== AuthorizationScope::COMPANY || $reportScope !== AuthorizationScope::COMPANY) {
-            return $recipient->branch?->name ?: 'Branch';
+            return $recipient->branch?->name ?: $this->localization->get($company, 'common.branch');
         }
 
         return $company->company_name;

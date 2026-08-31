@@ -271,7 +271,7 @@ class CustomerPortalCredentialService
                 'customer_portal',
                 'portal_login_phone_changed',
                 "customer:{$customer->id}:portal-phone-changed:".hash('sha256', $phone),
-                "*HARDEX CUSTOMER PORTAL*\n\nHabari {$customer->name},\n\nNamba yako ya kuingia Customer Portal imebadilishwa kuwa {$phone}. Password yako haijabadilishwa.\n\nHARDEX POS",
+                $this->phoneChangedMessage($company, $customer, $phone),
                 $customer->branch_id,
                 ['customer_id' => $customer->id, 'customer_account_id' => $account->id],
             );
@@ -283,8 +283,27 @@ class CustomerPortalCredentialService
     private function credentialMessage(Company $company, Customer $customer, CustomerAccount $account, string $password): string
     {
         $portalUrl = rtrim((string) config('app.customer_portal_url', config('app.url')), '/').'/customer/login';
+        $localization = app(WhatsAppLocalization::class);
+        $features = collect($localization->get($company, 'portal.features'))->map(fn (string $feature): string => '• '.$feature)->implode("\n");
 
-        return "*HARDEX CUSTOMER PORTAL*\n\nHabari {$customer->name},\n\nUmesajiliwa kama mteja wa {$company->company_name}.\n\nUnaweza kuingia kwenye Customer Portal kwa taarifa zifuatazo:\n\nNamba ya Simu:\n{$account->login_phone}\n\nPassword ya Muda:\n{$password}\n\nPortal:\n{$portalUrl}\n\nKwa usalama, tafadhali badilisha password baada ya kuingia mara ya kwanza.\n\nKupitia portal unaweza:\n\n• Kuangalia madeni na malipo\n• Kuangalia invoices na receipts\n• Kuangalia account statement\n• Kutuma Purchase Request\n• Kupokea na kukubali Quotation/Proforma\n• Kuangalia invoices zako\n\nAsante kwa kutumia {$company->company_name}.\n\nHARDEX POS";
+        return '*'.$localization->get($company, 'portal.title')."*\n\n"
+            .$localization->get($company, 'portal.hello', ['name' => $customer->name])."\n\n"
+            .$localization->get($company, 'portal.registered', ['company' => $company->company_name])."\n\n"
+            .$localization->get($company, 'portal.login_intro')."\n\n"
+            .$localization->get($company, 'portal.phone').":\n{$account->login_phone}\n\n"
+            .$localization->get($company, 'portal.temporary_password').":\n{$password}\n\nPortal:\n{$portalUrl}\n\n"
+            .$localization->get($company, 'portal.security')."\n\n"
+            .$localization->get($company, 'portal.features_intro')."\n\n{$features}\n\n"
+            .$localization->get($company, 'portal.thanks', ['company' => $company->company_name])."\n\nHARDEX POS";
+    }
+
+    private function phoneChangedMessage(Company $company, Customer $customer, string $phone): string
+    {
+        $localization = app(WhatsAppLocalization::class);
+
+        return '*'.$localization->get($company, 'portal.title')."*\n\n"
+            .$localization->get($company, 'portal.hello', ['name' => $customer->name])."\n\n"
+            .$localization->get($company, 'portal.phone_changed', ['phone' => $phone])."\n\nHARDEX POS";
     }
 
     private function temporaryPassword(): string

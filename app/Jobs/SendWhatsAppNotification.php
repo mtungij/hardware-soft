@@ -240,7 +240,7 @@ class SendWhatsAppNotification implements ShouldQueue
 
                 return false;
             }
-            $updates = ['message' => $debts->managementMessage($rows, $date)];
+            $updates = ['message' => $debts->managementMessage($company, $rows, $date)];
             if ($notification->attachment_type === 'file') {
                 $updates['attachment_path'] = app(WhatsAppDebtPdfService::class)->generate($company, $recipient, $date, $rows);
             }

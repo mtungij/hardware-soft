@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class WhatsAppStockAlertService
 {
+    public function __construct(private WhatsAppLocalization $localization) {}
+
     /** @return Collection<int, object> */
     public function rows(Company $company, WhatsAppRecipient $recipient): Collection
     {
@@ -78,22 +80,23 @@ class WhatsAppStockAlertService
     ): string {
         $out = $rows->where('status', 'OUT OF STOCK')->count();
         $low = $rows->where('status', 'LOW STOCK')->count();
+        $label = fn (string $key, array $replace = []): string => $this->localization->get($company, 'stock_alert.'.$key, $replace);
 
         return implode("\n", [
-            '*HARDEX STOCK ALERT*',
+            '*'.$label('title').'*',
             '',
-            $rows->count().' stock items require attention.',
+            $label('items_attention', ['count' => $rows->count()]),
             '',
-            'Out of Stock: '.$out,
-            'Low Stock: '.$low,
+            $label('out_of_stock').': '.$out,
+            $label('low_stock').': '.$low,
             '',
-            ($recipient->scope === 'branch' ? 'Branch: ' : 'Scope: ').$this->scopeLabel($company, $recipient),
-            'Generated: '.$generatedAt->format('d M Y H:i'),
+            $this->localization->get($company, $recipient->scope === 'branch' ? 'common.branch' : 'common.scope').': '.$this->scopeLabel($company, $recipient),
+            $label('generated').': '.$this->localization->date($company, $generatedAt, true),
             '',
             match (true) {
-                $hasAttachment => 'Full Low / Out of Stock report is attached.',
-                $attachmentEnabled => 'The full report could not be attached; view HARDEX POS for details.',
-                default => 'PDF attachment is disabled; view HARDEX POS for details.',
+                $hasAttachment => $label('attachment_note'),
+                $attachmentEnabled => $label('attachment_failed'),
+                default => $label('attachment_disabled'),
             },
             '',
             'HARDEX POS',
@@ -103,8 +106,8 @@ class WhatsAppStockAlertService
     public function scopeLabel(Company $company, WhatsAppRecipient $recipient): string
     {
         return $recipient->scope === 'branch'
-            ? ($recipient->branch?->name ?: 'Branch')
-            : $company->company_name.' (All authorized locations)';
+            ? ($recipient->branch?->name ?: $this->localization->get($company, 'common.branch'))
+            : $company->company_name.' ('.$this->localization->get($company, 'common.all_authorized_locations').')';
     }
 
     public function quantity(float|int|string|null $value): string
