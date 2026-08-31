@@ -16,6 +16,7 @@ use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
 use App\Models\User;
+use App\Support\AuthorizationScope;
 use App\Support\InventorySettings;
 use App\Support\UiText;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -1427,22 +1428,11 @@ class InventoryService
             }
 
             $user = User::query()->find($completedBy);
-            if ($user?->stockLocations()->exists()) {
-                $canTransferSource = $user->stockLocations()
-                    ->where('stock_locations.id', $fromLocation->id)
-                    ->wherePivot('can_transfer', true)
-                    ->exists();
-                $canReceiveDestination = $user->stockLocations()
-                    ->where('stock_locations.id', $toLocation->id)
-                    ->wherePivot('can_receive', true)
-                    ->exists();
-
-                if (! $canTransferSource) {
-                    throw ValidationException::withMessages(['from_location_id' => 'You are not allowed to transfer stock from this location.']);
-                }
-                if (! $canReceiveDestination) {
-                    throw ValidationException::withMessages(['to_location_id' => 'You are not allowed to receive stock into this destination.']);
-                }
+            if (! $user || ! AuthorizationScope::stockLocationsForBranch($user, 'can_transfer', (int) $transfer->branch_id)->contains('id', $fromLocation->id)) {
+                throw ValidationException::withMessages(['from_location_id' => 'You are not allowed to transfer stock from this location.']);
+            }
+            if (! AuthorizationScope::stockLocationsForBranch($user, 'can_receive', (int) $transfer->branch_id)->contains('id', $toLocation->id)) {
+                throw ValidationException::withMessages(['to_location_id' => 'You are not allowed to receive stock into this destination.']);
             }
 
             if (($toLocation->is_dispensing_location || $toLocation->type === 'dispensing') && ! $fromLocation->can_transfer_to_dispensing) {

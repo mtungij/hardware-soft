@@ -64,14 +64,18 @@ class User extends Authenticatable
     public function permittedStockLocations(string $ability = 'can_view', ?int $branchId = null): Collection
     {
         $hasExplicitAssignments = $this->stockLocations()
-            ->when($branchId, fn ($query) => $query->where('stock_locations.branch_id', $branchId))
+            ->when($branchId, fn ($query) => $query->where(fn ($locations) => $locations
+                ->where('stock_locations.branch_id', $branchId)
+                ->orWhereNull('stock_locations.branch_id')))
             ->exists();
 
         $locations = $this->stockLocations()
             ->wherePivot($ability, true)
             ->where('stock_locations.is_active', true)
             ->where('stock_locations.status', 'active')
-            ->when($branchId, fn ($query) => $query->where('stock_locations.branch_id', $branchId))
+            ->when($branchId, fn ($query) => $query->where(fn ($locations) => $locations
+                ->where('stock_locations.branch_id', $branchId)
+                ->orWhereNull('stock_locations.branch_id')))
             ->orderByDesc('user_stock_locations.is_default')
             ->orderBy('stock_locations.name')
             ->get();
@@ -94,7 +98,7 @@ class User extends Authenticatable
         }
 
         return StockLocation::query()
-            ->where('branch_id', $branchId)
+            ->where(fn ($query) => $query->where('branch_id', $branchId)->orWhereNull('branch_id'))
             ->whereIn('type', $this->allowedSalesLocationTypes())
             ->where('status', 'active')
             ->where('is_active', true)

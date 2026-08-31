@@ -82,6 +82,31 @@ final class AuthorizationScope
         return self::stockLocationIds($user, $ability)->contains($locationId);
     }
 
+    /**
+     * Return active stock locations the user may use for a branch workflow.
+     * Company-wide locations (a null branch_id) remain eligible for every branch.
+     *
+     * @return Collection<int, StockLocation>
+     */
+    public static function stockLocationsForBranch(User $user, string $ability, int $branchId): Collection
+    {
+        $query = StockLocation::withoutGlobalScopes()
+            ->where('company_id', $user->company_id)
+            ->where('status', 'active')
+            ->where('is_active', true)
+            ->where(fn (Builder $locations) => $locations
+                ->where('branch_id', $branchId)
+                ->orWhereNull('branch_id'));
+
+        return match (self::scopeFor($user, 'stock_scope', self::ASSIGNED_LOCATIONS)) {
+            self::COMPANY => $query->orderByDesc('is_default')->orderBy('name')->get(),
+            self::BRANCH => (int) $user->branch_id === $branchId
+                ? $query->orderByDesc('is_default')->orderBy('name')->get()
+                : collect(),
+            default => $user->permittedStockLocations($ability, $branchId),
+        };
+    }
+
     public static function scopeFor(User $user, string $column, string $default): string
     {
         $priority = match ($column) {
