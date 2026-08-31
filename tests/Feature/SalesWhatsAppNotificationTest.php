@@ -9,12 +9,14 @@ use App\Models\Product;
 use App\Models\Sale;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
+use App\Models\Unit;
 use App\Models\User;
 use App\Models\WhatsAppNotification;
 use App\Models\WhatsAppRecipient;
 use App\Observers\SaleWhatsAppObserver;
 use App\Services\Gowa;
 use App\Services\InventoryService;
+use App\Services\WhatsAppMessageFactory;
 use App\Services\WhatsAppNotificationService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Http\Client\Request;
@@ -89,6 +91,57 @@ function salesWaSale(Company $company, Branch $branch, User $seller, array $over
 function salesWaNotify(Sale $sale): void
 {
     app(SaleWhatsAppObserver::class)->created($sale);
+}
+
+function salesWaAddItem(Sale $sale, string $name, float $quantity, string $unitCode = 'pcs', float $unitPrice = 1000): void
+{
+    $template = Product::withoutGlobalScopes()->where('company_id', $sale->company_id)->firstOrFail();
+    $product = $template->replicate();
+    $product->name = $name;
+    $product->sku = 'WA-ITEM-'.str()->random(10);
+    $product->barcode = null;
+    $product->product_size_id = null;
+    $product->save();
+    $unit = Unit::withoutGlobalScopes()->where('company_id', $sale->company_id)->where('short_name', $unitCode)->firstOrFail();
+    $stockLocationId = StockLocation::withoutGlobalScopes()->where('company_id', $sale->company_id)->where('branch_id', $sale->branch_id)->value('id');
+
+    $sale->items()->create([
+        'company_id' => $sale->company_id,
+        'product_id' => $product->id,
+        'stock_location_id' => $stockLocationId,
+        'selling_unit_id' => $unit->id,
+        'base_unit_id' => $product->unit_id,
+        'conversion_factor' => 1,
+        'selling_unit_name_snapshot' => $unit->name,
+        'selling_unit_code_snapshot' => $unitCode,
+        'base_unit_name_snapshot' => $product->unit?->name,
+        'base_unit_code_snapshot' => $product->unit?->short_name,
+        'quantity' => $quantity,
+        'base_quantity' => $quantity,
+        'unit_cost' => 0,
+        'unit_price' => $unitPrice,
+        'discount_per_unit' => 0,
+        'discount_amount' => 0,
+        'discount_total' => 0,
+        'gross_total' => $quantity * $unitPrice,
+        'net_unit_price' => $unitPrice,
+        'net_total' => $quantity * $unitPrice,
+        'tax_amount' => 0,
+        'line_total' => $quantity * $unitPrice,
+    ]);
+}
+
+function salesWaCompletedMessage(Sale $sale, string $language): string
+{
+    salesWaSetting($sale->company, ['whatsapp_notification_language' => $language]);
+    $sale->payments()->create([
+        'payment_method' => 'cash',
+        'amount' => $sale->paid_amount,
+        'received_by' => $sale->sold_by,
+        'payment_date' => $sale->sale_date,
+    ]);
+
+    return app(WhatsAppMessageFactory::class)->saleCompleted($sale);
 }
 
 function salesWaPosSale(Company $company, Branch $branch, User $seller, ?Customer $customer = null): Sale
@@ -319,6 +372,89 @@ test('sales message contains invoice customer and actual amounts', function () {
     $message = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'sale_completed')->firstOrFail()->message;
     expect($message)->toContain('INV-WA-001')->toContain($customer->name)
         ->toContain('Total: TZS 125,000')->toContain('Paid: TZS 125,000')->toContain('Balance: TZS 0')->toContain('Payment: Cash');
+});
+
+test('Kiswahili completed sale message includes one product and transaction quantity', function () {
+    $sale = salesWaSale($this->company, $this->branch, $this->admin, ['total_amount' => 2000, 'paid_amount' => 2000]);
+    salesWaAddItem($sale, 'Simba Cement 50kg', 2, 'pcs', 1000);
+
+    $message = salesWaCompletedMessage($sale, 'sw');
+
+    expect($message)->toContain('*MAUZO MAPYA*', "Bidhaa:\n• Simba Cement 50kg — 2 pcs")
+        ->toContain('Jumla ya Bidhaa: 2', 'Jumla: TZS 2,000', 'Iliyolipwa: TZS 2,000', 'Salio: TZS 0');
+});
+
+test('Kiswahili completed sale message lists multiple products on separate lines', function () {
+    $sale = salesWaSale($this->company, $this->branch, $this->admin, ['total_amount' => 91250, 'paid_amount' => 91250]);
+    salesWaAddItem($sale, 'Cement', 2, 'pcs', 1000);
+    salesWaAddItem($sale, 'PVC Pipe 1 Inch', 0.25, 'box', 357000);
+
+    $message = salesWaCompletedMessage($sale, 'sw');
+
+    expect($message)->toContain("• Cement — 2 pcs\n• PVC Pipe 1 Inch — 0.25 box")
+        ->toContain('Jumla ya Bidhaa: 2.25', 'Jumla: TZS 91,250');
+});
+
+test('English completed sale message includes localized labels and product breakdown', function () {
+    $sale = salesWaSale($this->company, $this->branch, $this->admin, ['total_amount' => 18000, 'paid_amount' => 18000]);
+    salesWaAddItem($sale, 'PVC Pipe 1 Inch', 2, 'pcs', 9000);
+
+    $message = salesWaCompletedMessage($sale, 'en');
+
+    expect($message)->toContain('*NEW SALE*', 'Invoice: INV-WA-001', 'Sold By: '.$this->admin->name)
+        ->toContain("Products:\n• PVC Pipe 1 Inch — 2 pcs", 'Total Quantity: 2')
+        ->toContain('Total: TZS 18,000', 'Paid: TZS 18,000', 'Balance: TZS 0', 'Payment: Cash')
+        ->not->toContain('Jumla ya Bidhaa', 'Muuzaji:');
+});
+
+test('completed sale message preserves fractional transaction unit snapshot', function () {
+    $sale = salesWaSale($this->company, $this->branch, $this->admin, ['total_amount' => 9000, 'paid_amount' => 9000]);
+    salesWaAddItem($sale, 'Ceramic Floor Tiles 40x40', 0.25, 'box', 36000);
+    Unit::withoutGlobalScopes()->where('company_id', $this->company->id)->where('short_name', 'box')->update(['short_name' => 'carton']);
+
+    $message = salesWaCompletedMessage($sale, 'en');
+
+    expect($message)->toContain('• Ceramic Floor Tiles 40x40 — 0.25 box')
+        ->not->toContain('0.25 carton');
+});
+
+test('completed sale message leaves stored product names unchanged', function () {
+    $sale = salesWaSale($this->company, $this->branch, $this->admin);
+    salesWaAddItem($sale, 'Mabati Gauge 28 / Premium', 1, 'pcs', 125000);
+
+    $message = salesWaCompletedMessage($sale, 'sw');
+
+    expect($message)->toContain('Mabati Gauge 28 / Premium')
+        ->and(Product::withoutGlobalScopes()->where('name', 'Mabati Gauge 28 / Premium')->value('name'))->toBe('Mabati Gauge 28 / Premium');
+});
+
+test('completed sale message shows ten products then a localized remainder count', function () {
+    $sale = salesWaSale($this->company, $this->branch, $this->admin, ['total_amount' => 14000, 'paid_amount' => 14000]);
+    foreach (range(1, 14) as $index) {
+        salesWaAddItem($sale, sprintf('WhatsApp Product %02d', $index), 1, 'pcs', 1000);
+    }
+
+    $english = salesWaCompletedMessage($sale, 'en');
+    salesWaSetting($this->company, ['whatsapp_notification_language' => 'sw']);
+    $kiswahili = app(WhatsAppMessageFactory::class)->saleCompleted($sale->fresh());
+
+    expect($english)->toContain('WhatsApp Product 01', 'WhatsApp Product 10', '...and 4 more items', 'Total Quantity: 14')
+        ->not->toContain('WhatsApp Product 11', 'WhatsApp Product 14')
+        ->and($kiswahili)->toContain('...na bidhaa nyingine 4', 'Jumla ya Bidhaa: 14');
+});
+
+test('building completed sale product details does not change sale totals', function () {
+    $sale = salesWaSale($this->company, $this->branch, $this->admin, [
+        'subtotal' => 91250, 'total_amount' => 91250, 'paid_amount' => 91250, 'balance_amount' => 0,
+    ]);
+    salesWaAddItem($sale, 'Cement', 2, 'pcs', 1000);
+    salesWaAddItem($sale, 'PVC Pipe 1 Inch', 0.25, 'box', 357000);
+    $before = $sale->only(['subtotal', 'total_amount', 'paid_amount', 'balance_amount']);
+
+    $message = salesWaCompletedMessage($sale, 'en');
+
+    expect($sale->fresh()->only(array_keys($before)))->toBe($before)
+        ->and($message)->toContain('Total: TZS 91,250', 'Paid: TZS 91,250', 'Balance: TZS 0');
 });
 
 test('phone only sales message excludes sensitive cost and profit information', function () {

@@ -21,8 +21,14 @@ return [
         'attachment_failed' => 'The full report could not be attached; view HARDEX POS for details.',
         'attachment_disabled' => 'PDF attachment is disabled; view HARDEX POS for details.',
     ],
+    'sale_completed' => [
+        'title' => 'NEW SALE', 'invoice' => 'Invoice', 'date' => 'Date', 'branch' => 'Branch',
+        'sold_by' => 'Sold By', 'customer' => 'Customer', 'products' => 'Products',
+        'total_quantity' => 'Total Quantity', 'total' => 'Total', 'paid' => 'Paid',
+        'balance' => 'Balance', 'payment' => 'Payment', 'more_items' => '...and :count more items',
+    ],
     'templates' => [
-        'sale_completed' => "*NEW SALE*\n\nInvoice: {{sale_number}}\nDate: {{date}}\nBranch: {{branch}}\nCashier: {{cashier}}\nCustomer: {{customer}}\n\nItems: {{items}}\nTotal: {{currency}} {{total}}\nPaid: {{currency}} {{paid}}\nBalance: {{currency}} {{balance}}\n\nPayment: {{payment}}\n\nHARDEX POS",
+        'sale_completed' => "*NEW SALE*\n\nInvoice: {{sale_number}}\nDate: {{date}}\nBranch: {{branch}}\nSold By: {{cashier}}\nCustomer: {{customer}}\n\nProducts:\n{{products}}\n\nTotal Quantity: {{total_quantity}}\nTotal: {{currency}} {{total}}\nPaid: {{currency}} {{paid}}\nBalance: {{currency}} {{balance}}\n\nPayment: {{payment}}\n\nHARDEX POS",
         'sale_cancelled' => "HARDEX SECURITY ALERT\nSale {{sale_number}} was cancelled.\nBranch: {{branch}}\nAmount: TZS {{amount}}\nCancelled by: {{actor}}\nTime: {{time}}",
         'customer_payment_received' => "HARDEX CUSTOMER PAYMENT\nPayment received from {{customer}}.\nAmount: TZS {{amount}}\nReference: {{reference}}\nBranch: {{branch}}\nReceived by: {{actor}}",
         'production_completed' => "HARDEX PRODUCTION COMPLETED\nOrder: {{order_number}}\nProduct: {{product}}\nAccepted: {{accepted}}\nRejected: {{rejected}}\nBranch: {{branch}}",

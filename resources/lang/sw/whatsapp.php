@@ -21,8 +21,14 @@ return [
         'attachment_failed' => 'Ripoti kamili haikuweza kuambatanishwa; fungua HARDEX POS kwa maelezo.',
         'attachment_disabled' => 'Kiambatisho cha PDF kimezimwa; fungua HARDEX POS kwa maelezo.',
     ],
+    'sale_completed' => [
+        'title' => 'MAUZO MAPYA', 'invoice' => 'Ankara', 'date' => 'Tarehe', 'branch' => 'Tawi',
+        'sold_by' => 'Muuzaji', 'customer' => 'Mteja', 'products' => 'Bidhaa',
+        'total_quantity' => 'Jumla ya Bidhaa', 'total' => 'Jumla', 'paid' => 'Iliyolipwa',
+        'balance' => 'Salio', 'payment' => 'Malipo', 'more_items' => '...na bidhaa nyingine :count',
+    ],
     'templates' => [
-        'sale_completed' => "*MAUZO MAPYA*\n\nAnkara: {{sale_number}}\nTarehe: {{date}}\nTawi: {{branch}}\nMuuzaji: {{cashier}}\nMteja: {{customer}}\n\nBidhaa: {{items}}\nJumla: {{currency}} {{total}}\nIliyolipwa: {{currency}} {{paid}}\nSalio: {{currency}} {{balance}}\n\nMalipo: {{payment}}\n\nHARDEX POS",
+        'sale_completed' => "*MAUZO MAPYA*\n\nAnkara: {{sale_number}}\nTarehe: {{date}}\nTawi: {{branch}}\nMuuzaji: {{cashier}}\nMteja: {{customer}}\n\nBidhaa:\n{{products}}\n\nJumla ya Bidhaa: {{total_quantity}}\nJumla: {{currency}} {{total}}\nIliyolipwa: {{currency}} {{paid}}\nSalio: {{currency}} {{balance}}\n\nMalipo: {{payment}}\n\nHARDEX POS",
         'sale_cancelled' => "TAHADHARI YA USALAMA - HARDEX\nMauzo {{sale_number}} yamefutwa.\nTawi: {{branch}}\nKiasi: TZS {{amount}}\nYamefutwa na: {{actor}}\nMuda: {{time}}",
         'customer_payment_received' => "MALIPO YA MTEJA - HARDEX\nMalipo yamepokelewa kutoka kwa {{customer}}.\nKiasi: TZS {{amount}}\nKumbukumbu: {{reference}}\nTawi: {{branch}}\nYamepokelewa na: {{actor}}",
         'production_completed' => "UZALISHAJI UMEKAMILIKA - HARDEX\nOda: {{order_number}}\nBidhaa: {{product}}\nZilizokubaliwa: {{accepted}}\nZilizokataliwa: {{rejected}}\nTawi: {{branch}}",

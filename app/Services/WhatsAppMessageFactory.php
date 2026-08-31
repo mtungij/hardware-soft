@@ -19,7 +19,7 @@ class WhatsAppMessageFactory
 
     public function saleCompleted(Sale $sale): string
     {
-        $sale->load(['company', 'branch', 'customer', 'soldBy', 'createdBy', 'items', 'payments']);
+        $sale->load(['company', 'branch', 'customer', 'soldBy', 'createdBy', 'items.product', 'items.productSize', 'items.sellingUnit', 'payments']);
 
         $currency = $sale->company?->currency ?: 'TZS';
         $timezone = $sale->company?->timezone ?: config('app.timezone');
@@ -30,6 +30,22 @@ class WhatsAppMessageFactory
             ->map(fn (string $method): string => $this->paymentMethod($sale->company, $method))
             ->join(', ');
         $itemQuantity = (float) $sale->items->sum('quantity');
+        $displayedItems = $sale->items->take(10)->map(function ($item): string {
+            $name = $item->productDisplayNameWithSize() ?: '-';
+            $unit = $item->selling_unit_code_snapshot
+                ?: $item->selling_unit_name_snapshot
+                ?: $item->sellingUnit?->short_name
+                ?: $item->sellingUnit?->name
+                ?: '-';
+
+            return '• '.$name.' — '.$this->quantity($item->quantity).' '.$unit;
+        });
+        $remainingItems = max(0, $sale->items->count() - $displayedItems->count());
+        if ($remainingItems > 0) {
+            $displayedItems->push($this->localization->get($sale->company, 'sale_completed.more_items', ['count' => $remainingItems]));
+        }
+        $products = $displayedItems->isEmpty() ? '-' : $displayedItems->implode("\n");
+        $totalQuantity = $this->quantity($itemQuantity);
 
         return $this->templates->render($sale->company, 'sale_completed', [
             'sale_number' => $sale->sale_number,
@@ -37,7 +53,9 @@ class WhatsAppMessageFactory
             'branch' => $sale->branch?->name ?: '-',
             'cashier' => $sale->soldBy?->name ?: $sale->createdBy?->name ?: '-',
             'customer' => $customer,
-            'items' => $itemQuantity === floor($itemQuantity) ? number_format($itemQuantity, 0) : rtrim(rtrim(number_format($itemQuantity, 4, '.', ''), '0'), '.'),
+            'products' => $products,
+            'total_quantity' => $totalQuantity,
+            'items' => $products."\n\n".$this->localization->get($sale->company, 'sale_completed.total_quantity').': '.$totalQuantity,
             'currency' => $currency,
             'total' => $this->money($sale->total_amount),
             'paid' => $this->money($sale->paid_amount),
@@ -87,6 +105,15 @@ class WhatsAppMessageFactory
     private function money(mixed $amount): string
     {
         return number_format((float) $amount, 0);
+    }
+
+    private function quantity(mixed $quantity): string
+    {
+        $quantity = (float) $quantity;
+
+        return $quantity === floor($quantity)
+            ? number_format($quantity, 0)
+            : rtrim(rtrim(number_format($quantity, 4, '.', ''), '0'), '.');
     }
 
     private function paymentMethod(Company $company, string $method): string
