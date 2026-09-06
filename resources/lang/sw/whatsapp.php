@@ -27,6 +27,12 @@ return [
         'total_quantity' => 'Jumla ya Bidhaa', 'total' => 'Jumla', 'paid' => 'Iliyolipwa',
         'balance' => 'Salio', 'payment' => 'Malipo', 'more_items' => '...na bidhaa nyingine :count',
     ],
+    'material_issue' => [
+        'title' => 'BIDHAA ZIMETOLEWA - HARDEX', 'reference' => 'Kumbukumbu', 'date' => 'Tarehe', 'customer' => 'Mteja',
+        'materials' => 'Bidhaa', 'total_value' => 'Jumla ya Bidhaa', 'previous_balance' => 'Salio la Awali',
+        'amount_used' => 'Thamani Iliyotumika', 'new_balance' => 'Salio Jipya', 'issued_by' => 'Iliyotolewa na', 'collected_by' => 'Aliyechukua',
+        'attachment' => 'Risiti ya utoaji bidhaa :reference imeambatanishwa.',
+    ],
     'templates' => [
         'sale_completed' => "*MAUZO MAPYA*\n\nAnkara: {{sale_number}}\nTarehe: {{date}}\nTawi: {{branch}}\nMuuzaji: {{cashier}}\nMteja: {{customer}}\n\nBidhaa:\n{{products}}\n\nJumla ya Bidhaa: {{total_quantity}}\nJumla: {{currency}} {{total}}\nIliyolipwa: {{currency}} {{paid}}\nSalio: {{currency}} {{balance}}\n\nMalipo: {{payment}}\n\nHARDEX POS",
         'sale_cancelled' => "TAHADHARI YA USALAMA - HARDEX\nMauzo {{sale_number}} yamefutwa.\nTawi: {{branch}}\nKiasi: TZS {{amount}}\nYamefutwa na: {{actor}}\nMuda: {{time}}",

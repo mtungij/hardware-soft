@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Branch;
+use App\Models\CompanyWhatsAppSetting;
 use App\Models\Customer;
 use App\Models\CustomerMaterialAccount;
 use App\Models\CustomerMaterialCashTransaction;
@@ -12,12 +13,20 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\WhatsAppNotification;
 use App\Services\CustomerMaterialAccountService;
+use App\Services\CustomerMaterialIssueCommunicationService;
 use App\Services\InventoryService;
+use App\Services\WhatsAppMessageFactory;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Livewire\Volt\Volt;
 
 beforeEach(function () {
+    app()->setLocale('en');
     $this->seed(DatabaseSeeder::class);
     $this->user = User::where('email', 'admin@buildmart.test')->firstOrFail();
     $this->actingAs($this->user);
@@ -152,13 +161,302 @@ test('material account pages reports and permissions are wired', function () {
     $account = createAcceptanceMaterialAccount($this);
     $this->get(route('customer-material-accounts.index'))->assertOk()->assertSee('Customer Material Accounts');
     $this->get(route('customer-material-accounts.create'))->assertOk()->assertSee('Agreed Material Plan');
-    $this->get(route('customer-material-accounts.show', $account))->assertOk()->assertSee('Available Funded Balance')->assertSee('Material Plan Progress');
+    $this->withSession(['staff_locale' => 'en'])->get(route('customer-material-accounts.show', $account))->assertOk()->assertSee('Available Funded Balance')->assertSee('Material Plan Progress');
     $this->get(route('customer-material-accounts.reports'))->assertOk()->assertSee('Outstanding Material Commitments')->assertSee('Project Profitability');
 
     $cashier = User::factory()->create(['company_id' => $this->branch->company_id, 'branch_id' => $this->branch->id, 'status' => 'active']);
     $cashier->assignRole('Cashier');
     expect($cashier->can('customer_material_accounts.record_deposit'))->toBeTrue()
         ->and($cashier->can('customer_material_accounts.refund'))->toBeFalse();
+});
+
+test('material account page clearly separates funded money from remaining plan value in both locales', function () {
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 500000, 'payment_method' => 'cash'], $this->user->id, 'clarity-deposit');
+    $this->service->issue($account, [['plan_line_id' => $account->planLines[0]->id, 'quantity' => 10]], $this->location->id, [], $this->user->id, 'clarity-issue');
+
+    $this->withSession(['staff_locale' => 'en'])->get(route('customer-material-accounts.show', $account))
+        ->assertOk()
+        ->assertSeeText('Planned Material Value')
+        ->assertSeeText('Available Funded Balance')
+        ->assertSeeText('Remaining Planned Material Value')
+        ->assertSeeText('Planned Qty')
+        ->assertSeeText('Issued Qty')
+        ->assertSeeText('Customer-agreed value deducted from the funded balance.')
+        ->assertSeeText('Internal company cost for profit and accounting use only.');
+
+    $this->withSession(['staff_locale' => 'sw'])->get(route('customer-material-accounts.show', $account))
+        ->assertOk()
+        ->assertSeeText('Idadi Iliyopangwa')
+        ->assertSeeText('Iliyotolewa')
+        ->assertSeeText('Iliyobaki')
+        ->assertSeeText('Amana / Mkopo')
+        ->assertSeeText('Bidhaa / Marejesho')
+        ->assertSeeText('Salio la Fedha')
+        ->assertSeeText('Thamani ya Mteja')
+        ->assertSeeText('Gharama ya Ndani');
+});
+
+test('material issue action gives immediate feedback resets fields and refreshes all account sections', function () {
+    app()->setLocale('en');
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 500000, 'payment_method' => 'cash'], $this->user->id, 'ux-deposit');
+    $line = $account->planLines[0];
+    $stockBefore = app(InventoryService::class)->getProductStock($line->product_id, $this->location->id, $this->branch->id);
+
+    $component = Volt::test('customer-material-accounts.show', ['customerMaterialAccount' => $account])
+        ->set('stock_location_id', (string) $this->location->id)
+        ->set('issue_quantities', [$line->id => '10'])
+        ->set('collected_by', 'Juma')
+        ->set('issue_notes', 'First collection');
+    $stockLocation = $component->get('stock_location_id');
+    $submissionKey = $component->get('issue_key');
+
+    $component->call('issueMaterials');
+    $issue = CustomerMaterialIssue::query()->where('idempotency_key', $submissionKey)->firstOrFail();
+
+    $component
+        ->assertHasNoErrors()
+        ->assertSet('issue_quantities', [])
+        ->assertSet('collected_by', '')
+        ->assertSet('issue_notes', '')
+        ->assertSet('stock_location_id', $stockLocation)
+        ->assertDispatched('hardex-notify', fn (string $event, array $payload) => $payload['tone'] === 'success'
+            && $payload['title'] === 'Success'
+            && str_contains($payload['message'], $issue->reference_number))
+        ->assertSee('TZS 400,000')
+        ->assertSee($issue->reference_number);
+
+    expect(substr_count($component->html(), $issue->reference_number))->toBeGreaterThanOrEqual(2)
+        ->and($line->fresh()->issuedQuantity())->toBe(10.0)
+        ->and($line->fresh()->remainingQuantity())->toBe(80.0)
+        ->and($account->availableFundedBalance())->toBe(400000.0)
+        ->and($account->issuedValue())->toBe(100000.0)
+        ->and(CustomerMaterialIssue::query()->where('idempotency_key', $submissionKey)->count())->toBe(1)
+        ->and(CustomerMaterialTransaction::query()->where('source_type', CustomerMaterialIssue::class)->where('source_id', $issue->id)->count())->toBe(1)
+        ->and(StockMovement::query()->where('reference_type', CustomerMaterialIssue::class)->where('reference_id', $issue->id)->count())->toBe(1)
+        ->and(app(InventoryService::class)->getProductStock($line->product_id, $this->location->id, $this->branch->id))->toBe($stockBefore - 10)
+        ->and($component->get('issue_key'))->not->toBe($submissionKey);
+});
+
+test('failed material issue preserves user input and never emits success feedback or changes balances', function () {
+    app()->setLocale('en');
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 500000, 'payment_method' => 'cash'], $this->user->id, 'ux-validation-deposit');
+    $line = $account->planLines[0];
+    $stockBefore = app(InventoryService::class)->getProductStock($line->product_id, $this->location->id, $this->branch->id);
+
+    $component = Volt::test('customer-material-accounts.show', ['customerMaterialAccount' => $account])
+        ->set('stock_location_id', (string) $this->location->id)
+        ->set('issue_quantities', [$line->id => '60'])
+        ->set('collected_by', 'Juma')
+        ->set('issue_notes', 'Keep these values');
+    $submissionKey = $component->get('issue_key');
+
+    $component->call('issueMaterials')
+        ->assertHasErrors(['funded_balance'])
+        ->assertNotDispatched('hardex-notify')
+        ->assertSet('issue_quantities', [$line->id => '60'])
+        ->assertSet('collected_by', 'Juma')
+        ->assertSet('issue_notes', 'Keep these values')
+        ->assertSet('issue_key', $submissionKey);
+
+    expect(CustomerMaterialIssue::query()->where('idempotency_key', $submissionKey)->exists())->toBeFalse()
+        ->and($account->availableFundedBalance())->toBe(500000.0)
+        ->and($account->issuedValue())->toBe(0.0)
+        ->and($line->fresh()->issuedQuantity())->toBe(0.0)
+        ->and(app(InventoryService::class)->getProductStock($line->product_id, $this->location->id, $this->branch->id))->toBe($stockBefore);
+});
+
+test('material issue feedback and loading labels render in English and Kiswahili', function () {
+    $account = createAcceptanceMaterialAccount($this);
+
+    $this->withSession(['staff_locale' => 'en'])->get(route('customer-material-accounts.show', $account))
+        ->assertOk()
+        ->assertSeeText('Post Material Issue')
+        ->assertSeeText('Posting...');
+
+    $this->withSession(['staff_locale' => 'sw'])->get(route('customer-material-accounts.show', $account))
+        ->assertOk()
+        ->assertSeeText('Toa Bidhaa')
+        ->assertSeeText('Inahifadhi...');
+
+    app()->setLocale('sw');
+    expect(__('customer_material_accounts.material_issue.success_title'))->toBe('Imefanikiwa')
+        ->and(__('customer_material_accounts.material_issue.success_with_reference', ['reference' => 'CMI-2026-000001']))->toBe('Bidhaa zimetolewa kwa mafanikio. Kumbukumbu: CMI-2026-000001')
+        ->and(__('customer_material_accounts.material_issue.failure_message'))->toBe('Imeshindikana kutoa bidhaa. Tafadhali jaribu tena.');
+});
+
+test('funded balance validation follows the active English and Kiswahili locale', function () {
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 10000, 'payment_method' => 'cash'], $this->user->id, 'localized-balance-deposit');
+    $line = $account->planLines[0];
+
+    app()->setLocale('sw');
+    expect(fn () => $this->service->issue($account, [], $this->location->id, [], $this->user->id, 'localized-empty'))
+        ->toThrow(ValidationException::class, 'Chagua angalau bidhaa moja.');
+    expect(fn () => $this->service->issue($account, [['plan_line_id' => $line->id, 'quantity' => 2]], $this->location->id, [], $this->user->id, 'localized-sw'))
+        ->toThrow(ValidationException::class, 'Salio halitoshi. Umebakiwa na TZS 10,000 lakini bidhaa unazotaka kutoa zina thamani ya TZS 20,000.');
+
+    app()->setLocale('en');
+    expect(fn () => $this->service->issue($account, [['plan_line_id' => $line->id, 'quantity' => 2]], $this->location->id, [], $this->user->id, 'localized-en'))
+        ->toThrow(ValidationException::class, 'Insufficient funded balance. Available: TZS 10,000. Requested material value: TZS 20,000.');
+});
+
+test('material issue receipt uses immutable snapshots and historical funded balances', function () {
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 80000, 'payment_method' => 'cash'], $this->user->id, 'receipt-deposit');
+    $line = $account->planLines[0];
+    $snapshotName = $line->product_name_snapshot;
+    $issue = $this->service->issue($account, [['plan_line_id' => $line->id, 'quantity' => 5]], $this->location->id, ['collected_by' => 'James', 'notes' => 'Collect at counter'], $this->user->id, 'receipt-issue');
+    $line->product->update(['name' => 'Renamed After Issue', 'selling_price' => 999999]);
+    $issueBefore = $issue->fresh()->getRawOriginal();
+    $stockPostings = StockMovement::query()->where('reference_type', CustomerMaterialIssue::class)->where('reference_id', $issue->id)->count();
+    $ledgerPostings = CustomerMaterialTransaction::query()->where('source_type', CustomerMaterialIssue::class)->where('source_id', $issue->id)->count();
+
+    $this->withSession(['staff_locale' => 'en'])->get(route('customer-material-accounts.issue-document', $issue))
+        ->assertOk()
+        ->assertSeeText('MATERIAL ISSUE RECEIPT / RISITI YA UTOAJI BIDHAA')
+        ->assertSeeText($issue->reference_number)
+        ->assertSeeText($snapshotName)
+        ->assertDontSeeText('Renamed After Issue')
+        ->assertSeeText('5 '.$line->unit_code_snapshot)
+        ->assertSeeText('TZS 50,000')
+        ->assertSeeText('Previous Funded Balance:')
+        ->assertSeeText('TZS 80,000')
+        ->assertSeeText('Remaining Funded Balance:')
+        ->assertSeeText('TZS 30,000')
+        ->assertSeeText('James')
+        ->assertSeeText('Collect at counter')
+        ->assertSeeText('Print Receipt');
+
+    $this->get(route('customer-material-accounts.show', $account))
+        ->assertOk()
+        ->assertSeeText('View')
+        ->assertSeeText('Print')
+        ->assertSeeText('WhatsApp');
+
+    expect($issue->fresh()->getRawOriginal())->toBe($issueBefore)
+        ->and(StockMovement::query()->where('reference_type', CustomerMaterialIssue::class)->where('reference_id', $issue->id)->count())->toBe($stockPostings)
+        ->and(CustomerMaterialTransaction::query()->where('source_type', CustomerMaterialIssue::class)->where('source_id', $issue->id)->count())->toBe($ledgerPostings);
+});
+
+test('customer material issue WhatsApp receipt respects company language and prevents duplicates', function (string $language, string $title, string $balanceLabel, string $attachment) {
+    Queue::fake();
+    Storage::fake('local');
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 80000, 'payment_method' => 'cash'], $this->user->id, 'wa-receipt-deposit-'.$language);
+    $line = $account->planLines[0];
+    $issue = $this->service->issue($account, [['plan_line_id' => $line->id, 'quantity' => 5]], $this->location->id, ['collected_by' => 'James'], $this->user->id, 'wa-receipt-issue-'.$language);
+    CompanyWhatsAppSetting::withoutGlobalScopes()->updateOrCreate(['company_id' => $account->company_id], [
+        'enabled' => true,
+        'sending_paused' => false,
+        'device_id' => 'material-device',
+        'last_device_state' => 'logged_in',
+        'whatsapp_notification_language' => $language,
+        'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES,
+    ]);
+    $issueBefore = $issue->fresh()->getRawOriginal();
+    $stockPostings = StockMovement::query()->where('reference_type', CustomerMaterialIssue::class)->where('reference_id', $issue->id)->count();
+    $ledgerPostings = CustomerMaterialTransaction::query()->where('source_type', CustomerMaterialIssue::class)->where('source_id', $issue->id)->count();
+
+    $message = app(WhatsAppMessageFactory::class)->materialIssue($issue);
+    $first = app(CustomerMaterialIssueCommunicationService::class)->queueCustomerReceipt($issue);
+    $second = app(CustomerMaterialIssueCommunicationService::class)->queueCustomerReceipt($issue);
+
+    expect($message)->toContain($title, $issue->reference_number, $line->product_name_snapshot, '5 '.$line->unit_code_snapshot, 'TZS 50,000', $balanceLabel, 'TZS 30,000', $attachment)
+        ->and($first)->not->toBeNull()
+        ->and($second?->id)->toBe($first?->id)
+        ->and($first?->attachment_type)->toBe('file')
+        ->and(Storage::disk('local')->exists((string) $first?->attachment_path))->toBeTrue()
+        ->and(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'customer_material_issue_receipt')->count())->toBe(1)
+        ->and($issue->fresh()->getRawOriginal())->toBe($issueBefore)
+        ->and(StockMovement::query()->where('reference_type', CustomerMaterialIssue::class)->where('reference_id', $issue->id)->count())->toBe($stockPostings)
+        ->and(CustomerMaterialTransaction::query()->where('source_type', CustomerMaterialIssue::class)->where('source_id', $issue->id)->count())->toBe($ledgerPostings);
+})->with([
+    'English' => ['en', 'MATERIALS ISSUED - HARDEX', 'New Balance: TZS 30,000', 'Material issue receipt'],
+    'Kiswahili' => ['sw', 'BIDHAA ZIMETOLEWA - HARDEX', 'Salio Jipya: TZS 30,000', 'Risiti ya utoaji bidhaa'],
+]);
+
+test('customer material WhatsApp safely skips invalid phones and disabled notifications', function () {
+    Queue::fake();
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 80000, 'payment_method' => 'cash'], $this->user->id, 'wa-skip-deposit');
+    $issue = $this->service->issue($account, [['plan_line_id' => $account->planLines[0]->id, 'quantity' => 1]], $this->location->id, [], $this->user->id, 'wa-skip-issue');
+    $settings = CompanyWhatsAppSetting::withoutGlobalScopes()->updateOrCreate(['company_id' => $account->company_id], [
+        'enabled' => false, 'sending_paused' => false, 'device_id' => 'material-device', 'last_device_state' => 'logged_in',
+        'whatsapp_notification_language' => 'sw', 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES,
+    ]);
+
+    expect(app(CustomerMaterialIssueCommunicationService::class)->queueCustomerReceipt($issue))->toBeNull();
+    $settings->update(['enabled' => true]);
+    $this->customer->update(['phone' => '123']);
+    $issue->unsetRelation('account');
+
+    expect(app(CustomerMaterialIssueCommunicationService::class)->queueCustomerReceipt($issue))->toBeNull()
+        ->and(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'customer_material_issue_receipt')->exists())->toBeFalse();
+});
+
+test('customer material WhatsApp language is independent from UI locale and changes for future issues', function () {
+    Queue::fake();
+    Storage::fake('local');
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 200000, 'payment_method' => 'cash'], $this->user->id, 'wa-language-deposit');
+    $line = $account->planLines[0];
+    $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->updateOrCreate(['company_id' => $account->company_id], [
+        'enabled' => true, 'sending_paused' => false, 'device_id' => 'language-device', 'last_device_state' => 'logged_in',
+        'whatsapp_notification_language' => 'en', 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES,
+    ]);
+
+    app()->setLocale('sw');
+    $englishIssue = $this->service->issue($account, [['plan_line_id' => $line->id, 'quantity' => 5]], $this->location->id, ['collected_by' => 'James'], $this->user->id, 'wa-language-en-issue');
+    $english = app(CustomerMaterialIssueCommunicationService::class)->queueCustomerReceipt($englishIssue);
+
+    expect($english?->message)->toContain('MATERIALS ISSUED - HARDEX', 'Material issue receipt '.$englishIssue->reference_number.' is attached.')
+        ->not->toContain('BIDHAA ZIMETOLEWA - HARDEX', 'Risiti ya utoaji bidhaa');
+
+    $setting->update(['whatsapp_notification_language' => 'sw']);
+    app()->setLocale('en');
+    $swahiliIssue = $this->service->issue($account, [['plan_line_id' => $line->id, 'quantity' => 5]], $this->location->id, ['collected_by' => 'James'], $this->user->id, 'wa-language-sw-issue');
+    $swahili = app(CustomerMaterialIssueCommunicationService::class)->queueCustomerReceipt($swahiliIssue);
+
+    expect($swahili?->message)->toContain('BIDHAA ZIMETOLEWA - HARDEX', 'Risiti ya utoaji bidhaa '.$swahiliIssue->reference_number.' imeambatanishwa.')
+        ->not->toContain('MATERIALS ISSUED - HARDEX', 'Material issue receipt');
+
+    app()->setLocale('sw');
+    $swUiMessage = app(WhatsAppMessageFactory::class)->materialIssue($swahiliIssue, $setting->refresh());
+    app()->setLocale('en');
+    $enUiMessage = app(WhatsAppMessageFactory::class)->materialIssue($swahiliIssue, $setting->refresh());
+    expect($swUiMessage)->toBe($enUiMessage)->toContain('BIDHAA ZIMETOLEWA - HARDEX');
+
+    $setting->update(['whatsapp_notification_language' => 'en']);
+    app()->setLocale('sw');
+    $futureIssue = $this->service->issue($account, [['plan_line_id' => $line->id, 'quantity' => 5]], $this->location->id, [], $this->user->id, 'wa-language-future-issue');
+    $future = app(CustomerMaterialIssueCommunicationService::class)->queueCustomerReceipt($futureIssue);
+    expect($future?->message)->toContain('MATERIALS ISSUED - HARDEX')->not->toContain('BIDHAA ZIMETOLEWA - HARDEX');
+});
+
+test('customer material WhatsApp language safely falls back to English without adding another language field', function () {
+    $account = createAcceptanceMaterialAccount($this);
+    $this->service->recordDeposit($account, ['amount' => 50000, 'payment_method' => 'cash'], $this->user->id, 'wa-language-fallback-deposit');
+    $issue = $this->service->issue($account, [['plan_line_id' => $account->planLines[0]->id, 'quantity' => 1]], $this->location->id, [], $this->user->id, 'wa-language-fallback-issue');
+
+    CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $account->company_id)->delete();
+    app()->setLocale('sw');
+    $missing = app(WhatsAppMessageFactory::class)->materialIssue($issue);
+
+    CompanyWhatsAppSetting::withoutGlobalScopes()->create([
+        'company_id' => $account->company_id,
+        'whatsapp_notification_language' => 'xx',
+        'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES,
+    ]);
+    $invalid = app(WhatsAppMessageFactory::class)->materialIssue($issue);
+
+    expect($missing)->toContain('MATERIALS ISSUED - HARDEX', 'Material issue receipt')->not->toContain('BIDHAA ZIMETOLEWA - HARDEX')
+        ->and($invalid)->toContain('MATERIALS ISSUED - HARDEX', 'Material issue receipt')->not->toContain('BIDHAA ZIMETOLEWA - HARDEX')
+        ->and(Schema::hasColumn('company_whatsapp_settings', 'whatsapp_notification_language'))->toBeTrue()
+        ->and(Schema::hasColumn('customer_material_accounts', 'whatsapp_notification_language'))->toBeFalse()
+        ->and(Schema::hasColumn('customer_material_issues', 'whatsapp_notification_language'))->toBeFalse();
 });
 
 test('post transaction plan amendments require reasons and printable documents render', function () {

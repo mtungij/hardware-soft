@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 
 use function Livewire\Volt\layout;
@@ -16,12 +17,19 @@ rules(['email' => ['required', 'string', 'email']]);
 $sendPasswordResetLink = function () {
     $this->validate();
 
-    // We will send the password reset link to this user. Once we have attempted
-    // to send the link, we will examine the response then see the message we
-    // need to show to the user. Finally, we'll send out a proper response.
-    $status = Password::sendResetLink(
-        $this->only('email')
-    );
+    try {
+        $status = Password::sendResetLink($this->only('email'));
+    } catch (\Throwable $exception) {
+        Log::error('Password reset email delivery failed.', [
+            'exception' => $exception::class,
+            'email_hash' => hash('sha256', str($this->email)->trim()->lower()->toString()),
+            'mailer' => config('mail.default'),
+        ]);
+
+        $this->addError('email', __('password_reset.request.failure'));
+
+        return;
+    }
 
     if ($status != Password::RESET_LINK_SENT) {
         $this->addError('email', __($status));
@@ -31,31 +39,39 @@ $sendPasswordResetLink = function () {
 
     $this->reset('email');
 
-    Session::flash('status', __($status));
+    Session::flash('status', __('password_reset.request.success'));
 };
 
 ?>
 
 <div>
-    <div class="mb-4 text-sm text-gray-600 dark:text-gray-400">
-        {{ __('Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one.') }}
+    <div class="text-center">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ __('password_reset.request.title') }}</h1>
+        <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
+            {{ __('password_reset.request.description') }}
+        </p>
     </div>
 
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+    <x-auth-session-status class="mt-5" :status="session('status')" />
 
-    <form wire:submit="sendPasswordResetLink">
-        <!-- Email Address -->
+    <form wire:submit="sendPasswordResetLink" class="mt-6 space-y-5">
         <div>
-            <x-input-label for="email" :value="__('Email')" />
+            <x-input-label for="email" :value="__('password_reset.request.email')" />
             <x-text-input wire:model="email" id="email" class="block mt-1 w-full" type="email" name="email" required autofocus />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            <x-primary-button>
-                {{ __('Email Password Reset Link') }}
+        <div>
+            <x-primary-button class="w-full justify-center bg-orange-600 hover:bg-orange-700 focus:bg-orange-700 active:bg-orange-800 focus:ring-orange-500" wire:loading.attr="disabled" wire:target="sendPasswordResetLink">
+                <span wire:loading.remove wire:target="sendPasswordResetLink">{{ __('password_reset.request.submit') }}</span>
+                <span wire:loading wire:target="sendPasswordResetLink">{{ __('password_reset.request.sending') }}</span>
             </x-primary-button>
+        </div>
+
+        <div class="text-center">
+            <a href="{{ route('login') }}" wire:navigate class="text-sm font-medium text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300">
+                {{ __('password_reset.request.back') }}
+            </a>
         </div>
     </form>
 </div>

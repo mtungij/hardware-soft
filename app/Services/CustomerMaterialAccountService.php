@@ -192,14 +192,14 @@ class CustomerMaterialAccountService
                 return $existing->load('lines');
             }
             if ($rows === []) {
-                throw ValidationException::withMessages(['lines' => 'Add at least one material to issue.']);
+                throw ValidationException::withMessages(['lines' => __('customer_material_accounts.validation.no_material_selected')]);
             }
 
             $account = CustomerMaterialAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
             $this->requireActive($account);
             $location = StockLocation::query()->where('company_id', $account->company_id)->whereKey($stockLocationId)->lockForUpdate()->firstOrFail();
             if ((int) $location->branch_id !== (int) $account->branch_id || ! $location->isActive() || ! $location->can_issue_stock) {
-                throw ValidationException::withMessages(['stock_location_id' => 'Select an active issue-enabled stock location in the account branch.']);
+                throw ValidationException::withMessages(['stock_location_id' => __('customer_material_accounts.validation.invalid_stock_location')]);
             }
 
             $prepared = [];
@@ -211,20 +211,20 @@ class CustomerMaterialAccountService
                 $issued = (float) $line->issueLines()->lockForUpdate()->sum('quantity');
                 $remaining = round((float) $line->planned_quantity - $issued, 12);
                 if ($quantity <= 0) {
-                    throw ValidationException::withMessages(["lines.{$index}.quantity" => 'Issue quantity must be greater than zero.']);
+                    throw ValidationException::withMessages(["lines.{$index}.quantity" => __('customer_material_accounts.validation.quantity_positive')]);
                 }
                 if ($quantity > $remaining + 0.0000001) {
-                    throw ValidationException::withMessages(["lines.{$index}.quantity" => "Issue quantity exceeds the remaining planned quantity of {$remaining} {$line->unit_code_snapshot}."]);
+                    throw ValidationException::withMessages(["lines.{$index}.quantity" => __('customer_material_accounts.validation.quantity_exceeds_remaining', ['remaining' => $remaining, 'unit' => $line->unit_code_snapshot])]);
                 }
                 $baseQuantity = round($quantity * (float) $line->conversion_factor_snapshot, 12);
                 $product = Product::query()->where('company_id', $account->company_id)->whereKey($line->product_id)->lockForUpdate()->firstOrFail();
                 if (! $product->acceptsStockQuantity($baseQuantity)) {
-                    throw ValidationException::withMessages(["lines.{$index}.quantity" => $product->displayNameWithSize().' requires a valid base-stock quantity.']);
+                    throw ValidationException::withMessages(["lines.{$index}.quantity" => __('customer_material_accounts.validation.invalid_base_quantity', ['product' => $product->displayNameWithSize()])]);
                 }
                 StockMovement::query()->where('company_id', $account->company_id)->where('branch_id', $account->branch_id)->where('product_id', $product->id)->where('stock_location_id', $location->id)->lockForUpdate()->get();
                 $available = app(InventoryService::class)->getProductStock($product->id, $location->id, $account->branch_id);
                 if ($baseQuantity > $available + 0.0000001) {
-                    throw ValidationException::withMessages(["lines.{$index}.quantity" => "Insufficient stock. Available: {$available} {$line->base_unit_code_snapshot}; required: {$baseQuantity}."]);
+                    throw ValidationException::withMessages(["lines.{$index}.quantity" => __('customer_material_accounts.validation.insufficient_stock', ['available' => $available, 'required' => $baseQuantity, 'unit' => $line->base_unit_code_snapshot])]);
                 }
                 $value = round($quantity * (float) $line->agreed_unit_price, 2);
                 $baseCost = app(InventoryService::class)->getAverageCost($product->id, $location->id, $account->branch_id);
@@ -236,7 +236,7 @@ class CustomerMaterialAccountService
 
             $availableFunds = $this->lockedFundedBalance($account);
             if ($totalValue > $availableFunds + 0.001) {
-                throw ValidationException::withMessages(['funded_balance' => 'Insufficient funded balance. Available: TZS '.number_format($availableFunds, 2).'. Requested material value: TZS '.number_format($totalValue, 2).'.']);
+                throw ValidationException::withMessages(['funded_balance' => __('customer_material_accounts.validation.insufficient_funded_balance', ['available' => number_format($availableFunds, 0), 'requested' => number_format($totalValue, 0)])]);
             }
 
             $reference = $this->nextNumber($account->company_id, 'customer_material_issue', 'CMI');

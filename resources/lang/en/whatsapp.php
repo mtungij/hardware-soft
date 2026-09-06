@@ -27,6 +27,12 @@ return [
         'total_quantity' => 'Total Quantity', 'total' => 'Total', 'paid' => 'Paid',
         'balance' => 'Balance', 'payment' => 'Payment', 'more_items' => '...and :count more items',
     ],
+    'material_issue' => [
+        'title' => 'MATERIALS ISSUED - HARDEX', 'reference' => 'Reference', 'date' => 'Date', 'customer' => 'Customer',
+        'materials' => 'Materials', 'total_value' => 'Total Material Value', 'previous_balance' => 'Previous Balance',
+        'amount_used' => 'Amount Used', 'new_balance' => 'New Balance', 'issued_by' => 'Issued By', 'collected_by' => 'Collected By',
+        'attachment' => 'Material issue receipt :reference is attached.',
+    ],
     'templates' => [
         'sale_completed' => "*NEW SALE*\n\nInvoice: {{sale_number}}\nDate: {{date}}\nBranch: {{branch}}\nSold By: {{cashier}}\nCustomer: {{customer}}\n\nProducts:\n{{products}}\n\nTotal Quantity: {{total_quantity}}\nTotal: {{currency}} {{total}}\nPaid: {{currency}} {{paid}}\nBalance: {{currency}} {{balance}}\n\nPayment: {{payment}}\n\nHARDEX POS",
         'sale_cancelled' => "HARDEX SECURITY ALERT\nSale {{sale_number}} was cancelled.\nBranch: {{branch}}\nAmount: TZS {{amount}}\nCancelled by: {{actor}}\nTime: {{time}}",

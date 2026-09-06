@@ -54,7 +54,7 @@ $resetPassword = function () {
         return;
     }
 
-    Session::flash('status', __($status));
+    Session::flash('status', __('password_reset.reset.success'));
 
     $this->redirectRoute('login', navigate: true);
 };
@@ -62,24 +62,28 @@ $resetPassword = function () {
 ?>
 
 <div>
-    <form wire:submit="resetPassword">
-        <!-- Email Address -->
+    <div class="text-center">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ __('password_reset.reset.title') }}</h1>
+        <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-gray-400">
+            {{ __('password_reset.reset.description') }}
+        </p>
+    </div>
+
+    <form wire:submit="resetPassword" class="mt-6 space-y-4">
         <div>
-            <x-input-label for="email" :value="__('Email')" />
+            <x-input-label for="email" :value="__('password_reset.reset.email')" />
             <x-text-input wire:model="email" id="email" class="block mt-1 w-full" type="email" name="email" required autofocus autocomplete="username" />
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
+        <div>
+            <x-input-label for="password" :value="__('password_reset.reset.password')" />
             <x-text-input wire:model="password" id="password" class="block mt-1 w-full" type="password" name="password" required autocomplete="new-password" />
             <x-input-error :messages="$errors->get('password')" class="mt-2" />
         </div>
 
-        <!-- Confirm Password -->
-        <div class="mt-4">
-            <x-input-label for="password_confirmation" :value="__('Confirm Password')" />
+        <div>
+            <x-input-label for="password_confirmation" :value="__('password_reset.reset.password_confirmation')" />
 
             <x-text-input wire:model="password_confirmation" id="password_confirmation" class="block mt-1 w-full"
                           type="password"
@@ -88,9 +92,10 @@ $resetPassword = function () {
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>
 
-        <div class="flex items-center justify-end mt-4">
-            <x-primary-button>
-                {{ __('Reset Password') }}
+        <div class="pt-1">
+            <x-primary-button class="w-full justify-center bg-orange-600 hover:bg-orange-700 focus:bg-orange-700 active:bg-orange-800 focus:ring-orange-500" wire:loading.attr="disabled" wire:target="resetPassword">
+                <span wire:loading.remove wire:target="resetPassword">{{ __('password_reset.reset.submit') }}</span>
+                <span wire:loading wire:target="resetPassword">{{ __('password_reset.reset.resetting') }}</span>
             </x-primary-button>
         </div>
     </form>

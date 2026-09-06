@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\HasCompany;
+use App\Notifications\HardexResetPassword;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -14,6 +15,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
 use Spatie\Permission\Traits\HasRoles;
+use Throwable;
 
 #[Fillable(['company_id', 'branch_id', 'name', 'email', 'phone', 'profile_photo', 'status', 'sales_location_access', 'is_system_owner', 'password', 'last_login_at', 'email_verified_at'])]
 #[Hidden(['password', 'remember_token'])]
@@ -21,6 +23,24 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasCompany, HasFactory, HasRoles, Notifiable;
+
+    public function sendPasswordResetNotification($token): void
+    {
+        $locale = app()->getLocale();
+
+        try {
+            $locale = UserPreference::query()
+                ->where('guard', 'web')
+                ->where('user_id', $this->getKey())
+                ->where('key', 'locale')
+                ->value('value') ?: $locale;
+        } catch (Throwable) {
+            // Fall back to the current authentication UI locale.
+        }
+
+        $locale = in_array($locale, ['en', 'sw'], true) ? $locale : config('app.fallback_locale', 'en');
+        $this->notify((new HardexResetPassword((string) $token, $locale))->locale($locale));
+    }
 
     public function branch(): BelongsTo
     {

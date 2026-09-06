@@ -101,6 +101,7 @@ class WhatsAppNotificationService
         ?string $attachmentPath = null,
         ?string $attachmentType = null,
         bool $sensitive = false,
+        ?string $idempotencyRecipientToken = null,
     ): WhatsAppNotification {
         return $this->create(
             $company,
@@ -115,6 +116,7 @@ class WhatsAppNotificationService
             attachmentType: $attachmentType,
             metadata: $metadata,
             encryptedMessage: $sensitive ? encrypt($message) : null,
+            idempotencyRecipientToken: $idempotencyRecipientToken,
         );
     }
 
@@ -160,6 +162,7 @@ class WhatsAppNotificationService
         ?string $attachmentType = null,
         array $metadata = [],
         ?string $encryptedMessage = null,
+        ?string $idempotencyRecipientToken = null,
     ): WhatsAppNotification {
         try {
             $phone = WhatsAppPhone::normalize($phone);
@@ -171,7 +174,7 @@ class WhatsAppNotificationService
             $suppression = $exception->getMessage();
         }
 
-        $recipientToken = $recipient?->id ?: hash('sha256', $phone);
+        $recipientToken = $idempotencyRecipientToken ?: ($recipient?->id ?: hash('sha256', $phone));
         $idempotencyKey = substr($eventKey.':recipient:'.$recipientToken, 0, 191);
 
         $notification = WhatsAppNotification::withoutGlobalScopes()->firstOrCreate(

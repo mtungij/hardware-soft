@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Company;
+use App\Models\CompanyWhatsAppSetting;
+use App\Models\CustomerMaterialIssue;
 use App\Models\CustomerPayment;
 use App\Models\ProductionOrder;
 use App\Models\Sale;
@@ -83,6 +85,43 @@ class WhatsAppMessageFactory
             'customer' => $payment->customer?->name ?: $this->localization->get($payment->company, 'common.customer'), 'amount' => $this->money($payment->amount),
             'reference' => $payment->receipt_number ?: $payment->reference_number ?: '-',
             'branch' => $payment->branch?->name ?: '-', 'actor' => $payment->receivedBy?->name ?: '-',
+        ]);
+    }
+
+    public function materialIssue(CustomerMaterialIssue $issue, ?CompanyWhatsAppSetting $setting = null): string
+    {
+        $data = app(CustomerMaterialIssueDocumentService::class)->data($issue);
+        $issue = $data['issue'];
+        $account = $data['account'];
+        $company = $account->company;
+        $languageContext = $setting ?: $company;
+        $currency = $company?->currency ?: 'TZS';
+        $timezone = $company?->timezone ?: config('app.timezone');
+        $lines = $issue->lines->map(fn ($line): string => '• '.$line->product_name_snapshot
+            .' — '.$this->quantity($line->quantity).' '.$line->unit_code_snapshot
+            .' — '.$currency.' '.$this->money($line->line_value))->implode("\n");
+
+        return implode("\n", [
+            $this->localization->get($languageContext, 'material_issue.title'),
+            '',
+            $this->localization->get($languageContext, 'material_issue.reference').': '.$issue->reference_number,
+            $this->localization->get($languageContext, 'material_issue.date').': '.$this->localization->date($languageContext, $issue->issued_at?->clone()->timezone($timezone), true),
+            $this->localization->get($languageContext, 'material_issue.customer').': '.($account->customer?->name ?: '-'),
+            '',
+            $this->localization->get($languageContext, 'material_issue.materials').':',
+            $lines ?: '-',
+            '',
+            $this->localization->get($languageContext, 'material_issue.total_value').': '.$currency.' '.$this->money($issue->total_value),
+            $this->localization->get($languageContext, 'material_issue.previous_balance').': '.$currency.' '.$this->money($data['previousBalance']),
+            $this->localization->get($languageContext, 'material_issue.amount_used').': '.$currency.' '.$this->money($issue->total_value),
+            $this->localization->get($languageContext, 'material_issue.new_balance').': '.$currency.' '.$this->money($data['remainingBalance']),
+            '',
+            $this->localization->get($languageContext, 'material_issue.collected_by').': '.($issue->collected_by ?: '-'),
+            $this->localization->get($languageContext, 'material_issue.issued_by').': '.($issue->issuedBy?->name ?: '-'),
+            '',
+            $this->localization->get($languageContext, 'material_issue.attachment', ['reference' => $issue->reference_number]),
+            '',
+            'HARDEX POS',
         ]);
     }
 
