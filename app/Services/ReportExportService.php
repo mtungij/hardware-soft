@@ -120,7 +120,7 @@ class ReportExportService
             'reports.customer-payments', 'tables.customer-payments' => $this->customerPayments($request, $branchId, $from, $to),
             'reports.customers', 'tables.customers' => $this->customers($request, $branchId, $search),
             'reports.suppliers', 'tables.suppliers' => $this->suppliers($request, $branchId, $search),
-            'reports.stock-valuation', 'tables.inventory-summary' => $this->stockValuation($branchId),
+            'reports.stock-valuation', 'tables.inventory-summary' => $this->stockValuation($branchId, $request->integer('stock_location_id') ?: null, $search),
             'reports.profit-loss' => $this->profitLoss($branchId, $from, $to),
             'reports.cashbook', 'tables.cashbook' => $this->cashbook($branchId, $from, $to),
             'tables.products' => $this->products($request, $branchId, $search),
@@ -634,7 +634,7 @@ class ReportExportService
     private function stockMovements(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
         $canViewCost = $request->user()?->can('stock.view_value') ?? false;
-        $rows = StockMovement::with(['product.size', 'stockLocation', 'createdBy'])->whereIn('stock_location_id', AuthorizationScope::stockLocationIds($request->user()))->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->integer('stock_location_id'), fn ($q, $id) => $q->where('stock_location_id', $id))->when($from, fn ($q) => $q->whereDate('movement_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('movement_date', '<=', $to))->when($search, fn ($q) => $q->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))->latest()->get();
+        $rows = app(FinancialReportService::class)->stockMovementsForLocations($branchId)->with(['product.size', 'stockLocation', 'creator'])->when($request->boolean('receipts_today'), fn ($q) => $q->whereIn('movement_type', ['purchase_in', 'purchase_receipt'])->whereDate('movement_date', today()))->when($request->string('movement_type')->toString(), fn ($q, $type) => $q->where('movement_type', $type))->when($request->integer('stock_location_id'), fn ($q, $id) => $q->where('stock_location_id', $id))->when($from, fn ($q) => $q->whereDate('movement_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('movement_date', '<=', $to))->when($search, fn ($q) => $q->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))->latest()->get();
 
         $headers = $canViewCost ? ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Cost', 'Created By'] : ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Created By'];
 
@@ -643,7 +643,7 @@ class ReportExportService
             if ($canViewCost) {
                 $row[] = $this->formatCurrency($movement->unit_cost);
             }
-            $row[] = $movement->createdBy?->name;
+            $row[] = $movement->creator?->name;
 
             return $row;
         })->all(), []];
@@ -663,9 +663,9 @@ class ReportExportService
         return ['Purchase Email Report', ['Purchase Number', 'Supplier', 'Recipient', 'Status', 'Sent By', 'Sent Date', 'Error'], $rows->map(fn ($log) => [$log->purchase?->reference_number, $log->purchase?->supplier?->name, $log->recipient_email, ucfirst($log->status), $log->sentBy?->name, $log->sent_at?->format('Y-m-d H:i'), $log->error_message])->all(), []];
     }
 
-    private function stockValuation(?int $branchId): array
+    private function stockValuation(?int $branchId, ?int $stockLocationId = null, string $search = ''): array
     {
-        $rows = collect(app(FinancialReportService::class)->stockValuation($branchId));
+        $rows = collect(app(FinancialReportService::class)->stockValuation($branchId, $stockLocationId, $search));
 
         return ['Stock Valuation Report', ['Branch', 'Location', 'Product', 'Measurement Type', 'Size', 'Category', 'Unit', 'Stock', 'Average Cost', 'Value'], $rows->map(fn ($row) => [$row['branch'], $row['location'], $row['product'], $row['measurement_type'], $row['size'] ?: '—', $row['category'], $row['unit'], $row['quantity'], $this->formatCurrency($row['average_cost']), $this->formatCurrency($row['value'])])->all(), ['Total Value' => $this->formatCurrency($rows->sum('value'))]];
     }

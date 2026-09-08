@@ -27,8 +27,9 @@ return [
         'greeting' => 'Hello,',
         'intro' => 'We received a request to reset the password for your HARDEX account.',
         'action' => 'Reset Password',
-        'expiry' => 'For security, this link will expire in :minutes minutes, according to the configured password reset expiry time.',
-        'ignore' => 'If you did not request a password reset, you can ignore this email.',
+        'expiry' => 'This link will expire in :minutes minutes.',
+        'ignore' => 'If you did not request a password reset, you can safely ignore this email. No changes will be made to your account.',
+        'fallback' => 'If the "Reset Password" button does not work, copy and open this link in your browser:',
         'footer' => 'HARDEX Hardware ERP',
     ],
 ];

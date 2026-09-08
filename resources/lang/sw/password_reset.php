@@ -27,8 +27,9 @@ return [
         'greeting' => 'Habari,',
         'intro' => 'Tumepokea ombi la kubadili nenosiri la akaunti yako ya HARDEX.',
         'action' => 'Badilisha Nenosiri',
-        'expiry' => 'Kwa usalama, kiungo hiki kitaisha baada ya dakika :minutes kulingana na muda uliowekwa kwenye mfumo.',
-        'ignore' => 'Kama hukuomba kubadili nenosiri, unaweza kupuuza ujumbe huu.',
+        'expiry' => 'Kiungo hiki kitaisha baada ya dakika :minutes.',
+        'ignore' => 'Kama hukuomba kubadili nenosiri, puuza ujumbe huu. Hakuna mabadiliko yatakayofanyika kwenye akaunti yako.',
+        'fallback' => 'Ikiwa kitufe cha "Badilisha Nenosiri" hakifanyi kazi, nakili kiungo hiki na ukifungue kwenye kivinjari chako:',
         'footer' => 'HARDEX Hardware ERP',
     ],
 ];

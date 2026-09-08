@@ -1458,6 +1458,8 @@ class InventoryService
                 throw ValidationException::withMessages(['items' => 'Transfer requires at least one item.']);
             }
 
+            $sourceCosts = [];
+
             foreach ($items as $item) {
                 if ($item->product?->status !== 'active') {
                     throw ValidationException::withMessages(['product' => 'Inactive products cannot be transferred.']);
@@ -1470,6 +1472,27 @@ class InventoryService
                         'quantity' => $item->product?->displayNameWithSize().' transfer quantity exceeds available stock.',
                     ]);
                 }
+
+                if (! isset($sourceCosts[$item->product_id])) {
+                    // Transfer quantities are base-stock quantities. Snapshot their canonical
+                    // source cost before posting either side, independently for each product.
+                    $unitCost = $this->getAverageCost($item->product_id, $fromLocation->id, $transfer->branch_id);
+                    $hasCostHistory = $unitCost > 0 || StockMovement::query()
+                        ->where('product_id', $item->product_id)
+                        ->where('stock_location_id', $fromLocation->id)
+                        ->when($transfer->branch_id !== null, fn ($query) => $query->where('branch_id', $transfer->branch_id))
+                        ->whereIn('movement_type', StockMovement::POSITIVE_TYPES)
+                        ->whereNotNull('unit_cost')
+                        ->sum('quantity') > 0;
+
+                    if (! $hasCostHistory || ! is_finite($unitCost) || $unitCost < 0) {
+                        throw ValidationException::withMessages([
+                            'items' => $item->product->displayNameWithSize().' source stock cost could not be resolved. Review the source cost history before completing this transfer.',
+                        ]);
+                    }
+
+                    $sourceCosts[$item->product_id] = $unitCost;
+                }
             }
 
             foreach ($items as $item) {
@@ -1480,6 +1503,7 @@ class InventoryService
                     'source_location_id' => $fromLocation->id,
                     'destination_location_id' => $toLocation->id,
                     'movement_type' => 'transfer_out',
+                    'unit_cost' => $sourceCosts[$item->product_id],
                     'quantity' => $item->quantity,
                     'quantity_in' => 0,
                     'quantity_out' => $item->quantity,
@@ -1497,6 +1521,7 @@ class InventoryService
                     'source_location_id' => $fromLocation->id,
                     'destination_location_id' => $toLocation->id,
                     'movement_type' => 'transfer_in',
+                    'unit_cost' => $sourceCosts[$item->product_id],
                     'quantity' => $item->quantity,
                     'quantity_in' => $item->quantity,
                     'quantity_out' => 0,

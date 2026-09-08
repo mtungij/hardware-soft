@@ -20,6 +20,10 @@ class HardexResetPassword extends ResetPassword
         $text = fn (string $key, array $replace = []): string => Lang::get('password_reset.email.'.$key, $replace, $this->messageLocale);
 
         return (new MailMessage)
+            ->view(['html' => 'mail.auth.reset-password', 'text' => 'mail.auth.reset-password-text'], [
+                'messageLocale' => $this->messageLocale,
+                'fallback' => $text('fallback'),
+            ])
             ->subject($text('subject'))
             ->greeting($text('brand'))
             ->line($text('greeting'))

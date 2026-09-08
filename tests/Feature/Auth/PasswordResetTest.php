@@ -7,10 +7,67 @@ use App\Models\UserPreference;
 use App\Notifications\HardexResetPassword;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Livewire\Volt\Volt;
 use RuntimeException;
+
+test('reset email renders fully localized HTML and plain text with the original broker URL', function (string $locale, int $minutes) {
+    config(['auth.passwords.users.expire' => $minutes]);
+    app()->setLocale($locale === 'sw' ? 'en' : 'sw');
+    $user = User::factory()->create(['email' => 'staff+reset@example.com']);
+    UserPreference::query()->create([
+        'guard' => 'web', 'user_id' => $user->id, 'key' => 'locale', 'value' => $locale,
+    ]);
+
+    expect(Password::sendResetLink(['email' => $user->email]))->toBe(Password::RESET_LINK_SENT);
+    $message = Mail::mailer()->getSymfonyTransport()->messages()->sole()->getOriginalMessage();
+    $expected = $locale === 'sw' ? [
+        'Habari,',
+        'Tumepokea ombi la kubadili nenosiri la akaunti yako ya HARDEX.',
+        'Badilisha Nenosiri',
+        "Kiungo hiki kitaisha baada ya dakika {$minutes}.",
+        'Kama hukuomba kubadili nenosiri, puuza ujumbe huu. Hakuna mabadiliko yatakayofanyika kwenye akaunti yako.',
+        'Ikiwa kitufe cha "Badilisha Nenosiri" hakifanyi kazi, nakili kiungo hiki na ukifungue kwenye kivinjari chako:',
+    ] : [
+        'Hello,',
+        'We received a request to reset the password for your HARDEX account.',
+        'Reset Password',
+        "This link will expire in {$minutes} minutes.",
+        'If you did not request a password reset, you can safely ignore this email. No changes will be made to your account.',
+        'If the "Reset Password" button does not work, copy and open this link in your browser:',
+    ];
+
+    foreach ([$message->getHtmlBody(), $message->getTextBody()] as $body) {
+        expect($body)->not->toBeNull();
+        $body = html_entity_decode($body, ENT_QUOTES, 'UTF-8');
+        expect($body)->toContain('HARDEX Hardware ERP');
+        foreach ($expected as $line) {
+            expect($body)->toContain($line);
+        }
+        foreach (["If you're having trouble clicking", 'Regards', 'All rights reserved', 'Laravel',
+            ...($locale === 'sw' ? ['Hello', 'Reset Password', 'This link will expire', 'If you did not request'] : ['Habari', 'Badilisha Nenosiri', 'Kiungo hiki', 'Ikiwa kitufe']),
+        ] as $unwanted) {
+            expect($body)->not->toContain($unwanted);
+        }
+    }
+
+    expect($message->getSubject())->toBe($locale === 'sw' ? 'Badilisha Nenosiri lako la HARDEX' : 'Reset Your HARDEX Password');
+    preg_match('/href="([^"]+)"/', $message->getHtmlBody(), $matches);
+    $url = html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8');
+    $token = basename(parse_url($url, PHP_URL_PATH));
+    parse_str(parse_url($url, PHP_URL_QUERY), $query);
+    expect($query['email'])->toBe($user->email)
+        ->and($url)->toBe(route('password.reset', ['token' => $token, 'email' => $user->email]))
+        ->and($message->getTextBody())->toContain($url)
+        ->and(Password::broker()->tokenExists($user, $token))->toBeTrue();
+    $this->get($url)->assertOk();
+    $storedToken = \Illuminate\Support\Facades\DB::table('password_reset_tokens')->where('email', $user->email)->value('token');
+    expect($storedToken)->not->toBe($token)
+        ->and(Hash::check($token, $storedToken))->toBeTrue();
+    expect(Password::sendResetLink(['email' => $user->email]))->toBe(Password::RESET_THROTTLED);
+})->with([['sw', 37], ['en', 19]]);
 
 test('staff login links to the localized forgot password page', function (string $locale, string $label) {
     $this->withSession(['staff_locale' => $locale])

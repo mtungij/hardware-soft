@@ -1,9 +1,6 @@
 <?php
 
 use App\Models\Product;
-use App\Models\StockLocation;
-use App\Models\StockMovement;
-use App\Support\AuthorizationScope;
 use Livewire\WithPagination;
 
 use function Livewire\Volt\layout;
@@ -13,15 +10,18 @@ use function Livewire\Volt\uses;
 layout('layouts.app');
 uses([WithPagination::class]);
 
-state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateFrom' => '', 'dateTo' => '']);
+state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateFrom' => '', 'dateTo' => '', 'branch_id' => '', 'receipts_today' => ''])->url();
 
 ?>
 
 <div>
     <x-page-header title="Stock Movements" description="Immutable inventory ledger. Stock movement rows are not deleted." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Movements' => null]">
-        <x-export-actions export="tables.stock-movements" :params="['product_id' => $productFilter, 'stock_location_id' => $locationFilter, 'movement_type' => $typeFilter, 'date_from' => $dateFrom, 'date_to' => $dateTo]" />
+        <x-export-actions export="tables.stock-movements" :params="['product_id' => $productFilter, 'stock_location_id' => $locationFilter, 'movement_type' => $typeFilter, 'date_from' => $dateFrom, 'date_to' => $dateTo, 'branch_id' => $branch_id, 'receipts_today' => $receipts_today]" />
     </x-page-header>
 
+    @if ($receipts_today)
+        <p class="mb-3 text-sm">{{ __('dashboard.stock_received_today_help') }}</p>
+    @endif
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-5">
             <select wire:model.live="productFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -32,13 +32,13 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
             </select>
             <select wire:model.live="locationFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">All locations</option>
-                @foreach (StockLocation::whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))->orderBy('name')->get() as $location)
+                @foreach (app(\App\Services\FinancialReportService::class)->valuationLocations($branch_id ? (int) $branch_id : null) as $location)
                     <option value="{{ $location->id }}">{{ $location->name }}</option>
                 @endforeach
             </select>
             <select wire:model.live="typeFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">All types</option>
-                @foreach (['purchase_in', 'transfer_in', 'transfer_out', 'sale_out', 'adjustment_in', 'adjustment_out', 'damage_out', 'return_in'] as $type)
+                @foreach (['purchase_in', 'purchase_receipt', 'transfer_in', 'transfer_out', 'sale_out', 'adjustment_in', 'adjustment_out', 'damage_out', 'return_in'] as $type)
                     <option value="{{ $type }}">{{ $type }}</option>
                 @endforeach
             </select>
@@ -47,9 +47,9 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
         </div>
 
         @php
-            $movements = StockMovement::query()
+            $movements = app(\App\Services\FinancialReportService::class)->stockMovementsForLocations($branch_id ? (int) $branch_id : null)
                 ->with(['product', 'stockLocation', 'branch', 'creator'])
-                ->whereIn('stock_location_id', AuthorizationScope::stockLocationIds(auth()->user()))
+                ->when($receipts_today, fn ($query) => $query->whereIn('movement_type', ['purchase_in', 'purchase_receipt'])->whereDate('movement_date', today()))
                 ->when($productFilter, fn ($query) => $query->where('product_id', $productFilter))
                 ->when($locationFilter, fn ($query) => $query->where('stock_location_id', $locationFilter))
                 ->when($typeFilter, fn ($query) => $query->where('movement_type', $typeFilter))

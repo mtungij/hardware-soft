@@ -99,51 +99,6 @@ $stockQuantityFor = function (int $productId, ?int $locationId = null): float {
         ->sum(fn (StockMovement $movement) => $movement->signedQuantity());
 };
 
-$averageCostFor = function (int $productId, ?int $locationId = null): float {
-    $allowedLocationIds = AuthorizationScope::stockLocationIds(auth()->user());
-
-    $incoming = StockMovement::query()
-        ->where('product_id', $productId)
-        ->whereIn('stock_location_id', $allowedLocationIds)
-        ->whereIn('movement_type', StockMovement::POSITIVE_TYPES)
-        ->whereNotNull('unit_cost')
-        ->when($locationId, fn ($query) => $query->where('stock_location_id', $locationId))
-        ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
-        ->get();
-
-    $quantity = (float) $incoming->sum('quantity');
-
-    return $quantity > 0
-        ? (float) round($incoming->sum(fn (StockMovement $movement) => (float) $movement->quantity * (float) $movement->unit_cost) / $quantity, 2)
-        : 0.0;
-};
-
-$stockValueByLocationType = function (string $type): float {
-    if (! auth()->user()->can('dashboard.stock_value')) {
-        return 0.0;
-    }
-
-    $locations = StockLocation::query()
-        ->where('type', $type)
-        ->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user()))
-        ->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))
-        ->pluck('id');
-
-    if ($locations->isEmpty()) {
-        return 0.0;
-    }
-
-    return (float) Product::query()
-        ->get()
-        ->sum(function (Product $product) use ($locations) {
-            return $locations->sum(function (int $locationId) use ($product) {
-                $quantity = $this->stockQuantityFor($product->id, $locationId);
-
-                return $quantity * $this->averageCostFor($product->id, $locationId);
-            });
-        });
-};
-
 $stockItemsByLocationType = function (string $type): int {
     $locations = StockLocation::query()
         ->where('type', $type)
@@ -204,8 +159,9 @@ $totalProfit = computed(function (): float {
 });
 
 $totalPurchases = computed(fn (): float => auth()->user()->can('dashboard.purchase_summary') ? (float) $this->purchaseQuery()->sum('total_amount') : 0.0);
-$mainStoreStockValue = computed(fn (): float => $this->stockValueByLocationType('store'));
-$dispensingStockValue = computed(fn (): float => $this->stockValueByLocationType('dispensing'));
+$stockLocationValues = computed(fn (): Collection => auth()->user()->can('dashboard.stock_value')
+    ? app(\App\Services\FinancialReportService::class)->stockValueByLocation($this->activeBranchId())
+    : collect());
 $customerDebts = computed(fn (): float => auth()->user()->can('dashboard.receivables')
     ? (float) AuthorizationScope::sales(Sale::query(), auth()->user())->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))->sum('balance_amount')
     : 0.0);
@@ -560,9 +516,7 @@ $recentTransactions = computed(function (): Collection {
             ['label' => "Today's Profit", 'display_label' => __('dashboard.profit_today'), 'value' => $formatMoney($profitForRange($today, $today)), 'tone' => 'text-emerald-600', 'display_hint' => __('dashboard.profit_today_help'), 'url' => route('reports.profit-loss', ['date_from' => $today, 'date_to' => $today]), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ['label' => 'Monthly Profit', 'display_label' => __('dashboard.monthly_profit'), 'value' => $formatMoney($profitForRange($monthStart, $monthEnd)), 'tone' => 'text-emerald-600', 'display_hint' => __('dashboard.monthly_profit_help'), 'url' => route('reports.profit-loss', ['date_from' => $monthStart, 'date_to' => $monthEnd]), 'roles' => ['Admin', 'Manager', 'Accountant']],
             ...($warehouseEnabled && $user->can('dashboard.purchase_summary') ? [['label' => 'Pending Purchases', 'value' => number_format(Purchase::query()->whereIn('status', ['draft', 'ordered', 'partial'])->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-amber-600', 'hint' => 'Purchases waiting for receiving', 'url' => route('purchases.index', ['status' => 'ordered']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
-            ...($warehouseEnabled && $user->can('dashboard.stock_summary') ? [['label' => 'Stock Received Today', 'value' => $formatQuantity(StockMovement::query()->whereIn('movement_type', ['purchase_in'])->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->sum('quantity')), 'tone' => 'text-emerald-600', 'hint' => 'Received into Main Store today', 'url' => route('stock-movements.index', ['movement_type' => 'purchase_in']), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
-            ...($warehouseEnabled && $user->can('dashboard.stock_value') ? [['label' => 'Main Store Stock Value', 'value' => $formatMoney($this->mainStoreStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => 'Warehouse valuation', 'url' => route('reports.stock-valuation', ['search' => 'Main Store']), 'roles' => ['Admin', 'Manager', 'Accountant']]] : []),
-            ['label' => 'Dispensing Stock Value', 'value' => $formatMoney($this->dispensingStockValue), 'tone' => 'text-navy-900 dark:text-white', 'hint' => $warehouseEnabled ? 'Sales counter valuation' : 'Direct stock and POS valuation', 'url' => route('reports.stock-valuation', ['search' => 'Dispensing']), 'roles' => ['Admin', 'Manager', 'Accountant']],
+            ...($user->can('dashboard.stock_summary') ? [['label' => 'Stock Received Today', 'display_label' => __('dashboard.stock_received_today'), 'value' => $formatQuantity(app(\App\Services\FinancialReportService::class)->stockReceivedToday($branchId)), 'tone' => 'text-emerald-600', 'display_hint' => __('dashboard.stock_received_today_help'), 'url' => route('stock-movements.index', ['receipts_today' => 1, 'branch_id' => $branchId]), 'roles' => ['Admin', 'Manager', 'Accountant', 'Store Keeper']]] : []),
             ...(! $warehouseEnabled ? [['label' => 'Direct Stock In Today', 'value' => number_format(StockMovement::where('movement_type', 'direct_stock_in')->whereDate('movement_date', $today)->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->count()), 'tone' => 'text-cyan-600', 'hint' => 'Direct stock entries today', 'url' => route('direct-stock-in.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper']]] : []),
             ...(! $warehouseEnabled ? [['label' => 'Products In Stock', 'value' => number_format(Product::query()->where('status', 'active')->whereHas('stockMovements', fn ($query) => $query->when($branchId, fn ($movementQuery) => $movementQuery->where('branch_id', $branchId)))->count()), 'tone' => 'text-emerald-600', 'hint' => 'Products with stock movement history', 'url' => route('dispensing-stock.index'), 'roles' => ['Admin', 'Manager', 'Store Keeper', 'Cashier']]] : []),
             ['label' => 'Low Stock Products', 'value' => number_format($this->lowStockAlerts), 'tone' => 'text-amber-600', 'hint' => 'At or below reorder level', 'url' => route('inventory-summary.index', ['statusFilter' => 'low_stock']), 'roles' => ['Admin', 'Manager', 'Store Keeper']],
@@ -679,6 +633,27 @@ $recentTransactions = computed(function (): Collection {
             </a>
         @endforeach
     </div>
+
+    @can('dashboard.stock_value')
+        <x-card :title="__('dashboard.stock_value_by_location')" :description="__('dashboard.stock_value_by_location_help')">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4 dark:border-slate-700">
+                <span class="font-bold">{{ __('dashboard.total_stock_value') }}</span>
+                <a href="{{ route('reports.stock-valuation', ['branch_id' => $branchId]) }}" wire:navigate class="text-2xl font-black text-cyan-600 dark:text-cyan-300">{{ $formatMoney($this->stockLocationValues->sum('value')) }}</a>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                @forelse ($this->stockLocationValues as $locationValue)
+                    <a wire:key="valuation-{{ $locationValue['stock_location_id'] }}" href="{{ route('reports.stock-valuation', ['stock_location_id' => $locationValue['stock_location_id'], 'branch_id' => $branchId]) }}" wire:navigate class="rounded-xl border border-slate-200 p-4 transition hover:border-cyan-500 dark:border-slate-700">
+                        <p class="font-bold">{{ $locationValue['location'] }}</p>
+                        <p class="mt-1 text-xs text-slate-500">{{ $locationValue['branch'] ?? __('dashboard.company_wide_location') }}</p>
+                        <p class="mt-3 text-xl font-black">{{ $formatMoney($locationValue['value']) }}</p>
+                        <p class="mt-3 text-xs font-bold text-cyan-600 dark:text-cyan-300">{{ __('dashboard.view_details') }} &rarr;</p>
+                    </a>
+                @empty
+                    <p class="text-sm text-slate-500">{{ __('dashboard.no_stock_locations') }}</p>
+                @endforelse
+            </div>
+        </x-card>
+    @endcan
 
     <div data-tour="dashboard-charts" class="grid min-w-0 gap-6 xl:grid-cols-2">
         @can('settings.manage')
