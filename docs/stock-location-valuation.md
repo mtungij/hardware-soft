@@ -1,6 +1,8 @@
 # Dashboard stock-location valuation
 
-The dashboard and Stock Valuation Report now share `FinancialReportService::stockValuation()`. It reads quantity through `InventoryService::getProductStocks()` and cost through `InventoryService::getAverageCost()`. These inventory methods and all posting code are unchanged. Values are current ledger balances, independent of the dashboard's sales date range.
+The dashboard and Stock Valuation Report now share `FinancialReportService::stockValuation()`. It reads quantity through `InventoryService::getProductStocks()` and cost through `InventoryService::getAverageCost()`. Values are current ledger balances, independent of the dashboard's sales date range.
+
+The valuation task itself did not redesign Goods Receipt, POS, accounting, or the canonical costing method. A later stock-transfer cost-preservation follow-up now snapshots the source location's canonical average cost onto future transfer movements so stock moved into a new location does not lose its cost history.
 
 ## Why a “Main Store” card could show TZS 480,000 and its report show zero
 
@@ -24,20 +26,34 @@ The old cost formula was a duplicate of the canonical method, rather than a sepa
 
 Stock Received Today includes both legacy `purchase_in` and current `purchase_receipt` rows, across authorized locations and the selected branch. Transfers are excluded. Receiving capability flags are not used to erase historical receipts if a location's configuration has since changed. The drill-down and exports show receiving locations and apply the same receipt/date scope.
 
-## Existing transfer-cost limitation
+## Stock transfer cost preservation follow-up
 
-`InventoryService::completeStockTransfer()` currently posts `transfer_in` without `unit_cost`. The canonical average-cost method ignores incoming rows without cost. Consequently, a destination with no prior cost history has zero canonical average cost after receiving a transfer. The dashboard and report both show that existing result. No cost is inferred or silently substituted.
+`InventoryService::completeStockTransfer()` now resolves the source location's canonical `getAverageCost()` before either transfer side is posted. That cost is snapshotted independently per product and written unchanged to both the matching `transfer_out` and `transfer_in` movements.
 
-Tests verify unchanged total value when source and destination have the same established average cost, and separately capture the existing zero-cost result for a new destination. Quantities are not duplicated in either case. Guaranteeing unchanged total monetary value for transfers into a new destination requires a separately authorized change to transfer posting/costing, excluded from this task.
+This fixes the important new-location case. For example, moving 20 units at a source average cost of TZS 4,000 into an empty “Zanzibar store” now creates an incoming cost snapshot of TZS 4,000, so the destination immediately carries TZS 80,000 of stock value instead of zero.
+
+The completion path rejects the whole transfer if source stock exists but no resolvable cost history exists. It does not fall back to the product's current buying price. Explicit historical zero-cost stock remains zero-cost rather than being fabricated into a positive value. Existing completed transfers and their historical movements are not rewritten.
+
+The follow-up does not create revenue, purchases, COGS, profit, inventory gains/losses, or other accounting records. It only preserves the inventory-cost snapshot on future internal transfer movements.
+
+### Existing canonical averaging caveat
+
+`InventoryService::getAverageCost()` still uses the project's existing historical incoming weighted-average method. It averages cost-bearing positive movements and does not reweight only the quantity currently remaining after prior issues/sales. Therefore, when a destination already has older incoming cost history plus substantial historical outgoing stock, its post-transfer reported valuation can still move in a way that is not strictly value-neutral at company level.
+
+That behavior is pre-existing costing methodology and was intentionally not redesigned by the transfer-cost preservation follow-up. Fixing it would require a separate costing-methodology change, such as a perpetual moving-average/cost-layer approach, with its own migration, accounting, and historical-data review.
 
 ## Regression coverage
 
 `tests/Feature/StockLocationValuationTest.php` covers dynamic location types and flags, newly created locations, actual dashboard/report rendering, ID links, the TZS 480,000 mismatch, branch/company/assignment scope, shared locations, receiving, POS selling, transfers, aggregate totals and filtered exports. All test stock transactions use the isolated test database.
 
-## Final validation
+`tests/Feature/StockTransferCostPreservationTest.php` covers transfer-out/in cost snapshots, a brand-new ordinary Store such as Zanzibar store, destination existing-cost averaging, multiple products, fractional/base-unit conversion, unresolved source cost rollback, explicit zero-cost history, historical transfer immutability, quantity neutrality, financial-table non-mutation, and the existing historical-incoming average-cost caveat.
 
-All nine task-specific regressions passed across the final suite run and the corrected export rerun (101 assertions in total). The export regression verifies identical filter parameters in PDF/XLS links, browser printing of the filtered report, streamed XLS content, and successful PDF generation. The broader run also passed 25 existing dashboard, authorization, receiving, POS and transfer checks.
+## Validation notes
 
-Four unrelated failures were reproduced against an isolated copy of unchanged HEAD: the POS receipt test expects English `From:` text with the default Kiswahili locale, and three legacy transfer tests require seeded transfer/stock fixtures that the current seeder does not provide. They remain separate test-suite issues; the broader suite is not fully green.
+For the stock-location valuation task, all nine task-specific regressions passed across the final suite run and the corrected export rerun (101 assertions in total). The export regression verifies identical filter parameters in PDF/XLS links, browser printing of the filtered report, streamed XLS content, and successful PDF generation. The broader run also passed 25 existing dashboard, authorization, receiving, POS and transfer checks.
 
-PHP syntax checks cover the changed services, tests, localization files and Blade files. Laravel Pint and `git diff --check` pass. No changes were made to InventoryService, Goods Receipt/POS posting, accounting, costing methodology, transfer posting or historical stock records.
+Four unrelated failures were reproduced against an isolated copy of unchanged HEAD during that valuation task: the POS receipt test expected English `From:` text with the default Kiswahili locale, and three legacy transfer tests required seeded transfer/stock fixtures that the current seeder did not provide. They remain separate test-suite issues; the broader suite was therefore not fully green at that point.
+
+The repository now also contains the dedicated stock-transfer cost-preservation regression suite. GitHub does not currently show a CI workflow run for the latest pushed commit, so its runtime result should be confirmed in the normal local/container test environment before deployment.
+
+No changes were made to Goods Receipt costing, purchase costs, POS sale costing, COGS recognition, unit conversion architecture, accounting behavior, or historical stock movements. The transfer-cost follow-up changes only future stock-transfer posting by preserving the source `unit_cost` on both transfer sides.
