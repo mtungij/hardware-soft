@@ -34,6 +34,9 @@ mount(function (Sale $sale) {
                 <div class="flex justify-between"><span class="text-slate-500">Date</span><span class="font-bold">{{ $sale->sale_date?->format('M d, Y') }}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Customer</span><span class="font-bold">{{ $sale->customer?->name ?? 'Walk-in Customer' }}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Sale Type</span><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $sale->saleType() === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ $sale->saleTypeLabel() }}</span></div>
+                @if ($sale->discount_mode)
+                    <div class="flex justify-between"><span class="text-slate-500">Discount Mode</span><span class="font-bold">{{ str($sale->discount_mode)->replace('order', 'whole sale')->title() }}</span></div>
+                @endif
                 <div class="flex justify-between"><span class="text-slate-500">Branch</span><span class="font-bold">{{ $sale->branch?->name }}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Cashier</span><span class="font-bold">{{ $sale->createdBy?->name }}</span></div>
                 <div class="flex justify-between"><span class="text-slate-500">Status</span><span class="font-bold">{{ ucfirst($sale->status) }} / {{ ucfirst($sale->payment_status) }}</span></div>

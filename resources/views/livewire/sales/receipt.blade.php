@@ -415,8 +415,10 @@ mount(function (Sale $sale) {
                     @if($item->sold_from_label || $item->stockLocation)
                         <p class="receipt-item-location mt-0.5">{{ $item->sold_from_label ?: \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) }}</p>
                     @endif
-                    @if ($discountPerUnit > 0)
-                        <p class="receipt-item-discount mt-0.5">Discount: {{ \App\Support\NumberFormatter::money($discountPerUnit) }} each</p>
+                    @if ((float) $item->allocated_order_discount > 0)
+                        <p class="receipt-item-discount mt-0.5">Order discount allocation: {{ \App\Support\NumberFormatter::money($item->allocated_order_discount) }}</p>
+                    @elseif ($discountPerUnit > 0)
+                        <p class="receipt-item-discount mt-0.5">Discount: {{ \App\Support\NumberFormatter::money($item->discount_total ?: $item->discount_amount) }}</p>
                     @endif
                 </div>
             @endforeach
@@ -425,7 +427,7 @@ mount(function (Sale $sale) {
         <div class="receipt-summary py-[2mm]">
             <div class="summary-row"><span>Subtotal</span><span>{{ \App\Support\NumberFormatter::money($sale->subtotal) }}</span></div>
             @if ((float) $sale->discount_amount > 0)
-                <div class="summary-row"><span>Discount</span><span>-{{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</span></div>
+                <div class="summary-row"><span>{{ $sale->discount_mode === 'order' ? 'Order Discount' : 'Discount' }}</span><span>-{{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</span></div>
             @endif
             @if ((float) $sale->tax_amount > 0)
                 <div class="summary-row"><span>Tax/VAT</span><span>{{ \App\Support\NumberFormatter::money($sale->tax_amount) }}</span></div>

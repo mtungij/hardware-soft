@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Schema;
 
 #[Fillable([
     'company_name',
+    'quotation_template_key',
     'business_type',
     'tagline',
     'tin_number',

@@ -162,6 +162,7 @@
                     ['label' => __('messages.staff.nav.customer_notifications'), 'route' => 'admin.customer-notifications.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.settings'), 'route' => 'settings.index', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.company_settings'), 'route' => 'settings.company', 'icon' => 'branch', 'roles' => ['Super Admin', 'Admin'], 'permission' => 'company-settings.update'],
+                    ['label' => 'Document Templates', 'route' => 'settings.quotation-templates', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin'], 'permission' => 'company-settings.update'],
                     ['label' => __('messages.staff.nav.commercial_documents'), 'route' => 'settings.commercial-documents', 'icon' => 'receipt', 'permission' => 'payment_methods.view'],
                     ['label' => __('messages.staff.nav.inventory_settings'), 'route' => 'settings.inventory', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.whatsapp_notifications'), 'route' => 'settings.whatsapp', 'icon' => 'message', 'permission' => 'whatsapp.view_settings'],

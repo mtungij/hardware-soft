@@ -6,7 +6,9 @@ use App\Http\Controllers\CustomerPortal\CustomerFileDownloadController;
 use App\Http\Controllers\GenericExportController;
 use App\Http\Controllers\ProductionReportExportController;
 use App\Http\Controllers\PurchaseOrderPdfController;
+use App\Http\Controllers\QuotationTemplatePreviewController;
 use App\Http\Controllers\ReportExportController;
+use App\Http\Controllers\StockTransferNoteController;
 use App\Models\Company;
 use App\Models\Setting;
 use App\Models\UserOnboardingProgress;
@@ -247,6 +249,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('quotations', 'quotations.index')->middleware('can:quotations.view')->name('quotations.index');
     Volt::route('quotations/create', 'quotations.create')->middleware('can:quotations.create')->name('quotations.create');
     Volt::route('quotations/{quotation}', 'quotations.show')->middleware('can:quotations.view')->name('quotations.show');
+    Route::get('quotations/{quotation}/preview', [B2bDocumentController::class, 'quotationPreview'])->middleware('can:quotations.view')->name('quotations.preview');
     Route::get('quotations/{quotation}/pdf', [B2bDocumentController::class, 'quotation'])->middleware('can:quotations.view')->name('quotations.pdf');
     Volt::route('direct-customer-sales/create', 'direct-sales.create')->middleware(['can:sales.create', 'can:invoices.send'])->name('direct-sales.create');
     Volt::route('invoices', 'invoices.index')->middleware('can:invoices.view')->name('invoices.index');
@@ -361,6 +364,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('settings/company', 'settings.company')
         ->middleware('company-settings.update')
         ->name('settings.company');
+    Volt::route('settings/document-templates/quotations', 'settings.quotation-templates')->middleware('company-settings.update')->name('settings.quotation-templates');
+    Route::get('settings/document-templates/quotations/{template}/preview', QuotationTemplatePreviewController::class)->middleware('company-settings.update')->name('settings.quotation-templates.preview');
     Volt::route('settings/commercial-documents', 'settings.commercial-documents')
         ->middleware('can:payment_methods.view')
         ->name('settings.commercial-documents');
@@ -439,6 +444,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware('role.any:Super Admin,Admin,Manager,Store Keeper,Accountant')->group(function () {
+        Route::get('stock-transfers/{stockTransfer}/note/print', [StockTransferNoteController::class, 'print'])->middleware('warehouse.enabled')->name('stock-transfers.note.print');
+        Route::get('stock-transfers/{stockTransfer}/note/pdf', [StockTransferNoteController::class, 'pdf'])->middleware('warehouse.enabled')->name('stock-transfers.note.pdf');
         Volt::route('stock-transfers', 'stock-transfers.index')->middleware('warehouse.enabled')->name('stock-transfers.index');
         Volt::route('stock-transfers/{stockTransfer}', 'stock-transfers.show')->middleware('warehouse.enabled')->name('stock-transfers.show');
     });

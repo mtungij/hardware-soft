@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['company_id', 'sale_id', 'product_id', 'product_unit_conversion_id', 'product_size_id', 'stock_location_id', 'selling_unit_id', 'base_unit_id', 'conversion_factor', 'conversion_factor_to_base', 'selling_unit_name_snapshot', 'selling_unit_code_snapshot', 'base_unit_name_snapshot', 'base_unit_code_snapshot', 'base_unit_cost', 'sold_from_label', 'sale_type', 'quantity', 'base_quantity', 'unit_cost', 'unit_price', 'discount_per_unit', 'discount_amount', 'discount_total', 'gross_total', 'net_unit_price', 'net_total', 'tax_amount', 'line_total'])]
+#[Fillable(['company_id', 'sale_id', 'product_id', 'product_unit_conversion_id', 'product_size_id', 'stock_location_id', 'selling_unit_id', 'base_unit_id', 'conversion_factor', 'conversion_factor_to_base', 'selling_unit_name_snapshot', 'selling_unit_code_snapshot', 'base_unit_name_snapshot', 'base_unit_code_snapshot', 'base_unit_cost', 'sold_from_label', 'sale_type', 'quantity', 'base_quantity', 'unit_cost', 'unit_price', 'item_discount_type', 'item_discount_value', 'discount_per_unit', 'discount_amount', 'discount_total', 'allocated_order_discount', 'gross_total', 'net_unit_price', 'net_total', 'tax_amount', 'line_total'])]
 class SaleItem extends Model
 {
     use HasCompany, HasFactory;
@@ -71,6 +71,8 @@ class SaleItem extends Model
             'discount_per_unit' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'discount_total' => 'decimal:2',
+            'item_discount_value' => 'decimal:2',
+            'allocated_order_discount' => 'decimal:2',
             'gross_total' => 'decimal:2',
             'net_unit_price' => 'decimal:2',
             'net_total' => 'decimal:2',

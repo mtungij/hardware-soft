@@ -2,7 +2,6 @@
 
 use App\Models\Branch;
 use App\Models\Product;
-use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\User;
@@ -12,6 +11,24 @@ use Illuminate\Validation\ValidationException;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    $this->actingAs($admin)->withSession(['staff_locale' => 'en']);
+    $inventory = app(InventoryService::class);
+    $store = $inventory->getMainStoreLocation($admin->branch_id);
+    $dispensing = $inventory->getDispensingLocation($admin->branch_id);
+    $product = Product::firstOrFail();
+    StockMovement::create([
+        'branch_id' => $admin->branch_id, 'product_id' => $product->id,
+        'stock_location_id' => $store->id, 'movement_type' => 'purchase_receipt',
+        'quantity' => 100, 'unit_cost' => 4000, 'created_by' => $admin->id, 'movement_date' => today(),
+    ]);
+    $transfer = StockTransfer::create([
+        'branch_id' => $admin->branch_id, 'transfer_number' => 'TRF-SEED-0001',
+        'from_location_id' => $store->id, 'to_location_id' => $dispensing->id,
+        'transfer_date' => today(), 'status' => 'draft', 'created_by' => $admin->id,
+    ]);
+    $transfer->items()->create(['product_id' => $product->id, 'quantity' => 10]);
+    $inventory->completeStockTransfer($transfer->id, $admin->id);
 });
 
 test('phase four pages render for super admin', function () {

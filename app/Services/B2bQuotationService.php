@@ -18,6 +18,7 @@ use App\Models\StockLocation;
 use App\Models\User;
 use App\Support\AuthorizationScope;
 use App\Support\NumberFormatter;
+use App\Support\QuotationTemplateRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -37,14 +38,14 @@ class B2bQuotationService
     ) {}
 
     /** @param array<int, array<string, mixed>> $lines */
-    public function createFromRequest(CustomerPurchaseRequest $request, User $staff, array $lines, string $documentType, mixed $validUntil, ?string $notes = null, ?string $terms = null, array $additionalCharges = []): Quotation
+    public function createFromRequest(CustomerPurchaseRequest $request, User $staff, array $lines, string $documentType, mixed $validUntil, ?string $notes = null, ?string $terms = null, array $additionalCharges = [], ?string $quotationTemplateKey = null): Quotation
     {
         $this->authorizeStaff($staff, $request->company_id, $request->branch_id, 'customer_requests.create_quotation');
         if (! in_array($documentType, ['quotation', 'proforma'], true)) {
             throw ValidationException::withMessages(['document_type' => 'Select quotation or proforma.']);
         }
 
-        return DB::transaction(function () use ($request, $staff, $lines, $documentType, $validUntil, $notes, $terms, $additionalCharges): Quotation {
+        return DB::transaction(function () use ($request, $staff, $lines, $documentType, $validUntil, $notes, $terms, $additionalCharges, $quotationTemplateKey): Quotation {
             $request = CustomerPurchaseRequest::withoutGlobalScopes()->with('items')->lockForUpdate()->findOrFail($request->id);
             if (! in_array($request->status, ['pending', 'under_review'], true)) {
                 throw ValidationException::withMessages(['request' => 'Only pending or under-review requests can be quoted.']);
@@ -92,6 +93,7 @@ class B2bQuotationService
                 'company_id' => $request->company_id, 'branch_id' => $request->branch_id,
                 'customer_id' => $request->customer_id, 'customer_purchase_request_id' => $request->id,
                 'created_by' => $staff->id, 'quotation_number' => $this->numbers->next($request->company_id, $type, $prefix),
+                'quotation_template_key' => $documentType === 'quotation' ? QuotationTemplateRegistry::forNew((int) $request->company_id, $quotationTemplateKey) : null,
                 'document_type' => $documentType, 'status' => 'draft', 'quotation_date' => today(),
                 'source_type' => 'customer_request',
                 'valid_until' => $validUntil, 'subtotal' => $subtotal, 'discount_amount' => $discount,
@@ -137,6 +139,7 @@ class B2bQuotationService
         ?string $notes = null,
         ?string $terms = null,
         array $additionalCharges = [],
+        ?string $quotationTemplateKey = null,
     ): Quotation {
         $this->authorizeStaff($staff, (int) $customer->company_id, $branchId, 'quotations.create');
         $this->validateCustomerAndBranch($customer, $branchId);
@@ -145,7 +148,7 @@ class B2bQuotationService
             throw ValidationException::withMessages(['creation_key' => 'A valid document operation key is required.']);
         }
 
-        return DB::transaction(function () use ($customer, $staff, $branchId, $lines, $documentType, $validUntil, $creationKey, $notes, $terms, $additionalCharges): Quotation {
+        return DB::transaction(function () use ($customer, $staff, $branchId, $lines, $documentType, $validUntil, $creationKey, $notes, $terms, $additionalCharges, $quotationTemplateKey): Quotation {
             $existing = Quotation::withoutGlobalScopes()
                 ->where('company_id', $customer->company_id)
                 ->where('creation_key', $creationKey)
@@ -166,6 +169,7 @@ class B2bQuotationService
                 'customer_purchase_request_id' => null,
                 'created_by' => $staff->id,
                 'quotation_number' => $this->numbers->next((int) $customer->company_id, $type, $prefix),
+                'quotation_template_key' => $documentType === 'quotation' ? QuotationTemplateRegistry::forNew((int) $customer->company_id, $quotationTemplateKey) : null,
                 'document_type' => $documentType,
                 'source_type' => 'staff_created',
                 'creation_key' => $creationKey,

@@ -20,6 +20,10 @@ $convert=function(B2bQuotationService $s){$this->validate(['stock_location_id'=>
 </div>@endif
 <div>
 <x-page-header :title="$quotation->quotation_number" :description="str($quotation->document_type)->headline().' · '.str($quotation->status)->headline()" :breadcrumbs="['Quotations'=>route('quotations.index'),$quotation->quotation_number=>null]">
+@if ($quotation->document_type === 'quotation')
+<span class="text-sm font-bold">Template: {{ \App\Support\QuotationTemplateRegistry::saved($quotation->quotation_template_key)['name'] }}</span>
+<a href="{{ route('quotations.preview', $quotation) }}" target="_blank" rel="noopener" class="rounded-xl border px-4 py-2 font-black">Preview</a>
+@endif
 <a href="{{ route('quotations.pdf',$quotation) }}" class="rounded-xl border px-4 py-2 font-black">Download PDF</a>
 </x-page-header>
 <div class="grid gap-6 xl:grid-cols-3">

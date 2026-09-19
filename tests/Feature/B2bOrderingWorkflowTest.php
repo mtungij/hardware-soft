@@ -26,6 +26,7 @@ use App\Models\WhatsAppRecipient;
 use App\Services\B2bQuotationService;
 use App\Services\CustomerPurchaseRequestService;
 use App\Services\InventoryService;
+use App\Services\QuotationDocumentService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Http;
@@ -722,4 +723,20 @@ test('direct sale supports flexible charges while rejecting inactive or cross-co
         $this->customer, $this->admin, $this->branch->id, [['product_id' => $this->product->id, 'quantity' => 1]],
         'quotation', today()->addWeek(), (string) str()->uuid(), additionalCharges: [['additional_charge_type_id' => $installation->id, 'amount' => 10]],
     ))->toThrow(ValidationException::class);
+});
+
+test('purchase request quotations preserve effective templates and identical financial snapshots', function () {
+    $this->company->update(['quotation_template_key' => 'corporate']);
+    $first = quoteB2bRequest($this, submitB2bRequest($this));
+    $this->company->update(['quotation_template_key' => 'modern_blue']);
+    $second = quoteB2bRequest($this, submitB2bRequest($this));
+    $money = ['subtotal', 'discount_amount', 'tax_amount', 'additional_charge_amount', 'total_amount'];
+    expect($first->fresh()->quotation_template_key)->toBe('corporate')
+        ->and($second->quotation_template_key)->toBe('modern_blue')
+        ->and($first->only($money))->toBe($second->only($money))
+        ->and((float) $first->total_amount)->toBe(4100.0);
+    $documents = app(QuotationDocumentService::class);
+    foreach ([$first, $second] as $quotation) {
+        expect($documents->pdf($documents->buildDocumentData($quotation), $quotation->quotation_template_key))->toStartWith('%PDF-');
+    }
 });

@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\CompanyPaymentMethod;
 use App\Models\Quotation;
 use App\Models\SalesInvoice;
+use App\Support\QuotationTemplateRegistry;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Mpdf\Mpdf;
 use Mpdf\Output\Destination;
 
@@ -13,6 +15,15 @@ class B2bDocumentPdfService
 {
     public function quotation(Quotation $quotation): string
     {
+        if ($quotation->document_type === 'quotation') {
+            $documents = app(QuotationDocumentService::class);
+            $key = QuotationTemplateRegistry::saved($quotation->quotation_template_key)['key'];
+            $path = 'documents/'.$quotation->company_id.'/quotations/'.Str::slug($quotation->quotation_number).'-'.$key.'.pdf';
+            Storage::disk('local')->put($path, $documents->pdf($documents->buildDocumentData($quotation), $key));
+
+            return $path;
+        }
+
         $quotation->loadMissing(['company', 'branch', 'customer', 'creator', 'items', 'additionalCharges']);
         $paymentMethods = CompanyPaymentMethod::withoutGlobalScopes()
             ->where('company_id', $quotation->company_id)

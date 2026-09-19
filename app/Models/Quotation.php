@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['company_id', 'branch_id', 'customer_id', 'customer_purchase_request_id', 'created_by', 'converted_sale_id', 'quotation_number', 'document_type', 'source_type', 'creation_key', 'status', 'quotation_date', 'valid_until', 'subtotal', 'discount_amount', 'tax_amount', 'additional_charge_amount', 'total_amount', 'notes', 'terms', 'rejection_reason', 'pdf_path', 'sent_at', 'accepted_at', 'rejected_at'])]
+#[Fillable(['company_id', 'branch_id', 'customer_id', 'customer_purchase_request_id', 'created_by', 'converted_sale_id', 'quotation_number', 'quotation_template_key', 'document_type', 'source_type', 'creation_key', 'status', 'quotation_date', 'valid_until', 'subtotal', 'discount_amount', 'tax_amount', 'additional_charge_amount', 'total_amount', 'notes', 'terms', 'rejection_reason', 'pdf_path', 'sent_at', 'accepted_at', 'rejected_at'])]
 class Quotation extends Model
 {
     use HasCompany;

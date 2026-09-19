@@ -22,6 +22,9 @@ state([
     'barcode' => '',
     'customer_id' => '',
     'sale_type' => 'retail',
+    'discount_mode' => 'none',
+    'order_discount_type' => 'fixed',
+    'order_discount_value' => '0',
     'cart' => [],
     'payments' => [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']],
     'notes' => '',
@@ -64,6 +67,25 @@ mount(function (InventoryService $inventory) {
 
 $canCreditSale = fn () => auth()->user()->can('create credit sales') || auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
 $canCreateUnassignedCreditSale = fn () => auth()->user()->can('create unassigned credit sales') || auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
+$canApplyDiscount = fn () => auth()->user()->can('sales.discount');
+
+$updatedDiscountMode = function ($mode) {
+    if (! in_array($mode, ['none', 'item', 'order'], true) || ($mode !== 'none' && ! $this->canApplyDiscount())) {
+        $this->discount_mode = 'none';
+    }
+
+    foreach ($this->cart as $index => $item) {
+        $this->cart[$index]['discount_type'] = 'fixed';
+        $this->cart[$index]['discount_value'] = '0';
+        $this->cart[$index]['discount_amount'] = '0';
+    }
+    $this->order_discount_type = 'fixed';
+    $this->order_discount_value = '0';
+    $this->syncDefaultPaymentAmount();
+};
+
+$updatedOrderDiscountValue = fn () => $this->syncDefaultPaymentAmount();
+$updatedOrderDiscountType = fn () => $this->syncDefaultPaymentAmount();
 
 $allowedSaleLocations = fn () => collect(InventorySettings::allowedSaleLocationsForUser(auth()->user(), (int) $this->branch_id));
 
@@ -116,7 +138,7 @@ $updatedSaleType = function () {
 
         $this->cart[$index]['sale_type'] = $this->sale_type;
         $this->cart[$index]['unit_price'] = $unitPrice;
-        $this->cart[$index]['tax_amount'] = $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0';
+        $this->cart[$index]['tax_amount'] = (string) app(InventoryService::class)->saleTaxPerUnit($product, (float) $unitPrice);
         $this->dispatch('money-input-updated', model: "cart.{$index}.unit_price", value: $this->cart[$index]['unit_price']);
         $this->dispatch('money-input-updated', model: "cart.{$index}.tax_amount", value: $this->cart[$index]['tax_amount']);
     }
@@ -339,7 +361,7 @@ $changeLineUnit = function (int $index, string $selection): void {
 
     $this->cart[$index]['unit_selection'] = $selection;
     $this->cart[$index]['unit_price'] = $unitPrice;
-    $this->cart[$index]['tax_amount'] = $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0';
+    $this->cart[$index]['tax_amount'] = (string) app(InventoryService::class)->saleTaxPerUnit($product, (float) $unitPrice);
     $this->resetErrorBag(["cart.{$index}.unit_price", "cart.{$index}.quantity"]);
     $this->syncDefaultPaymentAmount();
 };
@@ -411,7 +433,9 @@ $addProduct = function (int $productId, $locationId = null) {
             : '1',
         'unit_price' => $unitPrice,
         'discount_amount' => '0',
-        'tax_amount' => $product->taxable ? (string) round((float) $unitPrice * 0.18, 2) : '0',
+        'discount_type' => 'fixed',
+        'discount_value' => '0',
+        'tax_amount' => (string) app(InventoryService::class)->saleTaxPerUnit($product, (float) $unitPrice),
         'selling_unit' => $product->sellingUnit?->short_name ?: $product->unit?->short_name,
         'base_unit' => $product->unit?->short_name,
         'conversion_factor' => (string) $conversionFactor,
@@ -455,12 +479,34 @@ $subtotal = fn () => collect($this->cart)->sum(function ($item) {
     return $quantity * $unitPrice;
 });
 
-$discountTotal = fn () => collect($this->cart)->sum(function ($item) {
-    $quantity = (float) ($item['quantity'] ?? 0);
-    $discountPerUnit = (float) ($item['discount_amount'] ?? 0);
+$itemDiscountFor = function (array $item): float {
+    if ($this->discount_mode !== 'item') {
+        return 0;
+    }
 
-    return $quantity * $discountPerUnit;
-});
+    $gross = (float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0);
+    $value = max(0, (float) ($item['discount_value'] ?? 0));
+
+    return ($item['discount_type'] ?? 'fixed') === 'percentage'
+        ? round($gross * min(100, $value) / 100, 2)
+        : min($gross, $value);
+};
+
+$discountTotal = function (): float {
+    $subtotal = (float) $this->subtotal();
+    if ($this->discount_mode === 'item') {
+        return (float) collect($this->cart)->sum(fn (array $item) => $this->itemDiscountFor($item));
+    }
+    if ($this->discount_mode === 'order') {
+        $value = max(0, (float) $this->order_discount_value);
+
+        return ($this->order_discount_type === 'percentage')
+            ? round($subtotal * min(100, $value) / 100, 2)
+            : min($subtotal, $value);
+    }
+
+    return 0;
+};
 
 $taxTotal = fn () => collect($this->cart)->sum(function ($item) {
     $quantity = (float) ($item['quantity'] ?? 0);
@@ -513,6 +559,9 @@ $resetCompletedSale = function () {
     $this->payments = [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']];
     $this->customer_id = '';
     $this->sale_type = 'retail';
+    $this->discount_mode = 'none';
+    $this->order_discount_type = 'fixed';
+    $this->order_discount_value = '0';
     $this->notes = '';
     $this->temporary_customer_name = '';
     $this->temporary_customer_phone = '';
@@ -538,6 +587,7 @@ $completeSale = function (InventoryService $inventory) {
             ? (int) $this->stock_location_id
             : (int) ($this->allowedSaleLocations()->first()?->id ?? 0);
         foreach ($this->cart as $index => $item) {
+            $this->cart[$index]['sale_type'] = $this->sale_type;
             if (blank($item['stock_location_id'] ?? null) && $fallbackLocationId) {
                 $this->cart[$index]['stock_location_id'] = $fallbackLocationId;
             }
@@ -557,8 +607,11 @@ $completeSale = function (InventoryService $inventory) {
             'cart.*.stock_location_id' => ['required', 'integer', 'exists:stock_locations,id'],
             'cart.*.sale_type' => ['required', 'in:retail,wholesale'],
             'cart.*.quantity' => ['required', 'numeric', 'gt:0'],
-            'cart.*.unit_price' => ['required', 'numeric', 'min:0'],
-            'cart.*.discount_amount' => ['required', 'numeric', 'min:0'],
+            'discount_mode' => ['required', 'in:none,item,order'],
+            'order_discount_type' => ['required_if:discount_mode,order', 'in:fixed,percentage'],
+            'order_discount_value' => ['required_if:discount_mode,order', 'numeric', 'min:0'],
+            'cart.*.discount_type' => ['required_if:discount_mode,item', 'in:fixed,percentage'],
+            'cart.*.discount_value' => ['required_if:discount_mode,item', 'numeric', 'min:0'],
             'cart.*.tax_amount' => ['required', 'numeric', 'min:0'],
             'payments' => ['required', 'array', 'min:1'],
             'payments.*.payment_method' => ['required', 'in:cash,mobile_money,bank,credit'],
@@ -571,14 +624,22 @@ $completeSale = function (InventoryService $inventory) {
             'credit_notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        foreach ($this->cart as $item) {
-            $unitPrice = (float) ($item['unit_price'] ?? 0);
-            $discountPerUnit = (float) ($item['discount_amount'] ?? 0);
-
-            if ($unitPrice > 0 && $discountPerUnit >= $unitPrice) {
-                throw ValidationException::withMessages([
-                    'cart' => \App\Support\UiText::translate('The discount per unit must be less than the unit price.'),
-                ]);
+        if ($this->discount_mode !== 'none' && ! $this->canApplyDiscount()) {
+            throw ValidationException::withMessages(['discount_mode' => 'You are not authorized to apply discounts.']);
+        }
+        if ($this->discount_mode === 'order' && $this->order_discount_type === 'percentage' && (float) $this->order_discount_value > 100) {
+            throw ValidationException::withMessages(['order_discount_value' => 'Discount percentage cannot exceed 100.']);
+        }
+        if ($this->discount_mode === 'order' && (float) $this->order_discount_value > $this->subtotal() && $this->order_discount_type === 'fixed') {
+            throw ValidationException::withMessages(['order_discount_value' => 'Order discount cannot exceed the subtotal.']);
+        }
+        foreach ($this->cart as $index => $item) {
+            $gross = (float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0);
+            if ($this->discount_mode === 'item' && ($item['discount_type'] ?? null) === 'percentage' && (float) ($item['discount_value'] ?? 0) > 100) {
+                throw ValidationException::withMessages(["cart.{$index}.discount_value" => 'Discount percentage cannot exceed 100.']);
+            }
+            if ($this->discount_mode === 'item' && ($item['discount_type'] ?? null) === 'fixed' && (float) ($item['discount_value'] ?? 0) > $gross) {
+                throw ValidationException::withMessages(["cart.{$index}.discount_value" => 'Discount cannot exceed the line subtotal.']);
             }
         }
 
@@ -614,6 +675,11 @@ $completeSale = function (InventoryService $inventory) {
                 'credit_notes' => $this->credit_notes ?: null,
             ],
             $this->submission_token,
+            discountDetails: [
+                'mode' => $this->discount_mode,
+                'type' => $this->order_discount_type,
+                'value' => $this->order_discount_value,
+            ],
         );
 
         $this->resetCompletedSale();
@@ -688,7 +754,7 @@ $completeSale = function (InventoryService $inventory) {
                 @error('stock_location_id') <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
             </x-card>
 
-            <x-card>
+            <x-card data-pos-section="price-mode">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <p class="text-sm font-black text-slate-700 dark:text-slate-200">Aina ya Bei</p>
@@ -806,6 +872,24 @@ $completeSale = function (InventoryService $inventory) {
                 </div>
                 @error('customer_id') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
 
+                <section data-pos-section="cart-discount-mode">
+                    <label class="block text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                        Aina ya Punguzo
+                    @if ($this->canApplyDiscount())
+                        <select data-discount-mode-selector wire:model.live="discount_mode" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
+                            <option value="none">Hakuna</option>
+                            <option value="item">Kwa Kila Bidhaa</option>
+                            <option value="order">Jumla ya Sale</option>
+                        </select>
+                    @else
+                        <select disabled aria-disabled="true" class="mt-1 block w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            <option>Hakuna</option>
+                        </select>
+                    @endif
+                    </label>
+                    @error('discount_mode') <p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p> @enderror
+                </section>
+
                 @if ($this->usesCreditPayment())
                     <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
                         @if ($selectedCustomer)
@@ -826,7 +910,7 @@ $completeSale = function (InventoryService $inventory) {
                     @php
                         $quantity = (float) ($item['quantity'] ?? 0);
                         $unitPrice = (float) ($item['unit_price'] ?? 0);
-                        $discountPerUnit = (float) ($item['discount_amount'] ?? 0);
+                        $lineDiscount = $this->itemDiscountFor($item);
                         $taxPerUnit = (float) ($item['tax_amount'] ?? 0);
                         $sellingUnitLabel = $item['selling_unit'] ?? '';
                         $baseUnitLabel = $item['base_unit'] ?? '';
@@ -883,36 +967,37 @@ $completeSale = function (InventoryService $inventory) {
                             <span class="mt-1 block text-[11px] font-bold normal-case tracking-normal text-emerald-700 dark:text-emerald-300">Stock at {{ $selectedLineLocation['name'] ?? ($item['stock_location_name'] ?? 'selected location') }}: {{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span>
                             @error("cart.{$index}.stock_location_id")<span class="mt-1 block text-xs font-semibold normal-case tracking-normal text-red-600">{{ $message }}</span>@enderror
                         </label>
-                        <div class="mt-3 grid gap-2 sm:grid-cols-4">
+                        <div class="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Qty') }} ({{ $sellingUnitLabel ?: '-' }})
                                 <input wire:model.live.debounce.400ms="cart.{{ $index }}.quantity" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
                             </label>
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                 {{ $t('Unit Price') }}
-                                <span data-money-field wire:ignore wire:key="pos-unit-price-{{ $index }}-{{ $item['product_id'] }}-{{ $item['stock_location_id'] ?? 0 }}" class="mt-1 block min-w-0">
-                                    <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
-                                    <input type="hidden" data-money-value value="{{ $item['unit_price'] ?? '' }}" wire:model.live="cart.{{ $index }}.unit_price">
-                                </span>
+                                <input type="text" value="TZS {{ \App\Support\NumberFormatter::money($unitPrice) }}" readonly aria-readonly="true" class="mt-1 w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-sm font-bold normal-case tracking-normal text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                             </label>
-                            <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                {{ $t('Discount') }}
-                                <span data-money-field wire:ignore class="mt-1 block min-w-0">
-                                    <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
-                                    <input type="hidden" data-money-value value="{{ $item['discount_amount'] ?? '' }}" wire:model.live="cart.{{ $index }}.discount_amount">
-                                </span>
-                            </label>
-                            <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                {{ $t('VAT') }}
-                                <span data-money-field wire:ignore class="mt-1 block min-w-0">
-                                    <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-1 text-sm normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
-                                    <input type="hidden" data-money-value value="{{ $item['tax_amount'] ?? '' }}" wire:model.live="cart.{{ $index }}.tax_amount">
-                                </span>
-                            </label>
+                            @if ($discount_mode === 'item')
+                                <div data-item-discount-editor class="contents">
+                                    <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                        Aina ya Punguzo
+                                        <select wire:model.live="cart.{{ $index }}.discount_type" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-semibold normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
+                                            <option value="fixed">Kiasi</option>
+                                            <option value="percentage">Asilimia</option>
+                                        </select>
+                                    </label>
+                                    <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                                        {{ $t('Discount') }} {{ ($item['discount_type'] ?? 'fixed') === 'percentage' ? '(%)' : '(TZS)' }}
+                                        <input wire:model.live.debounce.300ms="cart.{{ $index }}.discount_value" type="number" inputmode="decimal" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
+                                    </label>
+                                </div>
+                            @endif
                         </div>
 
                         <div class="mt-2 grid gap-1 text-xs text-slate-500 dark:text-slate-400">
-                            <div class="flex justify-between font-black text-slate-800 dark:text-slate-100"><span>Line Total</span><span>TZS {{ \App\Support\NumberFormatter::money(max(0, ($quantity * $unitPrice) - ($quantity * $discountPerUnit) + ($quantity * $taxPerUnit))) }}</span></div>
+                            @if ($discount_mode === 'item')
+                                <div class="flex justify-between"><span>Punguzo</span><span>TZS {{ \App\Support\NumberFormatter::money($lineDiscount) }}</span></div>
+                            @endif
+                            <div class="flex justify-between font-black text-slate-800 dark:text-slate-100"><span>Line Total</span><span>TZS {{ \App\Support\NumberFormatter::money(max(0, ($quantity * $unitPrice) - $lineDiscount + ($quantity * $taxPerUnit))) }}</span></div>
                             @if ($isFractionalSale || abs($conversionFactor - 1) > 0.0001)
                                 <div class="flex justify-between"><span>{{ $t('Available Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span></div>
                                 @if ($baseUnitLabel && ($baseUnitLabel !== $sellingUnitLabel || abs($conversionFactor - 1) > 0.0001))
@@ -924,10 +1009,29 @@ $completeSale = function (InventoryService $inventory) {
                             @endif
                         </div>
                         @error("cart.{$index}.quantity")<p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>@enderror
+                        @error("cart.{$index}.discount_value")<p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>@enderror
                     </div>
                 @endforeach
 
                 @error('cart') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+
+                @if ($discount_mode === 'order')
+                    <div data-order-discount-editor class="rounded-lg border border-orange-200 bg-orange-50 p-3 dark:border-orange-500/30 dark:bg-orange-500/10">
+                        <p class="text-xs font-black uppercase tracking-wide text-orange-700 dark:text-orange-200">Punguzo la Jumla</p>
+                        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                            <label class="text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">Aina
+                                <select wire:model.live="order_discount_type" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case dark:border-slate-700 dark:bg-navy-950">
+                                    <option value="fixed">Kiasi Maalum</option>
+                                    <option value="percentage">Asilimia</option>
+                                </select>
+                            </label>
+                            <label class="text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">Thamani {{ $order_discount_type === 'percentage' ? '(%)' : '(TZS)' }}
+                                <input wire:model.live.debounce.300ms="order_discount_value" type="number" inputmode="decimal" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case dark:border-slate-700 dark:bg-navy-950">
+                            </label>
+                            @error('order_discount_value') <p class="text-xs font-semibold text-red-600 sm:col-span-2">{{ $message }}</p> @enderror
+                        </div>
+                    </div>
+                @endif
 
                 <div class="space-y-2 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
                     <div class="flex justify-between"><span>{{ $t('Subtotal') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->subtotal()) }}</span></div>
@@ -935,9 +1039,7 @@ $completeSale = function (InventoryService $inventory) {
                     <div class="flex justify-between"><span>{{ $t('Tax/VAT') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->taxTotal()) }}</span></div>
                     <div class="flex justify-between text-lg font-black"><span>{{ $t('Grand Total') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span></div>
                     <div class="flex justify-between"><span>{{ $t('Paid') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->paidTotal()) }}</span></div>
-                    @if ($this->paidTotal() >= $this->grandTotal())
-                        <div class="flex justify-between"><span>{{ $t('Change') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->paidTotal() - $this->grandTotal()) }}</span></div>
-                    @else
+                    @if ($this->paidTotal() < $this->grandTotal())
                         <div class="flex justify-between"><span>{{ $t('Balance') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal() - $this->paidTotal()) }}</span></div>
                     @endif
                 </div>

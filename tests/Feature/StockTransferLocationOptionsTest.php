@@ -144,6 +144,7 @@ test('source availability is location specific and a completed transfer preserve
         'stock_location_id' => $source->id,
         'movement_type' => 'adjustment_in',
         'quantity' => 84,
+        'unit_cost' => 4000,
         'quantity_in' => 84,
         'quantity_out' => 0,
         'created_by' => $this->superAdmin->id,

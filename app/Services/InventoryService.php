@@ -28,6 +28,11 @@ use Illuminate\Validation\ValidationException;
 
 class InventoryService
 {
+    public function saleTaxPerUnit(Product $product, float $unitPrice): float
+    {
+        return $product->taxable ? round($unitPrice * 0.18, 2) : 0.0;
+    }
+
     public function getMainStoreLocation(int $branchId): StockLocation
     {
         $location = StockLocation::query()->firstOrCreate(
@@ -418,9 +423,9 @@ class InventoryService
      * @param  array<int, array<string, mixed>>  $cart
      * @param  array<int, array<string, mixed>>  $payments
      */
-    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = [], ?string $idempotencyKey = null, bool $useApprovedSnapshotPrices = false, array $additionalCharges = []): Sale
+    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = [], ?string $idempotencyKey = null, bool $useApprovedSnapshotPrices = false, array $additionalCharges = [], array $discountDetails = []): Sale
     {
-        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails, $idempotencyKey, $useApprovedSnapshotPrices, $additionalCharges) {
+        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails, $idempotencyKey, $useApprovedSnapshotPrices, $additionalCharges, $discountDetails) {
             if ($cart === []) {
                 throw ValidationException::withMessages(['cart' => 'Cart is required.']);
             }
@@ -428,6 +433,22 @@ class InventoryService
             $preferredLocation = StockLocation::query()->whereKey($stockLocationId)->lockForUpdate()->firstOrFail();
             $companyId = (int) $preferredLocation->company_id;
             $cashier = User::withoutGlobalScopes()->where('company_id', $companyId)->findOrFail($createdBy);
+            $discountMode = $discountDetails === [] ? 'legacy' : (string) ($discountDetails['mode'] ?? 'none');
+            if (! in_array($discountMode, ['legacy', 'none', 'item', 'order'], true)) {
+                throw ValidationException::withMessages(['discount_mode' => 'The selected discount mode is invalid.']);
+            }
+            if ($discountMode !== 'legacy' && $discountMode !== 'none' && ! $cashier->can('sales.discount')) {
+                throw ValidationException::withMessages(['discount_mode' => 'You are not authorized to apply discounts.']);
+            }
+            $orderDiscountType = $discountMode === 'order' ? (string) ($discountDetails['type'] ?? '') : null;
+            $orderDiscountRawValue = $discountDetails['value'] ?? null;
+            $orderDiscountValue = $discountMode === 'order' && is_numeric($orderDiscountRawValue) ? (float) $orderDiscountRawValue : null;
+            if ($discountMode === 'order' && ! in_array($orderDiscountType, ['fixed', 'percentage'], true)) {
+                throw ValidationException::withMessages(['order_discount_type' => 'The selected order discount type is invalid.']);
+            }
+            if ($discountMode === 'order' && ($orderDiscountValue === null || $orderDiscountValue < 0 || ($orderDiscountType === 'percentage' && $orderDiscountValue > 100))) {
+                throw ValidationException::withMessages(['order_discount_value' => 'The order discount must be non-negative and percentages cannot exceed 100.']);
+            }
 
             if (filled($idempotencyKey)) {
                 $existingSale = Sale::withoutGlobalScopes()
@@ -521,7 +542,27 @@ class InventoryService
                     $unitPrice = (float) $row['approved_unit_price'];
                 }
                 $discountPerUnit = (float) ($row['discount_per_unit'] ?? $row['discount_amount'] ?? 0);
-                $taxPerUnit = (float) ($row['tax_amount'] ?? 0);
+                $itemDiscountType = null;
+                $itemDiscountValue = null;
+                if ($discountMode === 'none' || $discountMode === 'order') {
+                    $discountPerUnit = 0;
+                } elseif ($discountMode === 'item') {
+                    $itemDiscountType = (string) ($row['discount_type'] ?? '');
+                    $itemDiscountRawValue = $row['discount_value'] ?? null;
+                    $itemDiscountValue = is_numeric($itemDiscountRawValue) ? (float) $itemDiscountRawValue : null;
+                    if (! in_array($itemDiscountType, ['fixed', 'percentage'], true)) {
+                        throw ValidationException::withMessages(["cart.{$index}.discount_type" => 'The selected item discount type is invalid.']);
+                    }
+                    if ($itemDiscountValue === null || $itemDiscountValue < 0 || ($itemDiscountType === 'percentage' && $itemDiscountValue > 100)) {
+                        throw ValidationException::withMessages(["cart.{$index}.discount_value" => 'The item discount must be non-negative and percentages cannot exceed 100.']);
+                    }
+                }
+                $taxPerUnit = ($discountMode === 'legacy' || $useApprovedSnapshotPrices)
+                    ? (float) ($row['tax_amount'] ?? 0)
+                    : $this->saleTaxPerUnit($product, $unitPrice);
+                if ($taxPerUnit < 0) {
+                    throw ValidationException::withMessages(["cart.{$index}.tax_amount" => 'Tax per unit cannot be negative.']);
+                }
                 $allowsDecimalQuantity = $product->allowsDecimalQuantities();
                 $conversionFactor = $selectedConversion
                     ? (float) $selectedConversion->conversion_factor
@@ -581,19 +622,29 @@ class InventoryService
                     throw ValidationException::withMessages(['cart' => $product->displayNameWithSize().' price cannot be below buying price.']);
                 }
 
-                if ($discountPerUnit < 0) {
+                if ($discountMode === 'legacy' && $discountPerUnit < 0) {
                     throw ValidationException::withMessages(['cart' => 'Discount per unit cannot be negative.']);
                 }
 
-                if ($discountPerUnit >= $unitPrice && $unitPrice > 0) {
+                if ($discountMode === 'legacy' && $discountPerUnit >= $unitPrice && $unitPrice > 0) {
                     throw ValidationException::withMessages(['cart' => UiText::translate('The discount per unit must be less than the unit price.')]);
                 }
 
-                $gross = $quantity * $unitPrice;
-                $itemDiscount = $quantity * $discountPerUnit;
+                $gross = round($quantity * $unitPrice, 2);
+                $itemDiscount = $discountMode === 'item'
+                    ? ($itemDiscountType === 'percentage'
+                        ? round(((int) round($gross * 100)) * $itemDiscountValue / 100) / 100
+                        : ((int) round($itemDiscountValue * 100)) / 100)
+                    : $quantity * $discountPerUnit;
+                if ($itemDiscount > $gross) {
+                    throw ValidationException::withMessages(["cart.{$index}.discount_value" => 'The item discount cannot exceed the line subtotal.']);
+                }
+                if ($discountMode === 'item') {
+                    $discountPerUnit = $quantity > 0 ? round($itemDiscount / $quantity, 2) : 0;
+                }
                 $itemTax = $quantity * $taxPerUnit;
-                $netUnitPrice = $unitPrice - $discountPerUnit;
-                $netTotal = $quantity * $netUnitPrice;
+                $netTotal = $gross - $itemDiscount;
+                $netUnitPrice = $quantity > 0 ? round($netTotal / $quantity, 2) : 0;
 
                 StockMovement::query()->where('company_id', $companyId)->where('branch_id', $branchId)
                     ->where('product_id', $product->id)->where('stock_location_id', $location->id)
@@ -627,9 +678,12 @@ class InventoryService
                     'base_unit_name_snapshot' => $product->unit?->name,
                     'base_unit_code_snapshot' => $product->unit?->short_name,
                     'unit_price' => $unitPrice,
+                    'item_discount_type' => $itemDiscountType,
+                    'item_discount_value' => $itemDiscountValue,
                     'discount_per_unit' => $discountPerUnit,
                     'discount_amount' => $itemDiscount,
                     'discount_total' => $itemDiscount,
+                    'allocated_order_discount' => 0,
                     'gross_total' => $gross,
                     'net_unit_price' => $netUnitPrice,
                     'net_total' => $netTotal,
@@ -640,6 +694,40 @@ class InventoryService
                         : $this->getAverageCost($product->id, $location->id, $branchId) / $conversionFactor,
                     'base_unit_cost' => $this->getAverageCost($product->id, $location->id, $branchId),
                 ];
+            }
+
+            if ($discountMode === 'order') {
+                $subtotalCents = (int) round($subtotal * 100);
+                $orderDiscountCents = $orderDiscountType === 'percentage'
+                    ? (int) round($subtotalCents * $orderDiscountValue / 100)
+                    : (int) round($orderDiscountValue * 100);
+                if ($orderDiscountCents > $subtotalCents) {
+                    throw ValidationException::withMessages(['order_discount_value' => 'The order discount cannot exceed the sale subtotal.']);
+                }
+
+                $remainingCents = $orderDiscountCents;
+                $eligibleIndexes = collect($preparedItems)
+                    ->filter(fn (array $item): bool => (float) $item['gross_total'] > 0)
+                    ->keys();
+                $lastIndex = $eligibleIndexes->last();
+                foreach ($preparedItems as $index => &$preparedItem) {
+                    $allocationCents = ! $eligibleIndexes->contains($index)
+                        ? 0
+                        : ($index === $lastIndex
+                        ? $remainingCents
+                        : (int) floor($orderDiscountCents * ((int) round($preparedItem['gross_total'] * 100)) / max(1, $subtotalCents)));
+                    $remainingCents -= $allocationCents;
+                    $allocation = $allocationCents / 100;
+                    $preparedItem['allocated_order_discount'] = $allocation;
+                    $preparedItem['discount_amount'] = $allocation;
+                    $preparedItem['discount_total'] = $allocation;
+                    $preparedItem['discount_per_unit'] = $preparedItem['quantity'] > 0 ? round($allocation / $preparedItem['quantity'], 2) : 0;
+                    $preparedItem['net_total'] = $preparedItem['gross_total'] - $allocation;
+                    $preparedItem['net_unit_price'] = $preparedItem['quantity'] > 0 ? round($preparedItem['net_total'] / $preparedItem['quantity'], 2) : 0;
+                    $preparedItem['line_total'] = $preparedItem['net_total'] + $preparedItem['tax_amount'];
+                }
+                unset($preparedItem);
+                $discount = $orderDiscountCents / 100;
             }
 
             $preparedCharges = collect($additionalCharges)->values()->map(function (array $charge, int $index) use ($companyId): array {
@@ -709,6 +797,9 @@ class InventoryService
                 'idempotency_key' => $idempotencyKey,
                 'sale_date' => now()->toDateString(),
                 'sale_type' => $saleType,
+                'discount_mode' => $discountMode === 'legacy' ? null : $discountMode,
+                'order_discount_type' => $orderDiscountType,
+                'order_discount_value' => $orderDiscountValue,
                 'subtotal' => $subtotal,
                 'discount_amount' => $discount,
                 'tax_amount' => $tax,
@@ -751,9 +842,12 @@ class InventoryService
                     'base_unit_cost' => $item['base_unit_cost'],
                     'unit_cost' => $item['unit_cost'],
                     'unit_price' => $item['unit_price'],
+                    'item_discount_type' => $item['item_discount_type'],
+                    'item_discount_value' => $item['item_discount_value'],
                     'discount_per_unit' => $item['discount_per_unit'],
                     'discount_amount' => $item['discount_amount'],
                     'discount_total' => $item['discount_total'],
+                    'allocated_order_discount' => $item['allocated_order_discount'],
                     'gross_total' => $item['gross_total'],
                     'net_unit_price' => $item['net_unit_price'],
                     'net_total' => $item['net_total'],

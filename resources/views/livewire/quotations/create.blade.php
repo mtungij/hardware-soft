@@ -1,7 +1,7 @@
 <?php
 use App\Models\{AdditionalChargeType,Branch,Customer,Product}; use App\Services\B2bQuotationService; use App\Support\AuthorizationScope; use Illuminate\Support\Str;
 use function Livewire\Volt\{computed,layout,mount,state};
-layout('layouts.app'); state(['customer_id'=>'','branch_id'=>'','document_type'=>'quotation','valid_until'=>'','notes'=>'','terms'=>'Payment and delivery subject to agreed terms.','lines'=>[],'additional_charges'=>[],'creation_key'=>'']);
+layout('layouts.app'); state(['customer_id'=>'','branch_id'=>'','document_type'=>'quotation','quotation_template_key'=>'','valid_until'=>'','notes'=>'','terms'=>'Payment and delivery subject to agreed terms.','lines'=>[],'additional_charges'=>[],'creation_key'=>'']);
 mount(function(){ $u=auth()->user(); $this->document_type=in_array(request('type'),['quotation','proforma'])?request('type'):'quotation'; $this->customer_id=(string)request('customer'); $this->branch_id=(string)($u->branch_id?:Branch::withoutGlobalScopes()->where('company_id',$u->company_id)->value('id')); $this->valid_until=today()->addDays(14)->toDateString(); $this->creation_key=(string)Str::uuid(); });
 $branches=computed(function(){ $u=auth()->user(); $q=Branch::withoutGlobalScopes()->where('company_id',$u->company_id)->where('status','active'); if(AuthorizationScope::scopeFor($u,'report_scope',AuthorizationScope::BRANCH)!==AuthorizationScope::COMPANY)$q->whereKey($u->branch_id); return $q->orderBy('name')->get(); });
 $customers=computed(fn()=>Customer::withoutGlobalScopes()->where('company_id',auth()->user()->company_id)->where('status','active')->orderBy('name')->get());
@@ -11,7 +11,7 @@ $addLine=function(){ $this->lines[]=['product_id'=>'','product_unit_conversion_i
 $removeLine=function($i){ unset($this->lines[$i]); $this->lines=array_values($this->lines); };
 $addCharge=function(){ $this->additional_charges[]=['additional_charge_type_id'=>'','amount'=>'','description'=>'']; };
 $removeCharge=function($i){ unset($this->additional_charges[$i]); $this->additional_charges=array_values($this->additional_charges); };
-$save=function(B2bQuotationService $service){ $this->validate(['customer_id'=>'required|integer','branch_id'=>'required|integer','document_type'=>'required|in:quotation,proforma','valid_until'=>'required|date','lines'=>'required|array|min:1','lines.*.product_id'=>'required|integer','lines.*.quantity'=>'required|numeric|gt:0','additional_charges.*.additional_charge_type_id'=>'required|integer','additional_charges.*.amount'=>'required|numeric|gt:0']); $customer=Customer::withoutGlobalScopes()->where('company_id',auth()->user()->company_id)->findOrFail($this->customer_id); $q=$service->createDirect($customer,auth()->user(),(int)$this->branch_id,$this->lines,$this->document_type,$this->valid_until,$this->creation_key,$this->notes,$this->terms,$this->additional_charges); session()->flash('success',"{$q->quotation_number} created."); $this->redirectRoute('quotations.show',$q,navigate:true); };
+$save=function(B2bQuotationService $service){ $this->validate(['customer_id'=>'required|integer','branch_id'=>'required|integer','document_type'=>'required|in:quotation,proforma','valid_until'=>'required|date','lines'=>'required|array|min:1','lines.*.product_id'=>'required|integer','lines.*.quantity'=>'required|numeric|gt:0','additional_charges.*.additional_charge_type_id'=>'required|integer','additional_charges.*.amount'=>'required|numeric|gt:0']); $customer=Customer::withoutGlobalScopes()->where('company_id',auth()->user()->company_id)->findOrFail($this->customer_id); $q=$service->createDirect($customer,auth()->user(),(int)$this->branch_id,$this->lines,$this->document_type,$this->valid_until,$this->creation_key,$this->notes,$this->terms,$this->additional_charges,$this->quotation_template_key); session()->flash('success',"{$q->quotation_number} created."); $this->redirectRoute('quotations.show',$q,navigate:true); };
 ?>
 <div>
 <x-page-header :title="$document_type==='proforma'?'New Proforma Invoice':'New Quotation'" description="Prepare a document directly for an existing customer." :breadcrumbs="['Quotations'=>route('quotations.index'),'Create'=>null]"/>
@@ -25,6 +25,7 @@ $save=function(B2bQuotationService $service){ $this->validate(['customer_id'=>'r
 <option value="">Select customer</option>@foreach($this->customers as $c)<option value="{{ $c->id }}">{{ $c->name }} · {{ $c->phone }}</option>@endforeach</select>@error('customer_id')<span class="text-xs text-red-600">{{ $message }}</span>@enderror</label>
 <label class="text-sm font-bold">Branch<select wire:model="branch_id" class="mt-1 w-full rounded-xl border-slate-200 dark:bg-navy-950">@foreach($this->branches as $b)<option value="{{ $b->id }}">{{ $b->name }}</option>@endforeach</select>
 </label>
+@include('documents.quotations.partials.selector')
 <x-form-input label="Valid Until" name="valid_until" type="date" wire:model="valid_until"/>
 </div>
 </x-card>

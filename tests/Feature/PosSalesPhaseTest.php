@@ -422,6 +422,7 @@ test('pos paid amount auto updates when discount changes', function () {
 
     Volt::test('pos.index')
         ->set('stock_location_id', (string) $dispensing->id)
+        ->set('discount_mode', 'item')
         ->set('cart', [[
             'product_id' => $product->id,
             'name' => $product->name,
@@ -429,7 +430,9 @@ test('pos paid amount auto updates when discount changes', function () {
             'sale_type' => 'retail',
             'quantity' => '4',
             'unit_price' => '15000',
-            'discount_amount' => '500',
+            'discount_type' => 'fixed',
+            'discount_value' => '2000',
+            'discount_amount' => '0',
             'tax_amount' => '0',
         ]])
         ->set('payments', [['payment_method' => 'cash', 'amount' => '60000', 'reference_number' => '']])
@@ -447,6 +450,7 @@ test('pos preserves manually entered amount received and recalculates change', f
 
     Volt::test('pos.index')
         ->set('stock_location_id', (string) $dispensing->id)
+        ->set('discount_mode', 'item')
         ->set('cart', [[
             'product_id' => $product->id,
             'name' => $product->name,
@@ -454,7 +458,9 @@ test('pos preserves manually entered amount received and recalculates change', f
             'sale_type' => 'retail',
             'quantity' => '4',
             'unit_price' => '15000',
-            'discount_amount' => '500',
+            'discount_type' => 'fixed',
+            'discount_value' => '2000',
+            'discount_amount' => '0',
             'tax_amount' => '0',
         ]])
         ->set('auto_payment_amount', '60000')
@@ -462,7 +468,8 @@ test('pos preserves manually entered amount received and recalculates change', f
         ->set('payments', [['payment_method' => 'cash', 'amount' => '60000', 'reference_number' => '']])
         ->call('syncDefaultPaymentAmount')
         ->assertSet('payments.0.amount', '60000')
-        ->assertSee('TZS 2,000');
+        ->assertSee('TZS 2,000')
+        ->assertDontSee('Change');
 });
 
 function fractionalPipeScenario(): array

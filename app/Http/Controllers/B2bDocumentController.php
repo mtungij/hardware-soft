@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Quotation;
 use App\Models\SalesInvoice;
 use App\Services\B2bDocumentPdfService;
+use App\Services\QuotationDocumentService;
 use App\Support\AuthorizationScope;
+use App\Support\QuotationTemplateRegistry;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -17,11 +19,22 @@ class B2bDocumentController extends Controller
     {
         $this->authorizeDocument($request, $quotation->company_id, $quotation->branch_id, $quotation->customer_id, 'quotations.view');
         $path = $quotation->pdf_path ?: $pdfs->quotation($quotation);
-        if ($quotation->pdf_path !== $path) {
+        if ($quotation->document_type !== 'quotation' && $quotation->pdf_path !== $path) {
             $quotation->update(['pdf_path' => $path]);
         }
 
         return Storage::disk('local')->download($path, $quotation->quotation_number.'.pdf');
+    }
+
+    public function quotationPreview(Request $request, Quotation $quotation, QuotationDocumentService $documents)
+    {
+        $this->authorizeDocument($request, $quotation->company_id, $quotation->branch_id, $quotation->customer_id, 'quotations.view');
+        abort_unless($quotation->document_type === 'quotation', 404);
+        $template = QuotationTemplateRegistry::saved($quotation->quotation_template_key);
+        $document = $documents->buildDocumentData($quotation);
+        $document['preview'] = ['name' => $template['name'], 'download' => route('quotations.pdf', $quotation), 'back' => route('quotations.show', $quotation)];
+
+        return response($documents->html($document, $template['key']))->header('Cache-Control', 'private, no-store');
     }
 
     public function invoice(Request $request, SalesInvoice $invoice, B2bDocumentPdfService $pdfs): StreamedResponse
