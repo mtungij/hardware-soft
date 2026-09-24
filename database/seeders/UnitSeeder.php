@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Company;
+use App\Models\MeasurementType;
 use App\Models\Unit;
 use Illuminate\Database\Seeder;
 
@@ -14,6 +15,7 @@ class UnitSeeder extends Seeder
             ['Piece', 'pcs'],
             ['Bag', 'bag'],
             ['Kilogram', 'kg'],
+            ['Tonne', 'tonne'],
             ['Litre', 'L'],
             ['Meter', 'm'],
             ['Box', 'box'],
@@ -27,8 +29,10 @@ class UnitSeeder extends Seeder
                     ['company_id' => $companyId, 'short_name' => $shortName],
                     [
                         'name' => $name,
+                        ...($shortName === 'tonne' ? ['code' => 'tonne'] : []),
                         'description' => "{$name} inventory unit",
                         'status' => 'active',
+                        ...($shortName === 'tonne' ? ['measurement_type_id' => MeasurementType::query()->where('code', MeasurementType::WEIGHT)->value('id')] : []),
                     ]
                 );
             }

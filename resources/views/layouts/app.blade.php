@@ -103,6 +103,7 @@
                     ['label' => __('messages.staff.nav.store_stock'), 'route' => 'store-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.dispensing_stock'), 'route' => 'dispensing-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier']],
                     ['label' => __('messages.staff.nav.direct_stock_in'), 'route' => 'direct-stock-in.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper'], 'show' => $directStockInAllowed && ! $warehouseEnabled],
+                    ['label' => 'Opening Stock', 'route' => 'opening-stock.index', 'icon' => 'stock', 'permission' => 'opening_stock.view', 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.stock_transfers'), 'route' => 'stock-transfers.index', 'icon' => 'transfer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.stock_movements'), 'route' => 'stock-movements.index', 'icon' => 'truck', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant']],
                     ['label' => __('messages.staff.nav.stock_adjustments'), 'route' => 'stock-adjustments.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper']],

@@ -122,10 +122,10 @@ $toggleStatus = function (int $unitId) {
 $deleteUnit = function (int $unitId) {
     abort_unless($this->canManage(), 403);
 
-    $unit = Unit::withCount(['products', 'sellingProducts'])->findOrFail($unitId);
+    $unit = Unit::withCount(['products', 'sellingProducts', 'purchaseProducts', 'productUnitConversions'])->findOrFail($unitId);
 
-    if ($unit->products_count + $unit->selling_products_count > 0) {
-        session()->flash('error', 'Cannot delete a unit with attached products.');
+    if ($unit->products_count + $unit->selling_products_count + $unit->purchase_products_count + $unit->product_unit_conversions_count > 0) {
+        session()->flash('error', 'Cannot delete a unit used by products or their conversions.');
         return;
     }
 
@@ -165,10 +165,10 @@ $deleteUnit = function (int $unitId) {
                     @if ($editingId)
                         @php
                             $editingUnit = Unit::query()
-                                ->withCount(['products', 'sellingProducts'])
+                                ->withCount(['products', 'sellingProducts', 'purchaseProducts', 'productUnitConversions'])
                                 ->find($editingId);
                         @endphp
-                        @if (($editingUnit?->products_count ?? 0) + ($editingUnit?->selling_products_count ?? 0) > 0)
+                        @if (($editingUnit?->products_count ?? 0) + ($editingUnit?->selling_products_count ?? 0) + ($editingUnit?->purchase_products_count ?? 0) + ($editingUnit?->product_unit_conversions_count ?? 0) > 0)
                             <div class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200">
                                 This unit is assigned to products. Its Measurement Type can only be changed when all assigned products remain compatible.
                             </div>
@@ -215,7 +215,7 @@ $deleteUnit = function (int $unitId) {
             @php
                 $units = Unit::query()
                     ->with('measurementType')
-                    ->withCount(['products', 'sellingProducts'])
+                    ->withCount(['products', 'sellingProducts', 'purchaseProducts', 'productUnitConversions'])
                     ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('short_name', 'like', "%{$search}%")))
                     ->when($statusFilter, fn ($query) => $query->where('status', $statusFilter))
                     ->when($measurementTypeFilter, fn ($query) => $query->where('measurement_type_id', $measurementTypeFilter))
@@ -230,7 +230,7 @@ $deleteUnit = function (int $unitId) {
                         <td class="px-4 py-3 font-mono text-xs">{{ $unit->short_name }}</td>
                         <td class="px-4 py-3 font-bold">{{ $unit->measurementType?->name ?? 'Other' }}</td>
                         <td class="px-4 py-3">{{ $unit->description ?? '-' }}</td>
-                        <td class="px-4 py-3">{{ $unit->products_count + $unit->selling_products_count }}</td>
+                        <td class="px-4 py-3">{{ $unit->products_count + $unit->selling_products_count + $unit->purchase_products_count + $unit->product_unit_conversions_count }}</td>
                         <td class="px-4 py-3"><span class="{{ $unit->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($unit->status) }}</span></td>
                         <td class="px-4 py-3">
                             @if ($this->canManage())

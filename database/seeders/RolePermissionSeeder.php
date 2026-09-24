@@ -84,6 +84,7 @@ class RolePermissionSeeder extends Seeder
             'purchases.view', 'purchases.create', 'purchases.edit', 'purchases.approve',
             'purchases.receive', 'purchases.view_cost', 'purchases.export',
             'stock.view', 'stock.adjust', 'stock.transfer', 'stock.receive', 'stock.view_value', 'stock.direct_stock_in',
+            'opening_stock.view', 'opening_stock.create',
             'reports.sales', 'reports.stock', 'reports.purchases', 'reports.profit', 'reports.expenses',
             'reports.receivables', 'reports.export',
             'accounting.view', 'accounting.expenses', 'accounting.profit_loss', 'accounting.cashflow',
@@ -261,7 +262,7 @@ class RolePermissionSeeder extends Seeder
             'customer_material_accounts.create',
             'customer_material_accounts.record_deposit',
         ]);
-        Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', 'dashboard.view', 'dashboard.stock_summary', 'products.view', 'products.view_buying_price', 'products.view_selling_price', 'purchases.view', 'purchases.create', 'purchases.receive', 'purchases.view_cost', 'stock.view', 'stock.adjust', 'stock.transfer', 'stock.receive', 'stock.direct_stock_in', ...$storeKeeperPermissions, 'view sales', 'sales.view', 'sell from store', 'customer_material_accounts.view', 'customer_material_accounts.issue_material']);
+        Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', 'dashboard.view', 'dashboard.stock_summary', 'products.view', 'products.view_buying_price', 'products.view_selling_price', 'purchases.view', 'purchases.create', 'purchases.receive', 'purchases.view_cost', 'stock.view', 'stock.adjust', 'stock.transfer', 'stock.receive', 'stock.direct_stock_in', 'opening_stock.view', 'opening_stock.create', ...$storeKeeperPermissions, 'view sales', 'sales.view', 'sell from store', 'customer_material_accounts.view', 'customer_material_accounts.issue_material']);
         Role::findByName('Store Keeper', $this->guard)->givePermissionTo('view stock valuation');
         Role::findByName('Store Keeper', $this->guard)->givePermissionTo(['export pdf', 'export excel', 'print reports']);
         Role::findByName('Accountant', $this->guard)->syncPermissions([

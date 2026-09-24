@@ -81,7 +81,8 @@ class PurchaseItem extends Model
                     ?? $this->product?->purchaseUnit?->measurementType?->code
                     ?? $this->product?->unit?->measurementType?->code
                     ?? $this->product?->measurementCode()) !== MeasurementType::COUNT
-                || $this->product?->quantityIsWhole($quantity));
+                || $this->product?->quantityIsWhole($quantity))
+            && $this->product?->acceptsStockQuantity($this->stockQuantity($quantity));
     }
 
     public function productSize(): BelongsTo

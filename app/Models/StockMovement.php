@@ -44,18 +44,24 @@ class StockMovement extends Model
 {
     use HasCompany, HasFactory;
 
-    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in', 'production_output', 'curing_release_in'];
+    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in', 'opening_stock', 'production_output', 'curing_release_in'];
 
     public const NEGATIVE_TYPES = ['sale_out', 'transfer_out', 'adjustment_out', 'damage_out', 'purchase_receipt_reversal', 'production_consumption', 'curing_release_out', 'curing_damage'];
 
     protected static function booted(): void
     {
         static::updating(function (self $movement): void {
+            if ($movement->movement_type === 'opening_stock') {
+                throw new LogicException('Posted Opening Stock movements are immutable.');
+            }
             if ($movement->production_curing_release_id) {
                 throw new LogicException('Posted curing release movements are immutable.');
             }
         });
         static::deleting(function (self $movement): void {
+            if ($movement->movement_type === 'opening_stock') {
+                throw new LogicException('Posted Opening Stock movements cannot be deleted.');
+            }
             if ($movement->production_curing_release_id) {
                 throw new LogicException('Posted curing release movements cannot be deleted.');
             }

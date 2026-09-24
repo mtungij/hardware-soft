@@ -530,6 +530,12 @@ $save = function () {
                 @error('measurement_type_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 
+            @if (auth()->user()->hasAnyRole(['Super Admin', 'Admin']))
+                <div class="self-end text-sm md:col-span-2 xl:col-span-3">
+                    <a href="{{ route('units.index') }}" target="_blank" rel="noopener" class="font-bold text-cyan-700 hover:underline">+ Ongeza Kipimo</a>
+                </div>
+            @endif
+
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Purchase Unit
                 <select wire:model.live="purchase_unit_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">

@@ -57,6 +57,7 @@ class ProductUnitConversionService
             ->where('product_id', $product->id)
             ->where('active', true)
             ->where('can_purchase', true)
+            ->whereHas('unit', fn ($query) => $query->where('status', 'active'))
             ->orderBy('id')
             ->get();
     }
@@ -68,7 +69,12 @@ class ProductUnitConversionService
 
     public function resolveForPurchase(Product $product, ?int $conversionId, bool $lockForUpdate = false): ?ProductUnitConversion
     {
-        return $this->resolve($product, $conversionId, 'can_purchase', $lockForUpdate);
+        $conversion = $this->resolve($product, $conversionId, 'can_purchase', $lockForUpdate);
+        if ($conversion && $conversion->unit?->status !== 'active') {
+            throw ValidationException::withMessages(['unit' => 'The selected purchase unit is inactive.']);
+        }
+
+        return $conversion;
     }
 
     public function resolveForSale(Product $product, ?int $conversionId): ?ProductUnitConversion
@@ -161,10 +167,6 @@ class ProductUnitConversionService
             $messages["{$key}.unit_id"] = 'Select a unit belonging to this company.';
         } elseif ((int) $unit->id === (int) $product->unit_id) {
             $messages["{$key}.unit_id"] = 'The base stock unit must not be repeated as an alternative unit.';
-        } elseif ($unit->measurement_type_id && $product->measurement_type_id
-            && (int) $unit->measurement_type_id !== (int) $product->measurement_type_id
-            && $unit->measurementType()->value('code') !== MeasurementType::COUNT) {
-            $messages["{$key}.unit_id"] = 'The alternative unit is incompatible with the product measurement type.';
         }
 
         if (! is_numeric($row['conversion_factor'] ?? null) || (float) $row['conversion_factor'] <= 0) {

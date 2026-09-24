@@ -66,13 +66,14 @@ mount(function (GoodsReceivingNote $receipt) {
                             @endif
                         </td>
                         <td class="px-4 py-3 font-mono">{{ $item->product?->sku }}</td>
-                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ $item->purchaseUnit?->short_name }}</td>
-                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->previously_received_quantity) }} {{ $item->purchaseUnit?->short_name }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }} {{ ($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name) }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->previously_received_quantity) }} {{ ($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name) }}</td>
                         <td class="px-4 py-3 font-bold">
-                            {{ \App\Support\NumberFormatter::quantity($item->received_quantity) }} {{ $item->purchaseUnit?->short_name }}
-                            <span class="block text-xs text-slate-500">Stock +{{ \App\Support\NumberFormatter::quantity($item->stock_quantity) }} {{ $item->stockUnit?->short_name }}</span>
+                            {{ \App\Support\NumberFormatter::quantity($item->received_quantity) }} {{ ($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name) }}
+                            <span class="block text-xs text-slate-500">Stock +{{ \App\Support\NumberFormatter::quantity($item->stock_quantity) }} {{ ($item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name) }}</span>
+                            <span class="block text-xs text-slate-500">1 {{ $item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name }} = {{ \App\Support\NumberFormatter::quantity($item->conversion_factor_snapshot) }} {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}</span>
                         </td>
-                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money(($item->unit_cost ?: $item->cost_price)) }} / {{ $item->purchaseUnit?->short_name }}</td>
+                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money(($item->unit_cost ?: $item->cost_price)) }} / {{ ($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name) }}</td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money(($item->total_cost ?: ((float) $item->received_quantity * (float) $item->cost_price))) }}</td>
                         <td class="px-4 py-3">{{ $item->stockLocation ? InventorySettings::stockLocationLabel($item->stockLocation) : '-' }}</td>
                         <td class="px-4 py-3">{{ $item->batch_number ?: '-' }}</td>

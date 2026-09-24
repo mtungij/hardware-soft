@@ -2,10 +2,7 @@
     @php
         $baseUnitForConversions = filled($unit_id) ? \App\Models\Unit::find($unit_id) : null;
         $conversionUnits = filled($measurement_type_id)
-            ? \App\Models\Unit::query()->where('status', 'active')->where(fn ($query) => $query
-                ->where('measurement_type_id', $measurement_type_id)
-                ->orWhereHas('measurementType', fn ($type) => $type->where('code', \App\Models\MeasurementType::COUNT)))
-                ->orderBy('name')->get()
+            ? \App\Models\Unit::query()->where('status', 'active')->orderBy('name')->get()
             : collect();
         $unitConversionRows = is_iterable($unit_conversions ?? null)
             ? $unit_conversions

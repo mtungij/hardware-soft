@@ -38,8 +38,8 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
             </select>
             <select wire:model.live="typeFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">All types</option>
-                @foreach (['purchase_in', 'purchase_receipt', 'transfer_in', 'transfer_out', 'sale_out', 'adjustment_in', 'adjustment_out', 'damage_out', 'return_in'] as $type)
-                    <option value="{{ $type }}">{{ $type }}</option>
+                @foreach (['opening_stock', 'purchase_in', 'purchase_receipt', 'transfer_in', 'transfer_out', 'sale_out', 'adjustment_in', 'adjustment_out', 'damage_out', 'return_in'] as $type)
+                    <option value="{{ $type }}">{{ $type === 'opening_stock' ? 'Opening Stock' : $type }}</option>
                 @endforeach
             </select>
             <input wire:model.live="dateFrom" type="date" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -66,13 +66,13 @@ state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateF
                     <td class="px-4 py-3">{{ $movement->movement_date->format('d M Y') }}</td>
                     <td class="px-4 py-3 font-bold">{{ $movement->product?->displayNameWithSize() }}</td>
                     <td class="px-4 py-3">{{ $movement->stockLocation?->name }}</td>
-                    <td class="px-4 py-3"><span class="badge-info">{{ $movement->movement_type }}</span></td>
+                    <td class="px-4 py-3"><span class="badge-info">{{ $movement->movement_type === 'opening_stock' ? 'Opening Stock' : $movement->movement_type }}</span></td>
                     <td class="px-4 py-3 text-emerald-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::POSITIVE_TYPES, true) ? \App\Support\NumberFormatter::quantity($movement->quantity) : '-' }}</td>
                     <td class="px-4 py-3 text-red-700">{{ in_array($movement->movement_type, \App\Models\StockMovement::NEGATIVE_TYPES, true) ? \App\Support\NumberFormatter::quantity($movement->quantity) : '-' }}</td>
                     @if ($canViewCost)
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>
                     @endif
-                    <td class="px-4 py-3 text-xs">{{ class_basename($movement->reference_type) }} #{{ $movement->reference_id }}</td>
+                    <td class="px-4 py-3 text-xs">{{ $movement->posting_reference ?: class_basename($movement->reference_type).' #'.$movement->reference_id }}</td>
                     <td class="px-4 py-3">{{ $movement->creator?->name }}</td>
                 </tr>
             @empty

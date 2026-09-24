@@ -30,8 +30,13 @@
                     @foreach ($items as $index => $item)
                         @php
                             $selectedProduct = filled($item['product_id'] ?? null)
-                                ? \App\Models\Product::query()->with(['purchaseUnit.measurementType', 'unit', 'size'])->find($item['product_id'])
+                                ? \App\Models\Product::query()->with(['purchaseUnit.measurementType', 'unit', 'size', 'unitConversions.unit'])->find($item['product_id'])
                                 : null;
+                            $selectedPurchaseUnit = filled($item['purchase_unit_id'] ?? null) ? \App\Models\Unit::find($item['purchase_unit_id']) : null;
+                            $purchaseConversions = $selectedProduct?->unitConversions?->filter(fn ($row) => $row->active && $row->can_purchase && ($row->unit?->status === 'active' || (string) ($item['product_unit_conversion_id'] ?? '') === (string) $row->id)) ?? collect();
+                            $hasLegacyPurchaseUnit = $selectedProduct?->purchase_unit_id
+                                && (int) $selectedProduct->purchase_unit_id !== (int) $selectedProduct->unit_id
+                                && ! $purchaseConversions->contains('unit_id', $selectedProduct->purchase_unit_id);
                             $sellingPriceValue = filled($item['selling_price'] ?? null)
                                 ? $item['selling_price']
                                 : ($selectedProduct?->selling_price ?? '');
@@ -61,10 +66,27 @@
                                     <span class="mt-1 block text-xs font-semibold text-amber-600">Select supplier before choosing products.</span>
                                 @endif
                             </td>
-                            <td class="px-3 py-3 font-bold">{{ $selectedProduct?->purchaseUnit?->short_name ?: $selectedProduct?->unit?->short_name ?: '-' }}</td>
+                            <td class="px-3 py-3 font-bold">
+                                <select wire:change="selectPurchaseUnit({{ $index }}, $event.target.value)" @disabled(! $selectedProduct) class="w-32 rounded-lg border-slate-200 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-navy-950">
+                                    @if ($selectedProduct)
+                                        <option value="base" @selected(($item['use_base_unit'] ?? false))>{{ $selectedProduct->unit?->short_name }}</option>
+                                        @if ($hasLegacyPurchaseUnit)
+                                            <option value="configured" @selected(! ($item['use_base_unit'] ?? false) && blank($item['product_unit_conversion_id'] ?? null))>{{ $selectedProduct->purchaseUnit?->short_name }}</option>
+                                        @endif
+                                        @foreach ($purchaseConversions as $conversion)
+                                            <option value="{{ $conversion->id }}" @selected((string) ($item['product_unit_conversion_id'] ?? '') === (string) $conversion->id)>{{ $conversion->unit?->short_name }}</option>
+                                        @endforeach
+                                    @else
+                                        <option value="">Chagua bidhaa kwanza</option>
+                                    @endif
+                                </select>
+                                @if ($selectedProduct)
+                                    <span class="mt-1 block text-xs text-slate-500">1 {{ $selectedPurchaseUnit?->short_name }} = {{ \App\Support\NumberFormatter::quantity($item['purchase_conversion_factor'] ?? 1) }} {{ $selectedProduct->unit?->short_name }}</span>
+                                @endif
+                            </td>
                             <td class="px-3 py-3">
-                                <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedProduct?->purchaseUnit?->measurementType?->code === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedProduct->purchaseUnit?->short_name ?: $selectedProduct->unit?->short_name }}</span>@endif
+                                <input wire:model.live="items.{{ $index }}.ordered_quantity" type="number" step="{{ $selectedPurchaseUnit?->measurementType?->code === \App\Models\MeasurementType::COUNT ? '1' : '0.0001' }}" class="w-28 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
+                                @if ($selectedProduct)<span class="mt-1 block text-xs font-semibold text-slate-500">{{ $selectedPurchaseUnit?->short_name ?: $selectedProduct->unit?->short_name }}</span>@endif
                                 @error("items.{$index}.ordered_quantity") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                             </td>
                             <td class="px-3 py-3">

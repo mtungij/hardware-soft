@@ -68,14 +68,16 @@ test('generic alternatives are product specific active and directly normalized t
         ->toThrow(ValidationException::class);
 
     $ton = Unit::where('company_id', $this->branch->company_id)->where('short_name', 'ton')->firstOrFail();
-    expect(fn () => ProductUnitConversion::create([
+    $productSpecificTon = ProductUnitConversion::create([
         'company_id' => $this->branch->company_id,
         'product_id' => $this->product->id,
         'unit_id' => $ton->id,
         'conversion_factor' => 1000,
-        'can_sell' => true,
+        'can_purchase' => true,
+        'can_sell' => false,
         'active' => true,
-    ]))->toThrow(ValidationException::class, 'incompatible');
+    ]);
+    expect($productSpecificTon->baseQuantity(2))->toBe(2000.0);
 });
 
 test('an existing product can add and later deactivate a conversion from edit product', function () {
@@ -228,6 +230,8 @@ test('purchase selection uses package purchase price and rejects a purchase-disa
     Volt::test('purchases.create')
         ->set('supplier_id', (string) $supplier->id)
         ->call('selectProduct', 0, (string) $this->product->id)
+        ->assertSet('items.0.use_base_unit', true)
+        ->call('selectPurchaseUnit', 0, (string) $conversion->id)
         ->assertSet('items.0.product_unit_conversion_id', (string) $conversion->id)
         ->assertSet('items.0.purchase_conversion_factor', '50.0000')
         ->assertSet('items.0.cost_price', 700000.0);

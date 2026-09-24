@@ -15,8 +15,11 @@ state(['statusFilter' => '']);
 ?>
 
 <div>
-    <x-page-header title="Stock Adjustments" description="Request and track stock adjustments by location." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Adjustments' => null]">
+    <x-page-header title="Stock Adjustments" description="Use this after a physical count when HARDEX quantity differs from physical stock." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Adjustments' => null]">
         <a href="{{ route('stock-adjustments.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Create Adjustment</a>
+        @if (\App\Support\InventorySettings::warehouseEnabled() && auth()->user()->can('opening_stock.create'))
+            <a href="{{ route('opening-stock.create') }}" wire:navigate class="rounded-xl border border-cyan-200 px-4 py-2 text-sm font-bold text-cyan-700">Entering stock you already had before HARDEX? Create Opening Stock</a>
+        @endif
         @if (auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']))
             <a href="{{ route('stock-adjustments.approve') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Approve</a>
         @endif

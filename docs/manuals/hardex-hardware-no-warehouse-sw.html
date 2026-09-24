@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="sw">
+<head>
+<meta charset="utf-8">
+<title>HARDEX — Mwongozo Mfupi wa Matumizi Bila Warehouse</title>
+<style>
+@page { size:A4; margin:0; }
+* { box-sizing:border-box; }
+html,body { margin:0; font-family:Arial,Helvetica,sans-serif; color:#193245; }
+body { background:#dfe8ec; }
+.page { width:210mm; height:297mm; margin:0 auto 8px; padding:16mm 17mm 15mm; background:#fff; position:relative; overflow:hidden; break-after:page; }
+.page:last-child { break-after:auto; }
+@media print { body { background:#fff; } .page { margin:0; } }
+.top { height:5mm; margin:-16mm -17mm 12mm; background:linear-gradient(90deg,#f47b20 0 29%,#03a8c9 29% 100%); }
+.kicker { color:#087f9b; font-size:9pt; letter-spacing:1.5px; font-weight:800; text-transform:uppercase; margin:0 0 3mm; }
+h1,h2,p { margin:0; }
+h1 { font-size:34pt; line-height:1.08; }
+h2 { font-size:23pt; line-height:1.13; color:#103a52; margin-bottom:3mm; }
+.intro { font-size:12.5pt; color:#526c7d; margin-bottom:5mm; }
+.figure { margin:5mm 0 4mm; break-inside:avoid; }
+.figure img { width:100%; height:auto; max-height:105mm; display:block; object-fit:contain; border:1px solid #c9dce3; }
+.figure figcaption { font-size:9pt; color:#5b7381; margin-top:2mm; }
+.steps { list-style:none; counter-reset:step; padding:0; margin:5mm 0 0; display:grid; grid-template-columns:1fr 1fr; gap:3mm 5mm; }
+.steps li { counter-increment:step; min-height:14mm; display:flex; align-items:center; gap:3mm; padding:2.5mm 3mm; border:1px solid #d9e7ec; border-radius:2.5mm; background:#f8fbfc; font-size:12pt; font-weight:700; line-height:1.2; }
+.steps li::before { content:counter(step); flex:none; width:8mm; height:8mm; display:grid; place-items:center; border-radius:50%; background:#f47b20; color:#fff; font-size:10pt; }
+.note { margin-top:5mm; padding:4mm 5mm; border-left:1.5mm solid #03a8c9; background:#ecf8fa; font-size:12pt; line-height:1.35; }
+.note strong { color:#103a52; }
+.example { margin-top:4mm; padding:4mm 5mm; border-left:1.5mm solid #f47b20; background:#fff4e8; font-size:11.5pt; line-height:1.42; }
+.gloss { display:grid; grid-template-columns:1fr 1fr 1fr; gap:3mm; margin-top:4mm; }
+.gloss div { padding:3mm; border:1px solid #cfe3e9; border-radius:2mm; background:#f8fbfc; font-size:10.5pt; line-height:1.25; }
+.gloss strong { display:block; color:#087f9b; margin-bottom:1mm; }
+.footer { position:absolute; left:17mm; right:17mm; bottom:8mm; border-top:1px solid #cddfe5; padding-top:2mm; display:flex; justify-content:space-between; color:#5b7582; font-size:8pt; }
+.cover { background:linear-gradient(145deg,#102f47,#17445d 65%,#0f7c91); color:#fff; }
+.cover h1 { color:#fff; }
+.cover .top { margin-bottom:24mm; }
+.cover img { width:49mm; max-height:34mm; object-fit:contain; background:#fff; padding:3mm; border-radius:3mm; margin-bottom:25mm; }
+.cover .kicker { color:#b5e7ef; }
+.cover .subtitle { font-size:24pt; font-weight:800; margin:8mm 0 4mm; }
+.cover .small { color:#c8e9ef; font-size:12pt; line-height:1.6; margin-top:23mm; }
+.cover .stripe { position:absolute; left:0; right:0; bottom:24mm; height:8mm; background:#f47b20; }
+.cover .footer { border-color:#79aebd; color:#d1e9ee; }
+.flow-list { list-style:none; padding:0; margin:9mm auto 0; max-width:140mm; }
+.flow-list li { display:flex; align-items:center; gap:5mm; font-size:17pt; font-weight:800; padding:4.5mm 5mm; background:#eef8fa; border:1px solid #cce6ed; border-radius:3mm; }
+.flow-list .num { flex:none; width:11mm; height:11mm; display:grid; place-items:center; border-radius:50%; background:#f47b20; color:#fff; font-size:13pt; }
+.flow-list .arrow { text-align:center; background:none; border:none; padding:1mm; color:#f47b20; font-size:17pt; }
+.flow-page .note { margin-top:12mm; }
+</style>
+</head>
+<body>
+<section class="page cover"><div class="top"></div>
+<img src="../../public/images/hardex.png" alt="HARDEX">
+<div class="kicker">Mwongozo mfupi wa kazi za kila siku</div>
+<h1>HARDEX<br>HARDWARE ERP</h1>
+<p class="subtitle">MWONGOZO WA MATUMIZI</p>
+<p style="font-size:17pt;color:#b5e7ef">Hardware Bila Warehouse</p>
+<p class="small">Kwa mfanyakazi mpya wa duka la hardware.<br>Hatua fupi, picha halisi, kazi za kila siku.</p>
+<div class="stripe"></div><div class="footer"><span>HARDEX POS</span><span>1</span></div></section>
+
+<section class="page flow-page"><div class="top"></div><div class="kicker">Anza hapa</div><h2>Hatua tano za kazi ya kila siku</h2>
+<p class="intro">Fuata mpangilio huu kutoka kupokea bidhaa hadi kuangalia mauzo.</p>
+<ol class="flow-list">
+<li><span class="num">1</span>ONGEZA BIDHAA</li><li class="arrow">↓</li>
+<li><span class="num">2</span>INGIZA IDADI</li><li class="arrow">↓</li>
+<li><span class="num">3</span>ANGALIA STOCK</li><li class="arrow">↓</li>
+<li><span class="num">4</span>UZA</li><li class="arrow">↓</li>
+<li><span class="num">5</span>ANGALIA MAUZO</li>
+</ol>
+<div class="note"><strong>Bila Warehouse:</strong> bidhaa unazoingiza zinafika moja kwa moja kwenye sehemu ya mauzo.</div>
+<div class="footer"><span>HARDEX · Mwongozo mfupi</span><span>2</span></div></section>
+
+<section class="page"><div class="top"></div><div class="kicker">Hatua 1</div><h2>Jinsi ya Kuongeza Bidhaa</h2>
+<figure class="figure"><img src="assets/screenshots/01-add-product.png" alt="Fomu ya kuongeza bidhaa"><figcaption>Picha 1: Fomu ya kuongeza bidhaa.</figcaption></figure>
+<ol class="steps">
+<li>Fungua <strong>Bidhaa</strong>.</li><li>Bonyeza <strong>Create Product</strong>.</li>
+<li>Weka jina la bidhaa.</li><li>Chagua kundi.</li>
+<li>Chagua kipimo.</li><li>Weka bei ya kununua.</li>
+<li>Weka bei ya kuuza.</li><li>Weka bei ya jumla ikiwa inatumika.</li>
+<li>Bonyeza <strong>Save Product</strong>.</li>
+</ol>
+<div class="footer"><span>HARDEX · Mwongozo mfupi</span><span>3</span></div></section>
+
+<section class="page"><div class="top"></div><div class="kicker">Hatua 2</div><h2>Jinsi ya Kuingiza Idadi ya Bidhaa</h2>
+<figure class="figure"><img src="assets/screenshots/02-direct-stock-in.png" alt="Fomu ya kuingiza bidhaa moja kwa moja"><figcaption>Picha 2: Ingiza idadi ya bidhaa.</figcaption></figure>
+<ol class="steps">
+<li>Fungua <strong>Ingiza Stoo Moja kwa Moja</strong>.</li><li>Chagua bidhaa.</li>
+<li>Weka idadi iliyopokelewa.</li><li>Hakiki bei ya kununua.</li>
+<li>Chagua sababu.</li><li>Bonyeza <strong>Save Direct Stock In</strong>.</li>
+</ol>
+<div class="example"><strong>Mfano:</strong> Umepokea Nyundo 10. Chagua Nyundo. Weka <strong>Quantity = 10</strong>. Bonyeza <strong>Save Direct Stock In</strong>.</div>
+<div class="note">Stock itaingia moja kwa moja kwenye sehemu ya mauzo.</div>
+<div class="footer"><span>HARDEX · Mwongozo mfupi</span><span>4</span></div></section>
+
+<section class="page"><div class="top"></div><div class="kicker">Hatua 3</div><h2>Jinsi ya Kuona Stock Iliyopo</h2>
+<figure class="figure"><img src="assets/screenshots/04-dispensing-stock.png" alt="Orodha ya stoo ya mauzo"><figcaption>Picha 3: Angalia stock iliyopo dukani.</figcaption></figure>
+<ol class="steps">
+<li>Fungua <strong>Ghala → Stoo ya Mauzo</strong>.</li><li>Tafuta bidhaa.</li>
+<li>Angalia <strong>Dispensing Qty</strong>.</li>
+</ol>
+<div class="gloss"><div><strong>Dispensing Qty</strong>Idadi iliyopo dukani</div><div><strong>Low Stock</strong>Bidhaa imebaki kidogo</div><div><strong>Out of Stock</strong>Bidhaa imeisha</div></div>
+<div class="example"><strong>Mfano:</strong> Claw Hammer = 9 pcs. Maana yake nyundo 9 zipo dukani.</div>
+<div class="footer"><span>HARDEX · Mwongozo mfupi</span><span>5</span></div></section>
+
+<section class="page"><div class="top"></div><div class="kicker">Hatua 4</div><h2>Jinsi ya Kuuza</h2>
+<figure class="figure"><img src="assets/screenshots/03-pos-cart-payment.png" alt="POS na kikapu cha malipo"><figcaption>Picha 4: Uza bidhaa kupitia POS.</figcaption></figure>
+<ol class="steps">
+<li>Fungua <strong>Mauzo ya POS</strong>.</li><li>Tafuta bidhaa.</li>
+<li>Bonyeza bidhaa.</li><li>Weka <strong>Quantity</strong>.</li>
+<li>Hakiki bei.</li><li>Chagua mteja ikiwa anahitajika.</li>
+<li>Chagua njia ya malipo.</li><li>Bonyeza <strong>Kamilisha Mauzo</strong>.</li>
+</ol>
+<div class="note"><strong>Jumla Kuu</strong> ni kiasi anachotakiwa kulipa mteja. Stock inapungua moja kwa moja baada ya mauzo.</div>
+<div class="footer"><span>HARDEX · Mwongozo mfupi</span><span>6</span></div></section>
+
+<section class="page"><div class="top"></div><div class="kicker">Hatua 5</div><h2>Jinsi ya Kuona Mauzo</h2>
+<figure class="figure"><img src="assets/screenshots/06-sales-list.png" alt="Orodha ya mauzo"><figcaption>Picha 5: Orodha ya mauzo na risiti.</figcaption></figure>
+<ol class="steps">
+<li>Fungua <strong>Mauzo</strong>.</li><li>Chagua <strong>Orodha ya Mauzo / Sales</strong>.</li>
+<li>Tafuta kwa tarehe, mteja au namba ya sale.</li><li>Angalia jumla ya mauzo.</li>
+<li>Fungua sale kuona maelezo.</li><li>Print receipt ikiwa inahitajika.</li>
+</ol>
+<div class="footer"><span>HARDEX · Mwongozo mfupi</span><span>7</span></div></section>
+</body></html>

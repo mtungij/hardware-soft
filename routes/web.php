@@ -237,6 +237,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('products/create', 'products.create')->middleware('can:products.create')->name('products.create');
     Volt::route('products/{product}/edit', 'products.edit')->middleware('can:products.edit')->name('products.edit');
     Volt::route('direct-stock-in', 'direct-stock-in.index')->middleware('can:stock.direct_stock_in')->name('direct-stock-in.index');
+    Volt::route('opening-stock', 'opening-stock.index')->middleware(['warehouse.enabled', 'can:opening_stock.view'])->name('opening-stock.index');
+    Volt::route('opening-stock/create', 'opening-stock.create')->middleware(['warehouse.enabled', 'can:opening_stock.create'])->name('opening-stock.create');
+    Volt::route('opening-stock/{openingStock}', 'opening-stock.show')->middleware(['warehouse.enabled', 'can:opening_stock.view'])->name('opening-stock.show');
     Volt::route('pos', 'pos.index')->middleware('can:sales.create')->name('pos.index');
     Volt::route('sales', 'sales.index')->middleware('can:sales.view')->name('sales.index');
     Volt::route('sales/{sale}', 'sales.show')->middleware('can:sales.view')->name('sales.show');

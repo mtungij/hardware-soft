@@ -639,7 +639,7 @@ class ReportExportService
         $headers = $canViewCost ? ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Cost', 'Created By'] : ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Created By'];
 
         return ['Stock Movement Report', $headers, $rows->map(function ($movement) use ($canViewCost): array {
-            $row = [$this->formatDate($movement->movement_date), $movement->product?->displayNameWithSize(), $movement->stockLocation?->name, $movement->movement_type, $movement->quantity];
+            $row = [$this->formatDate($movement->movement_date), $movement->product?->displayNameWithSize(), $movement->stockLocation?->name, ($movement->movement_type === 'opening_stock' ? 'Opening Stock' : $movement->movement_type), $movement->quantity];
             if ($canViewCost) {
                 $row[] = $this->formatCurrency($movement->unit_cost);
             }

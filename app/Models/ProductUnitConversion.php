@@ -43,11 +43,6 @@ class ProductUnitConversion extends Model
                 throw ValidationException::withMessages(['conversion_factor' => 'Conversion factor must be greater than zero.']);
             }
 
-            if ($unit->measurement_type_id && $product->measurement_type_id
-                && (int) $unit->measurement_type_id !== (int) $product->measurement_type_id
-                && $unit->measurementType()->value('code') !== MeasurementType::COUNT) {
-                throw ValidationException::withMessages(['unit_id' => 'The alternative unit is incompatible with the product measurement type.']);
-            }
         });
     }
 

@@ -33,7 +33,7 @@ test('a user can create and classify a Unicode unit from the Units module', func
         ->and($unit->description)->toBe('User-created cubic drum unit.');
 });
 
-test('a newly created active volume unit immediately appears only for volume products', function () {
+test('a custom volume unit is restricted as a base unit but available for explicit purchase conversion', function () {
     $volume = MeasurementType::where('code', MeasurementType::VOLUME)->firstOrFail();
     $weight = MeasurementType::where('code', MeasurementType::WEIGHT)->firstOrFail();
 
@@ -52,7 +52,9 @@ test('a newly created active volume unit immediately appears only for volume pro
         ->set('measurement_type_id', (string) $volume->id)
         ->assertSee('Fluid Ounce / fl oz')
         ->set('measurement_type_id', (string) $weight->id)
-        ->assertDontSee('Fluid Ounce / fl oz');
+        ->assertSee('Fluid Ounce / fl oz');
+    expect(ProductMeasurementOptions::baseUnits(MeasurementType::WEIGHT)->pluck('short_name'))->not->toContain('fl oz')
+        ->and(ProductMeasurementOptions::purchaseUnits(MeasurementType::WEIGHT)->pluck('short_name'))->toContain('fl oz');
 });
 
 test('inactive user-created units are excluded from product forms', function () {

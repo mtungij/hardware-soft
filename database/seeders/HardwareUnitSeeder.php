@@ -23,6 +23,7 @@ class HardwareUnitSeeder extends Seeder
             ['name' => 'Kilogram', 'symbol' => 'kg', 'measurement' => MeasurementType::WEIGHT],
             ['name' => 'Gram', 'symbol' => 'g', 'measurement' => MeasurementType::WEIGHT],
             ['name' => 'Ton', 'symbol' => 'ton', 'measurement' => MeasurementType::WEIGHT],
+            ['name' => 'Tonne', 'symbol' => 'tonne', 'code' => 'tonne', 'measurement' => MeasurementType::WEIGHT],
             ['name' => 'Litre', 'symbol' => 'L', 'code' => 'l', 'measurement' => MeasurementType::VOLUME],
             ['name' => 'Millilitre', 'symbol' => 'ml', 'code' => 'ml', 'measurement' => MeasurementType::VOLUME],
             ['name' => 'Cubic Metre', 'symbol' => 'm³', 'code' => 'm3', 'measurement' => MeasurementType::VOLUME],
@@ -57,7 +58,7 @@ class HardwareUnitSeeder extends Seeder
                     : null;
 
                 Unit::query()->updateOrCreate(
-                    $code
+                    $code && $shortName !== 'tonne'
                         ? ['company_id' => $company->id, 'code' => $code]
                         : ['company_id' => $company->id, 'short_name' => $shortName],
                     [

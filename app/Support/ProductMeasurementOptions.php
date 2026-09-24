@@ -37,14 +37,14 @@ class ProductMeasurementOptions
     }
 
     /**
-     * Purchase packaging may intentionally differ from the product measurement type.
+     * Purchase units use an explicit factor on each product, so their measurement
+     * category may differ from the base unit (for example tonne to bags).
      *
      * @return Collection<int, Unit>
      */
     public static function purchaseUnits(string $measurementCode, ?int $includeUnitId = null): Collection
     {
         return Unit::query()
-            ->with('measurementType')
             ->where(function ($query) use ($includeUnitId): void {
                 $query->where('status', 'active');
 
@@ -53,11 +53,7 @@ class ProductMeasurementOptions
                 }
             })
             ->orderBy('name')
-            ->get()
-            ->filter(fn (Unit $unit): bool => $unit->id === $includeUnitId
-                || $unit->measurementType?->code === MeasurementType::COUNT
-                || self::unitIsAllowed($unit, $measurementCode))
-            ->values();
+            ->get();
     }
 
     /**
