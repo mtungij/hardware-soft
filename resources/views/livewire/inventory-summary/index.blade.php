@@ -1,11 +1,11 @@
 <?php
 
-use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Product;
 use App\Models\StockLocation;
 use App\Services\InventoryService;
 use App\Support\AuthorizationScope;
+use App\Support\InventorySettings;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -24,7 +24,7 @@ mount(function () {
 ?>
 
 <div>
-    <x-page-header title="Inventory Summary" description="Combined stock position by Main Store and Dispensing Area." :breadcrumbs="['Dashboard' => route('dashboard'), 'Inventory Summary' => null]" />
+    <x-page-header title="Inventory Summary" description="Stock across authorised locations, with a breakdown for each location." :breadcrumbs="['Dashboard' => route('dashboard'), 'Inventory Summary' => null]" />
 
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-4">
@@ -44,40 +44,64 @@ mount(function () {
         </div>
 
         @php
-            $branchId = auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id');
-            $allowedLocationIds = AuthorizationScope::stockLocationIds(auth()->user());
-            $store = StockLocation::where('branch_id', $branchId)->where('type', 'store')->whereIn('id', $allowedLocationIds)->first();
-            $dispensing = StockLocation::where('branch_id', $branchId)->where('type', 'dispensing')->whereIn('id', $allowedLocationIds)->first();
+            $branchId = InventorySettings::branchId();
+            $locations = StockLocation::query()
+                ->where(fn ($query) => $query->where('branch_id', $branchId)->orWhereNull('branch_id'))
+                ->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user(), 'can_view'))
+                ->where('status', 'active')->where('is_active', true)
+                ->orderBy('name')->get();
+            if (! InventorySettings::warehouseEnabled()) {
+                $canonicalId = app(InventoryService::class)->getDispensingLocation($branchId)->id;
+                $locations = $locations->where('id', $canonicalId);
+            }
             $inventory = app(InventoryService::class);
             $rows = Product::with(['category', 'measurementType', 'unit', 'size'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('sku', 'like', "%{$search}%")))
                 ->when($categoryFilter, fn ($query) => $query->where('category_id', $categoryFilter))
-                ->orderBy('name')
-                ->get()
-                ->map(function ($product) use ($inventory, $store, $dispensing, $branchId) {
-                    $storeQty = $store ? $inventory->getProductStock($product->id, $store->id, $branchId) : 0;
-                    $dispensingQty = $dispensing ? $inventory->getProductStock($product->id, $dispensing->id, $branchId) : 0;
-                    $totalQty = $storeQty + $dispensingQty;
+                ->orderBy('name')->get()
+                ->map(function (Product $product) use ($locations, $inventory, $branchId) {
+                    $balances = $locations->map(function (StockLocation $location) use ($product, $inventory, $branchId) {
+                        $warehouse = $location->is_warehouse || $location->type === 'warehouse' || $location->code === 'MAIN-STORE';
+                        return [
+                            'id' => $location->id,
+                            'name' => $location->name,
+                            'quantity' => $inventory->getProductStock($product->id, $location->id, $branchId),
+                            'selling' => ! $warehouse && $location->can_sell && $location->is_sellable,
+                        ];
+                    });
+                    $sellingQty = $balances->where('selling', true)->sum('quantity');
+                    $totalQty = $balances->sum('quantity');
+                    $warehouseQty = $totalQty - $sellingQty;
                     $status = $totalQty <= 0 ? 'out_of_stock' : ($totalQty <= (float) $product->reorder_level ? 'low_stock' : 'in_stock');
-                    return compact('product', 'storeQty', 'dispensingQty', 'totalQty', 'status');
+                    return compact('product', 'balances', 'warehouseQty', 'sellingQty', 'totalQty', 'status');
                 })
-                ->when($statusFilter, fn ($rows) => $rows->filter(fn ($row) => $row['status'] === $statusFilter)->values());
+                ->when($statusFilter, fn ($items) => $items->where('status', $statusFilter))
+                ->values();
         @endphp
 
-        <x-table :headers="['Product', 'Measurement Type', 'Size', 'Category', 'Unit', 'Main Store Qty', 'Dispensing Qty', 'Total Stock', 'Reorder', 'Status']">
+        <x-table :headers="['Product / Locations', 'Measurement Type', 'Size', 'Category', 'Unit', 'Warehouse / Other Qty', 'Total Selling Qty', 'Total Stock', 'Reorder', 'Status']">
             @forelse ($rows as $row)
                 @php $product = $row['product']; @endphp
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
-                    <td class="px-4 py-3 font-black">{{ $product->displayNameWithSize() }}</td>
+                    <td class="px-4 py-3 font-black">
+                        <details>
+                            <summary class="cursor-pointer">{{ $product->displayNameWithSize() }}</summary>
+                            <ul class="mt-2 space-y-1 text-sm font-normal">
+                                @foreach ($row['balances'] as $balance)
+                                    <li>{{ $balance['name'] }}: {{ \App\Support\NumberFormatter::quantity($balance['quantity']) }}</li>
+                                @endforeach
+                            </ul>
+                        </details>
+                    </td>
                     <td class="px-4 py-3">{{ $product->measurementType?->name ?? str($product->measurementCode())->title() }}</td>
                     <td class="px-4 py-3">{{ $product->sizeLabel() ?: '—' }}</td>
                     <td class="px-4 py-3">{{ $product->category?->name }}</td>
                     <td class="px-4 py-3">{{ $product->unit?->short_name }}</td>
-                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($row['storeQty']) }}</td>
-                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($row['dispensingQty']) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($row['warehouseQty']) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($row['sellingQty']) }}</td>
                     <td class="px-4 py-3 font-black">{{ \App\Support\NumberFormatter::quantity($row['totalQty']) }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($product->reorder_level) }}</td>
-                    <td class="px-4 py-3"><span class="{{ $row['status'] === 'in_stock' ? 'badge-success' : ($row['status'] === 'low_stock' ? 'badge-warning' : 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300') }}">{{ str($row['status'])->replace('_', ' ')->title() }}</span></td>
+                    <td class="px-4 py-3"><span class="{{ $row['status'] === 'in_stock' ? 'badge-success' : ($row['status'] === 'low_stock' ? 'badge-warning' : 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700') }}">{{ str($row['status'])->replace('_', ' ')->title() }}</span></td>
                 </tr>
             @empty
                 <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No inventory summary records found.</td></tr>

@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Branch;
 use App\Models\Announcement;
+use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\CustomerDeposit;
@@ -18,10 +18,12 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\User;
+use App\Services\FinancialReportService;
 use App\Support\AuthorizationScope;
+use App\Support\InventorySettings;
+use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 use function Livewire\Volt\computed;
@@ -43,8 +45,8 @@ $dateRange = function (): array {
         'this_week' => [now()->startOfWeek()->startOfDay(), now()->endOfWeek()->endOfDay()],
         'this_year' => [now()->startOfYear()->startOfDay(), now()->endOfYear()->endOfDay()],
         'custom' => [
-            $this->customFrom ? \Carbon\Carbon::parse($this->customFrom)->startOfDay() : now()->startOfMonth()->startOfDay(),
-            $this->customTo ? \Carbon\Carbon::parse($this->customTo)->endOfDay() : today()->endOfDay(),
+            $this->customFrom ? Carbon::parse($this->customFrom)->startOfDay() : now()->startOfMonth()->startOfDay(),
+            $this->customTo ? Carbon::parse($this->customTo)->endOfDay() : today()->endOfDay(),
         ],
         default => [now()->startOfMonth()->startOfDay(), today()->endOfDay()],
     };
@@ -160,7 +162,7 @@ $totalProfit = computed(function (): float {
 
 $totalPurchases = computed(fn (): float => auth()->user()->can('dashboard.purchase_summary') ? (float) $this->purchaseQuery()->sum('total_amount') : 0.0);
 $stockLocationValues = computed(fn (): Collection => auth()->user()->can('dashboard.stock_value')
-    ? app(\App\Services\FinancialReportService::class)->stockValueByLocation($this->activeBranchId())
+    ? app(FinancialReportService::class)->stockValueByLocation($this->activeBranchId())
     : collect());
 $customerDebts = computed(fn (): float => auth()->user()->can('dashboard.receivables')
     ? (float) AuthorizationScope::sales(Sale::query(), auth()->user())->where('status', 'completed')->whereIn('payment_status', ['unpaid', 'partial'])->when($this->activeBranchId(), fn ($query, $branchId) => $query->where('branch_id', $branchId))->sum('balance_amount')
@@ -346,7 +348,7 @@ $topSellingProducts = computed(function (): Collection {
 $recentTransactions = computed(function (): Collection {
     [$from, $to] = $this->dateRange();
     $branchId = $this->activeBranchId();
-    $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
+    $warehouseEnabled = InventorySettings::warehouseEnabled();
 
     $sales = auth()->user()->can('dashboard.sales_summary') ? AuthorizationScope::sales(Sale::query(), auth()->user())->when($branchId, fn ($query) => $query->where('branch_id', $branchId))->latest()->limit(5)->get()->map(fn (Sale $sale) => [
         'type' => 'Sale',
@@ -853,7 +855,7 @@ $recentTransactions = computed(function (): Collection {
                         'Out of Stock Products' => $this->inventorySummary['out_of_stock_products'],
                         'Low Stock Products' => $this->inventorySummary['low_stock_products'],
                         ...($warehouseEnabled ? ['Main Store Stock Items' => $this->inventorySummary['main_store_stock_items']] : []),
-                        'Dispensing Stock Items' => $this->inventorySummary['dispensing_stock_items'],
+                        'Selling Stock Items' => $this->inventorySummary['dispensing_stock_items'],
                     ] as $label => $value)
                         <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 dark:bg-white/5">
                             <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">{{ $t($label) }}</span>

@@ -7,6 +7,7 @@ use App\Models\StockLocation;
 use App\Services\InventoryService;
 use App\Services\ProductUnitConversionService;
 use App\Support\InventorySettings;
+use App\Support\UiText;
 use Illuminate\Validation\ValidationException;
 
 use function Livewire\Volt\layout;
@@ -58,7 +59,7 @@ mount(function (InventoryService $inventory) {
 
     if ($allowedLocations->count() === 1 || ($setting->inventory_mode ?? 'multi_location') === 'single_location') {
         $this->stock_location_id = (string) ($allowedLocations->first()?->id
-            ?? $inventory->getDispensingLocation((int) $this->branch_id)->id);
+            ?? (! InventorySettings::warehouseEnabled() ? $inventory->getDispensingLocation((int) $this->branch_id)->id : ''));
     }
 
     $this->quick_customer_branch_id = $this->branch_id;
@@ -91,6 +92,7 @@ $allowedSaleLocations = fn () => collect(InventorySettings::allowedSaleLocations
 
 $currentSaleLocation = function () {
     $locations = $this->allowedSaleLocations();
+
     return $locations->firstWhere('id', (int) $this->stock_location_id);
 };
 
@@ -133,6 +135,7 @@ $updatedSaleType = function () {
             $this->cart[$index]['tax_amount'] = '0';
             $this->dispatch('money-input-updated', model: "cart.{$index}.unit_price", value: '0');
             $this->dispatch('money-input-updated', model: "cart.{$index}.tax_amount", value: '0');
+
             continue;
         }
 
@@ -203,7 +206,7 @@ $saveQuickCustomer = function () {
     $this->customer_id = (string) $customer->id;
     $this->resetQuickCustomerForm();
     $this->dispatch('close-modal', 'quick-customer');
-    session()->flash('success', \App\Support\UiText::translate('Customer created and selected.'));
+    session()->flash('success', UiText::translate('Customer created and selected.'));
 };
 
 $syncDefaultPaymentAmount = function () {
@@ -288,6 +291,7 @@ $changeLineLocation = function (int $index, $locationId): void {
     $selected = $locations->firstWhere('id', $locationId);
     if (! $selected) {
         $this->addError("cart.{$index}.stock_location_id", 'Select an authorised location with available stock.');
+
         return;
     }
     $duplicate = collect($this->cart)->contains(fn (array $item, int $itemIndex): bool => $itemIndex !== $index
@@ -296,6 +300,7 @@ $changeLineLocation = function (int $index, $locationId): void {
         && (string) ($item['unit_selection'] ?? 'default') === (string) ($this->cart[$index]['unit_selection'] ?? 'default'));
     if ($duplicate) {
         $this->addError("cart.{$index}.stock_location_id", 'This product already has a cart line for that location.');
+
         return;
     }
     $this->cart[$index]['stock_location_id'] = $locationId;
@@ -356,6 +361,7 @@ $changeLineUnit = function (int $index, string $selection): void {
 
     if ($unitPrice === '') {
         $this->addError("cart.{$index}.unit_price", 'No '.$this->sale_type.' price is configured for this unit.');
+
         return;
     }
 
@@ -370,18 +376,21 @@ $addProduct = function (int $productId, $locationId = null) {
     $locations = $this->stockByLocationForProduct($productId);
     if ($locations->isEmpty()) {
         $this->addError('cart', 'This product has no stock in an authorised selling location.');
+
         return;
     }
     if (filled($locationId)) {
         $selectedLocation = $locations->firstWhere('id', (int) $locationId);
         if (! $selectedLocation) {
             $this->addError('cart', 'Select an authorised location with available stock.');
+
             return;
         }
     } elseif ($locations->count() === 1) {
         $selectedLocation = $locations->first();
     } else {
         $this->addError('cart', 'Select the source location for this product.');
+
         return;
     }
     $this->resetErrorBag('cart');
@@ -393,14 +402,16 @@ $addProduct = function (int $productId, $locationId = null) {
     $available = $baseStock * $conversionFactor;
 
     if ($available <= 0) {
-        $this->addError('cart', \App\Support\UiText::translate('Product is out of stock in selected source.'));
+        $this->addError('cart', UiText::translate('Product is out of stock in selected source.'));
+
         return;
     }
 
     $unitPrice = $this->priceForProduct($product);
 
     if ($unitPrice === '') {
-        $this->addError('cart', \App\Support\UiText::translate('Wholesale price is not set for this product.'));
+        $this->addError('cart', UiText::translate('Wholesale price is not set for this product.'));
+
         return;
     }
 
@@ -535,7 +546,7 @@ $cancelUnassignedCreditWarning = function () {
 
 $continueWithoutCustomer = function (InventoryService $inventory) {
     if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true) || ! $this->canCreateUnassignedCreditSale()) {
-        $this->addError('customer_id', \App\Support\UiText::translate('Select a customer or create a customer before completing this credit sale.'));
+        $this->addError('customer_id', UiText::translate('Select a customer or create a customer before completing this credit sale.'));
 
         return;
     }
@@ -644,12 +655,12 @@ $completeSale = function (InventoryService $inventory) {
         }
 
         if (collect($this->payments)->contains(fn ($payment) => $payment['payment_method'] === 'credit') && ! $this->canCreditSale()) {
-            throw ValidationException::withMessages(['payments' => \App\Support\UiText::translate('You are not authorized to create credit sales.')]);
+            throw ValidationException::withMessages(['payments' => UiText::translate('You are not authorized to create credit sales.')]);
         }
 
         if ($this->usesCreditPayment() && blank($this->customer_id) && ! $this->unassigned_credit_confirmed) {
             if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true) || ! $this->canCreateUnassignedCreditSale()) {
-                throw ValidationException::withMessages(['customer_id' => \App\Support\UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
+                throw ValidationException::withMessages(['customer_id' => UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
             }
 
             $this->dispatch('open-modal', 'unassigned-credit-warning');
@@ -702,7 +713,7 @@ $completeSale = function (InventoryService $inventory) {
         // session flash alone is invisible here: it renders in the layout, which is
         // outside the Livewire component's DOM and isn't touched by this AJAX response.
         session()->flash('error', $message);
-    } catch (\Throwable $exception) {
+    } catch (Throwable $exception) {
         report($exception);
         $message = 'Mauzo hayajakamilika. '.$exception->getMessage();
         $this->addError('sale', $message);

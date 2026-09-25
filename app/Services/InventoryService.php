@@ -79,6 +79,19 @@ class InventoryService
         return $this->ensureLocationIsActive($location);
     }
 
+    /** Active dispensing-classified locations in a branch, including selling counters. */
+    public function getDispensingLocations(int $branchId): EloquentCollection
+    {
+        return StockLocation::query()
+            ->where(fn ($query) => $query->where('branch_id', $branchId)->orWhereNull('branch_id'))
+            ->where('status', 'active')
+            ->where('is_active', true)
+            ->where(fn ($query) => $query->where('type', 'dispensing')->orWhere('is_dispensing_location', true))
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->get();
+    }
+
     private function ensureLocationIsActive(StockLocation $location): StockLocation
     {
         if ($location->status !== 'active' || ! $location->is_active) {
@@ -138,9 +151,14 @@ class InventoryService
 
     public function getDispensingStock(int $productId, int $branchId): float
     {
-        $location = $this->getDispensingLocation($branchId);
+        if (! InventorySettings::warehouseEnabled()) {
+            $location = $this->getDispensingLocation($branchId);
 
-        return $this->getProductStock($productId, $location->id, $branchId);
+            return $this->getProductStock($productId, $location->id, $branchId);
+        }
+
+        return $this->getDispensingLocations($branchId)
+            ->sum(fn (StockLocation $location) => $this->getProductStock($productId, $location->id, $branchId));
     }
 
     public function getAverageCost(int $productId, int $stockLocationId, ?int $branchId = null): float

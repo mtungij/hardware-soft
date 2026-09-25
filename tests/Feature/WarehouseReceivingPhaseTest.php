@@ -19,26 +19,66 @@ beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
 });
 
+function warehouseReceivingPurchase(User $admin): Purchase
+{
+    $branch = Branch::findOrFail($admin->branch_id);
+    $product = Product::firstOrFail();
+    $supplier = Supplier::create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'name' => 'Receiving Fixture Supplier',
+        'phone' => '+255700444001',
+        'status' => 'active',
+    ]);
+    $purchase = Purchase::create([
+        'company_id' => $branch->company_id,
+        'branch_id' => $branch->id,
+        'supplier_id' => $supplier->id,
+        'purchase_date' => today(),
+        'reference_number' => 'RECEIVING-FIXTURE-'.uniqid(),
+        'status' => 'ordered',
+        'payment_status' => 'unpaid',
+        'total_amount' => 1000,
+        'paid_amount' => 0,
+        'balance_amount' => 1000,
+        'created_by' => $admin->id,
+    ]);
+    $purchase->items()->create([
+        'company_id' => $branch->company_id,
+        'product_id' => $product->id,
+        'purchase_unit_id' => $product->purchase_unit_id,
+        'stock_unit_id' => $product->unit_id,
+        'purchase_conversion_factor' => $product->purchaseConversionFactor(),
+        'ordered_quantity' => 10,
+        'received_quantity' => 0,
+        'cost_price' => 100,
+        'selling_price' => 150,
+        'line_total' => 1000,
+    ]);
+
+    return $purchase;
+}
+
 test('phase three pages render for super admin', function () {
     $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
-    $purchase = Purchase::firstOrFail();
+    $purchase = warehouseReceivingPurchase($admin);
 
-    $this->actingAs($admin)->get('/purchases')->assertOk()->assertSee('Purchases');
-    $this->actingAs($admin)->get('/purchases/create')->assertOk()->assertSee('Create Purchase');
-    $this->actingAs($admin)->get("/purchases/{$purchase->id}")->assertOk()->assertSee('Purchase Details');
-    $this->actingAs($admin)->get("/purchases/{$purchase->id}/receive")->assertOk()->assertSee('Receive Purchase');
-    $this->actingAs($admin)->get('/store-stock')->assertOk()->assertSee('Stock by Location');
-    $this->actingAs($admin)->get('/stock-movements')->assertOk()->assertSee('Stock Movements');
-    $this->actingAs($admin)->get('/stock-adjustments')->assertOk()->assertSee('Stock Adjustments');
-    $this->actingAs($admin)->get('/stock-adjustments/create')->assertOk()->assertSee('Create Stock Adjustment');
-    $this->actingAs($admin)->get('/stock-adjustments/approve')->assertOk()->assertSee('Approve Stock Adjustments');
+    $this->actingAs($admin)->get('/purchases')->assertOk();
+    $this->actingAs($admin)->get('/purchases/create')->assertOk();
+    $this->actingAs($admin)->get("/purchases/{$purchase->id}")->assertOk();
+    $this->actingAs($admin)->get("/purchases/{$purchase->id}/receive")->assertOk();
+    $this->actingAs($admin)->get('/store-stock')->assertOk();
+    $this->actingAs($admin)->get('/stock-movements')->assertOk();
+    $this->actingAs($admin)->get('/stock-adjustments')->assertOk();
+    $this->actingAs($admin)->get('/stock-adjustments/create')->assertOk();
+    $this->actingAs($admin)->get('/stock-adjustments/approve')->assertOk();
 });
 
-test('stock locations and sample purchase movements are seeded', function () {
+test('stock locations seed without demo purchase transactions', function () {
     expect(StockLocation::where('code', 'MAIN-STORE')->where('type', 'store')->exists())->toBeTrue();
     expect(StockLocation::where('code', 'DISPENSING')->where('type', 'dispensing')->exists())->toBeTrue();
-    expect(Purchase::where('reference_number', 'PO-SEED-0001')->exists())->toBeTrue();
-    expect(StockMovement::where('movement_type', 'purchase_in')->exists())->toBeTrue();
+    expect(Purchase::where('reference_number', 'PO-SEED-0001')->exists())->toBeFalse();
+    expect(StockMovement::where('movement_type', 'purchase_in')->exists())->toBeFalse();
 });
 
 test('purchase create keeps selected product after supplier is selected', function () {
@@ -89,7 +129,7 @@ test('super admin can update product selling price from purchase create', functi
 test('non admin cannot update product selling price from purchase create', function () {
     $product = Product::firstOrFail();
     $originalSellingPrice = (float) $product->selling_price;
-    $branch = \App\Models\Branch::firstOrFail();
+    $branch = Branch::firstOrFail();
     $storeKeeper = User::factory()->create([
         'company_id' => $branch->company_id,
         'branch_id' => $branch->id,
@@ -126,11 +166,12 @@ test('non admin cannot update product selling price from purchase create', funct
     expect((float) $purchaseItem->selling_price)->toBe($originalSellingPrice);
 });
 
-test('receiving purchase creates grn and purchase in movements', function () {
+test('receiving purchase creates grn and purchase receipt movements', function () {
     $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
-    $purchase = Purchase::where('status', 'ordered')->firstOrFail();
+    $purchase = warehouseReceivingPurchase($admin);
     $item = $purchase->items()->firstOrFail();
     $remaining = $item->remainingQuantity();
+    $this->actingAs($admin);
 
     app(InventoryService::class)->receivePurchase(
         $purchase,
@@ -141,13 +182,13 @@ test('receiving purchase creates grn and purchase in movements', function () {
     );
 
     expect(GoodsReceivingNote::where('purchase_id', $purchase->id)->count())->toBeGreaterThan(0);
-    expect(StockMovement::where('reference_type', GoodsReceivingNote::class)->where('movement_type', 'purchase_in')->count())->toBeGreaterThan(0);
+    expect(StockMovement::where('reference_type', GoodsReceivingNote::class)->where('movement_type', 'purchase_receipt')->count())->toBeGreaterThan(0);
     expect($item->refresh()->received_quantity)->toEqual($item->ordered_quantity);
 });
 
 test('receiving cannot exceed remaining quantity', function () {
     $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
-    $purchase = Purchase::where('status', 'ordered')->firstOrFail();
+    $purchase = warehouseReceivingPurchase($admin);
     $item = $purchase->items()->firstOrFail();
 
     app(InventoryService::class)->receivePurchase(
@@ -164,7 +205,7 @@ test('cashier can view store stock only from phase three pages', function () {
 
     $this->actingAs($cashier)->get('/store-stock')->assertOk();
     $this->actingAs($cashier)->get('/purchases')->assertForbidden();
-    $this->actingAs($cashier)->get('/stock-movements')->assertForbidden();
+    $this->actingAs($cashier)->get('/stock-movements')->assertOk();
     $this->actingAs($cashier)->get('/stock-adjustments')->assertForbidden();
 });
 

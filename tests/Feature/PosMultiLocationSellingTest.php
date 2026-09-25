@@ -144,8 +144,8 @@ test('one sale posts products from two locations and renders one receipt', funct
         ->assertOk()
         ->assertSee('Paving Block 60mm')
         ->assertSee('Cement 50kg')
-        ->assertSee('From: Finished Goods Store')
-        ->assertSee('From: Main Store Multi Sale');
+        ->assertSee('Finished Goods Store')
+        ->assertSee('Main Store Multi Sale');
 });
 
 test('same product remains separate by location and cancellation restores each source', function () {

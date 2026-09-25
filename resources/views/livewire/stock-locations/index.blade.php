@@ -3,9 +3,10 @@
 use App\Models\Branch;
 use App\Models\Product;
 use App\Models\SaleItem;
+use App\Models\Setting;
 use App\Models\StockLocation;
-use App\Models\StockMovement;
 use App\Services\InventoryService;
+use App\Services\StockLocationDefaultService;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\WithPagination;
@@ -205,15 +206,7 @@ $save = function () {
     $validated['is_dispensing_location'] = $validated['is_dispensing_location'] || $validated['type'] === 'dispensing';
     $validated['is_warehouse'] = $validated['is_warehouse'] || $validated['type'] === 'warehouse';
 
-    if ($validated['is_default']) {
-        StockLocation::query()
-            ->when($validated['branch_id'], fn ($query) => $query->where('branch_id', $validated['branch_id']))
-            ->when(! $validated['branch_id'], fn ($query) => $query->whereNull('branch_id'))
-            ->when($this->editing_id, fn ($query) => $query->whereKeyNot($this->editing_id))
-            ->update(['is_default' => false]);
-    }
-
-    if (($validated['is_dispensing_location'] || $validated['type'] === 'dispensing') && ! \App\Models\Setting::query()->value('allow_multiple_dispensing_locations')) {
+    if (($validated['is_dispensing_location'] || $validated['type'] === 'dispensing') && ! Setting::query()->value('allow_multiple_dispensing_locations')) {
         $exists = StockLocation::query()
             ->where('branch_id', $validated['branch_id'])
             ->where(fn ($query) => $query->where('type', 'dispensing')->orWhere('is_dispensing_location', true))
@@ -231,11 +224,10 @@ $save = function () {
         'status' => $validated['is_active'] ? 'active' : 'inactive',
     ];
 
-    if ($this->editing_id) {
-        StockLocation::findOrFail($this->editing_id)->update($payload);
-    } else {
-        StockLocation::create([...$payload, 'created_by' => auth()->id()]);
-    }
+    app(StockLocationDefaultService::class)->save(
+        [...$payload, 'company_id' => $companyId, ...(! $this->editing_id ? ['created_by' => auth()->id()] : [])],
+        $this->editing_id ? StockLocation::findOrFail($this->editing_id) : null
+    );
 
     $this->dispatch('close-modal', 'stock-location-form');
     session()->flash('success', 'Stock location saved.');
@@ -246,6 +238,7 @@ $toggleActive = function (int $id) {
 
     if ($location->is_default && $location->isActive()) {
         session()->flash('error', 'Default location cannot be deactivated.');
+
         return;
     }
 
@@ -259,15 +252,11 @@ $makeDefault = function (int $id) {
 
     if (! $location->isActive()) {
         session()->flash('error', 'Inactive location cannot be default.');
+
         return;
     }
 
-    StockLocation::query()
-        ->where('branch_id', $location->branch_id)
-        ->whereKeyNot($location->id)
-        ->update(['is_default' => false]);
-
-    $location->update(['is_default' => true]);
+    app(StockLocationDefaultService::class)->makeDefault($location);
     session()->flash('success', 'Default stock location updated.');
 };
 

@@ -6,11 +6,10 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
-use App\Models\SalePayment;
 use App\Models\StockLocation;
 use App\Models\User;
-use App\Support\InventorySettings;
 use App\Support\AuthorizationScope;
+use App\Support\InventorySettings;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 use function Livewire\Volt\layout;
@@ -82,8 +81,9 @@ mount(function () {
             : null;
         $availableStockLocations = StockLocation::when($assignedLocationIds !== null, fn ($query) => $query->whereIn('id', $assignedLocationIds))
             ->when($branch_id, fn ($query) => $query->where('branch_id', $branch_id))
-            ->whereIn('type', ['store', 'dispensing'])
-            ->orderBy('type')
+            ->where('can_sell', true)->where('is_sellable', true)
+            ->where('status', 'active')->where('is_active', true)
+            ->orderBy('name')
             ->get();
         $exportParams = compact('search', 'status', 'payment_status', 'sale_type', 'stock_location_id', 'customer_id', 'product_id', 'category_id', 'cashier_id', 'branch_id', 'payment_method', 'view', 'date_from', 'date_to');
 

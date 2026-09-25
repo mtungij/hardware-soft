@@ -71,13 +71,21 @@ class InventorySettings
     public static function saleLocations(int $branchId): array
     {
         $inventory = app(InventoryService::class);
-        $locations = [$inventory->getDispensingLocation($branchId)->id];
-
-        if (self::salesFromStoreAllowed()) {
-            $locations[] = $inventory->getMainStoreLocation($branchId)->id;
+        if (! self::warehouseEnabled()) {
+            return [$inventory->getDispensingLocation($branchId)->id];
         }
 
-        return $locations;
+        return StockLocation::query()
+            ->where(fn ($query) => $query->where('branch_id', $branchId)->orWhereNull('branch_id'))
+            ->where('status', 'active')
+            ->where('is_active', true)
+            ->where('can_sell', true)
+            ->where('is_sellable', true)
+            ->where(fn ($query) => $query
+                ->where('type', 'dispensing')
+                ->orWhere('is_dispensing_location', true)
+                ->when(self::salesFromStoreAllowed(), fn ($query) => $query->orWhere('type', 'store')))
+            ->pluck('id')->map(fn ($id): int => (int) $id)->all();
     }
 
     /**
@@ -99,21 +107,22 @@ class InventorySettings
             }
         }
 
-        $inventory = app(InventoryService::class);
-        $locations = [];
-        $types = self::warehouseEnabled()
-            ? ($user?->allowedSalesLocationTypes() ?: ['dispensing'])
-            : ['dispensing'];
-
-        if (in_array('store', $types, true)) {
-            $locations[] = $inventory->getMainStoreLocation($branchId);
+        if (! self::warehouseEnabled()) {
+            return [app(InventoryService::class)->getDispensingLocation($branchId)];
         }
 
-        if (in_array('dispensing', $types, true)) {
-            $locations[] = $inventory->getDispensingLocation($branchId);
-        }
+        $types = $user?->allowedSalesLocationTypes() ?: ['dispensing'];
 
-        return $locations;
+        return StockLocation::query()
+            ->where(fn ($query) => $query->where('branch_id', $branchId)->orWhereNull('branch_id'))
+            ->where('status', 'active')
+            ->where('is_active', true)
+            ->where('can_sell', true)
+            ->where('is_sellable', true)
+            ->where(fn ($query) => $query
+                ->whereIn('type', $types)
+                ->when(in_array('dispensing', $types, true), fn ($query) => $query->orWhere('is_dispensing_location', true)))
+            ->orderByDesc('is_default')->orderBy('name')->get()->all();
     }
 
     public static function canUserSellFromLocation(?User $user, StockLocation $location): bool
@@ -138,7 +147,8 @@ class InventorySettings
             }
         }
 
-        return in_array($location->type, $user?->allowedSalesLocationTypes() ?: ['dispensing'], true);
+        return in_array($location->type, $user?->allowedSalesLocationTypes() ?: ['dispensing'], true)
+            || ($location->is_dispensing_location && in_array('dispensing', $user?->allowedSalesLocationTypes() ?: ['dispensing'], true));
     }
 
     public static function stockLocationLabel(StockLocation $location): string

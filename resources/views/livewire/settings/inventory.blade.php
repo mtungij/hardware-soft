@@ -33,7 +33,9 @@ mount(function (InventoryService $inventory) {
     if ((bool) $this->setting->enable_warehouse) {
         $inventory->getMainStoreLocation($branchId);
     }
-    $inventory->getDispensingLocation($branchId);
+    if (! (bool) $this->setting->enable_warehouse || $inventory->getDispensingLocations($branchId)->isEmpty()) {
+        $inventory->getDispensingLocation($branchId);
+    }
 
     $this->enable_warehouse = (bool) $this->setting->enable_warehouse;
     $this->allow_direct_stock_in = (bool) $this->setting->allow_direct_stock_in;
@@ -208,8 +210,8 @@ $save = function () {
 
             <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
                 <span>
-                    <span class="block text-sm font-black">Allow Multiple Dispensing Locations</span>
-                    <span class="mt-1 block text-xs text-slate-500">Default keeps one dispensing location per branch.</span>
+                    <span class="block text-sm font-black">Allow Multiple Selling / Dispensing Locations</span>
+                    <span class="mt-1 block text-xs text-slate-500">Enable this when one branch has more than one shop, counter or selling area. Off keeps one dispensing location per branch.</span>
                 </span>
                 <input type="checkbox" wire:model="allow_multiple_dispensing_locations" class="h-5 w-5 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500">
             </label>
