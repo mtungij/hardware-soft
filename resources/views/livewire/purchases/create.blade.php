@@ -3,12 +3,14 @@
 use App\Models\Branch;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\PurchaseCostType;
 use App\Models\StockLocation;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Services\AccountingService;
 use App\Services\InventoryService;
 use App\Services\ProductUnitConversionService;
+use App\Services\PurchaseCostBreakdownService;
 use App\Support\CompanyFeatures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -38,6 +40,9 @@ state([
     'save_status' => 'ordered',
     'send_purchase_email' => false,
     'items' => [],
+    'breakdown_open' => [],
+    'breakdown_complete' => [],
+    'new_cost_type' => '',
 ]);
 
 $toNumber = function (mixed $value): float {
@@ -65,6 +70,7 @@ $newItem = fn (): array => [
     'discount' => 0.0,
     'tax' => 0.0,
     'line_total' => 0.0,
+    'cost_breakdown' => [],
 ];
 
 $normalizeNumericState = function (): void {
@@ -117,12 +123,86 @@ $recalculateTotals = function (): void {
 };
 
 mount(function (InventoryService $inventory) {
+    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes((int) auth()->user()->company_id);
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
     $this->purchase_date = now()->toDateString();
     $this->reference_number = $inventory->generatePurchaseReference();
     $this->items = [$this->newItem()];
     $this->recalculateTotals();
 });
+
+$toggleCostBreakdown = function (int $index): void {
+    if ((float) ($this->items[$index]['cost_price'] ?? 0) <= 0) {
+        return;
+    }
+
+    $this->breakdown_open[$index] = ! ($this->breakdown_open[$index] ?? false);
+};
+
+$addCostType = function (): void {
+    abort_unless(auth()->user()?->hasAnyRole(['Super Admin', 'Admin']), 403);
+    $this->validate(['new_cost_type' => ['required', 'string', 'max:100']]);
+    $type = PurchaseCostType::query()->firstOrCreate(
+        ['company_id' => auth()->user()->company_id, 'name' => trim($this->new_cost_type)],
+        ['is_active' => true],
+    );
+    $type->update(['is_active' => true]);
+    $this->new_cost_type = '';
+    $this->dispatch('close-modal', 'purchase-cost-types');
+};
+
+$addCostComponent = function (int $index): void {
+    $this->items[$index]['cost_breakdown'][] = ['type_id' => '', 'amount' => '', 'reference' => '', 'notes' => ''];
+    $this->breakdown_complete[$index] = false;
+    $this->breakdown_open[$index] = true;
+};
+
+$removeCostComponent = function (int $index, int $row): void {
+    unset($this->items[$index]['cost_breakdown'][$row]);
+    $this->items[$index]['cost_breakdown'] = array_values($this->items[$index]['cost_breakdown']);
+    $this->breakdown_complete[$index] = false;
+    $this->breakdown_open[$index] = true;
+};
+
+$breakdownTotal = function (int $index): float {
+    return round(collect($this->items[$index]['cost_breakdown'] ?? [])->sum(fn ($row) => is_numeric($row['amount'] ?? null) ? (float) $row['amount'] : 0), 2);
+};
+
+$breakdownRemaining = function (int $index): float {
+    return round((float) ($this->items[$index]['cost_price'] ?? 0) - $this->breakdownTotal($index), 2);
+};
+
+$breakdownIsComplete = function (int $index): bool {
+    return ($this->breakdown_complete[$index] ?? false)
+        && ! empty($this->items[$index]['cost_breakdown'])
+        && abs($this->breakdownRemaining($index)) < 0.005;
+};
+
+$hasIncompleteBreakdown = function (): bool {
+    foreach ($this->items as $index => $item) {
+        if (! empty($item['cost_breakdown']) && abs($this->breakdownRemaining($index)) >= 0.005) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+$completeCostBreakdown = function (int $index): void {
+    $item = $this->items[$index] ?? null;
+    if (! $item || empty($item['cost_breakdown']) || (float) ($item['cost_price'] ?? 0) <= 0
+        || abs($this->breakdownRemaining($index)) >= 0.005) {
+        return;
+    }
+
+    app(PurchaseCostBreakdownService::class)->prepare(
+        (int) auth()->user()->company_id,
+        $item['cost_breakdown'],
+        "items.{$index}.cost_breakdown",
+    );
+    $this->breakdown_complete[$index] = true;
+    $this->breakdown_open[$index] = false;
+};
 
 $addItem = function () {
     if (blank($this->supplier_id)) {
@@ -138,6 +218,8 @@ $addItem = function () {
 $removeItem = function (int $index) {
     unset($this->items[$index]);
     $this->items = array_values($this->items);
+    $this->breakdown_open = [];
+    $this->breakdown_complete = [];
     $this->recalculateTotals();
 };
 
@@ -160,6 +242,8 @@ $selectProduct = function (int $index, string $productId) {
     $this->items[$index]['purchase_unit_id'] = $conversion?->unit_id ?: ($product?->purchase_unit_id ?: $product?->unit_id ?: '');
     $this->items[$index]['purchase_conversion_factor'] = $factor;
     $this->items[$index]['cost_price'] = $costPrice;
+    $this->items[$index]['cost_breakdown'] = [];
+    $this->breakdown_complete[$index] = false;
     $this->items[$index]['selling_price'] = $sellingPrice;
     $this->recalculateTotals();
     $this->dispatch('money-input-updated', model: "items.{$index}.cost_price", value: $costPrice);
@@ -198,10 +282,15 @@ $selectPurchaseUnit = function (int $index, string $selection): void {
         $this->items[$index]['cost_price'] = $this->toNumber($conversion->purchase_price ?? ((float) $product->buying_price * $factor));
     }
 
+    $this->items[$index]['cost_breakdown'] = [];
+    $this->breakdown_complete[$index] = false;
     $this->recalculateTotals();
 };
 
-$updatedItems = function (): void {
+$updatedItems = function (mixed $value = null, ?string $key = null): void {
+    if ($key !== null && preg_match('/^(\d+)\.(cost_price|cost_breakdown)(\.|$)/', $key, $matches)) {
+        $this->breakdown_complete[(int) $matches[1]] = false;
+    }
     $this->normalizeNumericState();
     $this->recalculateTotals();
 };
@@ -250,6 +339,11 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         'items.*.discount' => ['required', 'numeric', 'min:0'],
         'items.*.tax' => ['required', 'numeric', 'min:0'],
         'items.*.line_total' => ['required', 'numeric', 'min:0'],
+        'items.*.cost_breakdown' => ['nullable', 'array'],
+        'items.*.cost_breakdown.*.type_id' => ['nullable'],
+        'items.*.cost_breakdown.*.amount' => ['nullable'],
+        'items.*.cost_breakdown.*.reference' => ['nullable', 'string', 'max:255'],
+        'items.*.cost_breakdown.*.notes' => ['nullable', 'string', 'max:1000'],
     ]);
 
     foreach ($validated['items'] as $index => $item) {
@@ -277,8 +371,16 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
     }
 
     $canUpdateSellingPrice = $this->canUpdateSellingPrice();
+    $breakdowns = [];
+    foreach ($validated['items'] as $index => $line) {
+        $breakdowns[$index] = app(PurchaseCostBreakdownService::class)->prepare(
+            (int) auth()->user()->company_id,
+            $line['cost_breakdown'] ?? [],
+            "items.{$index}.cost_breakdown",
+        )['rows'];
+    }
 
-    $purchase = DB::transaction(function () use ($validated, $status, $total, $canUpdateSellingPrice) {
+    $purchase = DB::transaction(function () use ($validated, $status, $total, $canUpdateSellingPrice, $breakdowns) {
         $paid = $this->toNumber($validated['paid_amount']);
         $balance = max(0, $total - $paid);
 
@@ -297,7 +399,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
             'created_by' => auth()->id(),
         ]);
 
-        foreach ($validated['items'] as $item) {
+        foreach ($validated['items'] as $index => $item) {
             $product = Product::query()->with(['unit', 'purchaseUnit'])->findOrFail($item['product_id']);
             $conversion = app(ProductUnitConversionService::class)->resolveForPurchase(
                 $product,
@@ -314,7 +416,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                 ? $sellingPriceValue
                 : $this->toNumber($product->selling_price);
 
-            $purchase->items()->create([
+            $purchaseItem = $purchase->items()->create([
                 'product_id' => $item['product_id'],
                 'product_unit_conversion_id' => $conversion?->id,
                 'purchase_unit_id' => $purchaseUnit?->id ?: $product->unit_id,
@@ -333,6 +435,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
                 'selling_price' => $sellingPrice,
                 'line_total' => $lineTotal,
             ]);
+            app(PurchaseCostBreakdownService::class)->save($purchaseItem, $breakdowns[$index]);
 
             if ($canUpdateSellingPrice) {
                 $product->update(['selling_price' => $sellingPriceValue]);
@@ -376,6 +479,7 @@ $submitPurchase = function () {
 
     @php
         $canUpdateSellingPrice = $this->canUpdateSellingPrice();
+        $purchaseCostTypes = PurchaseCostType::query()->where('is_active', true)->orderBy('name')->get();
         $stockBranchId = (int) ($branch_id ?: (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id')));
         $storeLocation = StockLocation::where('branch_id', $stockBranchId)->where('type', 'store')->first();
         $inventory = app(InventoryService::class);
@@ -396,8 +500,10 @@ $submitPurchase = function () {
         ];
     @endphp
 
+    @include('livewire.purchases.partials.cost-type-manager')
+
     <x-card>
-        <form wire:submit="submitPurchase" class="space-y-6">
+        <form wire:submit="submitPurchase" @if ($this->hasIncompleteBreakdown()) wire:confirm="Cost Breakdown bado haijakamilika. Unataka kuhifadhi bila kuikamilisha?" @endif class="space-y-6">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Supplier
                     <select wire:model.live="supplier_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -506,6 +612,7 @@ $submitPurchase = function () {
                                         <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                         <input type="hidden" data-money-value value="{{ $item['cost_price'] ?? '' }}" wire:model.blur="items.{{ $index }}.cost_price">
                                     </span>
+                                    @include('livewire.purchases.partials.cost-breakdown-trigger')
                                 </td>
                                 <td class="px-3 py-3">
                                     @if ($canUpdateSellingPrice)
@@ -522,6 +629,9 @@ $submitPurchase = function () {
                                 <td class="px-3 py-3 font-black">TZS {{ \App\Support\NumberFormatter::moneyCompact($item['line_total'] ?? 0) }}</td>
                                 <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
                             </tr>
+                            @if ($breakdown_open[$index] ?? false)
+                                @include('livewire.purchases.partials.cost-breakdown', ['breakdownColspan' => 9, 'purchaseCostTypes' => $purchaseCostTypes])
+                            @endif
                         @endforeach
                     </tbody>
                 </table>
@@ -542,6 +652,8 @@ $submitPurchase = function () {
                 <p class="text-lg font-bold">TZS {{ \App\Support\NumberFormatter::moneyCompact($paid_amount) }}</p>
                 <p class="text-sm text-slate-500">Balance: TZS {{ \App\Support\NumberFormatter::moneyCompact($balance_amount) }}</p>
             </div>
+
+            @include('livewire.purchases.partials.cost-breakdown-save-warning')
 
             <div class="flex flex-wrap gap-2">
                 <button type="submit" x-on:click="$wire.$set('save_status', 'draft', false); $wire.$set('send_purchase_email', false, false)" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Save as Draft</button>

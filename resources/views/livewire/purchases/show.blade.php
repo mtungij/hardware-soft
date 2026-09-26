@@ -13,7 +13,7 @@ layout('layouts.app');
 state(['purchase' => null]);
 
 mount(function (Purchase $purchase) {
-    $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product', 'items.purchaseUnit', 'items.stockUnit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
+    $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product', 'items.costBreakdown', 'items.purchaseUnit', 'items.stockUnit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
 });
 
 $canSendEmail = fn () => auth()->user()->can('send purchase emails');
@@ -24,7 +24,7 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
 
     try {
         $service->send($this->purchase, auth()->id());
-        $this->purchase = $this->purchase->refresh()->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product', 'items.purchaseUnit', 'items.stockUnit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
+        $this->purchase = $this->purchase->refresh()->load(['supplier', 'branch', 'creator', 'receiver', 'emailSentBy', 'items.product', 'items.costBreakdown', 'items.purchaseUnit', 'items.stockUnit', 'goodsReceivingNotes.items.stockLocation', 'goodsReceivingNotes.items.product', 'goodsReceivingNotes.receiver', 'emailLogs.sentBy']);
         session()->flash('success', 'Purchase Order email sent successfully.');
     } catch (ValidationException $exception) {
         session()->flash('error', $exception->validator->errors()->first());
@@ -82,7 +82,20 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->received_quantity) }}</td>
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($item->base_received_quantity ?? $item->stockQuantity((float) $item->received_quantity)) }} {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}</td>
                         <td class="px-4 py-3 font-bold">{{ \App\Support\NumberFormatter::quantity($item->remainingQuantity()) }}</td>
-                        <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }} / {{ $item->purchaseUnit?->short_name }}</td>
+                        <td class="px-4 py-3">
+                            TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }} / {{ $item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name }}
+                            @if ($item->costBreakdown->isNotEmpty())
+                                <details class="mt-2 text-xs"><summary class="cursor-pointer font-bold text-cyan-700 dark:text-cyan-300">Cost Breakdown</summary>
+                                    <div class="mt-2 space-y-1">
+                                        @foreach ($item->costBreakdown as $component)
+                                            <p>{{ $component->cost_type_name_snapshot }}: TZS {{ \App\Support\NumberFormatter::money($component->amount) }}@if ($component->reference) · {{ $component->reference }}@endif @if ($component->notes) · {{ $component->notes }}@endif</p>
+                                        @endforeach
+                                        <p class="font-bold">Breakdown Total: TZS {{ \App\Support\NumberFormatter::money($item->costBreakdown->sum('amount')) }}</p>
+                                        <p class="{{ round($item->costBreakdown->sum('amount') * 100) === round((float) $item->cost_price * 100) ? 'text-emerald-700' : 'text-amber-700' }}">{{ round($item->costBreakdown->sum('amount') * 100) === round((float) $item->cost_price * 100) ? 'Cost breakdown matches Unit Cost.' : 'Cost breakdown does not match Unit Cost.' }}</p>
+                                    </div>
+                                </details>
+                            @endif
+                        </td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->selling_price) }}</td>
                         <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($item->line_total) }}</td>
                     </tr>

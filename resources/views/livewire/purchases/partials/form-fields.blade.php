@@ -1,3 +1,7 @@
+@php
+    $purchaseCostTypes = \App\Models\PurchaseCostType::query()->where('is_active', true)->orderBy('name')->get();
+@endphp
+
 <x-card>
     <form class="space-y-6">
         <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -94,6 +98,7 @@
                                     <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                     <input type="hidden" data-money-value value="{{ $item['cost_price'] ?? '' }}" wire:model.live="items.{{ $index }}.cost_price">
                                 </span>
+                                @include('livewire.purchases.partials.cost-breakdown-trigger')
                             </td>
                             <td class="px-3 py-3" wire:key="purchase-selling-price-{{ $index }}-{{ $item['product_id'] ?: 'no-product' }}">
                                 <span data-money-field wire:ignore class="block w-36">
@@ -104,6 +109,9 @@
                             <td class="px-3 py-3 font-black">TZS {{ \App\Support\NumberFormatter::money(($item['ordered_quantity'] ?? 0) * (float) ($item['cost_price'] ?? 0)) }}</td>
                             <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
                         </tr>
+                        @if ($breakdown_open[$index] ?? false)
+                            @include('livewire.purchases.partials.cost-breakdown', ['breakdownColspan' => 7, 'purchaseCostTypes' => $purchaseCostTypes])
+                        @endif
                     @endforeach
                 </tbody>
             </table>
@@ -122,9 +130,11 @@
             <p class="text-sm text-slate-500">Balance: TZS {{ \App\Support\NumberFormatter::money(max(0, $total - (float) $paid_amount)) }}</p>
         </div>
 
+        @include('livewire.purchases.partials.cost-breakdown-save-warning')
+
         <div class="flex flex-wrap gap-2">
-            <button type="button" wire:click="savePurchase('draft')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Save as Draft</button>
-            <button type="button" wire:click="savePurchase('ordered')" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save as Ordered</button>
+            <button type="button" @if ($this->hasIncompleteBreakdown()) wire:confirm="Cost Breakdown bado haijakamilika. Unataka kuhifadhi bila kuikamilisha?" @endif wire:click="savePurchase('draft')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Save as Draft</button>
+            <button type="button" @if ($this->hasIncompleteBreakdown()) wire:confirm="Cost Breakdown bado haijakamilika. Unataka kuhifadhi bila kuikamilisha?" @endif wire:click="savePurchase('ordered')" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save as Ordered</button>
             <a href="{{ route('purchases.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
         </div>
     </form>

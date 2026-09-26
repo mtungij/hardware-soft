@@ -2,6 +2,8 @@
 
 use App\Jobs\SendPurchaseOrderJob;
 use App\Mail\SupplierPurchaseOrderMail;
+use App\Models\Branch;
+use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseEmailLog;
 use App\Models\Supplier;
@@ -14,6 +16,44 @@ use Illuminate\Validation\ValidationException;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
+    $this->withSession(['staff_locale' => 'en']);
+
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    $branch = Branch::where('code', 'MAIN')->firstOrFail();
+    $supplier = Supplier::create([
+        'company_id' => $admin->company_id,
+        'branch_id' => $branch->id,
+        'name' => 'Purchase Email Supplier',
+        'phone' => '255700999111',
+        'email' => 'supplier@example.test',
+        'status' => 'active',
+    ]);
+    $product = Product::query()->firstOrFail();
+    $purchase = Purchase::create([
+        'company_id' => $admin->company_id,
+        'branch_id' => $branch->id,
+        'supplier_id' => $supplier->id,
+        'purchase_date' => today(),
+        'reference_number' => 'PO-EMAIL-FIXTURE',
+        'status' => 'ordered',
+        'payment_status' => 'unpaid',
+        'total_amount' => 100,
+        'paid_amount' => 0,
+        'balance_amount' => 100,
+        'created_by' => $admin->id,
+    ]);
+    $purchase->items()->create([
+        'company_id' => $admin->company_id,
+        'product_id' => $product->id,
+        'purchase_unit_id' => $product->purchase_unit_id,
+        'stock_unit_id' => $product->unit_id,
+        'purchase_conversion_factor' => $product->purchaseConversionFactor(),
+        'ordered_quantity' => 1,
+        'received_quantity' => 0,
+        'cost_price' => 100,
+        'selling_price' => 150,
+        'line_total' => 100,
+    ]);
 });
 
 test('purchase email pages and pdf render for super admin', function () {

@@ -9,8 +9,10 @@ use App\Models\StockTransfer;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\InventoryService;
+use App\Services\StockTransferNoteService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
@@ -89,7 +91,30 @@ test('mixed base units and long product names render with separate totals', func
     $this->get(route('stock-transfers.note.print', $this->transfer))->assertOk()
         ->assertSee($product->displayNameWithSize())->assertSee('Total Product Lines: 2')->assertSee('Total Quantity (note-pcs): 50')
         ->assertDontSee('Total Quantity: 70')->assertSee('word-wrap: break-word', false);
-    $this->get(route('stock-transfers.note.pdf', $this->transfer))->assertOk();
+    $noteData = app(StockTransferNoteService::class)->data($this->transfer);
+    $noteHtml = view('documents.stock-transfer-note', [...$noteData, 'isPdf' => true])->render();
+    expect(strlen($noteHtml))->toBeGreaterThan(1000);
+    expect($noteHtml)->toContain('STOCK TRANSFER NOTE', $this->transfer->transfer_number, 'Zanzibar store', 'Dispensing Area Note', $this->product->displayNameWithSize(), $product->displayNameWithSize(), '>20<', '>50<')
+        ->not->toContain('@page');
+
+    $notePdf = $this->get(route('stock-transfers.note.pdf', $this->transfer))->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf')
+        ->assertHeader('Content-Disposition', 'attachment; filename="stock-transfer-note-trf-20260909-0001.pdf"');
+    $pdfBytes = $notePdf->getContent();
+    expect($pdfBytes)->toStartWith('%PDF-')
+        ->and(strlen($pdfBytes))->toBeGreaterThan(10000)
+        ->and(preg_match_all('/\/Type\s*\/Page\b/', $pdfBytes))->toBe(1);
+});
+
+test('unreadable company logo does not blank the transfer note PDF', function () {
+    $this->transfer->update(['status' => 'completed']);
+    $this->admin->company->update(['logo' => 'unreadable-logo.png']);
+    Storage::shouldReceive('disk')->once()->with('public')->andThrow(new RuntimeException('Logo unavailable'));
+
+    $response = $this->get(route('stock-transfers.note.pdf', $this->transfer))->assertOk()
+        ->assertHeader('Content-Type', 'application/pdf');
+    expect($response->getContent())->toStartWith('%PDF-')
+        ->and(preg_match_all('/\/Type\s*\/Page\b/', $response->getContent()))->toBe(1);
 });
 
 test('company isolation protects all document and details routes', function () {

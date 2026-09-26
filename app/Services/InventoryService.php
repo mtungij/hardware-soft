@@ -1088,7 +1088,7 @@ class InventoryService
                             throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => 'You are not allowed to receive stock into this location.']);
                         }
 
-                        $unitCost = (float) ($line['unit_cost'] ?? $item->cost_price);
+                        $unitCost = (float) $item->cost_price;
 
                         $receivable[] = [
                             'item' => $item,

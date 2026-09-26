@@ -550,6 +550,8 @@ class ReportExportService
                 ->orWhere('product_sizes.name', 'like', "%{$search}%")
                 ->orWhere('product_sizes.symbol', 'like', "%{$search}%")))
             ->select([
+                'products.id as product_id',
+                'stock_locations.id as stock_location_id',
                 DB::raw("CASE WHEN product_sizes.symbol IS NULL OR product_sizes.symbol = '' THEN products.name ELSE {$productNameExpression} END as product_name"),
                 'products.sku',
                 'categories.name as category_name',
@@ -568,28 +570,53 @@ class ReportExportService
             ->orderBy('stock_locations.name')
             ->get();
 
-        $headers = ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Location Type', 'Quantity'];
+        $ledger = app(StockLedgerReadService::class);
+        $latestByPair = $ledger->latestForRows($rows, $user);
+        $isPdf = $request->route('format') === 'pdf';
+        $headers = $isPdf
+            ? ['Product', 'SKU', 'Unit', 'Location', 'Current Qty', 'Latest Action', 'Before', 'Change', 'Reference', 'Action Date']
+            : ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Location Type', 'Current Qty', 'Latest Action', 'Before', 'Change', 'Reference', 'Action Date'];
         if ($canViewValue) {
             array_push($headers, 'Average Cost', 'Stock Value');
         }
-        array_push($headers, 'Reorder Level', 'Status');
+        if (! $isPdf) {
+            $headers[] = 'Reorder Level';
+        }
+        $headers[] = 'Status';
+
+        $exportRows = $rows->map(function ($row) use ($canViewValue, $isPdf, $latestByPair, $ledger): array {
+            $latest = $latestByPair[$ledger->key($row->product_id, $row->stock_location_id)];
+            $details = [
+                $this->formatQuantity($row->quantity),
+                $latest['action'],
+                $latest['before'] === null ? '-' : $this->formatQuantity($latest['before']),
+                $latest['change'] === null ? '-' : (($latest['change'] > 0 ? '+' : '').$this->formatQuantity($latest['change'])),
+                $latest['reference'],
+                $latest['date']?->format('d M Y') ?? '-',
+            ];
+            $data = $isPdf
+                ? [$row->product_name, $row->sku, $row->unit_name, $row->location_name, ...$details]
+                : [$row->product_name, $row->sku, $row->category_name, $row->unit_name, $row->location_name, str($row->location_type)->replace('_', ' ')->title()->toString(), ...$details];
+            if ($canViewValue) {
+                array_push($data, $this->formatCurrency($row->average_cost), $this->formatCurrency($row->stock_value));
+            }
+            if (! $isPdf) {
+                $data[] = $this->formatQuantity($row->reorder_level);
+            }
+            $data[] = str($row->stock_status)->replace('_', ' ')->title()->toString();
+
+            return $data;
+        })->all();
 
         return [
-            'Stock by Location',
+            $request->boolean('grouped') ? 'Stock by Location (grouped by product)' : 'Stock by Location',
             $headers,
-            $rows->map(function ($row) use ($canViewValue): array {
-                $data = [$row->product_name, $row->sku, $row->category_name, $row->unit_name, $row->location_name, str($row->location_type)->replace('_', ' ')->title()->toString(), $this->formatQuantity($row->quantity)];
-                if ($canViewValue) {
-                    array_push($data, $this->formatCurrency($row->average_cost), $this->formatCurrency($row->stock_value));
-                }
-                array_push($data, $this->formatQuantity($row->reorder_level), str($row->stock_status)->replace('_', ' ')->title()->toString());
-
-                return $data;
-            })->all(),
+            $exportRows,
             array_filter([
                 'Total Quantity' => $this->formatQuantity($rows->sum('quantity')),
                 'Total Stock Value' => $canViewValue ? $this->formatCurrency($rows->sum('stock_value')) : null,
                 'Active Locations' => count($allowedLocationIds),
+                'Latest actions' => 'Shown separately for each product and location',
             ], fn ($value) => $value !== null),
         ];
     }

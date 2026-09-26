@@ -4,7 +4,9 @@
 <meta charset="utf-8">
 <title>Stock Transfer Note · {{ $transfer->transfer_number }}</title>
 <style>
+@if (! ($isPdf ?? false))
 @page { size: A4; margin: 15mm; }
+@endif
 body { font-family: sans-serif; color: #172033; font-size: 10pt; background: white; }
 .sheet { max-width: 180mm; margin: auto; }
 .brand { color: #ea580c; font-size: 22pt; font-weight: bold; }

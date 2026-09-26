@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Supplier;
+use App\Services\StockLedgerReadService;
 use App\Support\InventorySettings;
 use App\Support\AuthorizationScope;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +58,11 @@ $updatedLowStockOnly = function () {
 };
 
 $openLedger = function (int $productId, int $locationId) {
-    abort_unless(AuthorizationScope::canAccessStockLocation(auth()->user(), $locationId), 403);
+    app(StockLedgerReadService::class)->authorize(
+        auth()->user(),
+        Product::query()->findOrFail($productId),
+        StockLocation::query()->findOrFail($locationId),
+    );
 
     $this->ledgerProductId = (string) $productId;
     $this->ledgerLocationId = (string) $locationId;
@@ -194,20 +199,15 @@ $locationBadge = function (?string $type): string {
             ->orderBy('stock_locations.name')
             ->paginate(25);
 
+        $ledgerReport = app(StockLedgerReadService::class);
+        $latestByPair = $ledgerReport->latestForRows($rows->getCollection(), auth()->user());
         $groupedRows = $rows->getCollection()->groupBy('product_id');
         $selectedLocation = $locationFilter ? $locations->firstWhere('id', (int) $locationFilter) : null;
         $ledgerProduct = $ledgerProductId ? Product::query()->find($ledgerProductId) : null;
         $ledgerLocation = $ledgerLocationId ? StockLocation::query()->find($ledgerLocationId) : null;
-        $ledgerMovements = ($ledgerProduct && $ledgerLocation)
-            ? StockMovement::query()
-                ->with(['creator'])
-                ->where('product_id', $ledgerProduct->id)
-                ->where('stock_location_id', $ledgerLocation->id)
-                ->orderBy('movement_date')
-                ->orderBy('id')
-                ->get()
-            : collect();
-        $runningBalance = 0;
+        $ledger = ($ledgerProduct && $ledgerLocation)
+            ? $ledgerReport->ledger($ledgerProduct, $ledgerLocation, auth()->user())
+            : null;
     @endphp
 
     <x-page-header title="Stock by Location" description="Stock kwa Eneo - balances calculated from stock movements by location." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock by Location' => null]">
@@ -306,21 +306,20 @@ $locationBadge = function (?string $type): string {
                     <div class="border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-navy-900">
                         <div class="bg-slate-50 px-4 py-3 dark:bg-white/5">
                             <p class="font-black">{{ $first->product_name }}</p>
-                            <p class="text-xs text-slate-500">{{ $first->sku }} / {{ $first->category_name }} / {{ $first->unit_name }}</p>
+                            <p class="text-xs text-slate-500">SKU {{ $first->sku }} · {{ $first->category_name }} · {{ $first->unit_name }}</p>
                         </div>
                         @foreach ($productRows as $row)
-                            <button type="button" wire:click="openLedger({{ $row->product_id }}, {{ $row->stock_location_id }})" class="grid w-full gap-2 px-4 py-3 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/5 md:grid-cols-[1.5fr_1fr_1fr_1fr_auto]">
-                                <span><span class="{{ $this->locationBadge($row->location_type) }}">{{ str($row->location_type)->replace('_', ' ')->title() }}</span> <span class="ml-2 font-bold">{{ $row->location_name }}</span></span>
-                                <span>{{ \App\Support\NumberFormatter::quantity($row->quantity) }}</span>
-                                @if ($canViewValue)
-                                    <span>TZS {{ \App\Support\NumberFormatter::money($row->average_cost) }}</span>
-                                    <span>TZS {{ \App\Support\NumberFormatter::money($row->stock_value) }}</span>
-                                @endif
-                                <span class="font-black">{{ str($row->stock_status)->replace('_', ' ')->title() }}</span>
+                            @php $latest = $latestByPair[$ledgerReport->key($row->product_id, $row->stock_location_id)]; @endphp
+                            <button type="button" wire:click="openLedger({{ $row->product_id }}, {{ $row->stock_location_id }})" class="grid w-full gap-3 px-4 py-3 text-left text-sm hover:bg-slate-50 dark:hover:bg-white/5 md:grid-cols-[1.3fr_0.8fr_1.7fr_1fr]">
+                                <span><span class="{{ $this->locationBadge($row->location_type) }}">{{ str($row->location_type)->replace('_', ' ')->title() }}</span><span class="ml-2 font-bold">{{ $row->location_name }}</span></span>
+                                <span><span class="block text-xs text-slate-500">Current Stock</span><span class="font-black">{{ \App\Support\NumberFormatter::quantity($row->quantity) }} {{ $row->unit_name }}</span></span>
+                                <x-stock-latest-action :summary="$latest" :unit="$row->unit_name" />
+                                <span class="text-xs"><span class="block font-black">{{ str($row->stock_status)->replace('_', ' ')->title() }}</span><span class="block text-slate-500">Reorder {{ \App\Support\NumberFormatter::quantity($row->reorder_level) }}</span>@if ($canViewValue)<span class="block text-slate-500">Avg TZS {{ \App\Support\NumberFormatter::money($row->average_cost) }}</span><span class="block text-slate-500">Value TZS {{ \App\Support\NumberFormatter::money($row->stock_value) }}</span>@endif</span>
                             </button>
                         @endforeach
-                        <div class="grid gap-2 bg-slate-50 px-4 py-3 text-sm font-black dark:bg-white/5 md:grid-cols-[1.5fr_1fr_1fr_1fr_auto]">
-                            <span>Total</span><span>{{ \App\Support\NumberFormatter::quantity($productTotal) }}</span><span></span>@if ($canViewValue)<span>TZS {{ \App\Support\NumberFormatter::money($productValue) }}</span>@endif<span></span>
+                        <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3 text-sm font-black dark:bg-white/5">
+                            <span>Total across shown locations · latest actions are shown per location above</span>
+                            <span>{{ \App\Support\NumberFormatter::quantity($productTotal) }} {{ $first->unit_name }}@if ($canViewValue) · TZS {{ \App\Support\NumberFormatter::money($productValue) }}@endif</span>
                         </div>
                     </div>
                 @empty
@@ -328,29 +327,23 @@ $locationBadge = function (?string $type): string {
                 @endforelse
             </div>
         @else
-            <x-table :headers="$canViewValue ? ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Quantity', 'Average Cost', 'Stock Value', 'Reorder Level', 'Status'] : ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Quantity', 'Reorder Level', 'Status']">
+            <x-table :headers="$canViewValue ? ['Product', 'Stock Location', 'Current Stock', 'Latest Action', 'Average Cost', 'Stock Value', 'Reorder Level', 'Status'] : ['Product', 'Stock Location', 'Current Stock', 'Latest Action', 'Reorder Level', 'Status']">
                 @forelse ($rows as $row)
+                    @php $latest = $latestByPair[$ledgerReport->key($row->product_id, $row->stock_location_id)]; @endphp
                     <tr wire:click="openLedger({{ $row->product_id }}, {{ $row->stock_location_id }})" class="cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5">
-                        <td class="px-4 py-3 font-black">{{ $row->product_name }}</td>
-                        <td class="px-4 py-3 font-mono text-xs">{{ $row->sku }}</td>
-                        <td class="px-4 py-3">{{ $row->category_name }}</td>
-                        <td class="px-4 py-3">{{ $row->unit_name }}</td>
-                        <td class="px-4 py-3">
-                            <div class="font-bold">{{ $row->location_name }}</div>
-                            <span class="{{ $this->locationBadge($row->location_type) }}">{{ str($row->location_type)->replace('_', ' ')->title() }}</span>
-                        </td>
-                        <td class="px-4 py-3 font-black">{{ \App\Support\NumberFormatter::quantity($row->quantity) }}</td>
+                        <td class="px-4 py-3"><span class="block font-black">{{ $row->product_name }}</span><span class="block text-xs text-slate-500">SKU {{ $row->sku }} · {{ $row->category_name }} · {{ $row->unit_name }}</span></td>
+                        <td class="px-4 py-3"><div class="font-bold">{{ $row->location_name }}</div><span class="{{ $this->locationBadge($row->location_type) }}">{{ str($row->location_type)->replace('_', ' ')->title() }}</span></td>
+                        <td class="px-4 py-3 whitespace-nowrap font-black">{{ \App\Support\NumberFormatter::quantity($row->quantity) }} {{ $row->unit_name }}</td>
+                        <td class="px-4 py-3"><x-stock-latest-action :summary="$latest" :unit="$row->unit_name" /></td>
                         @if ($canViewValue)
-                            <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($row->average_cost) }}</td>
-                            <td class="px-4 py-3 font-bold">TZS {{ \App\Support\NumberFormatter::money($row->stock_value) }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">TZS {{ \App\Support\NumberFormatter::money($row->average_cost) }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap font-bold">TZS {{ \App\Support\NumberFormatter::money($row->stock_value) }}</td>
                         @endif
                         <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($row->reorder_level) }}</td>
-                        <td class="px-4 py-3">
-                            <span class="{{ $row->stock_status === 'in_stock' ? 'badge-success' : ($row->stock_status === 'low_stock' ? 'badge-warning' : 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300') }}">{{ str($row->stock_status)->replace('_', ' ')->title() }}</span>
-                        </td>
+                        <td class="px-4 py-3"><span class="{{ $row->stock_status === 'in_stock' ? 'badge-success' : ($row->stock_status === 'low_stock' ? 'badge-warning' : 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300') }}">{{ str($row->stock_status)->replace('_', ' ')->title() }}</span></td>
                     </tr>
                 @empty
-                    <tr><td colspan="{{ $canViewValue ? 10 : 8 }}" class="px-4 py-8 text-center text-slate-500">No stock records found.</td></tr>
+                    <tr><td colspan="{{ $canViewValue ? 8 : 6 }}" class="px-4 py-8 text-center text-slate-500">No stock records found.</td></tr>
                 @endforelse
             </x-table>
         @endif
@@ -359,32 +352,47 @@ $locationBadge = function (?string $type): string {
     </x-card>
 
     <x-modal name="stock-ledger" maxWidth="4xl">
-        <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-            <h2 class="text-lg font-black text-slate-900 dark:text-white">Stock Ledger</h2>
-            <p class="mt-1 text-sm text-slate-500">{{ $ledgerProduct?->name }} / {{ $ledgerLocation?->name }}</p>
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+            <div>
+                <h2 class="text-lg font-black text-slate-900 dark:text-white">Stock Ledger</h2>
+                <p class="mt-1 text-sm text-slate-500">{{ $ledgerProduct?->displayNameWithSize() }} / {{ $ledgerLocation?->name }}</p>
+            </div>
+            @if ($ledgerProduct && $ledgerLocation)
+                <a href="{{ route('store-stock.ledger.pdf', [$ledgerProduct, $ledgerLocation]) }}" class="rounded-lg bg-build-orange px-4 py-2 text-sm font-black text-white">Download PDF</a>
+            @endif
         </div>
         <div class="max-h-[calc(100vh-9rem)] overflow-y-auto px-5 py-5">
-            <x-table :headers="$canViewValue ? ['Date', 'Type', 'In', 'Out', 'Cost', 'Reference', 'Closing Balance'] : ['Date', 'Type', 'In', 'Out', 'Reference', 'Closing Balance']">
-                @forelse ($ledgerMovements as $movement)
-                    @php
-                        $signed = $movement->signedQuantity();
-                        $runningBalance += $signed;
-                    @endphp
-                    <tr>
-                        <td class="px-4 py-3">{{ $movement->movement_date?->format('d M Y') }}</td>
-                        <td class="px-4 py-3"><span class="badge-info">{{ str($movement->movement_type)->replace('_', ' ')->title() }}</span></td>
-                        <td class="px-4 py-3 text-emerald-700">{{ $signed > 0 ? \App\Support\NumberFormatter::quantity($signed) : '-' }}</td>
-                        <td class="px-4 py-3 text-red-700">{{ $signed < 0 ? \App\Support\NumberFormatter::quantity(abs($signed)) : '-' }}</td>
-                        @if ($canViewValue)
-                            <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($movement->unit_cost) }}</td>
-                        @endif
-                        <td class="px-4 py-3 text-xs">{{ class_basename($movement->reference_type) }} #{{ $movement->reference_id }}</td>
-                        <td class="px-4 py-3 font-black">{{ \App\Support\NumberFormatter::quantity($runningBalance) }}</td>
-                    </tr>
-                @empty
-                    <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No ledger movements found.</td></tr>
-                @endforelse
-            </x-table>
+            @if ($ledger)
+                @php $last = $ledger['latest']; @endphp
+                <div class="mb-5 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-white/5 sm:grid-cols-3">
+                    <div><span class="block text-xs text-slate-500">Product</span><strong>{{ $ledgerProduct->displayNameWithSize() }}</strong></div>
+                    <div><span class="block text-xs text-slate-500">Stock Location</span><strong>{{ $ledgerLocation->name }}</strong></div>
+                    <div><span class="block text-xs text-slate-500">Current Stock</span><strong>{{ \App\Support\NumberFormatter::quantity($ledger['current']) }} {{ $ledgerProduct->unit?->short_name }}</strong></div>
+                    <div><span class="block text-xs text-slate-500">Last Action</span><strong>{{ $last['action'] }}</strong></div>
+                    <div><span class="block text-xs text-slate-500">Quantity Before</span><strong>{{ $last['before'] === null ? '—' : \App\Support\NumberFormatter::quantity($last['before']).' '.$ledgerProduct->unit?->short_name }}</strong></div>
+                    <div><span class="block text-xs text-slate-500">Change</span><strong class="{{ ($last['change'] ?? 0) < 0 ? 'text-orange-700 dark:text-orange-300' : 'text-emerald-700 dark:text-emerald-300' }}">{{ $last['change'] === null ? '—' : (($last['change'] > 0 ? '+' : '').\App\Support\NumberFormatter::quantity($last['change']).' '.$ledgerProduct->unit?->short_name) }}</strong></div>
+                    <div><span class="block text-xs text-slate-500">Quantity After</span><strong>{{ \App\Support\NumberFormatter::quantity($last['after']) }} {{ $ledgerProduct->unit?->short_name }}</strong></div>
+                    <div><span class="block text-xs text-slate-500">Reference</span><strong>{{ $last['reference'] }}</strong></div>
+                    <div><span class="block text-xs text-slate-500">Last Action Date</span><strong>{{ $last['date']?->format('d M Y') ?? '—' }}</strong></div>
+                </div>
+                <x-table :headers="$canViewValue ? ['Date', 'Action', 'Qty In', 'Qty Out', 'Stock Before', 'Stock After', 'Cost', 'Reference', 'Notes'] : ['Date', 'Action', 'Qty In', 'Qty Out', 'Stock Before', 'Stock After', 'Reference', 'Notes']">
+                    @forelse ($ledger['history'] as $entry)
+                        <tr>
+                            <td class="px-4 py-3 whitespace-nowrap">{{ $entry['movement']->movement_date?->format('d M Y') }}</td>
+                            <td class="px-4 py-3"><span class="badge-info">{{ $entry['action'] }}</span></td>
+                            <td class="px-4 py-3 text-emerald-700 dark:text-emerald-300">{{ $entry['change'] > 0 ? \App\Support\NumberFormatter::quantity($entry['change']) : '—' }}</td>
+                            <td class="px-4 py-3 text-orange-700 dark:text-orange-300">{{ $entry['change'] < 0 ? \App\Support\NumberFormatter::quantity(abs($entry['change'])) : '—' }}</td>
+                            <td class="px-4 py-3 font-semibold">{{ \App\Support\NumberFormatter::quantity($entry['before']) }}</td>
+                            <td class="px-4 py-3 font-black">{{ \App\Support\NumberFormatter::quantity($entry['after']) }}</td>
+                            @if ($canViewValue)<td class="px-4 py-3 whitespace-nowrap">TZS {{ \App\Support\NumberFormatter::money($entry['movement']->unit_cost) }}</td>@endif
+                            <td class="px-4 py-3 text-xs">{{ $entry['reference'] }}</td>
+                            <td class="px-4 py-3 text-xs">{{ $entry['movement']->notes ?: '—' }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="{{ $canViewValue ? 9 : 8 }}" class="px-4 py-8 text-center text-slate-500">No ledger movements found.</td></tr>
+                    @endforelse
+                </x-table>
+            @endif
         </div>
     </x-modal>
 </div>

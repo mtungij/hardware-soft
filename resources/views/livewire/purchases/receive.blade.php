@@ -55,7 +55,6 @@ mount(function (Purchase $purchase, InventoryService $inventory) {
 
         $this->lines[$item->id] = [
             'quantity' => '0',
-            'unit_cost' => (string) $item->cost_price,
             'stock_location_id' => (string) $locationId,
             'batch_number' => '',
             'expiry_date' => '',
@@ -126,7 +125,7 @@ $summary = function (): array {
 
         $selectedLines++;
         $quantity += $lineQuantity;
-        $cost += $lineQuantity * (float) ($line['unit_cost'] ?? $item->cost_price);
+        $cost += $lineQuantity * (float) $item->cost_price;
         $locations->push((int) ($line['stock_location_id'] ?? 0));
     }
 
@@ -169,7 +168,6 @@ $validateReceiving = function () {
         'notes' => ['nullable', 'string', 'max:1000'],
         'lines' => ['required', 'array'],
         'lines.*.quantity' => ['nullable', 'numeric', 'min:0'],
-        'lines.*.unit_cost' => ['required', 'numeric', 'min:0'],
         'lines.*.stock_location_id' => ['required', Rule::in($locationIds)],
         'lines.*.notes' => ['nullable', 'string', 'max:1000'],
     ];
@@ -368,8 +366,7 @@ $postReceipt = function (InventoryService $inventory) {
                                     {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}
                                 </td>
                                 <td class="px-3 py-3">
-                                    <input wire:model="lines.{{ $item->id }}.unit_cost" type="number" step="0.01" class="w-32 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                    @error("lines.{$item->id}.unit_cost") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                                    TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }}
                                 </td>
                                 <td class="px-3 py-3">
                                     <select wire:model="lines.{{ $item->id }}.stock_location_id" class="w-52 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-navy-950">

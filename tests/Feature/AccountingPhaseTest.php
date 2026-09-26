@@ -6,6 +6,8 @@ use App\Models\Customer;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Product;
+use App\Models\Purchase;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\AccountingService;
@@ -16,6 +18,18 @@ use Illuminate\Validation\ValidationException;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
+    $this->withSession(['staff_locale' => 'en']);
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    $branch = Branch::where('code', 'MAIN')->firstOrFail();
+    $companyId = $branch->company_id;
+    $supplier = Supplier::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'name' => 'Accounting Test Supplier', 'phone' => '255700101010', 'status' => 'active']);
+    Customer::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'name' => 'Accounting Test Customer', 'phone' => '255700202020', 'customer_type' => 'credit', 'credit_limit' => 100000, 'status' => 'active']);
+    Purchase::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'supplier_id' => $supplier->id, 'purchase_date' => today(), 'reference_number' => 'ACC-PO-001', 'status' => 'ordered', 'payment_status' => 'unpaid', 'total_amount' => 10000, 'paid_amount' => 0, 'balance_amount' => 10000, 'created_by' => $admin->id]);
+    Expense::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'expense_category_id' => ExpenseCategory::where('name', 'Rent')->firstOrFail()->id, 'amount' => 100, 'payment_method' => 'cash', 'reference_number' => 'EXP-SEED-0001', 'expense_date' => today(), 'paid_by' => $admin->id]);
+    CashbookSession::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'session_date' => today()->subDay(), 'opening_cash' => 0, 'expected_cash' => 0, 'status' => 'closed', 'opened_by' => $admin->id, 'closed_by' => $admin->id, 'closed_at' => now()]);
+    $dispensing = app(InventoryService::class)->getDispensingLocation($branch->id);
+    $dispensing->update(['can_sell' => true, 'can_issue_stock' => true, 'is_active' => true, 'status' => 'active']);
+    StockMovement::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'product_id' => Product::firstOrFail()->id, 'stock_location_id' => $dispensing->id, 'movement_type' => 'direct_stock_in', 'quantity' => 10, 'quantity_in' => 10, 'quantity_out' => 0, 'unit_cost' => 100, 'created_by' => $admin->id, 'movement_date' => today()]);
 });
 
 test('phase six accounting pages render for super admin', function () {
@@ -45,7 +59,7 @@ test('phase six report pages render for accountant', function () {
     }
 });
 
-test('expense categories and expenses are seeded', function () {
+test('accounting fixtures include an expense category and recorded expense', function () {
     expect(ExpenseCategory::where('name', 'Rent')->exists())->toBeTrue();
     expect(Expense::where('reference_number', 'EXP-SEED-0001')->exists())->toBeTrue();
 });

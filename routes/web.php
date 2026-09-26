@@ -8,6 +8,7 @@ use App\Http\Controllers\ProductionReportExportController;
 use App\Http\Controllers\PurchaseOrderPdfController;
 use App\Http\Controllers\QuotationTemplatePreviewController;
 use App\Http\Controllers\ReportExportController;
+use App\Http\Controllers\StockLedgerPdfController;
 use App\Http\Controllers\StockTransferNoteController;
 use App\Models\Company;
 use App\Models\Setting;
@@ -258,6 +259,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('invoices', 'invoices.index')->middleware('can:invoices.view')->name('invoices.index');
     Route::get('invoices/{invoice}/pdf', [B2bDocumentController::class, 'invoice'])->middleware('can:invoices.view')->name('invoices.pdf');
     Volt::route('store-stock', 'store-stock.index')->middleware(['warehouse.enabled', 'can:stock.view'])->name('store-stock.index');
+    Route::get('store-stock/{product}/{location}/ledger/pdf', StockLedgerPdfController::class)->middleware(['warehouse.enabled', 'can:stock.view'])->name('store-stock.ledger.pdf');
     Volt::route('dispensing-stock', 'dispensing-stock.index')->middleware('can:stock.view')->name('dispensing-stock.index');
     Volt::route('inventory-summary', 'inventory-summary.index')->middleware('can:stock.view')->name('inventory-summary.index');
     Volt::route('stock-movements', 'stock-movements.index')->middleware('can:stock.view')->name('stock-movements.index');

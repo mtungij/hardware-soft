@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
     'purchase_id',
@@ -32,6 +33,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class PurchaseItem extends Model
 {
     use HasCompany, HasFactory;
+
+    public function costBreakdown(): HasMany
+    {
+        return $this->hasMany(PurchaseItemCostBreakdown::class);
+    }
 
     public function purchase(): BelongsTo
     {
