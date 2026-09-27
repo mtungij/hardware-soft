@@ -66,7 +66,7 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
         </x-card>
 
         <x-card title="Purchase Items" class="xl:col-span-2">
-            <x-table :headers="['Product', 'Purchase Unit', 'Conversion', 'Ordered', 'Base Ordered', 'Received', 'Base Received', 'Remaining', 'Unit Cost', 'Selling', 'Total']">
+            <x-table :headers="['Product', 'Purchase Unit', 'Conversion', 'Ordered', 'Base Ordered', 'Received', 'Base Received', 'Remaining', 'Supplier Unit Cost', 'Selling', 'Total']">
                 @foreach ($purchase->items as $item)
                     <tr>
                         <td class="px-4 py-3 font-bold">
@@ -105,12 +105,14 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
     </div>
 
     <x-card title="Goods Receipts" class="mt-6">
-        <x-table :headers="['Receipt Number', 'Receiving Date', 'Received By', 'Delivery Note', 'Supplier Invoice', 'Total Qty', 'Total Cost', 'Locations', 'Status', 'Actions']">
+        <x-table :headers="['Receipt Number', 'Receiving Date', 'Received By', 'Delivery Note', 'Supplier Invoice', 'Total Qty', 'Goods Value', 'Additional Costs', 'Landed Total', 'Locations', 'Status', 'Actions']">
             @forelse ($purchase->goodsReceivingNotes as $grn)
                 @php
                     $locations = $grn->items->map(fn ($item) => $item->stockLocation?->name)->filter()->unique()->join(', ');
                     $totalQuantity = $grn->items->sum('received_quantity');
-                    $totalCost = $grn->items->sum(fn ($item) => (float) ($item->total_cost ?: ((float) $item->received_quantity * (float) $item->cost_price)));
+                    $goodsValue = (float) ($grn->goods_value ?? $grn->items->sum(fn ($item) => (float) ($item->total_cost ?: ((float) $item->received_quantity * (float) $item->cost_price))));
+                    $additionalCost = (float) ($grn->additional_cost_total ?? 0);
+                    $totalCost = (float) ($grn->landed_total ?? $goodsValue);
                 @endphp
                 <tr>
                     <td class="px-4 py-3 font-black">{{ $grn->grn_number }}</td>
@@ -119,13 +121,15 @@ $sendPurchaseOrder = function (PurchaseOrderEmailService $service) {
                     <td class="px-4 py-3">{{ $grn->supplier_delivery_note_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $grn->supplier_invoice_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($totalQuantity) }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($goodsValue) }}</td>
+                    <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($additionalCost) }}</td>
                     <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($totalCost) }}</td>
                     <td class="px-4 py-3">{{ $locations ?: '-' }}</td>
                     <td class="px-4 py-3"><span class="{{ $grn->status === 'posted' ? 'badge-success' : ($grn->status === 'cancelled' ? 'rounded-full bg-red-100 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ ucfirst($grn->status ?? 'posted') }}</span></td>
                     <td class="px-4 py-3"><a href="{{ route('goods-receipts.show', $grn) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">View</a></td>
                 </tr>
             @empty
-                <tr><td colspan="10" class="px-4 py-8 text-center text-slate-500">No goods receipts yet.</td></tr>
+                <tr><td colspan="12" class="px-4 py-8 text-center text-slate-500">No goods receipts yet.</td></tr>
             @endforelse
         </x-table>
     </x-card>

@@ -113,6 +113,7 @@ class ReportExportService
         $search = $request->string('search')->toString();
 
         return match ($key) {
+            'reports.internal-sales' => $this->internalSales($request, $branchId, $from, $to),
             'reports.sales', 'tables.sales' => $this->sales($request, $branchId, $from, $to, $search),
             'tables.sales-items' => $this->salesItems($request, $branchId, $from, $to, $search),
             'reports.purchases', 'tables.purchases' => $this->purchases($request, $branchId, $from, $to, $search),
@@ -134,6 +135,103 @@ class ReportExportService
             'tables.email-logs', 'reports.purchase-emails' => $this->purchaseEmailLogs($request, $from, $to, $search),
             default => abort(404),
         };
+    }
+
+    private function internalSales(Request $request, ?int $branchId, ?string $from, ?string $to): array
+    {
+        $user = $request->user();
+        $tab = $request->string('tab')->toString() ?: 'outgoing';
+        abort_unless(in_array($tab, ['outgoing', 'incoming', 'location'], true), 404);
+        $report = app(InternalSaleReportService::class);
+        $filters = [
+            'date_from' => $from ?: now()->startOfMonth()->toDateString(),
+            'date_to' => $to ?: today()->toDateString(),
+            'branch_id' => $branchId,
+            'from_location_id' => $request->integer('from_location_id') ?: null,
+            'to_location_id' => $request->integer('to_location_id') ?: null,
+            'product_id' => $request->integer('product_id') ?: null,
+            'status' => $request->string('status')->toString() ?: 'completed',
+            'number' => $request->string('number')->toString(),
+        ];
+        if ($tab === 'outgoing') {
+            $lines = $report->rows($user, 'outgoing', $filters);
+            $canCost = $user->can('internal_sales.view_cost');
+            $canMargin = $user->can('internal_sales.view_margin');
+            $headers = ['Date', 'Internal Sale #', 'Destination', 'Product', 'SKU', 'Unit', 'Quantity', 'Internal Price', 'Internal Sales Value'];
+            if ($canCost) {
+                $headers[] = 'Internal Cost';
+            }
+            if ($canMargin) {
+                $headers[] = 'Internal Profit';
+            }
+            $headers[] = 'Status';
+            $rows = $lines->map(function (array $line) use ($canCost, $canMargin): array {
+                $row = [$line['date']?->format('Y-m-d'), $line['number'], $line['destination'], $line['product'],
+                    $line['sku'], $line['transaction_unit'], $line['transaction_quantity'],
+                    $line['posted'] ? $line['internal_unit_price'] : null, $line['posted'] ? $line['internal_value'] : null];
+                if ($canCost) {
+                    $row[] = $line['posted'] ? $line['source_cost'] : null;
+                }
+                if ($canMargin) {
+                    $row[] = $line['posted'] ? $line['internal_margin'] : null;
+                }
+                $row[] = ucfirst($line['status']);
+
+                return $row;
+            })->all();
+            $summary = $report->totals($lines);
+            $totals = ['Internal Sales' => $summary['internal_value'], 'Completed Internal Sales' => $summary['sales']];
+            if ($canCost) {
+                $totals['Internal Cost'] = $summary['source_cost'];
+            }
+            if ($canMargin) {
+                $totals['Internal Profit'] = $summary['internal_margin'];
+            }
+
+            return ['Outgoing Internal Sales', $headers, $rows, $totals];
+        }
+
+        if ($tab === 'incoming') {
+            $lines = $report->rows($user, 'incoming', $filters);
+            $headers = ['Date', 'Internal Sale #', 'Source', 'Product', 'SKU', 'Unit', 'Quantity', 'Acquisition Price', 'Acquisition Value', 'Status'];
+            $rows = $lines->map(fn (array $line): array => [
+                $line['date']?->format('Y-m-d'), $line['number'], $line['source'], $line['product'], $line['sku'],
+                $line['transaction_unit'], $line['transaction_quantity'], $line['posted'] ? $line['internal_unit_price'] : null,
+                $line['posted'] ? $line['acquisition_value'] : null, ucfirst($line['status']),
+            ])->all();
+            $summary = $report->totals($lines);
+
+            return ['Internal Purchases and Acquisitions', $headers, $rows, [
+                'Acquisition Value' => $summary['acquisition_value'], 'Received Base Quantity' => $summary['base_quantity'],
+                'Internal Receipts' => $summary['sales'],
+            ]];
+        }
+
+        abort_unless($user->can('reports.location_margins') && $user->can('stock.view_value')
+            && $user->can('internal_sales.view_margin'), 403);
+        $outgoing = $report->locationRows($user, 'outgoing', $filters)->where('posted', true);
+        $incoming = $report->locationRows($user, 'incoming', $filters)->where('posted', true);
+        $customer = $report->customerProductRows($user, $filters);
+        $financial = app(FinancialReportService::class);
+        $scope = AuthorizationScope::scopeFor($user, 'report_scope', AuthorizationScope::BRANCH);
+        $effectiveBranch = $branchId ?: ($scope === AuthorizationScope::COMPANY ? null : (int) $user->branch_id);
+        $locations = $financial->valuationLocations($effectiveBranch)
+            ->filter(fn (StockLocation $location) => (! $filters['from_location_id'] && ! $filters['to_location_id'])
+                || $location->id === $filters['from_location_id'] || $location->id === $filters['to_location_id']);
+        $headers = ['Location', 'Internal Sales', 'Internal Cost', 'Internal Profit', 'Stock Bought Internally',
+            'Customer Sales', 'Cost of Sold Stock', 'Outlet Profit'];
+        $rows = $locations->map(function (StockLocation $location) use ($report, $outgoing, $incoming, $customer): array {
+            $source = $report->totals($outgoing->where('source_id', $location->id));
+            $receipts = $report->totals($incoming->where('destination_id', $location->id));
+            $sold = $customer->where('location_id', $location->id);
+            $sales = $sold->sum('customer_sales');
+            $cost = $sold->sum('acquisition_cost');
+
+            return [$location->name, $source['internal_value'], $source['source_cost'], $source['internal_margin'],
+                $receipts['acquisition_value'], $sales, $cost, $sales - $cost];
+        })->values()->all();
+
+        return ['Location Profitability', $headers, $rows, []];
     }
 
     private function sales(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
@@ -326,6 +424,7 @@ class ReportExportService
     private function authorizeExport(string $key, Request $request): void
     {
         $permission = match (true) {
+            $key === 'reports.internal-sales' => 'reports.export',
             $key === 'tables.products' => 'products.view',
             in_array($key, ['tables.store-stock', 'tables.stock-movements', 'tables.stock-transfers'], true) => 'stock.view',
             $key === 'tables.users' => 'users.view',
@@ -499,8 +598,8 @@ class ReportExportService
         $allowedLocationIds = $locationQuery->pluck('id')->all();
         $stockExpression = "SUM(CASE WHEN stock_movements.quantity_in <> 0 OR stock_movements.quantity_out <> 0 THEN stock_movements.quantity_in - stock_movements.quantity_out WHEN stock_movements.movement_type IN ('sale_out','transfer_out','adjustment_out','damage_out','purchase_receipt_reversal') THEN -stock_movements.quantity ELSE stock_movements.quantity END)";
         $canViewValue = $user?->can('stock.view_value') ?? false;
-        $costNumerator = $canViewValue ? "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)" : '0';
-        $costDenominator = $canViewValue ? "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)" : '0';
+        $costNumerator = $canViewValue ? "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','internal_sale_in','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) * stock_movements.unit_cost ELSE 0 END)" : '0';
+        $costDenominator = $canViewValue ? "SUM(CASE WHEN stock_movements.unit_cost IS NOT NULL AND (stock_movements.quantity_in > 0 OR stock_movements.movement_type IN ('purchase_in','purchase_receipt','internal_sale_in','transfer_in','adjustment_in','return_in','direct_stock_in')) THEN (CASE WHEN stock_movements.quantity_in > 0 THEN stock_movements.quantity_in ELSE stock_movements.quantity END) ELSE 0 END)" : '0';
         $productNameExpression = DB::connection()->getDriverName() === 'sqlite'
             ? "products.name || ' - ' || product_sizes.symbol"
             : "CONCAT(products.name, ' - ', product_sizes.symbol)";

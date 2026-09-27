@@ -3,11 +3,9 @@
 use App\Models\Branch;
 use App\Models\Product;
 use App\Models\Purchase;
-use App\Models\PurchaseCostType;
 use App\Models\Supplier;
 use App\Models\Unit;
 use App\Services\ProductUnitConversionService;
-use App\Services\PurchaseCostBreakdownService;
 use App\Support\CompanyFeatures;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -19,12 +17,11 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['purchase' => null, 'branch_id' => '', 'supplier_id' => '', 'purchase_date' => '', 'invoice_number' => '', 'reference_number' => '', 'notes' => '', 'paid_amount' => '0', 'items' => [], 'breakdown_open' => [], 'breakdown_complete' => [], 'new_cost_type' => '']);
+state(['purchase' => null, 'branch_id' => '', 'supplier_id' => '', 'purchase_date' => '', 'invoice_number' => '', 'reference_number' => '', 'notes' => '', 'paid_amount' => '0', 'items' => [],]);
 
 mount(function (Purchase $purchase) {
     abort_unless($purchase->canBeModified(), 403);
 
-    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes((int) $purchase->company_id);
     $this->purchase = $purchase->load('items.costBreakdown');
     $this->branch_id = (string) $purchase->branch_id;
     $this->supplier_id = (string) $purchase->supplier_id;
@@ -47,79 +44,6 @@ mount(function (Purchase $purchase) {
     ])->all();
 });
 
-$toggleCostBreakdown = function (int $index): void {
-    if ((float) ($this->items[$index]['cost_price'] ?? 0) <= 0) {
-        return;
-    }
-
-    $this->breakdown_open[$index] = ! ($this->breakdown_open[$index] ?? false);
-};
-
-$addCostType = function (): void {
-    abort_unless(auth()->user()?->hasAnyRole(['Super Admin', 'Admin']), 403);
-    $this->validate(['new_cost_type' => ['required', 'string', 'max:100']]);
-    $type = PurchaseCostType::query()->firstOrCreate(
-        ['company_id' => auth()->user()->company_id, 'name' => trim($this->new_cost_type)],
-        ['is_active' => true],
-    );
-    $type->update(['is_active' => true]);
-    $this->new_cost_type = '';
-    $this->dispatch('close-modal', 'purchase-cost-types');
-};
-
-$addCostComponent = function (int $index): void {
-    $this->items[$index]['cost_breakdown'][] = ['type_id' => '', 'amount' => '', 'reference' => '', 'notes' => ''];
-    $this->breakdown_complete[$index] = false;
-    $this->breakdown_open[$index] = true;
-};
-
-$removeCostComponent = function (int $index, int $row): void {
-    unset($this->items[$index]['cost_breakdown'][$row]);
-    $this->items[$index]['cost_breakdown'] = array_values($this->items[$index]['cost_breakdown']);
-    $this->breakdown_complete[$index] = false;
-    $this->breakdown_open[$index] = true;
-};
-
-$breakdownTotal = function (int $index): float {
-    return round(collect($this->items[$index]['cost_breakdown'] ?? [])->sum(fn ($row) => is_numeric($row['amount'] ?? null) ? (float) $row['amount'] : 0), 2);
-};
-
-$breakdownRemaining = function (int $index): float {
-    return round((float) ($this->items[$index]['cost_price'] ?? 0) - $this->breakdownTotal($index), 2);
-};
-
-$breakdownIsComplete = function (int $index): bool {
-    return ($this->breakdown_complete[$index] ?? false)
-        && ! empty($this->items[$index]['cost_breakdown'])
-        && abs($this->breakdownRemaining($index)) < 0.005;
-};
-
-$hasIncompleteBreakdown = function (): bool {
-    foreach ($this->items as $index => $item) {
-        if (! empty($item['cost_breakdown']) && abs($this->breakdownRemaining($index)) >= 0.005) {
-            return true;
-        }
-    }
-
-    return false;
-};
-
-$completeCostBreakdown = function (int $index): void {
-    $item = $this->items[$index] ?? null;
-    if (! $item || empty($item['cost_breakdown']) || (float) ($item['cost_price'] ?? 0) <= 0
-        || abs($this->breakdownRemaining($index)) >= 0.005) {
-        return;
-    }
-
-    app(PurchaseCostBreakdownService::class)->prepare(
-        (int) auth()->user()->company_id,
-        $item['cost_breakdown'],
-        "items.{$index}.cost_breakdown",
-    );
-    $this->breakdown_complete[$index] = true;
-    $this->breakdown_open[$index] = false;
-};
-
 $addItem = function () {
     if (blank($this->supplier_id)) {
         $this->addError('supplier_id', 'Select supplier before adding products.');
@@ -134,8 +58,6 @@ $addItem = function () {
 $removeItem = function (int $index) {
     unset($this->items[$index]);
     $this->items = array_values($this->items);
-    $this->breakdown_open = [];
-    $this->breakdown_complete = [];
 };
 
 $syncProductSellingPrice = function (int $index) {
@@ -151,8 +73,6 @@ $syncProductSellingPrice = function (int $index) {
     $this->items[$index]['purchase_unit_id'] = $conversion?->unit_id ?: ($product?->purchase_unit_id ?: $product?->unit_id ?: '');
     $this->items[$index]['purchase_conversion_factor'] = $factor;
     $this->items[$index]['cost_price'] = (string) ($conversion?->purchase_price ?? ((float) ($product?->buying_price ?? 0) * $factor));
-    $this->items[$index]['cost_breakdown'] = [];
-    $this->breakdown_complete[$index] = false;
     $this->items[$index]['selling_price'] = $product ? (string) $product->selling_price : '';
 };
 
@@ -185,14 +105,9 @@ $selectPurchaseUnit = function (int $index, string $selection): void {
     $this->items[$index]['purchase_unit_id'] = $unitId;
     $this->items[$index]['purchase_conversion_factor'] = $factor;
     $this->items[$index]['cost_price'] = (string) ($conversion?->purchase_price ?? ((float) $product->buying_price * $factor));
-    $this->items[$index]['cost_breakdown'] = [];
-    $this->breakdown_complete[$index] = false;
 };
 
 $updatedItems = function (mixed $value = null, ?string $key = null): void {
-    if ($key !== null && preg_match('/^(\d+)\.(cost_price|cost_breakdown)(\.|$)/', $key, $matches)) {
-        $this->breakdown_complete[(int) $matches[1]] = false;
-    }
 };
 
 $totalAmount = function () {
@@ -232,11 +147,6 @@ $savePurchase = function (string $status) {
         'items.*.ordered_quantity' => ['required', 'numeric', 'gt:0'],
         'items.*.cost_price' => ['required', 'numeric', 'min:0'],
         'items.*.selling_price' => ['nullable', 'numeric', 'min:0'],
-        'items.*.cost_breakdown' => ['nullable', 'array'],
-        'items.*.cost_breakdown.*.type_id' => ['nullable'],
-        'items.*.cost_breakdown.*.amount' => ['nullable'],
-        'items.*.cost_breakdown.*.reference' => ['nullable', 'string', 'max:255'],
-        'items.*.cost_breakdown.*.notes' => ['nullable', 'string', 'max:1000'],
     ]);
 
     foreach ($validated['items'] as $index => $item) {
@@ -259,16 +169,8 @@ $savePurchase = function (string $status) {
         throw ValidationException::withMessages(['paid_amount' => 'Paid amount cannot exceed total amount.']);
     }
 
-    $breakdowns = [];
-    foreach ($validated['items'] as $index => $line) {
-        $breakdowns[$index] = app(PurchaseCostBreakdownService::class)->prepare(
-            (int) $this->purchase->company_id,
-            $line['cost_breakdown'] ?? [],
-            "items.{$index}.cost_breakdown",
-        )['rows'];
-    }
 
-    DB::transaction(function () use ($validated, $status, $total, $breakdowns) {
+    DB::transaction(function () use ($validated, $status, $total) {
         $paid = (float) $validated['paid_amount'];
         $this->purchase->update([
             'branch_id' => $validated['branch_id'],
@@ -346,7 +248,6 @@ $savePurchase = function (string $status) {
                 'selling_price' => $item['selling_price'] ?: null,
                 'line_total' => $quantity * $cost,
             ]);
-            app(PurchaseCostBreakdownService::class)->save($purchaseItem, $breakdowns[$index]);
         }
     });
 
@@ -359,7 +260,7 @@ $savePurchase = function (string $status) {
 <div>
     <x-page-header title="Edit Purchase" description="Only purchases with no received stock can be edited." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Edit' => null]" />
 
-    @include('livewire.purchases.partials.cost-type-manager')
+
 
     @include('livewire.purchases.partials.form-fields')
 </div>

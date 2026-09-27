@@ -46,6 +46,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'default_curing_location_id',
     'default_finished_goods_location_id',
     'theme_color',
+    'pwa_background_color',
     'system_initialized',
     'mail_host',
     'mail_port',

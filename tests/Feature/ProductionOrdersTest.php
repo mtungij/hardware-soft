@@ -392,7 +392,7 @@ test('company-wide machine mould order costs and posts through its branch-owned 
         ->and($order->completed_by)->toBe($this->admin->id)
         ->and($order->completed_at)->not->toBeNull()
         ->and($consumption->branch_id)->toBe($this->branch->id)
-        ->and($consumption->unit_cost)->toBe('10.00')
+        ->and($consumption->unit_cost)->toBe('10.000000')
         ->and($inventory->getProductStock($this->material->id, $this->location->id, $this->branch->id))->toBe($rawBefore - $actualConsumed)
         ->and($inventory->getProductStock($this->finished->id, $this->curingLocation->id, $this->branch->id))->toBe($curingBefore + 2750)
         ->and($inventory->getProductStock($this->finished->id, $this->finishedLocation->id, $this->branch->id))->toBe($finishedBefore)

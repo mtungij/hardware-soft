@@ -27,6 +27,7 @@ use LogicException;
     'transaction_quantity',
     'conversion_factor_snapshot',
     'unit_cost',
+    'location_acquisition_unit_cost',
     'transaction_unit_cost',
     'unit_price',
     'transaction_unit_price',
@@ -44,13 +45,16 @@ class StockMovement extends Model
 {
     use HasCompany, HasFactory;
 
-    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in', 'opening_stock', 'production_output', 'curing_release_in'];
+    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'internal_sale_in', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in', 'opening_stock', 'production_output', 'curing_release_in'];
 
-    public const NEGATIVE_TYPES = ['sale_out', 'transfer_out', 'adjustment_out', 'damage_out', 'purchase_receipt_reversal', 'production_consumption', 'curing_release_out', 'curing_damage'];
+    public const NEGATIVE_TYPES = ['sale_out', 'internal_sale_out', 'transfer_out', 'adjustment_out', 'damage_out', 'purchase_receipt_reversal', 'production_consumption', 'curing_release_out', 'curing_damage'];
 
     protected static function booted(): void
     {
         static::updating(function (self $movement): void {
+            if (in_array($movement->movement_type, ['internal_sale_out', 'internal_sale_in'], true)) {
+                throw new LogicException('Posted Internal Sale movements are immutable.');
+            }
             if ($movement->movement_type === 'opening_stock') {
                 throw new LogicException('Posted Opening Stock movements are immutable.');
             }
@@ -59,6 +63,9 @@ class StockMovement extends Model
             }
         });
         static::deleting(function (self $movement): void {
+            if (in_array($movement->movement_type, ['internal_sale_out', 'internal_sale_in'], true)) {
+                throw new LogicException('Posted Internal Sale movements cannot be deleted.');
+            }
             if ($movement->movement_type === 'opening_stock') {
                 throw new LogicException('Posted Opening Stock movements cannot be deleted.');
             }
@@ -137,7 +144,8 @@ class StockMovement extends Model
             'quantity_out' => 'decimal:4',
             'transaction_quantity' => 'decimal:4',
             'conversion_factor_snapshot' => 'decimal:4',
-            'unit_cost' => 'decimal:2',
+            'unit_cost' => 'decimal:6',
+            'location_acquisition_unit_cost' => 'decimal:6',
             'transaction_unit_cost' => 'decimal:2',
             'unit_price' => 'decimal:2',
             'transaction_unit_price' => 'decimal:2',

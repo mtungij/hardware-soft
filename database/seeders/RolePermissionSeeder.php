@@ -73,6 +73,17 @@ class RolePermissionSeeder extends Seeder
             Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
         }
 
+        foreach ([
+            'internal_sales.view', 'internal_sales.create', 'internal_sales.complete',
+            'internal_sales.cancel', 'internal_sales.override_price',
+            'location_prices.view', 'location_prices.manage',
+            'reports.internal_sales', 'reports.internal_acquisitions', 'reports.location_margins',
+            'internal_sales.print_delivery_note', 'internal_sales.print_value_note',
+            'internal_sales.view_cost', 'internal_sales.view_margin',
+        ] as $permissionName) {
+            Permission::query()->firstOrCreate(['name' => $permissionName, 'guard_name' => $this->guard]);
+        }
+
         $professionalPermissions = [
             'dashboard.view', 'dashboard.sales_summary', 'dashboard.purchase_summary', 'dashboard.stock_summary',
             'dashboard.stock_value', 'dashboard.profit', 'dashboard.expenses', 'dashboard.receivables',
@@ -262,7 +273,7 @@ class RolePermissionSeeder extends Seeder
             'customer_material_accounts.create',
             'customer_material_accounts.record_deposit',
         ]);
-        Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', 'dashboard.view', 'dashboard.stock_summary', 'products.view', 'products.view_buying_price', 'products.view_selling_price', 'purchases.view', 'purchases.create', 'purchases.receive', 'purchases.view_cost', 'stock.view', 'stock.adjust', 'stock.transfer', 'stock.receive', 'stock.direct_stock_in', 'opening_stock.view', 'opening_stock.create', ...$storeKeeperPermissions, 'view sales', 'sales.view', 'sell from store', 'customer_material_accounts.view', 'customer_material_accounts.issue_material']);
+        Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', 'dashboard.view', 'dashboard.stock_summary', 'products.view', 'products.view_buying_price', 'products.view_selling_price', 'purchases.view', 'purchases.create', 'purchases.receive', 'purchases.view_cost', 'stock.view', 'stock.adjust', 'stock.transfer', 'stock.receive', 'stock.direct_stock_in', 'opening_stock.view', 'opening_stock.create', ...$storeKeeperPermissions, 'view sales', 'sales.view', 'sell from store', 'customer_material_accounts.view', 'customer_material_accounts.issue_material', 'internal_sales.view', 'internal_sales.create', 'internal_sales.complete', 'location_prices.view', 'reports.internal_sales', 'reports.internal_acquisitions', 'internal_sales.print_delivery_note']);
         Role::findByName('Store Keeper', $this->guard)->givePermissionTo('view stock valuation');
         Role::findByName('Store Keeper', $this->guard)->givePermissionTo(['export pdf', 'export excel', 'print reports']);
         Role::findByName('Accountant', $this->guard)->syncPermissions([
@@ -335,6 +346,7 @@ class RolePermissionSeeder extends Seeder
             'customer_material_accounts.record_deposit',
             'customer_material_accounts.refund',
             'customer_material_accounts.reports',
+            'internal_sales.view', 'location_prices.view', 'reports.internal_sales', 'reports.internal_acquisitions', 'reports.location_margins', 'internal_sales.print_delivery_note', 'internal_sales.print_value_note', 'internal_sales.view_cost', 'internal_sales.view_margin',
         ]);
 
         // Existing customized roles are never replaced by template changes during deployment.

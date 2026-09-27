@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Branch;
 use App\Models\Expense;
+use App\Models\InternalSale;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\Sale;
@@ -61,6 +62,69 @@ class FinancialReportService
             'expenses' => $expenses,
             'net_profit' => $revenue - $cogs - $expenses,
         ];
+    }
+
+    public function locationMargins(?int $branchId, string $from, string $to): array
+    {
+        $user = Auth::user();
+        if (! $user instanceof User) {
+            return [];
+        }
+        $locations = $this->valuationLocations($branchId);
+        $inventory = app(InventoryService::class);
+        $valuationRows = collect($this->stockValuation($branchId))->groupBy('stock_location_id');
+        $sales = SaleItem::query()->with('sale')
+            ->where('company_id', $user->company_id)
+            ->whereIn('stock_location_id', $locations->pluck('id'))
+            ->whereHas('sale', fn ($query) => $query->where('status', 'completed')
+                ->whereDate('sale_date', '>=', $from)->whereDate('sale_date', '<=', $to))
+            ->get()->groupBy('stock_location_id');
+        $internal = InternalSale::query()->with('items')
+            ->where('company_id', $user->company_id)
+            ->where('status', 'completed')
+            ->whereDate('sale_date', '>=', $from)->whereDate('sale_date', '<=', $to)
+            ->where(fn ($query) => $query->whereIn('from_location_id', $locations->pluck('id'))
+                ->orWhereIn('to_location_id', $locations->pluck('id')))
+            ->get();
+
+        return $locations->map(function (StockLocation $location) use ($sales, $internal, $valuationRows, $inventory, $branchId): array {
+            $customerLines = $sales->get($location->id, collect());
+            $out = $internal->where('from_location_id', $location->id);
+            $in = $internal->where('to_location_id', $location->id);
+            $externalRevenue = $customerLines->sum(fn (SaleItem $line) => (float) $line->line_total);
+            $locationCogs = $customerLines->sum(fn (SaleItem $line) => (float) ($line->base_quantity ?: $line->quantity)
+                * (float) ($line->location_base_unit_cost ?? $line->base_unit_cost ?? $line->unit_cost));
+            $companyCogs = $customerLines->sum(fn (SaleItem $line) => (float) ($line->base_quantity ?: $line->quantity)
+                * (float) ($line->base_unit_cost ?? $line->unit_cost));
+            $internalOut = $out->sum('total_internal_value');
+            $sourceCost = $out->sum(fn (InternalSale $sale) => $sale->items->sum(fn ($item) => (float) $item->base_quantity * (float) ($item->source_acquisition_base_unit_cost ?? $item->company_base_unit_cost)));
+            $internalIn = $in->sum('total_internal_value');
+            $commercialValue = $valuationRows->get($location->id, collect())->sum(function (array $row) use ($inventory, $location, $branchId): float {
+                $product = Product::query()->where('company_id', $location->company_id)
+                    ->find($row['product_id']);
+                if (! $product) {
+                    return 0;
+                }
+
+                return (float) $row['quantity'] * $inventory->getLocationAcquisitionCost($product->id, $location->id, $branchId ?? $location->branch_id);
+            });
+
+            return [
+                'location_id' => $location->id,
+                'location' => $location->name,
+                'branch' => $location->branch?->name,
+                'external_revenue' => $externalRevenue,
+                'location_cogs' => $locationCogs,
+                'outlet_margin' => $externalRevenue - $locationCogs,
+                'internal_sales_out' => $internalOut,
+                'internal_purchases_in' => $internalIn,
+                'source_internal_margin' => $internalOut - $sourceCost,
+                'location_gross_margin' => $externalRevenue - $locationCogs + $internalOut - $sourceCost,
+                'company_cogs' => $companyCogs,
+                'company_stock_value' => $valuationRows->get($location->id, collect())->sum('value'),
+                'location_commercial_value' => $commercialValue,
+            ];
+        })->all();
     }
 
     /** Active locations visible under the existing stock scope, regardless of classification. */
@@ -131,6 +195,7 @@ class FinancialReportService
                 $averageCost = $inventory->getAverageCost($product->id, $location->id, $ledgerBranchId);
                 $rows[] = [
                     'branch_id' => $location->branch_id,
+                    'product_id' => $product->id,
                     'stock_location_id' => $location->id,
                     'branch' => $location->branch?->name,
                     'location' => $location->name,

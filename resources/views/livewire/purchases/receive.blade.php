@@ -2,6 +2,8 @@
 
 use App\Models\ProductLocationSetting;
 use App\Models\Purchase;
+use App\Models\PurchaseCostType;
+use App\Services\PurchaseCostBreakdownService;
 use App\Models\StockLocation;
 use App\Services\InventoryService;
 use App\Support\InventorySettings;
@@ -23,11 +25,14 @@ state([
     'default_stock_location_id' => '',
     'notes' => '',
     'lines' => [],
+    'additional_costs' => [],
+    'new_cost_type' => '',
 ]);
 
 mount(function (Purchase $purchase, InventoryService $inventory) {
     abort_if($purchase->status === 'cancelled' || $purchase->status === 'received', 403);
 
+    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes((int) $purchase->company_id);
     $this->purchase = $purchase->load(['supplier', 'branch', 'creator', 'items.product', 'items.purchaseUnit.measurementType', 'items.stockUnit']);
     $this->purchase_id = $purchase->id;
     if (blank($this->grn_number)) {
@@ -98,6 +103,32 @@ $updatedDefaultStockLocationId = function ($value) {
     }
 };
 
+$addCostType = function (): void {
+    abort_unless(auth()->user()?->hasAnyRole(['Super Admin', 'Admin']), 403);
+    $this->validate(['new_cost_type' => ['required', 'string', 'max:100']]);
+    $name = trim($this->new_cost_type);
+    if (mb_strtolower($name) === 'product cost') {
+        $this->addError('new_cost_type', 'Product Cost is already included in goods value.');
+
+        return;
+    }
+    $type = PurchaseCostType::query()->firstOrCreate(
+        ['company_id' => auth()->user()->company_id, 'name' => $name],
+        ['is_active' => true],
+    );
+    $type->update(['is_active' => true]);
+    $this->new_cost_type = '';
+};
+
+$addAdditionalCost = function (): void {
+    $this->additional_costs[] = ['type_id' => '', 'amount' => '', 'payee' => '', 'payment_method' => '', 'payment_reference' => '', 'notes' => ''];
+};
+
+$removeAdditionalCost = function (int $index): void {
+    unset($this->additional_costs[$index]);
+    $this->additional_costs = array_values($this->additional_costs);
+};
+
 $receiveAll = function () {
     $purchase = Purchase::query()->with('items')->findOrFail($this->purchase_id);
 
@@ -129,7 +160,11 @@ $summary = function (): array {
         $locations->push((int) ($line['stock_location_id'] ?? 0));
     }
 
+    $additional = collect($this->additional_costs)->sum(fn ($row) => is_numeric($row['amount'] ?? null) ? (float) $row['amount'] : 0);
+
     return [
+        'additional' => $additional,
+        'landed' => $cost + $additional,
         'selected_lines' => $selectedLines,
         'quantity' => $quantity,
         'cost' => $cost,
@@ -167,6 +202,13 @@ $validateReceiving = function () {
         'default_stock_location_id' => ['required', Rule::in($locationIds)],
         'notes' => ['nullable', 'string', 'max:1000'],
         'lines' => ['required', 'array'],
+        'additional_costs' => ['array'],
+        'additional_costs.*.type_id' => ['required', Rule::exists('purchase_cost_types', 'id')->where('company_id', auth()->user()->company_id)->where('is_active', true)->where('name', '!=', 'Product Cost')],
+        'additional_costs.*.amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
+        'additional_costs.*.payee' => ['nullable', 'string', 'max:255'],
+        'additional_costs.*.payment_method' => ['nullable', 'string', 'max:100'],
+        'additional_costs.*.payment_reference' => ['nullable', 'string', 'max:255'],
+        'additional_costs.*.notes' => ['nullable', 'string', 'max:1000'],
         'lines.*.quantity' => ['nullable', 'numeric', 'min:0'],
         'lines.*.stock_location_id' => ['required', Rule::in($locationIds)],
         'lines.*.notes' => ['nullable', 'string', 'max:1000'],
@@ -230,6 +272,7 @@ $saveDraft = function (InventoryService $inventory) {
         'supplier_delivery_note_number' => $this->supplier_delivery_note_number ?: null,
         'supplier_invoice_number' => $this->supplier_invoice_number ?: null,
         'status' => 'draft',
+        'additional_costs' => $this->additional_costs,
     ]);
 
     session()->flash('success', 'Goods receipt draft saved.');
@@ -247,6 +290,7 @@ $postReceipt = function (InventoryService $inventory) {
         'supplier_delivery_note_number' => $this->supplier_delivery_note_number ?: null,
         'supplier_invoice_number' => $this->supplier_invoice_number ?: null,
         'status' => 'posted',
+        'additional_costs' => $this->additional_costs,
     ]);
 
     session()->flash('success', 'Purchase received successfully.');
@@ -258,6 +302,7 @@ $postReceipt = function (InventoryService $inventory) {
 <div>
     @php
         $locations = $this->availableReceivingLocations();
+        $costTypes = PurchaseCostType::query()->where('is_active', true)->where('name', '!=', 'Product Cost')->orderBy('name')->get();
         $locationOptions = $locations->keyBy('id');
         $summary = $this->summary();
         $totalOrdered = $purchase->items->sum('ordered_quantity');
@@ -327,7 +372,7 @@ $postReceipt = function (InventoryService $inventory) {
                             <th class="px-3 py-3 text-right">Remaining Quantity</th>
                             <th class="px-3 py-3">Received Quantity</th>
                             <th class="px-3 py-3">Stock Increase</th>
-                            <th class="px-3 py-3">Unit Cost</th>
+                            <th class="px-3 py-3">Supplier Unit Cost</th>
                             <th class="px-3 py-3">Receive Into Location</th>
                             @if ($showBatchColumn)
                                 <th class="px-3 py-3">Batch Number</th>
@@ -410,11 +455,49 @@ $postReceipt = function (InventoryService $inventory) {
                 </table>
             </div>
 
+            <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                <div class="flex items-center justify-between gap-3">
+                    <div><h2 class="font-black">Additional / Landed Costs</h2><p class="text-xs text-slate-500">Supplier cost is the price paid for the goods. Landed cost includes expenses to bring them into stock.</p></div>
+                    <button type="button" wire:click="addAdditionalCost" class="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-bold text-white">Add Cost</button>
+                </div>
+                @if (auth()->user()?->hasAnyRole(['Super Admin', 'Admin']))
+                    <div class="mt-3 flex flex-wrap items-end gap-2">
+                        <label class="text-xs font-bold">New Cost Type
+                            <input wire:model="new_cost_type" maxlength="100" class="mt-1 block rounded-lg border border-slate-200 p-2 dark:bg-navy-950" placeholder="e.g. Port charges">
+                        </label>
+                        <button type="button" wire:click="addCostType" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">Add Type</button>
+                        @error('new_cost_type') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
+                    </div>
+                @endif
+                @foreach ($additional_costs as $index => $cost)
+                    <div wire:key="receipt-cost-{{ $index }}" class="mt-3 grid gap-2 md:grid-cols-3 xl:grid-cols-7">
+                        <label class="text-xs font-bold">Cost Type
+                            <select wire:model="additional_costs.{{ $index }}.type_id" class="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 dark:bg-navy-950">
+                                <option value="">Select type</option>
+                                @foreach ($costTypes as $type)<option value="{{ $type->id }}">{{ $type->name }}</option>@endforeach
+                            </select>
+                            @error("additional_costs.{$index}.type_id") <span class="text-red-600">{{ $message }}</span> @enderror
+                        </label>
+                        <label class="text-xs font-bold">Amount
+                            <input wire:model.live="additional_costs.{{ $index }}.amount" type="number" min="0.01" step="0.01" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950">
+                            @error("additional_costs.{$index}.amount") <span class="text-red-600">{{ $message }}</span> @enderror
+                        </label>
+                        <label class="text-xs font-bold">Paid To / Payee<input wire:model="additional_costs.{{ $index }}.payee" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <label class="text-xs font-bold">Payment Method<input wire:model="additional_costs.{{ $index }}.payment_method" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <label class="text-xs font-bold">Payment Reference<input wire:model="additional_costs.{{ $index }}.payment_reference" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <label class="text-xs font-bold">Notes<input wire:model="additional_costs.{{ $index }}.notes" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <button type="button" wire:click="removeAdditionalCost({{ $index }})" class="self-end rounded-lg border border-red-300 p-2 text-xs font-bold text-red-700">Remove</button>
+                    </div>
+                @endforeach
+            </div>
+
             <div class="grid gap-3 md:grid-cols-5">
                 @foreach ([
                     'Selected Products' => number_format($summary['selected_lines']),
                     'Quantity to Receive' => \App\Support\NumberFormatter::quantity($summary['quantity']),
-                    'Total Receiving Cost' => 'TZS '.\App\Support\NumberFormatter::money($summary['cost']),
+                    'Purchase Goods Value' => 'TZS '.\App\Support\NumberFormatter::money($summary['cost']),
+                    'Additional Costs' => 'TZS '.\App\Support\NumberFormatter::money($summary['additional']),
+                    'Total Landed Cost' => 'TZS '.\App\Support\NumberFormatter::money($summary['landed']),
                     'Receiving Locations' => number_format($summary['locations']),
                     'Remaining After Receipt' => \App\Support\NumberFormatter::quantity($summary['remaining_after']),
                 ] as $label => $value)
@@ -440,7 +523,9 @@ $postReceipt = function (InventoryService $inventory) {
                 <p><span class="font-bold">Supplier:</span> {{ $purchase->supplier?->name }}</p>
                 <p><span class="font-bold">Receiving Date:</span> {{ $received_date }}</p>
                 <p><span class="font-bold">Total Quantity:</span> {{ \App\Support\NumberFormatter::quantity($summary['quantity']) }}</p>
-                <p><span class="font-bold">Total Cost:</span> TZS {{ \App\Support\NumberFormatter::money($summary['cost']) }}</p>
+                <p><span class="font-bold">Goods Value:</span> TZS {{ \App\Support\NumberFormatter::money($summary['cost']) }}</p>
+                <p><span class="font-bold">Additional Costs:</span> TZS {{ \App\Support\NumberFormatter::money($summary['additional']) }}</p>
+                <p><span class="font-bold">Total Landed Cost:</span> TZS {{ \App\Support\NumberFormatter::money($summary['landed']) }}</p>
             </div>
             <div class="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 @foreach ($this->locationBreakdown() as $row)

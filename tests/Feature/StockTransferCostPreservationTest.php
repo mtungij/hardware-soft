@@ -75,7 +75,7 @@ test('costed transfer to a new ordinary store preserves both snapshots quantity 
     $posted = costTransferPostedRows($transfer);
     expect($posted)->toHaveCount(2)
         ->and($posted->pluck('movement_type')->all())->toBe(['transfer_out', 'transfer_in'])
-        ->and($posted->pluck('unit_cost')->all())->toBe(['4000.00', '4000.00'])
+        ->and($posted->pluck('unit_cost')->all())->toBe(['4000.000000', '4000.000000'])
         ->and($posted->sum(fn ($row) => $row->signedQuantity()))->toEqual(0)
         ->and($posted->sum(fn ($row) => $row->signedQuantity() * (float) $row->unit_cost))->toEqual(0)
         ->and($posted[0]->quantity_out)->toBe('20.0000')
@@ -102,8 +102,8 @@ test('destination existing cost history includes the transferred source snapshot
     $transfer = costTransferDraft($this, [[$this->product, 20]]);
     $this->inventory->completeStockTransfer($transfer->id, $this->admin->id);
     $expectedAverage = round((10 * 5000 + 20 * 4000) / 30, 2);
-    expect($this->inventory->getAverageCost($this->product->id, $this->destination->id, $this->branch->id))->toBe($expectedAverage)
-        ->and(costTransferPostedRows($transfer)->pluck('unit_cost')->all())->toBe(['4000.00', '4000.00']);
+    expect(round($this->inventory->getAverageCost($this->product->id, $this->destination->id, $this->branch->id), 2))->toBe($expectedAverage)
+        ->and(costTransferPostedRows($transfer)->pluck('unit_cost')->all())->toBe(['4000.000000', '4000.000000']);
     $after = collect($this->valuation->stockValuation($this->branch->id))->sum('value');
     expect(abs($after - $before))->toBeLessThanOrEqual(30 * 0.005);
 });
@@ -120,8 +120,8 @@ test('source cost is captured at completion independently for multiple products'
     $this->inventory->completeStockTransfer($transfer->id, $this->admin->id);
     $posted = costTransferPostedRows($transfer);
     expect($posted)->toHaveCount(4)
-        ->and($posted->where('product_id', $this->product->id)->pluck('unit_cost')->all())->toBe(['15000.00', '15000.00'])
-        ->and($posted->where('product_id', $second->id)->pluck('unit_cost')->all())->toBe(['22000.00', '22000.00'])
+        ->and($posted->where('product_id', $this->product->id)->pluck('unit_cost')->all())->toBe(['15000.000000', '15000.000000'])
+        ->and($posted->where('product_id', $second->id)->pluck('unit_cost')->all())->toBe(['22000.000000', '22000.000000'])
         ->and(collect($this->valuation->stockValuation($this->branch->id))->sum('value'))->toEqual($before);
 });
 
@@ -143,7 +143,7 @@ test('fractional transfer uses base cost after a converted stock receipt', funct
     $this->inventory->completeStockTransfer($transfer->id, $this->admin->id);
     $posted = costTransferPostedRows($transfer);
     expect($posted->pluck('quantity')->all())->toBe(['2.5000', '2.5000'])
-        ->and($posted->pluck('unit_cost')->all())->toBe(['4000.00', '4000.00'])
+        ->and($posted->pluck('unit_cost')->all())->toBe(['4000.000000', '4000.000000'])
         ->and($this->inventory->getProductStock($this->product->id, $this->source->id, $this->branch->id))->toEqual(17.5)
         ->and($this->inventory->getProductStock($this->product->id, $this->destination->id, $this->branch->id))->toEqual(2.5)
         ->and(collect($this->valuation->stockValuation($this->branch->id))->sum('value'))->toEqual(80000);
@@ -171,7 +171,7 @@ test('explicit zero-cost source history remains zero without fabrication', funct
     costTransferMovement($this, $this->product, $this->source, 100, 0);
     $transfer = costTransferDraft($this, [[$this->product, 20]]);
     $this->inventory->completeStockTransfer($transfer->id, $this->admin->id);
-    expect(costTransferPostedRows($transfer)->pluck('unit_cost')->all())->toBe(['0.00', '0.00'])
+    expect(costTransferPostedRows($transfer)->pluck('unit_cost')->all())->toBe(['0.000000', '0.000000'])
         ->and($this->inventory->getProductStock($this->product->id, $this->destination->id, $this->branch->id))->toEqual(20);
 });
 
@@ -190,7 +190,7 @@ test('historical completed transfers and movements are never rewritten', functio
     expect(fn () => $this->inventory->completeStockTransfer($historical->id, $this->admin->id))->toThrow(ValidationException::class);
     expect(costTransferPostedRows($historical)->toJson())->toBe($historyBefore)
         ->and($historical->fresh()->toJson())->toBe($headerBefore)
-        ->and(costTransferPostedRows($next)->pluck('unit_cost')->all())->toBe(['4000.00', '4000.00']);
+        ->and(costTransferPostedRows($next)->pluck('unit_cost')->all())->toBe(['4000.000000', '4000.000000']);
 });
 
 test('depleted destination history retains the existing historical incoming average methodology', function () {
@@ -201,9 +201,10 @@ test('depleted destination history retains the existing historical incoming aver
     $transfer = costTransferDraft($this, [[$this->product, 20]]);
     $this->inventory->completeStockTransfer($transfer->id, $this->admin->id);
     $expectedAverage = round((100 * 5000 + 20 * 4000) / 120, 2);
-    expect($this->inventory->getAverageCost($this->product->id, $this->destination->id, $this->branch->id))->toBe($expectedAverage)
+    expect(round($this->inventory->getAverageCost($this->product->id, $this->destination->id, $this->branch->id), 2))->toBe($expectedAverage)
         ->and(costTransferPostedRows($transfer)->sum(fn ($row) => $row->signedQuantity() * (float) $row->unit_cost))->toEqual(0);
     // This pre-existing averaging rule does not reweight only the 10 remaining units.
     $after = collect($this->valuation->stockValuation($this->branch->id))->sum('value');
-    expect($before)->toEqual(450000)->and($after)->toEqual(320000 + 30 * $expectedAverage);
+    expect($before)->toEqual(450000)
+        ->and(abs($after - (320000 + 30 * $this->inventory->getAverageCost($this->product->id, $this->destination->id, $this->branch->id))))->toBeLessThanOrEqual(0.01);
 });

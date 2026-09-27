@@ -27,6 +27,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'cancelled_at',
     'cancellation_reason',
     'notes',
+    'goods_value',
+    'additional_cost_total',
+    'landed_total',
 ])]
 class GoodsReceivingNote extends Model
 {
@@ -72,12 +75,20 @@ class GoodsReceivingNote extends Model
         return $this->hasMany(GoodsReceivingNoteItem::class);
     }
 
+    public function additionalCosts(): HasMany
+    {
+        return $this->hasMany(GoodsReceiptAdditionalCost::class);
+    }
+
     protected function casts(): array
     {
         return [
             'received_date' => 'date',
             'posted_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'goods_value' => 'decimal:2',
+            'additional_cost_total' => 'decimal:2',
+            'landed_total' => 'decimal:2',
         ];
     }
 }

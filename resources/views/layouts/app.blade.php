@@ -9,7 +9,7 @@
         <title>{{ config('app.name', 'Hardex POS') }}</title>
 
         @php
-            $themeColor = '#06b6d4';
+            $themeColor = app(\App\Services\PwaBrandingService::class)->brand()['theme_color'];
         @endphp
 
         <style>
@@ -105,6 +105,8 @@
                     ['label' => __('messages.staff.nav.direct_stock_in'), 'route' => 'direct-stock-in.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper'], 'show' => $directStockInAllowed && ! $warehouseEnabled],
                     ['label' => 'Opening Stock', 'route' => 'opening-stock.index', 'icon' => 'stock', 'permission' => 'opening_stock.view', 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.stock_transfers'), 'route' => 'stock-transfers.index', 'icon' => 'transfer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant'], 'show' => $warehouseEnabled],
+                    ['label' => 'Internal Sales', 'route' => 'internal-sales.index', 'icon' => 'transfer', 'permission' => 'internal_sales.view'],
+                    ['label' => 'Location Pricing', 'route' => 'location-pricing.index', 'icon' => 'money', 'permission' => 'location_prices.view'],
                     ['label' => __('messages.staff.nav.stock_movements'), 'route' => 'stock-movements.index', 'icon' => 'truck', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant']],
                     ['label' => __('messages.staff.nav.stock_adjustments'), 'route' => 'stock-adjustments.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper']],
                 ]],
@@ -152,6 +154,8 @@
                     ['label' => __('messages.staff.nav.sales_reports'), 'route' => 'reports.sales', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.purchase_reports'), 'route' => 'reports.purchases', 'icon' => 'reports', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.profit_reports'), 'route' => 'reports.profit-loss', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => 'Internal Sales & Acquisitions', 'route' => 'reports.internal-sales', 'icon' => 'chart', 'permissions' => ['reports.internal_sales', 'reports.internal_acquisitions', 'reports.location_margins']],
+                    ['label' => 'Location Margins', 'route' => 'reports.location-margins', 'icon' => 'chart', 'permission' => 'reports.location_margins', 'show' => auth()->user()?->can('stock.view_value') && auth()->user()?->can('internal_sales.view_margin')],
                     ['label' => __('messages.staff.nav.stock_reports'), 'route' => 'reports.stock-valuation', 'icon' => 'summary', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.material_account_reports'), 'route' => 'customer-material-accounts.reports', 'icon' => 'chart', 'permission' => 'customer_material_accounts.reports'],
                 ]],
@@ -172,16 +176,9 @@
                 ]],
             ];
             $user = auth()->user();
-            $company = \App\Models\Company::current();
-            $companySettings = null;
-
-            try {
-                if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
-                    $companySettings = \App\Models\Setting::query()->first();
-                }
-            } catch (\Throwable) {
-                $companySettings = null;
-            }
+            $branding = app(\App\Services\PwaBrandingService::class);
+            $company = $branding->company();
+            $companySettings = $branding->settings();
 
             $companyName = $companySettings?->company_name ?: ($company?->company_name ?: config('app.name', 'Hardex POS'));
             $companyLogo = $companySettings?->company_logo ?: $company?->logo;

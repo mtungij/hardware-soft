@@ -183,7 +183,7 @@ test('costing requires completed order and creates one concurrency safe snapshot
 test('planned actual historical non inventory loss and variance calculations are precise and stable', function () {
     $order = completedOrderForCosting($this);
     $movement = StockMovement::where('reference_type', ProductionOrder::class)->where('reference_id', $order->id)->where('movement_type', 'production_consumption')->firstOrFail();
-    expect($movement->unit_cost)->toBe('10.00');
+    expect($movement->unit_cost)->toBe('10.000000');
     $this->material->update(['buying_price' => 99999]);
     $this->recipe = ProductionRecipe::where('product_id', $this->finished->id)->first();
     $this->recipe->items()->update(['unit_cost' => 999]);

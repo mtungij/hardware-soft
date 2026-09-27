@@ -231,7 +231,7 @@ test('mixed-unit batch idempotency and weighted average costing remain correct',
         ->and($second->pluck('id')->all())->toBe($first->pluck('id')->all())
         ->and(StockMovement::where('posting_reference', $first->first()->posting_reference)->count())->toBe(2)
         ->and($inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe(120.0)
-        ->and($inventory->getAverageCost($this->product->id, $this->location->id, $this->branch->id))->toBe(14083.33);
+        ->and(round($inventory->getAverageCost($this->product->id, $this->location->id, $this->branch->id), 2))->toBe(14083.33);
 });
 
 test('warehouse-enabled batch posts every normalized row to the selected location', function () {
@@ -444,5 +444,5 @@ test('weighted average cost remains correct across base box and pallet receipts'
     $inventory->directStockIn(directStockInData($this, ['product_unit_conversion_id' => $palletConversion->id, 'quantity' => 2, 'cost_price' => 250000]), $this->admin->id);
 
     expect($inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe(1300.0)
-        ->and($inventory->getAverageCost($this->product->id, $this->location->id, $this->branch->id))->toBe(769.23);
+        ->and(round($inventory->getAverageCost($this->product->id, $this->location->id, $this->branch->id), 2))->toBe(769.23);
 });

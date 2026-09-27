@@ -27,6 +27,7 @@ state([
     'tax_enabled' => false,
     'default_branch_id' => '',
     'theme_color' => '#f97316',
+    'pwa_background_color' => '#ffffff',
 ]);
 
 mount(function () {
@@ -41,6 +42,7 @@ mount(function () {
     $this->tax_enabled = $this->setting->tax_enabled;
     $this->default_branch_id = (string) $this->setting->default_branch_id;
     $this->theme_color = $this->setting->theme_color;
+    $this->pwa_background_color = $this->setting->pwa_background_color ?: '#ffffff';
 });
 
 rules([
@@ -54,6 +56,7 @@ rules([
     'tax_enabled' => ['boolean'],
     'default_branch_id' => ['nullable', 'exists:branches,id'],
     'theme_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+    'pwa_background_color' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
 ]);
 
 $save = function () {
@@ -73,7 +76,7 @@ $save = function () {
 
     $this->setting->update($validated);
 
-    $company = Company::query()->first() ?: new Company();
+    $company = Company::query()->findOrFail(auth()->user()->company_id);
     $company->fill([
         'company_name' => $this->setting->company_name,
         'logo' => $this->setting->company_logo,
@@ -105,7 +108,7 @@ $removeLogo = function () {
     }
 
     $this->setting->update(['company_logo' => null]);
-    Company::query()->first()?->update(['logo' => null]);
+    Company::query()->whereKey(auth()->user()->company_id)->update(['logo' => null]);
     $this->company_logo = '';
     $this->logo_upload = null;
     $this->dispatch('hardex-brand-updated', name: $this->company_name, initials: $this->brandInitials($this->company_name), logoUrl: '');
@@ -156,6 +159,8 @@ $removeLogo = function () {
             <x-form-input label="Company Email" name="company_email" type="email" wire:model="company_email" />
             <x-form-input label="Currency" name="currency" wire:model="currency" required />
             <x-form-input label="System Theme Color" name="theme_color" type="color" wire:model="theme_color" required />
+            <x-form-input label="Installed App Background Color" name="pwa_background_color" type="color" wire:model="pwa_background_color" required />
+            <p class="md:col-span-2 text-xs text-slate-500">The installed app uses this company's name, logo, theme color, and background color. Some devices need the app re-added to update its home screen name or icon.</p>
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Default Branch

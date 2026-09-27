@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\GoodsReceivingNote;
+use App\Models\InternalSale;
 use App\Models\OpeningStock;
 use App\Models\Product;
 use App\Models\Purchase;
@@ -110,6 +111,8 @@ class StockLedgerReadService
     {
         return match ($type) {
             'purchase_in', 'purchase_receipt' => 'Purchase Receipt',
+            'internal_sale_in' => 'Internal Sale In',
+            'internal_sale_out' => 'Internal Sale Out',
             'purchase_receipt_reversal' => 'Purchase Receipt Reversal',
             'sale_out' => 'Sale Out',
             'transfer_in' => 'Transfer In',
@@ -158,6 +161,7 @@ class StockLedgerReadService
             Sale::class => ['sale_number', 'Sale'],
             GoodsReceivingNote::class => ['grn_number', 'GRN'],
             StockTransfer::class => ['transfer_number', 'Transfer'],
+            InternalSale::class => ['internal_sale_number', 'Internal Sale'],
             OpeningStock::class => ['reference_number', 'Opening Stock'],
             StockAdjustment::class => ['reference_number', 'Adjustment'],
             Purchase::class => ['reference_number', 'Purchase'],

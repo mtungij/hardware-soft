@@ -4,14 +4,14 @@ use App\Http\Controllers\B2bDocumentController;
 use App\Http\Controllers\CompletePosReceiptController;
 use App\Http\Controllers\CustomerPortal\CustomerFileDownloadController;
 use App\Http\Controllers\GenericExportController;
+use App\Http\Controllers\InternalSaleDocumentController;
 use App\Http\Controllers\ProductionReportExportController;
 use App\Http\Controllers\PurchaseOrderPdfController;
+use App\Http\Controllers\PwaBrandingController;
 use App\Http\Controllers\QuotationTemplatePreviewController;
 use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\StockLedgerPdfController;
 use App\Http\Controllers\StockTransferNoteController;
-use App\Models\Company;
-use App\Models\Setting;
 use App\Models\UserOnboardingProgress;
 use App\Models\UserPreference;
 use App\Services\ProductionReportService;
@@ -20,51 +20,16 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 use Livewire\Volt\Volt;
 
-Route::get('pwa/manifest.json', function () {
-    $isCustomerPortal = request()->getHost() === parse_url(config('app.customer_portal_url', env('CUSTOMER_PORTAL_URL', '')), PHP_URL_HOST);
-    try {
-        $companyName = Schema::hasTable('settings')
-            ? Setting::query()->value('company_name')
-            : null;
-    } catch (Throwable) {
-        $companyName = null;
-    }
-
-    $companyName = $companyName ?: Company::current()?->company_name;
-    $name = $companyName ?: config('app.name', 'Hardex');
-    $shortName = Str::of($name)->squish()->limit(12, '')->value();
-    $description = $isCustomerPortal
-        ? 'Customer portal for checking debts, deposits, receipts, payments, and account statements.'
-        : 'Staff workspace for inventory, sales, accounting, reporting, and administration.';
-    $startUrl = $isCustomerPortal ? '/customer/login' : '/login';
-
-    return response()->json([
-        'name' => $name,
-        'short_name' => $shortName ?: 'Hardex',
-        'description' => $description,
-        'theme_color' => '#06b6d4',
-        'background_color' => '#ffffff',
-        'display' => 'standalone',
-        'orientation' => 'portrait',
-        'start_url' => $startUrl,
-        'scope' => '/',
-        'id' => $isCustomerPortal ? '/customer' : '/staff',
-        'categories' => ['business', 'productivity', 'finance'],
-        'icons' => collect([72, 96, 128, 144, 152, 192, 384, 512])->map(fn (int $size) => [
-            'src' => "/pwa/icons/icon-{$size}x{$size}.png",
-            'sizes' => "{$size}x{$size}",
-            'type' => 'image/png',
-            'purpose' => 'any maskable',
-        ])->values(),
-    ]);
-})->name('pwa.manifest');
+Route::get('manifest.webmanifest', [PwaBrandingController::class, 'manifest'])->name('pwa.manifest');
+Route::get('pwa/manifest.json', [PwaBrandingController::class, 'manifest'])->name('pwa.legacy-manifest');
+Route::get('manifest.json', [PwaBrandingController::class, 'manifest'])->name('pwa.static-legacy-manifest');
+Route::get('pwa/brand-icon/{size}.png', [PwaBrandingController::class, 'icon'])
+    ->whereNumber('size')->name('pwa.brand-icon');
 
 Route::get('pwa/icons/{filename}', function (string $filename) {
     abort_unless(preg_match('/^icon-(72|96|128|144|152|192|384|512)x\1\.png$/', $filename), 404);
-
     $path = public_path("icons/{$filename}");
     abort_unless(is_file($path), 404);
 
@@ -263,11 +228,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('dispensing-stock', 'dispensing-stock.index')->middleware('can:stock.view')->name('dispensing-stock.index');
     Volt::route('inventory-summary', 'inventory-summary.index')->middleware('can:stock.view')->name('inventory-summary.index');
     Volt::route('stock-movements', 'stock-movements.index')->middleware('can:stock.view')->name('stock-movements.index');
+    Volt::route('location-pricing', 'location-pricing.index')->middleware('can:location_prices.view')->name('location-pricing.index');
+    Volt::route('internal-sales', 'internal-sales.index')->middleware('can:internal_sales.view')->name('internal-sales.index');
+    Volt::route('internal-sales/create', 'internal-sales.create')->middleware('can:internal_sales.create')->name('internal-sales.create');
+    Volt::route('internal-sales/{internalSale}/edit', 'internal-sales.create')->middleware('can:internal_sales.create')->name('internal-sales.edit');
+    Route::get('internal-sales/{internalSale}/delivery-note', [InternalSaleDocumentController::class, 'printDelivery'])->name('internal-sales.delivery-note.print');
+    Route::get('internal-sales/{internalSale}/delivery-note/pdf', [InternalSaleDocumentController::class, 'pdfDelivery'])->name('internal-sales.delivery-note.pdf');
+    Route::get('internal-sales/{internalSale}/value-note', [InternalSaleDocumentController::class, 'printValue'])->name('internal-sales.value-note.print');
+    Route::get('internal-sales/{internalSale}/value-note/pdf', [InternalSaleDocumentController::class, 'pdfValue'])->name('internal-sales.value-note.pdf');
+    Volt::route('internal-sales/{internalSale}', 'internal-sales.show')->middleware('can:internal_sales.view')->name('internal-sales.show');
+
     Volt::route('reports/sales', 'reports.sales')->middleware('can:reports.sales')->name('reports.sales');
     Volt::route('reports/purchases', 'reports.purchases')->middleware(['warehouse.enabled', 'can:reports.purchases'])->name('reports.purchases');
     Volt::route('reports/expenses', 'reports.expenses')->middleware('can:reports.expenses')->name('reports.expenses');
     Volt::route('reports/stock-valuation', 'reports.stock-valuation')->middleware(['can:reports.stock', 'can:stock.view_value'])->name('reports.stock-valuation');
     Volt::route('reports/profit-loss', 'reports.profit-loss')->middleware('can:reports.profit')->name('reports.profit-loss');
+    Volt::route('reports/location-margins', 'reports.location-margins')->middleware(['can:reports.location_margins', 'can:stock.view_value', 'can:internal_sales.view_margin'])->name('reports.location-margins');
+    Volt::route('reports/internal-sales', 'reports.internal-sales')->name('reports.internal-sales');
     Volt::route('reports/cashbook', 'reports.cashbook')->middleware('can:accounting.cashflow')->name('reports.cashbook');
     Route::get('reports/{report}/export/{format}', ReportExportController::class)->middleware('can:reports.export')->name('reports.export');
     Route::get('exports/{export}/{format}', GenericExportController::class)->middleware('can:reports.export')->where('export', '.*')->name('exports.download');

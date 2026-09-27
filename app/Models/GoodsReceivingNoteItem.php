@@ -29,6 +29,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'cost_price',
     'unit_cost',
     'total_cost',
+    'supplier_line_cost',
+    'allocated_additional_cost',
+    'landed_line_cost',
+    'landed_unit_cost',
+    'landed_base_unit_cost',
     'batch_number',
     'expiry_date',
     'notes',
@@ -83,6 +88,11 @@ class GoodsReceivingNoteItem extends Model
             'previously_received_quantity' => 'decimal:4',
             'unit_cost' => 'decimal:2',
             'total_cost' => 'decimal:2',
+            'supplier_line_cost' => 'decimal:2',
+            'allocated_additional_cost' => 'decimal:2',
+            'landed_line_cost' => 'decimal:2',
+            'landed_unit_cost' => 'decimal:4',
+            'landed_base_unit_cost' => 'decimal:6',
             'expiry_date' => 'date',
         ];
     }

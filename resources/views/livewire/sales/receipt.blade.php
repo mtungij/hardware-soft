@@ -418,7 +418,7 @@ mount(function (Sale $sale) {
                     @if ((float) $item->allocated_order_discount > 0)
                         <p class="receipt-item-discount mt-0.5">Order discount allocation: {{ \App\Support\NumberFormatter::money($item->allocated_order_discount) }}</p>
                     @elseif ($discountPerUnit > 0)
-                        <p class="receipt-item-discount mt-0.5">Discount: {{ \App\Support\NumberFormatter::money($item->discount_total ?: $item->discount_amount) }}</p>
+                        <p class="receipt-item-discount mt-0.5">Discount: {{ \App\Support\NumberFormatter::money($discountPerUnit) }} each</p>
                     @endif
                 </div>
             @endforeach

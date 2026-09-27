@@ -5,6 +5,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\StockLocation;
 use App\Services\InventoryService;
+use App\Services\LocationPriceService;
 use App\Services\ProductUnitConversionService;
 use App\Support\InventorySettings;
 use App\Support\UiText;
@@ -105,19 +106,16 @@ $requestStockLocationChange = function ($locationId) {
     $this->applyStockLocation($locationId);
 };
 
-$priceForProduct = function (Product $product, ?int $conversionId = null): string {
-    if ($conversionId) {
-        $conversion = app(ProductUnitConversionService::class)->resolveForSale($product, $conversionId);
-        $price = $conversion->priceFor($this->sale_type);
+$priceForProduct = function (Product $product, ?int $conversionId = null, ?int $locationId = null): string {
+    $location = $this->allowedSaleLocations()->firstWhere('id', $locationId ?: (int) $this->stock_location_id);
+    $conversion = $conversionId
+        ? app(ProductUnitConversionService::class)->resolveForSale($product, $conversionId)
+        : null;
+    $price = $location
+        ? app(LocationPriceService::class)->priceFor($product, $location, $this->sale_type, $conversion)
+        : null;
 
-        return $price === null ? '' : (string) $price;
-    }
-
-    if ($this->sale_type === 'wholesale') {
-        return filled($product->wholesale_price) ? (string) $product->wholesale_price : '';
-    }
-
-    return (string) $product->selling_price;
+    return $price === null ? '' : number_format((float) $price, 2, '.', '');
 };
 
 $updatedSaleType = function () {
@@ -128,7 +126,7 @@ $updatedSaleType = function () {
             continue;
         }
 
-        $unitPrice = $this->priceForProduct($product, filled($item['product_unit_conversion_id'] ?? null) ? (int) $item['product_unit_conversion_id'] : null);
+        $unitPrice = $this->priceForProduct($product, filled($item['product_unit_conversion_id'] ?? null) ? (int) $item['product_unit_conversion_id'] : null, (int) ($item['stock_location_id'] ?? 0));
 
         if ($unitPrice === '') {
             $this->cart[$index]['unit_price'] = '0';
@@ -305,6 +303,20 @@ $changeLineLocation = function (int $index, $locationId): void {
     }
     $this->cart[$index]['stock_location_id'] = $locationId;
     $this->cart[$index]['stock_location_name'] = $selected['name'];
+    $product = Product::query()->findOrFail($productId);
+    $price = $this->priceForProduct($product,
+        filled($this->cart[$index]['product_unit_conversion_id'] ?? null) ? (int) $this->cart[$index]['product_unit_conversion_id'] : null,
+        $locationId);
+    if ($price === '') {
+        $this->addError("cart.{$index}.unit_price", 'No '.$this->sale_type.' price is configured for this unit.');
+
+        return;
+    }
+    $this->cart[$index]['unit_price'] = $price;
+    $this->cart[$index]['tax_amount'] = (string) app(InventoryService::class)->saleTaxPerUnit($product, (float) $price);
+    $this->dispatch('money-input-updated', model: "cart.{$index}.unit_price", value: $price);
+    $this->syncDefaultPaymentAmount();
+
     $conversionFactor = max(0.0001, (float) ($this->cart[$index]['conversion_factor'] ?? 1));
     $available = ($this->cart[$index]['uses_direct_conversion'] ?? false)
         ? $selected['stock'] / $conversionFactor
@@ -341,14 +353,14 @@ $changeLineUnit = function (int $index, string $selection): void {
         $this->cart[$index]['selling_unit'] = $product->unit?->short_name;
         $this->cart[$index]['conversion_factor'] = '1';
         $this->cart[$index]['uses_direct_conversion'] = true;
-        $unitPrice = $this->priceForProduct($product);
+        $unitPrice = $this->priceForProduct($product, null, (int) ($item['stock_location_id'] ?? 0));
     } elseif ($selection === 'default') {
         $this->cart[$index]['product_unit_conversion_id'] = '';
         $this->cart[$index]['selling_unit_id'] = $product->selling_unit_id ?: $product->unit_id;
         $this->cart[$index]['selling_unit'] = $product->sellingUnit?->short_name ?: $product->unit?->short_name;
         $this->cart[$index]['conversion_factor'] = (string) $product->saleConversionFactor();
         $this->cart[$index]['uses_direct_conversion'] = false;
-        $unitPrice = $this->priceForProduct($product);
+        $unitPrice = $this->priceForProduct($product, null, (int) ($item['stock_location_id'] ?? 0));
     } else {
         $conversion = app(ProductUnitConversionService::class)->resolveForSale($product, (int) $selection);
         $this->cart[$index]['product_unit_conversion_id'] = (string) $conversion->id;
@@ -356,7 +368,7 @@ $changeLineUnit = function (int $index, string $selection): void {
         $this->cart[$index]['selling_unit'] = $conversion->unit?->short_name;
         $this->cart[$index]['conversion_factor'] = (string) $conversion->conversion_factor;
         $this->cart[$index]['uses_direct_conversion'] = true;
-        $unitPrice = $this->priceForProduct($product, $conversion->id);
+        $unitPrice = $this->priceForProduct($product, $conversion->id, (int) ($item['stock_location_id'] ?? 0));
     }
 
     if ($unitPrice === '') {
@@ -407,7 +419,7 @@ $addProduct = function (int $productId, $locationId = null) {
         return;
     }
 
-    $unitPrice = $this->priceForProduct($product);
+    $unitPrice = $this->priceForProduct($product, null, (int) $selectedLocation['id']);
 
     if ($unitPrice === '') {
         $this->addError('cart', UiText::translate('Wholesale price is not set for this product.'));
@@ -803,7 +815,9 @@ $completeSale = function (InventoryService $inventory) {
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 @foreach ($products as $product)
                     @php
-                        $displayPrice = $sale_type === 'wholesale' ? $product->wholesale_price : $product->selling_price;
+                        $displayPrice = ($selectedPriceLocation = $this->currentSaleLocation())
+                            ? app(LocationPriceService::class)->priceFor($product, $selectedPriceLocation, $sale_type)
+                            : null;
                         $supportsFractionalSales = $product->allowsDecimalQuantities();
                         $sellingUnitLabel = $product->sellingUnit?->short_name ?: $product->unit?->short_name;
                         $baseUnitLabel = $product->unit?->short_name;
@@ -833,22 +847,57 @@ $completeSale = function (InventoryService $inventory) {
                             <p class="mt-1 truncate text-[13px] text-[#6B7280]">SKU: {{ $product->sku ?: '-' }}</p>
                         </div>
 
-                        <div class="mt-3">
-                            <span class="text-[28px] font-extrabold leading-none text-[#00B5E2]">TZS {{ \App\Support\NumberFormatter::money($displayPrice) }}</span>
-                        </div>
+                        @if ($selectedPriceLocation)
+                            <div class="mt-3">
+                                @if ($displayPrice !== null)
+                                    <span class="text-[28px] font-extrabold leading-none text-[#00B5E2]">
+                                        TZS {{ \App\Support\NumberFormatter::money($displayPrice) }}
+                                    </span>
+                                @else
+                                    <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                                        <p class="text-sm font-black text-amber-700">Price not set</p>
+                                        <p class="mt-0.5 text-xs font-semibold text-amber-600">
+                                            Set {{ ucfirst($sale_type) }} price for {{ $selectedPriceLocation->name }} in Location Pricing.
+                                        </p>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
 
                         <div class="mt-auto space-y-2 pt-4">
                             @forelse($locationBalances as $balance)
                                 @php
                                     $sellingStock = $balance['stock'] * $conversionFactor;
+                                    $rowLocation = $this->allowedSaleLocations()->firstWhere('id', (int) $balance['id']);
+                                    $rowPrice = $rowLocation
+                                        ? app(LocationPriceService::class)->priceFor($product, $rowLocation, $sale_type)
+                                        : null;
                                     $stockStateClasses = $balance['stock'] <= 0
                                         ? 'bg-[#FEE2E2] text-[#DC2626]'
                                         : ($balance['stock'] <= (float) $product->reorder_level
                                             ? 'bg-[#FEF3C7] text-[#D97706]'
                                             : 'bg-[#DCFCE7] text-[#15803D]');
                                 @endphp
-                                <button type="button" wire:click="addProduct({{ $product->id }}, {{ $balance['id'] }})" wire:loading.attr="disabled" wire:target="addProduct" @disabled($balance['stock'] <= 0) class="flex w-full items-center justify-between gap-3 rounded-[10px] border border-[#E5E7EB] bg-white px-3 py-2 text-left text-[13px] transition hover:border-[#00B5E2] hover:bg-sky-50 disabled:cursor-not-allowed disabled:hover:border-[#E5E7EB] disabled:hover:bg-white">
-                                    <span class="min-w-0 truncate font-semibold text-[#374151]">{{ $balance['name'] }}</span>
+                                <button
+                                    type="button"
+                                    wire:click="addProduct({{ $product->id }}, {{ $balance['id'] }})"
+                                    wire:loading.attr="disabled"
+                                    wire:target="addProduct"
+                                    @disabled($balance['stock'] <= 0 || $rowPrice === null)
+                                    class="flex w-full items-center justify-between gap-3 rounded-[10px] border border-[#E5E7EB] bg-white px-3 py-2 text-left text-[13px] transition hover:border-[#00B5E2] hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-[#E5E7EB] disabled:hover:bg-white"
+                                >
+                                    <span class="min-w-0">
+                                        <span class="block truncate font-semibold text-[#374151]">{{ $balance['name'] }}</span>
+                                        @if ($rowPrice !== null)
+                                            <span class="block text-xs font-bold text-[#00B5E2]">
+                                                TZS {{ \App\Support\NumberFormatter::money($rowPrice) }}
+                                            </span>
+                                        @else
+                                            <span class="block text-xs font-bold text-amber-600">
+                                                Price not set
+                                            </span>
+                                        @endif
+                                    </span>
                                     <span class="shrink-0 rounded-md px-2 py-1 font-bold {{ $stockStateClasses }}">{{ \App\Support\NumberFormatter::quantity($sellingStock) }} {{ $sellingUnitLabel }}</span>
                                 </button>
                             @empty

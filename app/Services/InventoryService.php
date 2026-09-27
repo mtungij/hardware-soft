@@ -8,6 +8,7 @@ use App\Models\GoodsReceivingNote;
 use App\Models\Product;
 use App\Models\ProductUnitConversion;
 use App\Models\Purchase;
+use App\Models\PurchaseCostType;
 use App\Models\PurchaseItem;
 use App\Models\Sale;
 use App\Models\StockAdjustment;
@@ -184,7 +185,25 @@ class InventoryService
 
         $value = $incoming->sum(fn (StockMovement $movement) => (float) $movement->quantity * (float) $movement->unit_cost);
 
-        return round($value / $quantity, 2);
+        return round($value / $quantity, 6);
+    }
+
+    public function getLocationAcquisitionCost(int $productId, int $stockLocationId, ?int $branchId = null): float
+    {
+        $location = StockLocation::query()->findOrFail($stockLocationId);
+        $incoming = StockMovement::query()
+            ->where('company_id', $location->company_id)
+            ->where('product_id', $productId)
+            ->where('stock_location_id', $stockLocationId)
+            ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
+            ->whereIn('movement_type', StockMovement::POSITIVE_TYPES)
+            ->get();
+        $quantity = (float) $incoming->sum('quantity');
+        if ($quantity <= 0) {
+            return 0;
+        }
+
+        return round($incoming->sum(fn (StockMovement $movement) => (float) $movement->quantity * (float) ($movement->location_acquisition_unit_cost ?? $movement->unit_cost ?? 0)) / $quantity, 6);
     }
 
     public function generatePurchaseReference(): string
@@ -550,9 +569,14 @@ class InventoryService
                 );
                 $explicitBaseUnit = array_key_exists('selling_unit_id', $row)
                     && (int) $row['selling_unit_id'] === (int) $product->unit_id;
-                $unitPrice = $selectedConversion
-                    ? $selectedConversion->priceFor($saleType)
-                    : (float) ($saleType === 'wholesale' ? $product->wholesale_price : $product->selling_price);
+                $unitPrice = app(LocationPriceService::class)->priceFor($product, $location, $saleType, $selectedConversion);
+
+                if ($unitPrice === null && ! $useApprovedSnapshotPrices) {
+                    throw ValidationException::withMessages([
+                        "cart.{$index}.unit_price" => ucfirst($saleType).' price is not set for '.$location->name.'. Configure it in Location Pricing before completing the sale.',
+                    ]);
+                }
+
                 if ($useApprovedSnapshotPrices) {
                     if (! is_numeric($row['approved_unit_price'] ?? null) || (float) $row['approved_unit_price'] < 0) {
                         throw ValidationException::withMessages(["cart.{$index}.approved_unit_price" => 'The approved quotation price is invalid.']);
@@ -711,6 +735,7 @@ class InventoryService
                         ? $this->getAverageCost($product->id, $location->id, $branchId) * $conversionFactor
                         : $this->getAverageCost($product->id, $location->id, $branchId) / $conversionFactor,
                     'base_unit_cost' => $this->getAverageCost($product->id, $location->id, $branchId),
+                    'location_base_unit_cost' => $this->getLocationAcquisitionCost($product->id, $location->id, $branchId),
                 ];
             }
 
@@ -858,6 +883,7 @@ class InventoryService
                     'base_unit_name_snapshot' => $item['base_unit_name_snapshot'],
                     'base_unit_code_snapshot' => $item['base_unit_code_snapshot'],
                     'base_unit_cost' => $item['base_unit_cost'],
+                    'location_base_unit_cost' => $item['location_base_unit_cost'],
                     'unit_cost' => $item['unit_cost'],
                     'unit_price' => $item['unit_price'],
                     'item_discount_type' => $item['item_discount_type'],
@@ -882,6 +908,7 @@ class InventoryService
                     'quantity_in' => 0,
                     'quantity_out' => $item['base_quantity'],
                     'unit_cost' => $item['base_unit_cost'],
+                    'location_acquisition_unit_cost' => $item['location_base_unit_cost'],
                     'unit_price' => $item['unit_price'],
                     'reference_type' => Sale::class,
                     'reference_id' => $sale->id,
@@ -939,6 +966,7 @@ class InventoryService
                     'unit_cost' => $item->conversion_factor_to_base !== null
                         ? (float) $item->unit_cost / max(0.0001, (float) $item->conversion_factor_to_base)
                         : (float) $item->unit_cost * (float) ($item->conversion_factor ?: 1),
+                    'location_acquisition_unit_cost' => $item->location_base_unit_cost ?? $item->base_unit_cost,
                     'unit_price' => $item->unit_price,
                     'reference_type' => Sale::class,
                     'reference_id' => $sale->id,
@@ -1107,6 +1135,65 @@ class InventoryService
                         throw ValidationException::withMessages(['lines' => 'Enter at least one quantity to receive.']);
                     }
 
+                    // Allocate receipt-specific charges in cents so every cent is assigned once.
+                    $rawCosts = $header['additional_costs'] ?? [];
+                    if (! is_array($rawCosts)) {
+                        throw ValidationException::withMessages(['additional_costs' => 'Additional costs must be a list.']);
+                    }
+                    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes((int) $purchase->company_id);
+                    $types = PurchaseCostType::query()
+                        ->where('company_id', $purchase->company_id)->where('is_active', true)->get()->keyBy('id');
+                    $costRows = [];
+                    $additionalCents = 0;
+                    foreach ($rawCosts as $index => $raw) {
+                        if (! is_array($raw)) {
+                            throw ValidationException::withMessages(["additional_costs.{$index}" => 'Invalid cost row.']);
+                        }
+                        if (collect($raw)->every(fn ($value) => blank($value))) {
+                            continue;
+                        }
+                        $type = $types->get((int) ($raw['type_id'] ?? 0));
+                        if (! $type || $type->name === 'Product Cost') {
+                            throw ValidationException::withMessages(["additional_costs.{$index}.type_id" => 'Select an active additional cost type.']);
+                        }
+                        $amount = trim((string) ($raw['amount'] ?? ''));
+                        if (! preg_match('/^\d+(?:\.\d{1,2})?$/', $amount) || (float) $amount <= 0) {
+                            throw ValidationException::withMessages(["additional_costs.{$index}.amount" => 'Enter a positive amount with at most two decimal places.']);
+                        }
+                        foreach (['payee' => 255, 'payment_method' => 100, 'payment_reference' => 255, 'notes' => 1000] as $field => $limit) {
+                            if (mb_strlen((string) ($raw[$field] ?? '')) > $limit) {
+                                throw ValidationException::withMessages(["additional_costs.{$index}.{$field}" => 'Value is too long.']);
+                            }
+                        }
+                        $cents = (int) round((float) $amount * 100);
+                        $additionalCents += $cents;
+                        $costRows[] = [
+                            'type' => $type, 'amount' => $cents / 100,
+                            'payee' => trim((string) ($raw['payee'] ?? '')) ?: null,
+                            'payment_method' => trim((string) ($raw['payment_method'] ?? '')) ?: null,
+                            'payment_reference' => trim((string) ($raw['payment_reference'] ?? '')) ?: null,
+                            'notes' => trim((string) ($raw['notes'] ?? '')) ?: null,
+                        ];
+                    }
+                    $goodsCents = 0;
+                    foreach ($receivable as &$line) {
+                        $line['goods_cents'] = (int) round($line['quantity'] * $line['unit_cost'] * 100);
+                        $goodsCents += $line['goods_cents'];
+                    }
+                    unset($line);
+                    if ($additionalCents > 0 && $goodsCents <= 0) {
+                        throw ValidationException::withMessages(['additional_costs' => 'A positive goods value is required to allocate additional costs.']);
+                    }
+                    $allocatedCents = 0;
+                    foreach ($receivable as $index => &$line) {
+                        $share = $index === count($receivable) - 1
+                            ? $additionalCents - $allocatedCents
+                            : min($additionalCents - $allocatedCents, (int) round($additionalCents * $line['goods_cents'] / max(1, $goodsCents)));
+                        $line['allocated_cents'] = $share;
+                        $allocatedCents += $share;
+                    }
+                    unset($line);
+
                     $defaultLocationId = (int) ($header['default_stock_location_id'] ?? $receivable[0]['location']->id);
                     $companyId = (int) $purchase->company_id;
                     $grnNumber = $systemGeneratedGrn
@@ -1134,7 +1221,23 @@ class InventoryService
                         'posted_by' => ($header['status'] ?? 'posted') === 'posted' ? $receivedBy : null,
                         'posted_at' => ($header['status'] ?? 'posted') === 'posted' ? now() : null,
                         'notes' => $notes,
+                        'goods_value' => $goodsCents / 100,
+                        'additional_cost_total' => $additionalCents / 100,
+                        'landed_total' => ($goodsCents + $additionalCents) / 100,
                     ]);
+
+                    foreach ($costRows as $row) {
+                        $grn->additionalCosts()->create([
+                            'company_id' => $companyId,
+                            'purchase_cost_type_id' => $row['type']->id,
+                            'cost_type_name_snapshot' => $row['type']->name,
+                            'amount' => $row['amount'],
+                            'payee' => $row['payee'],
+                            'payment_method' => $row['payment_method'],
+                            'payment_reference' => $row['payment_reference'],
+                            'notes' => $row['notes'],
+                        ]);
+                    }
 
                     foreach ($receivable as $line) {
                         /** @var PurchaseItem $item */
@@ -1144,7 +1247,9 @@ class InventoryService
                         $quantity = (float) $line['quantity'];
                         $unitCost = (float) $line['unit_cost'];
                         $stockQuantity = $item->stockQuantity($quantity);
-                        $stockUnitCost = round($unitCost / $item->purchaseFactor(), 4);
+                        $landedCents = $line['goods_cents'] + $line['allocated_cents'];
+                        $landedTotal = $landedCents / 100;
+                        $stockUnitCost = round($landedTotal / $stockQuantity, 6);
 
                         $grnItem = $grn->items()->create([
                             'branch_id' => $purchase->branch_id,
@@ -1164,7 +1269,12 @@ class InventoryService
                             'stock_quantity' => $stockQuantity,
                             'cost_price' => $unitCost,
                             'unit_cost' => $unitCost,
-                            'total_cost' => $quantity * $unitCost,
+                            'total_cost' => $line['goods_cents'] / 100,
+                            'supplier_line_cost' => $line['goods_cents'] / 100,
+                            'allocated_additional_cost' => $line['allocated_cents'] / 100,
+                            'landed_line_cost' => $landedTotal,
+                            'landed_unit_cost' => round($landedTotal / $quantity, 4),
+                            'landed_base_unit_cost' => $stockUnitCost,
                             'batch_number' => $line['batch_number'],
                             'expiry_date' => $line['expiry_date'],
                             'notes' => $line['notes'],
@@ -1223,6 +1333,58 @@ class InventoryService
         throw ValidationException::withMessages([
             'grn_number' => 'Imeshindikana kutengeneza namba ya GRN. Tafadhali jaribu tena.',
         ]);
+    }
+
+    public function postGoodsReceipt(GoodsReceivingNote $receipt, int $postedBy): GoodsReceivingNote
+    {
+        return DB::transaction(function () use ($receipt, $postedBy) {
+            $receipt = GoodsReceivingNote::query()->whereKey($receipt->id)->lockForUpdate()->firstOrFail();
+            if ($receipt->status !== 'draft') {
+                throw ValidationException::withMessages(['receipt' => 'Only draft receipts can be posted.']);
+            }
+            $purchase = Purchase::query()->whereKey($receipt->purchase_id)->lockForUpdate()->firstOrFail();
+            if ($purchase->status === 'cancelled') {
+                throw ValidationException::withMessages(['receipt' => 'Cancelled purchases cannot be received.']);
+            }
+            foreach ($receipt->items()->with('purchaseItem')->get() as $line) {
+                $item = PurchaseItem::query()->whereKey($line->purchase_item_id)->lockForUpdate()->firstOrFail();
+                if ((float) $line->received_quantity > $item->remainingQuantity()) {
+                    throw ValidationException::withMessages(['receipt' => 'Receipt quantity exceeds the remaining purchase quantity.']);
+                }
+                $location = StockLocation::query()->findOrFail($line->stock_location_id);
+                if (! $this->canUserReceiveIntoLocation(auth()->user(), $location)) {
+                    throw ValidationException::withMessages(['receipt' => 'You are not allowed to receive stock into this location.']);
+                }
+                StockMovement::create([
+                    'branch_id' => $receipt->branch_id,
+                    'product_id' => $line->product_id,
+                    'stock_location_id' => $line->stock_location_id,
+                    'movement_type' => 'purchase_receipt',
+                    'quantity' => $line->stock_quantity,
+                    'quantity_in' => $line->stock_quantity,
+                    'quantity_out' => 0,
+                    'unit_cost' => $line->landed_base_unit_cost
+                        ?? round((float) $line->cost_price / max(0.0001, (float) $line->conversion_factor_snapshot), 6),
+                    'unit_price' => $item->selling_price,
+                    'reference_type' => GoodsReceivingNote::class,
+                    'reference_id' => $receipt->id,
+                    'notes' => "Purchase {$purchase->reference_number} / {$line->id}",
+                    'created_by' => $postedBy,
+                    'movement_date' => $receipt->received_date,
+                ]);
+                $item->increment('received_quantity', $line->received_quantity);
+                $item->increment('base_received_quantity', $line->stock_quantity);
+            }
+            $receipt->update(['status' => 'posted', 'posted_by' => $postedBy, 'posted_at' => now()]);
+            $fullyReceived = $purchase->items()->get()->every(fn (PurchaseItem $item) => (float) $item->received_quantity >= (float) $item->ordered_quantity);
+            $purchase->update([
+                'status' => $fullyReceived ? 'received' : 'ordered',
+                'received_by' => $postedBy,
+                'received_at' => now(),
+            ]);
+
+            return $receipt->refresh();
+        }, 3);
     }
 
     private function nextGrnNumber(int $companyId, ?int $year = null): string

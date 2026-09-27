@@ -1,9 +1,8 @@
 (() => {
     let deferredInstallPrompt = null;
-    let refreshing = false;
 
     const dismissKey = 'hardex_pwa_install_dismissed_at';
-    const successMessage = 'Hardex App imewekwa kwenye kifaa chako kikamilifu.';
+    const successMessage = () => `${document.querySelector('[data-pwa-install-root]')?.dataset.pwaBrandName || 'Hardex'} App imewekwa kwenye kifaa chako kikamilifu.`;
     const unavailableMessage = 'Install haijapatikana sasa. Tumia menu ya browser kisha chagua Install app au Add to Home Screen.';
 
     const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
@@ -196,60 +195,135 @@
         deferredInstallPrompt = null;
         localStorage.removeItem(dismissKey);
         setInstallButtonsVisible(false);
-        showToast(successMessage);
+        showToast(successMessage());
+        rememberCurrentBrand();
     });
 
     document.addEventListener('DOMContentLoaded', bindInstallButtons);
     document.addEventListener('livewire:navigated', bindInstallButtons);
 
-    if ('serviceWorker' in navigator) {
-        const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+    const brandVersionMeta = () => document.querySelector('meta[name="pwa-brand-version"]');
+    const brandStorageKey = () => `hardex_pwa_brand_version:${document.querySelector('meta[name="pwa-tenant-key"]')?.content || 'generic'}`;
+    const brandNotice = 'App branding has been updated. Your browser may require reinstalling the app to update the installed app name or icon.';
+    let workerRegistration = null;
 
-        if (isLocalHost) {
-            window.addEventListener('load', async () => {
-                const registrations = await navigator.serviceWorker.getRegistrations();
+    const rememberCurrentBrand = () => {
+        const version = brandVersionMeta()?.content;
+        if (version) {
+            localStorage.setItem(brandStorageKey(), version);
+        }
+    };
 
-                await Promise.all(registrations.map((registration) => registration.unregister()));
-
-                if ('caches' in window) {
-                    const keys = await caches.keys();
-
-                    await Promise.all(keys.filter((key) => key.startsWith('hardex-')).map((key) => caches.delete(key)));
-                }
-            });
-
+    const refreshBranding = async (showLegacyNotice = false) => {
+        const manifestLink = document.querySelector('[data-pwa-manifest]');
+        if (!manifestLink) {
             return;
         }
 
-        window.addEventListener('load', async () => {
-            try {
-                const registration = await navigator.serviceWorker.register('/sw.js');
-
-                registration.addEventListener('updatefound', () => {
-                    const worker = registration.installing;
-
-                    if (!worker) {
-                        return;
-                    }
-
-                    worker.addEventListener('statechange', () => {
-                        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-                            worker.postMessage({ type: 'SKIP_WAITING' });
-                        }
-                    });
-                });
-            } catch (error) {
-                console.warn('Hardex service worker registration failed.', error);
-            }
-        });
-
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (refreshing) {
+        try {
+            const manifestUrl = new URL(manifestLink.href);
+            manifestUrl.searchParams.delete('v');
+            const response = await fetch(manifestUrl, {
+                cache: 'no-store',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/manifest+json' }
+            });
+            if (!response.ok) {
                 return;
             }
+            const manifest = await response.json();
+            const version = manifest.version;
+            if (!version) {
+                return;
+            }
+            const previous = localStorage.getItem(brandStorageKey());
+            const changed = previous && previous !== version;
+            if (isStandalone() && (changed || showLegacyNotice)) {
+                showToast(brandNotice);
+            }
+            localStorage.setItem(brandStorageKey(), version);
+            brandVersionMeta().content = version;
+            manifestUrl.searchParams.set('v', version);
+            manifestLink.href = manifestUrl.toString();
 
-            refreshing = true;
-            window.location.reload();
+            const icon192 = manifest.icons?.find((icon) => icon.sizes === '192x192')?.src;
+            if (icon192) {
+                document.querySelectorAll('[data-pwa-icon], [data-pwa-apple-icon]').forEach((link) => {
+                    link.href = icon192;
+                });
+            }
+            document.querySelector('[data-pwa-theme-color]')?.setAttribute('content', manifest.theme_color);
+            document.querySelector('[data-pwa-app-name]')?.setAttribute('content', manifest.name);
+            document.querySelector('[data-pwa-application-name]')?.setAttribute('content', manifest.name);
+            document.querySelectorAll('[data-pwa-install-root]').forEach((root) => {
+                root.dataset.pwaBrandName = manifest.name;
+                const button = root.querySelector('[data-pwa-install-button]');
+                button?.setAttribute('aria-label', `Install ${manifest.name} App`);
+                button?.setAttribute('title', `Install ${manifest.name} App`);
+            });
+        } catch (error) {
+            console.warn('PWA branding refresh failed.', error);
+        }
+    };
+
+    const checkForUpdates = async () => {
+        await refreshBranding();
+        try {
+            await workerRegistration?.update();
+        } catch (error) {
+            console.warn('PWA update check failed.', error);
+        }
+    };
+
+    window.addEventListener('hardex-brand-updated', checkForUpdates);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            checkForUpdates();
+        }
+    });
+
+    window.addEventListener('load', async () => {
+        const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+        let hadLegacyCache = false;
+        if ('caches' in window) {
+            const keys = await caches.keys();
+            hadLegacyCache = keys.some((key) => key.startsWith('hardex-customer-pwa-v4'));
+            if (isLocalHost) {
+                await Promise.all(keys.filter((key) => key.startsWith('hardex-')).map((key) => caches.delete(key)));
+            }
+        }
+
+        await refreshBranding(hadLegacyCache && !localStorage.getItem(brandStorageKey()));
+
+        if (!('serviceWorker' in navigator)) {
+            return;
+        }
+        if (isLocalHost) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((registration) => registration.unregister()));
+            return;
+        }
+
+        try {
+            workerRegistration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+            workerRegistration.addEventListener('updatefound', () => {
+                const worker = workerRegistration.installing;
+                worker?.addEventListener('statechange', () => {
+                    if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                        worker.postMessage({ type: 'SKIP_WAITING' });
+                    }
+                });
+            });
+            await workerRegistration.update();
+        } catch (error) {
+            console.warn('Hardex service worker registration failed.', error);
+        }
+    });
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            // New assets are used on the next navigation; avoid discarding unsaved work.
+            refreshBranding();
         });
     }
 })();

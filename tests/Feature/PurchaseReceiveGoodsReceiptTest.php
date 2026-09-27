@@ -6,9 +6,13 @@ use App\Models\DocumentSequence;
 use App\Models\GoodsReceivingNote;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\PurchaseCostType;
+use App\Models\Sale;
+use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
 use App\Services\InventoryService;
+use App\Services\PurchaseCostBreakdownService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -223,3 +227,155 @@ function grnPurchase(Branch $branch, User $user, float $quantity = 1): array
 
     return [$purchase, $item];
 }
+
+test('receipt landed costs are snapshotted and valued separately from supplier payable', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 100);
+    $item->update(['cost_price' => 15000, 'line_total' => 1500000]);
+    $purchase->update(['total_amount' => 1500000, 'balance_amount' => 1500000]);
+    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes($purchase->company_id);
+    $transport = PurchaseCostType::where('name', 'Transportation')->firstOrFail();
+    $duty = PurchaseCostType::where('name', 'Import Duty')->firstOrFail();
+
+    $receipt = app(InventoryService::class)->receivePurchase(
+        $purchase, [$item->id => ['quantity' => 100, 'stock_location_id' => $this->location->id]],
+        today()->toDateString(), $this->admin->id,
+        header: ['additional_costs' => [
+            ['type_id' => $transport->id, 'amount' => '120000', 'payee' => 'Haulier', 'payment_method' => 'bank', 'payment_reference' => 'TR-1'],
+            ['type_id' => $duty->id, 'amount' => '80000', 'payee' => 'Government'],
+        ]],
+    );
+    $line = $receipt->items()->firstOrFail();
+    $movement = StockMovement::where('reference_type', GoodsReceivingNote::class)
+        ->where('reference_id', $receipt->id)->firstOrFail();
+
+    expect((float) $receipt->goods_value)->toBe(1500000.0)
+        ->and((float) $receipt->additional_cost_total)->toBe(200000.0)
+        ->and((float) $receipt->landed_total)->toBe(1700000.0)
+        ->and((float) $line->allocated_additional_cost)->toBe(200000.0)
+        ->and((float) $line->landed_unit_cost)->toBe(17000.0)
+        ->and((float) $movement->quantity)->toBe((float) $line->stock_quantity)
+        ->and((float) $movement->unit_cost)->toBe((float) $line->landed_base_unit_cost)
+        ->and((float) $purchase->fresh()->balance_amount)->toBe(1500000.0)
+        ->and($receipt->additionalCosts()->count())->toBe(2)
+        ->and($receipt->additionalCosts()->first()->payee)->toBe('Haulier');
+
+    $this->get(route('goods-receipts.show', $receipt))
+        ->assertOk()
+        ->assertSee('Total Landed Cost')
+        ->assertSee('Haulier');
+
+    $item->product->update(['buying_price' => 99999]);
+    expect((float) $receipt->items()->first()->cost_price)->toBe(15000.0)
+        ->and((float) $receipt->items()->first()->landed_unit_cost)->toBe(17000.0);
+});
+
+test('additional cost allocation follows received goods value and each partial receipt has its own cost', function () {
+    [$purchase, $first] = grnPurchase($this->branch, $this->admin, 100);
+    $first->update(['cost_price' => 15000, 'line_total' => 1500000]);
+    $secondProduct = Product::whereKeyNot($first->product_id)->firstOrFail();
+    $second = $purchase->items()->create([
+        'company_id' => $purchase->company_id, 'product_id' => $secondProduct->id,
+        'purchase_unit_id' => $secondProduct->unit_id, 'stock_unit_id' => $secondProduct->unit_id,
+        'purchase_conversion_factor' => 1, 'ordered_quantity' => 100, 'received_quantity' => 0,
+        'cost_price' => 35000, 'selling_price' => 40000, 'line_total' => 3500000,
+    ]);
+    $purchase->update(['total_amount' => 5000000, 'balance_amount' => 5000000]);
+    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes($purchase->company_id);
+    $transport = PurchaseCostType::where('name', 'Transportation')->firstOrFail();
+    $service = app(InventoryService::class);
+
+    $receipt = $service->receivePurchase($purchase, [
+        $first->id => ['quantity' => 100, 'stock_location_id' => $this->location->id],
+        $second->id => ['quantity' => 100, 'stock_location_id' => $this->location->id],
+    ], today()->toDateString(), $this->admin->id,
+        header: ['additional_costs' => [['type_id' => $transport->id, 'amount' => '500000']]]);
+    expect((float) $receipt->items()->where('purchase_item_id', $first->id)->first()->allocated_additional_cost)->toBe(150000.0)
+        ->and((float) $receipt->items()->where('purchase_item_id', $second->id)->first()->allocated_additional_cost)->toBe(350000.0);
+
+    [$partialPurchase, $partialItem] = grnPurchase($this->branch, $this->admin, 100);
+    $partialItem->update(['cost_price' => 15000]);
+    $one = $service->receivePurchase($partialPurchase, [
+        $partialItem->id => ['quantity' => 40, 'stock_location_id' => $this->location->id],
+    ], today()->toDateString(), $this->admin->id,
+        header: ['additional_costs' => [['type_id' => $transport->id, 'amount' => '120000']]]);
+    $two = $service->receivePurchase($partialPurchase->fresh(), [
+        $partialItem->id => ['quantity' => 60, 'stock_location_id' => $this->location->id],
+    ], today()->toDateString(), $this->admin->id);
+
+    expect((float) $one->landed_total)->toBe(720000.0)
+        ->and((float) $one->items()->first()->landed_unit_cost)->toBe(18000.0)
+        ->and((float) $two->landed_total)->toBe(900000.0)
+        ->and((float) $two->items()->first()->landed_unit_cost)->toBe(15000.0);
+});
+
+test('draft receipt posts its saved converted base unit cost once', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 10);
+    $item->update(['purchase_conversion_factor' => 12, 'cost_price' => 180000, 'line_total' => 1800000]);
+    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes($purchase->company_id);
+    $transport = PurchaseCostType::where('name', 'Transportation')->firstOrFail();
+    $service = app(InventoryService::class);
+
+    $draft = $service->receivePurchase($purchase, [
+        $item->id => ['quantity' => 10, 'stock_location_id' => $this->location->id],
+    ], today()->toDateString(), $this->admin->id,
+        header: ['status' => 'draft', 'additional_costs' => [['type_id' => $transport->id, 'amount' => '120000']]]);
+    expect((float) $draft->items()->first()->stock_quantity)->toBe(120.0)
+        ->and((float) $draft->items()->first()->landed_base_unit_cost)->toBe(16000.0)
+        ->and((float) $item->fresh()->received_quantity)->toBe(0.0);
+
+    $service->postGoodsReceipt($draft, $this->admin->id);
+    $movement = StockMovement::where('reference_type', GoodsReceivingNote::class)
+        ->where('reference_id', $draft->id)->firstOrFail();
+    expect((float) $movement->quantity)->toBe(120.0)
+        ->and((float) $movement->unit_cost)->toBe(16000.0)
+        ->and((float) $item->fresh()->received_quantity)->toBe(10.0)
+        ->and((float) $item->fresh()->base_received_quantity)->toBe(120.0)
+        ->and(fn () => $service->postGoodsReceipt($draft->fresh(), $this->admin->id))->toThrow(ValidationException::class);
+});
+
+test('sale COGS and remaining stock valuation use received landed unit cost', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 10);
+    $item->update(['cost_price' => 100, 'line_total' => 1000]);
+    $item->product->update(['buying_price' => 100, 'selling_price' => 200]);
+    $this->location->update(['can_sell' => true, 'is_sellable' => true]);
+    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes($purchase->company_id);
+    $transport = PurchaseCostType::where('name', 'Transportation')->firstOrFail();
+    $service = app(InventoryService::class);
+    $service->receivePurchase($purchase, [
+        $item->id => ['quantity' => 10, 'stock_location_id' => $this->location->id],
+    ], today()->toDateString(), $this->admin->id,
+        header: ['additional_costs' => [['type_id' => $transport->id, 'amount' => '200']]]);
+
+    expect($service->getAverageCost($item->product_id, $this->location->id, $this->branch->id))->toBe(120.0)
+        ->and($service->getProductStock($item->product_id, $this->location->id, $this->branch->id))->toBe(10.0);
+
+    $sale = $service->completeSale(
+        [['product_id' => $item->product_id, 'quantity' => 1, 'sale_type' => 'retail', 'unit_price' => 200, 'discount_amount' => 0, 'tax_amount' => 0]],
+        [['payment_method' => 'cash', 'amount' => 200]],
+        null, $this->location->id, $this->branch->id, $this->admin->id,
+    );
+    expect((float) $sale->items()->first()->base_unit_cost)->toBe(120.0)
+        ->and((float) StockMovement::where('reference_type', Sale::class)->where('reference_id', $sale->id)->first()->unit_cost)->toBe(120.0)
+        ->and($service->getProductStock($item->product_id, $this->location->id, $this->branch->id) * $service->getAverageCost($item->product_id, $this->location->id, $this->branch->id))->toBe(1080.0);
+});
+
+test('receiver can add a configured cost type and post additional costs from the receiving form', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 2);
+    $component = Volt::test('purchases.receive', ['purchase' => $purchase])
+        ->set('new_cost_type', 'Custom Handling')
+        ->call('addCostType')
+        ->assertHasNoErrors()
+        ->call('addAdditionalCost')
+        ->set("lines.{$item->id}.quantity", '2');
+    $type = PurchaseCostType::where('name', 'Custom Handling')->firstOrFail();
+    $component->set('additional_costs.0.type_id', (string) $type->id)
+        ->set('additional_costs.0.amount', '25.50')
+        ->set('additional_costs.0.payee', 'Port agent')
+        ->call('postReceipt')
+        ->assertHasNoErrors();
+
+    $receipt = GoodsReceivingNote::where('purchase_id', $purchase->id)->firstOrFail();
+    expect((float) $receipt->goods_value)->toBe(200.0)
+        ->and((float) $receipt->landed_total)->toBe(225.5)
+        ->and($receipt->additionalCosts()->first()->payee)->toBe('Port agent');
+});

@@ -69,7 +69,7 @@ test('completed dynamic location flows render print and real PDF without stock s
         ->and($this->transfer->fresh()->toJson())->toBe($header)
         ->and($this->transfer->items()->get()->toJson())->toBe($items);
     $posted = StockMovement::where('reference_type', StockTransfer::class)->where('reference_id', $this->transfer->id)->get();
-    expect($posted)->toHaveCount(2)->and($posted->pluck('unit_cost')->all())->toBe(['4000.00', '4000.00']);
+    expect($posted)->toHaveCount(2)->and($posted->pluck('unit_cost')->all())->toBe(['4000.000000', '4000.000000']);
     expect(app(InventoryService::class)->getProductStock($this->product->id, $this->source->id, $this->admin->branch_id))->toEqual(80);
 })->with([['store', 'store'], ['store', 'dispensing'], ['warehouse', 'store'], ['transit', 'dispensing']]);
 

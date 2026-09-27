@@ -6,6 +6,7 @@ use App\Models\Sale;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\InventoryService;
+use App\Services\LocationPriceService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
@@ -20,6 +21,18 @@ beforeEach(function () {
     $this->location->update(['is_active' => true, 'is_sellable' => true, 'can_sell' => true]);
     $this->product = Product::where('sku', 'BM-MAB-G28')->firstOrFail();
     $this->product->update(['buying_price' => 10, 'selling_price' => 100, 'wholesale_price' => 80, 'taxable' => false]);
+
+    app(LocationPriceService::class)->savePrices(
+        $this->product,
+        $this->location,
+        null,
+        [
+            'retail_price' => 100,
+            'wholesale_price' => 80,
+            'internal_sale_price' => null,
+            'is_active' => true,
+        ]
+    );
 
     StockMovement::create([
         'company_id' => $this->branch->company_id, 'branch_id' => $this->branch->id,
@@ -137,6 +150,19 @@ test('whole-sale fixed and percentage discounts are allocated exactly and determ
         $product->sku = 'ORDER-DISCOUNT-'.$number;
         $product->barcode = null;
         $product->save();
+
+        app(LocationPriceService::class)->savePrices(
+            $product,
+            $this->location,
+            null,
+            [
+                'retail_price' => 100,
+                'wholesale_price' => 80,
+                'internal_sale_price' => null,
+                'is_active' => true,
+            ]
+        );
+
         StockMovement::create([
             'company_id' => $this->branch->company_id, 'branch_id' => $this->branch->id,
             'product_id' => $product->id, 'stock_location_id' => $this->location->id,
@@ -209,6 +235,12 @@ test('discount permission is enforced and historical sales retain nullable legac
         discountDetails: ['mode' => 'item'],
     ))->toThrow(ValidationException::class);
 
+    Sale::create([
+        'company_id' => $this->branch->company_id, 'branch_id' => $this->branch->id,
+        'stock_location_id' => $this->location->id, 'sale_number' => 'SALE-SEED-0001',
+        'sale_date' => today(), 'subtotal' => 0, 'total_amount' => 0,
+        'created_by' => $this->admin->id,
+    ]);
     $this->actingAs($cashier);
     Volt::test('pos.index')
         ->assertSeeHtml('data-pos-section="cart-discount-mode"')

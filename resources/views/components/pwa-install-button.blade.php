@@ -1,13 +1,20 @@
+@php
+    $branding = app(\App\Services\PwaBrandingService::class);
+    $pwaBrand = $branding->brand();
+    $brandName = $pwaBrand['name'];
+    $brandIcon = $branding->iconUrl(192, $pwaBrand);
+@endphp
+
 @props([
     'class' => 'hidden inline-flex h-10 w-10 items-center justify-center rounded-xl bg-build-orange text-white shadow-lg shadow-orange-500/25 transition hover:brightness-95 disabled:cursor-wait disabled:opacity-70',
 ])
 
-<div data-pwa-install-root>
+<div data-pwa-install-root data-pwa-brand-name="{{ $brandName }}">
     <button
         type="button"
         data-pwa-install-button
-        aria-label="{{ __('messages.install_app') }}"
-        title="{{ __('messages.install_app') }}"
+        aria-label="Install {{ $brandName }} App"
+        title="Install {{ $brandName }} App"
         class="{{ $class }}"
     >
         <svg aria-hidden="true" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -15,17 +22,17 @@
             <path d="m7 9 5 5 5-5"></path>
             <path d="M5 20h14"></path>
         </svg>
-        <span class="sr-only" data-pwa-install-label>{{ __('messages.install_app') }}</span>
+        <span class="sr-only" data-pwa-install-label>Install {{ $brandName }} App</span>
         <span class="sr-only hidden" data-pwa-install-loading>{{ __('messages.receipts.uploading') }}</span>
     </button>
 
     <div data-pwa-ios-modal aria-hidden="true" class="hidden fixed inset-0 z-[9998] bg-slate-950/60 p-4 backdrop-blur-sm">
         <div class="mx-auto mt-20 max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white">
             <div class="flex items-center gap-3">
-                <img src="{{ asset('images/hardex.png') }}" alt="Hardex" class="h-10 w-10 rounded-xl bg-white object-contain p-1">
+                <img src="{{ $brandIcon }}" alt="{{ $brandName }}" class="h-10 w-10 rounded-xl bg-white object-contain p-1">
                 <div>
-                    <h2 class="text-base font-black">Jinsi ya ku-install Hardex App</h2>
-                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">iPhone / iPad Safari</p>
+                    <h2 class="text-base font-black">Install {{ $brandName }} App</h2>
+                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">This app will use {{ $brandName }} branding. iPhone / iPad Safari</p>
                 </div>
             </div>
             <ol class="mt-4 list-decimal space-y-2 pl-5 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">
@@ -42,10 +49,10 @@
     <div data-pwa-help-modal aria-hidden="true" class="hidden fixed inset-0 z-[9998] bg-slate-950/60 p-4 backdrop-blur-sm">
         <div class="mx-auto mt-20 max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-white">
             <div class="flex items-center gap-3">
-                <img src="{{ asset('images/hardex.png') }}" alt="Hardex" class="h-10 w-10 rounded-xl bg-white object-contain p-1">
+                <img src="{{ $brandIcon }}" alt="{{ $brandName }}" class="h-10 w-10 rounded-xl bg-white object-contain p-1">
                 <div>
-                    <h2 class="text-base font-black">Install Hardex App</h2>
-                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">Browser install instructions</p>
+                    <h2 class="text-base font-black">Install {{ $brandName }} App</h2>
+                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400">This app will use {{ $brandName }} branding.</p>
                 </div>
             </div>
             <div class="mt-4 space-y-3 text-sm font-semibold leading-6 text-slate-600 dark:text-slate-300">

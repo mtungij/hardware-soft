@@ -5,21 +5,14 @@
         <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <title>{{ \App\Models\Company::current()?->company_name ?: __('messages.customer_portal') }}</title>
+        <title>{{ app(\App\Services\PwaBrandingService::class)->brand()['name'] }}</title>
 
         @php
-            $themeColor = '#f97316';
-            $settings = null;
-            $company = \App\Models\Company::current();
-
-            try {
-                if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
-                    $settings = \App\Models\Setting::query()->first();
-                    $themeColor = $settings?->theme_color ?: $themeColor;
-                }
-            } catch (\Throwable) {
-                $settings = null;
-            }
+            $branding = app(\App\Services\PwaBrandingService::class);
+            $brand = $branding->brand();
+            $themeColor = $brand['theme_color'];
+            $settings = $branding->settings();
+            $company = $branding->company();
 
             $companyName = $company?->company_name ?: ($settings?->company_name ?: __('messages.customer_portal'));
             $companyLogo = $company?->logo ?: $settings?->company_logo;

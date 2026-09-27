@@ -9,19 +9,7 @@
         <title>{{ config('app.name', 'Hardex POS') }}</title>
 
         @php
-            $themeColor = '#f97316';
-
-            try {
-                if (\Illuminate\Support\Facades\Schema::hasTable('settings')) {
-                    $savedThemeColor = \App\Models\Setting::query()->value('theme_color');
-
-                    if (is_string($savedThemeColor) && preg_match('/^#[0-9A-Fa-f]{6}$/', $savedThemeColor)) {
-                        $themeColor = $savedThemeColor;
-                    }
-                }
-            } catch (\Throwable) {
-                $themeColor = '#f97316';
-            }
+            $themeColor = app(\App\Services\PwaBrandingService::class)->brand()['theme_color'];
         @endphp
 
         <style>
