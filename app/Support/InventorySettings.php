@@ -13,7 +13,15 @@ class InventorySettings
 {
     public static function current(): Setting
     {
-        return Setting::query()->first() ?: Setting::query()->create(['company_name' => config('app.name', 'Hardex POS')]);
+        $user = auth()->user();
+
+        if ($user?->company_id) {
+            return Setting::query()
+                ->where('company_id', $user->company_id)
+                ->firstOrFail();
+        }
+
+        return Setting::query()->firstOrFail();
     }
 
     public static function warehouseEnabled(): bool
