@@ -5,6 +5,8 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductSize;
 use App\Models\Unit;
+use App\Services\WhatsAppNotificationService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\WithPagination;
 
@@ -169,10 +171,87 @@ $toggleStatus = function (int $productId) {
     session()->flash('success', 'Product status updated.');
 };
 
-$deleteProduct = function (int $productId) {
+$queueProductDeletedNotification = function (Product $product): void {
+    $user = auth()->user();
+
+    $company = $product->company()->withoutGlobalScopes()->first();
+
+    if (! $company) {
+        return;
+    }
+
+    $setting = \App\Models\CompanyWhatsAppSetting::withoutGlobalScopes()
+        ->where('company_id', $company->id)
+        ->first();
+
+    $language = $setting?->notificationLanguage() ?? 'en';
+
+    $productName = $product->displayName();
+    $sku = $product->sku ?: '-';
+    $branchName = $product->branch?->name ?: '-';
+    $deletedBy = $user?->name ?: 'System';
+    $deletedAt = now()->format('d M Y h:i A');
+
+    if ($language === 'sw') {
+        $message = <<<TEXT
+*BIDHAA IMEFUTWA*
+
+Bidhaa: {$productName}
+SKU: {$sku}
+Tawi: {$branchName}
+Amefuta: {$deletedBy}
+Tarehe: {$deletedAt}
+
+Bidhaa hii imeondolewa kwenye orodha ya bidhaa zinazotumika.
+
+{$company->name}
+TEXT;
+    } else {
+        $message = <<<TEXT
+*PRODUCT DELETED*
+
+Product: {$productName}
+SKU: {$sku}
+Branch: {$branchName}
+Deleted By: {$deletedBy}
+Date: {$deletedAt}
+
+The product has been removed from active inventory.
+
+{$company->name}
+TEXT;
+    }
+
+    app(WhatsAppNotificationService::class)->afterCommit(
+        fn (WhatsAppNotificationService $notifications) =>
+            $notifications->queueForRecipients(
+                company: $company,
+                category: 'security',
+                notificationType: 'product_deleted',
+                eventKey: 'product_deleted:'.$product->id.':'.now()->format('YmdHis'),
+                message: $message,
+                branchId: $product->branch_id,
+                metadata: [
+                    'product_id' => $product->id,
+                    'product_name' => $productName,
+                    'sku' => $product->sku,
+                    'deleted_by_user_id' => $user?->id,
+                    'deleted_by_name' => $deletedBy,
+                    'language' => $language,
+                ],
+            )
+    );
+};
+
+$deleteProduct = function (int $productId) use ($queueProductDeletedNotification) {
     abort_unless(auth()->user()->can('products.delete'), 403);
 
-    Product::findOrFail($productId)->delete();
+    $product = Product::with(['branch'])->findOrFail($productId);
+
+    DB::transaction(function () use ($product, $queueProductDeletedNotification): void {
+        $queueProductDeletedNotification($product);
+        $product->delete();
+    });
 
     session()->flash('success', 'Product deleted.');
 };
@@ -184,10 +263,16 @@ $confirmDeleteProduct = function (int $productId) {
     $this->dispatch('open-modal', 'delete-product');
 };
 
-$deleteConfirmedProduct = function () {
+$deleteConfirmedProduct = function () use ($queueProductDeletedNotification) {
     abort_unless(auth()->user()->can('products.delete'), 403);
 
-    Product::findOrFail($this->deleting_product_id)->delete();
+    $product = Product::with(['branch'])->findOrFail($this->deleting_product_id);
+
+    DB::transaction(function () use ($product, $queueProductDeletedNotification): void {
+        $queueProductDeletedNotification($product);
+        $product->delete();
+    });
+
     $this->deleting_product_id = null;
 
     session()->flash('success', 'Product deleted.');

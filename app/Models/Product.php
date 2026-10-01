@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -56,7 +57,7 @@ use Illuminate\Validation\ValidationException;
 ])]
 class Product extends Model
 {
-    use HasCompany, HasFactory;
+    use HasCompany, HasFactory, SoftDeletes;
 
     public const INVENTORY_SOURCE_PURCHASED = 'purchased';
 
