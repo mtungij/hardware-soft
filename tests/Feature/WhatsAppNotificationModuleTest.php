@@ -26,6 +26,7 @@ use App\Services\WhatsAppMessageFactory;
 use App\Services\WhatsAppNotificationService;
 use App\Services\WhatsAppStockAlertPdfService;
 use App\Services\WhatsAppStockAlertService;
+use App\Support\WhatsAppCategories;
 use App\Support\WhatsAppPhone;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
@@ -35,6 +36,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
+use Livewire\Volt\Volt;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
@@ -563,6 +565,7 @@ test('terminal queue failure is recorded for manual retry', function () {
 test('production completion observer records accepted and rejected output', function () {
     Queue::fake();
     $company = whatsappCompany();
+    $company->update(['manufacturing_enabled' => true]);
     $branch = Branch::query()->firstOrFail();
     $product = Product::query()->firstOrFail();
     whatsappSetting($company);
@@ -800,4 +803,92 @@ test('overdue reminder interval reuses one outbox entry throughout each cooldown
     $this->travel(1)->day();
     $this->artisan('whatsapp:debt-reminders', ['--company' => $company->id, '--force' => true])->assertSuccessful();
     expect(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'debt_overdue')->count())->toBe(2);
+});
+
+test('manufacturing categories follow the company flag in settings and log filters', function () {
+    $company = whatsappCompany();
+    $company->update(['manufacturing_enabled' => true]);
+    $admin = User::query()->where('company_id', $company->id)->whereHas('roles', fn ($query) => $query->whereIn('name', ['Admin', 'Super Admin']))->firstOrFail();
+    $this->actingAs($admin);
+    $screen = Volt::test('settings.whatsapp')->assertSee('Production / Curing');
+    $this->get(route('settings.whatsapp.logs'))->assertSee('Production / Curing');
+    $recipient = whatsappRecipient($company, ['categories' => ['production', 'sales']]);
+    expect($recipient->categories)->toContain('production');
+
+    $company->update(['manufacturing_enabled' => false]);
+    $screen->call('$refresh')->assertDontSee('Production / Curing')->assertDontSee('Production Completed');
+    $this->get(route('settings.whatsapp.logs'))->assertDontSee('Production / Curing');
+    foreach (WhatsAppCategories::LABELS as $category => $label) {
+        if (! in_array($category, WhatsAppCategories::MANUFACTURING, true)) {
+            $screen->assertSee($label);
+        }
+    }
+    expect($recipient->categories)->toBe(['sales']);
+    $recipient->save();
+    expect(json_decode($recipient->getRawOriginal('categories'), true))->toBe(['sales']);
+});
+
+test('disabled manufacturing categories cannot be persisted or selected', function () {
+    $company = whatsappCompany();
+    $company->update(['manufacturing_enabled' => false]);
+    $setting = whatsappSetting($company, ['enabled_categories' => ['production', 'sales']]);
+    $recipient = whatsappRecipient($company, ['categories' => ['production', 'sales']]);
+    expect(json_decode($setting->getRawOriginal('enabled_categories'), true))->toBe(['sales'])
+        ->and(json_decode($recipient->getRawOriginal('categories'), true))->toBe(['sales'])
+        ->and($setting->categoryEnabled('production'))->toBeFalse();
+    $admin = User::query()->where('company_id', $company->id)->whereHas('roles', fn ($query) => $query->whereIn('name', ['Admin', 'Super Admin']))->firstOrFail();
+    $this->actingAs($admin);
+    Volt::test('settings.whatsapp')
+        ->set('recipient_name', 'Injected subscription')->set('recipient_phone', '255764123499')
+        ->set('recipient_categories', ['production'])->call('addRecipient')
+        ->assertHasErrors(['recipient_categories.0']);
+});
+
+test('old manufacturing subscriptions and queued jobs cannot bypass a disabled module', function () {
+    Queue::fake();
+    Http::fake();
+    $company = whatsappCompany();
+    $company->update(['manufacturing_enabled' => true]);
+    $setting = whatsappSetting($company);
+    $recipient = whatsappRecipient($company);
+    $service = app(WhatsAppNotificationService::class);
+    $queued = $service->queueForRecipients($company, 'production', 'production_completed', 'manufacturing-before-toggle', 'Production completed')[0];
+    $company->update(['manufacturing_enabled' => false]);
+    // Raw legacy values remain in the database; runtime filtering must still protect delivery.
+    expect(json_decode($recipient->getRawOriginal('categories'), true))->toContain('production')
+        ->and($recipient->accepts('production', null))->toBeFalse()
+        ->and($service->queueForRecipients($company, 'production', 'curing_damage', 'legacy-production', 'Damage'))->toBe([]);
+    (new SendWhatsAppNotification($queued->id))->handle(app(Gowa::class));
+    expect($queued->refresh()->status)->toBe('suppressed');
+    Queue::fake();
+    $service->retry($queued);
+    expect($service->queueRecipient($company, $setting, $recipient, 'production', 'curing_release', 'direct-recipient', 'Release')->status)->toBe('suppressed')
+        ->and($service->queuePhone($company, $setting, $recipient->phone, 'production', 'curing_damage', 'direct-phone', 'Damage')->status)->toBe('suppressed');
+    Queue::assertNothingPushed();
+    Http::assertNothingSent();
+});
+
+test('manufacturing category policy uses the target company even with a different authenticated tenant', function () {
+    Queue::fake();
+    $hardware = whatsappCompany();
+    $hardware->update(['manufacturing_enabled' => false]);
+    whatsappSetting($hardware);
+    whatsappRecipient($hardware);
+    $manufacturer = Company::query()->create(['company_name' => 'Manufacturing tenant', 'business_type' => 'hardware', 'phone' => '255700000002', 'whatsapp_number' => '255700000002', 'manufacturing_enabled' => true]);
+    whatsappSetting($manufacturer);
+    $recipient = whatsappRecipient($manufacturer);
+    $admin = User::query()->where('company_id', $hardware->id)->firstOrFail();
+    $this->actingAs($admin);
+    expect(WhatsAppCategories::available($hardware->id))->not->toHaveKey('production')
+        ->and(WhatsAppCategories::available($manufacturer->id))->toHaveKey('production')
+        ->and($recipient->accepts('production', null))->toBeTrue();
+    auth()->logout(); // Dispatch as the background worker, without a web tenant.
+    $service = app(WhatsAppNotificationService::class);
+    $notifications = $service->queueForRecipients($manufacturer, 'production', 'production_completed', 'tenant-production', 'Completed');
+    expect($notifications)->toHaveCount(1)
+        ->and($notifications[0]->company_id)->toBe($manufacturer->id)
+        ->and($notifications[0]->recipient_id)->toBe($recipient->id)
+        ->and($service->queueForRecipients($hardware, 'production', 'production_completed', 'tenant-production', 'Completed'))->toBe([])
+        ->and(WhatsAppCategories::available($hardware->id))->not->toHaveKey('production')
+        ->and(WhatsAppCategories::available($manufacturer->id))->toHaveKey('production');
 });

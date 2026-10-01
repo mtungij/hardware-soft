@@ -17,8 +17,7 @@ class CompanyWhatsAppSetting extends Model
 
     public const DEFAULT_CATEGORIES = [
         'daily_summary', 'stock_alerts', 'sales', 'security', 'customer_payments',
-        'customer_debt', 'purchases', 'purchase_order_created', 'goods_received_grn',
-        'customer_materials', 'production',
+        'customer_debt', 'purchases', 'customer_materials', 'production',
         'customer_requests', 'quotations', 'quotation_acceptance', 'customer_invoices',
         'customer_portal',
     ];

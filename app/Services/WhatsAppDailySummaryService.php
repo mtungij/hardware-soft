@@ -106,10 +106,40 @@ class WhatsAppDailySummaryService
                 ->whereIn('status', ['draft', 'ordered', 'partial']);
             $this->scopeActivity($outstanding, $recipient, 'created_by');
 
+            $canViewPurchaseCost = $user?->can('purchases.view_cost') === true;
             $data['purchases'] = [
-                'amount' => (float) $purchases->sum('total_amount'),
+                'amount' => $canViewPurchaseCost ? (float) $purchases->sum('total_amount') : null,
                 'goods_received' => $grns->count(),
                 'outstanding_orders' => $outstanding->count(),
+            ];
+
+            $ordersToday = Purchase::withoutGlobalScopes()->where('company_id', $company->id)
+                ->whereDate('created_at', $date->toDateString());
+            $this->scopeActivity($ordersToday, $recipient, 'created_by');
+            $receiptsToday = GoodsReceivingNote::withoutGlobalScopes()->where('company_id', $company->id)
+                ->where('status', 'posted')->whereDate('posted_at', $date->toDateString());
+            $this->scopeActivity($receiptsToday, $recipient, 'received_by');
+            $orderList = (clone $ordersToday)->with('supplier')->orderBy('id')->limit(5)->get();
+            $receiptList = (clone $receiptsToday)->with('items.product')->orderBy('id')->limit(5)->get();
+            $data['purchase_orders_today'] = [
+                'count' => (clone $ordersToday)->count(),
+                'value' => $canViewPurchaseCost ? (float) (clone $ordersToday)->sum('total_amount') : null,
+                'orders' => $orderList->map(fn (Purchase $order): array => [
+                    'number' => $order->reference_number,
+                    'supplier' => $order->supplier?->name ?: '-',
+                    'value' => $canViewPurchaseCost ? (float) $order->total_amount : null,
+                ])->all(),
+            ];
+            $data['goods_received_today'] = [
+                'count' => (clone $receiptsToday)->count(),
+                'numbers' => $receiptList->pluck('grn_number')->all(),
+                'goods_value' => $canViewPurchaseCost ? (float) (clone $receiptsToday)->sum('goods_value') : null,
+                'additional_costs' => $canViewPurchaseCost ? (float) (clone $receiptsToday)->sum('additional_cost_total') : null,
+                'landed_value' => $canViewPurchaseCost ? (float) (clone $receiptsToday)->sum('landed_total') : null,
+                'products' => $receiptList->flatMap(fn (GoodsReceivingNote $receipt) => $receipt->items
+                    ->map(fn ($item): string => ($item->product?->name ?: '-').' — '.(float) $item->received_quantity
+                        .' '.($item->purchase_unit_code_snapshot ?: '')))
+                    ->take(5)->values()->all(),
             ];
         }
 
@@ -174,6 +204,41 @@ class WhatsAppDailySummaryService
         if (isset($data['stock'])) {
             $lines[] = $label('low_stock').': '.$data['stock']['low'];
             $lines[] = $label('out_of_stock').': '.$data['stock']['out'];
+        }
+
+        if (isset($data['purchase_orders_today'])) {
+            $orders = $data['purchase_orders_today'];
+            $lines[] = '';
+            $lines[] = '📦 *'.$label('purchase_orders_today').'*';
+            foreach ($orders['orders'] as $index => $order) {
+                $lines[] = ($index + 1).'. '.$order['number'].' — '.$order['supplier']
+                    .($order['value'] !== null ? ' — TZS '.$this->money($order['value']) : '');
+            }
+            if ($orders['count'] > count($orders['orders'])) {
+                $lines[] = '...+'.($orders['count'] - count($orders['orders']));
+            }
+            $lines[] = $label('purchase_orders').': '.$orders['count'];
+            if ($orders['value'] !== null) {
+                $lines[] = $label('ordered_value').': TZS '.$this->money($orders['value']);
+            }
+        }
+
+        if (isset($data['goods_received_today'])) {
+            $receipts = $data['goods_received_today'];
+            $lines[] = '';
+            $lines[] = '📥 *'.$label('goods_received_today').'*';
+            $lines[] = $label('grns').': '.$receipts['count'];
+            foreach ($receipts['numbers'] as $number) {
+                $lines[] = '• '.$number;
+            }
+            foreach ($receipts['products'] as $product) {
+                $lines[] = '• '.$product;
+            }
+            if ($receipts['goods_value'] !== null) {
+                $lines[] = $label('goods_value').': TZS '.$this->money($receipts['goods_value']);
+                $lines[] = $label('additional_costs').': TZS '.$this->money($receipts['additional_costs']);
+                $lines[] = $label('landed_value').': TZS '.$this->money($receipts['landed_value']);
+            }
         }
 
         if (isset($data['financial'])) {

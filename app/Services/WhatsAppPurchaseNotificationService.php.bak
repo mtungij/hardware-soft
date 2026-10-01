@@ -1,0 +1,202 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Company;
+use App\Models\GoodsReceivingNote;
+use App\Models\Purchase;
+use App\Models\WhatsAppRecipient;
+
+class WhatsAppPurchaseNotificationService
+{
+    private const HIDDEN_COST = '__HARDEX_RESTRICTED_COST__';
+
+    public function __construct(
+        private WhatsAppNotificationService $notifications,
+        private WhatsAppTemplateService $templates,
+        private WhatsAppLocalization $localization,
+    ) {}
+
+    public function queuePurchase(Purchase $purchase): array
+    {
+        $company = Company::query()->find($purchase->company_id);
+        if (! $company) {
+            return [];
+        }
+        $purchase->loadMissing(['supplier', 'branch', 'creator', 'items.product', 'items.purchaseUnit', 'items.stockUnit']);
+        if ((int) $purchase->branch?->company_id !== (int) $company->id
+            || (int) $purchase->supplier?->company_id !== (int) $company->id
+            || $purchase->items->contains(fn ($item) => (int) $item->company_id !== (int) $company->id
+                || (int) $item->product?->company_id !== (int) $company->id)) {
+            return [];
+        }
+
+        return $this->notifications->queueForRecipients(
+            $company, 'purchase_order_created', 'purchase_order_created',
+            "purchase_order_created:{$purchase->id}",
+            fn (WhatsAppRecipient $recipient): string => $this->purchaseMessage($company, $purchase, $recipient),
+            (int) $purchase->branch_id,
+            metadata: ['purchase_id' => $purchase->id, 'po_number' => $purchase->reference_number],
+            recipientFilter: fn (WhatsAppRecipient $recipient): bool => ! $recipient->user
+                || (int) $recipient->user->company_id === (int) $company->id,
+        );
+    }
+
+    public function queueReceipt(GoodsReceivingNote $receipt): array
+    {
+        if ($receipt->status !== 'posted') {
+            return [];
+        }
+        $company = Company::query()->find($receipt->company_id);
+        if (! $company) {
+            return [];
+        }
+        $receipt->loadMissing([
+            'purchase.supplier', 'branch', 'receiver', 'postedBy', 'stockLocation',
+            'items.product', 'items.stockLocation', 'items.purchaseItem', 'additionalCosts',
+        ]);
+        if ((int) $receipt->purchase?->company_id !== (int) $company->id
+            || (int) $receipt->branch?->company_id !== (int) $company->id
+            || $receipt->items->contains(fn ($item) => (int) $item->company_id !== (int) $company->id
+                || (int) $item->product?->company_id !== (int) $company->id
+                || (int) $item->stockLocation?->company_id !== (int) $company->id)
+            || $receipt->additionalCosts->contains(fn ($cost) => (int) $cost->company_id !== (int) $company->id)) {
+            return [];
+        }
+
+        return $this->notifications->queueForRecipients(
+            $company, 'goods_received_grn', 'goods_received_grn',
+            "goods_receipt_completed:{$receipt->id}",
+            fn (WhatsAppRecipient $recipient): string => $this->receiptMessage($company, $receipt, $recipient),
+            (int) $receipt->branch_id,
+            metadata: ['purchase_id' => $receipt->purchase_id, 'po_number' => $receipt->purchase?->reference_number,
+                'goods_receiving_note_id' => $receipt->id, 'grn_number' => $receipt->grn_number],
+            recipientFilter: fn (WhatsAppRecipient $recipient): bool => ! $recipient->user
+                || (int) $recipient->user->company_id === (int) $company->id,
+        );
+    }
+
+    public function purchaseMessage(Company $company, Purchase $purchase, WhatsAppRecipient $recipient): string
+    {
+        $canCost = $this->canViewCost($recipient);
+        $label = fn (string $key): string => $this->label($company, $key);
+        $products = $purchase->items->values()->map(function ($item, int $index) use ($company, $canCost, $label): string {
+            $unit = $item->purchase_unit_code_snapshot ?: $item->purchase_unit_name_snapshot
+                ?: $item->purchaseUnit?->short_name ?: $item->purchaseUnit?->name ?: '-';
+            $stockUnit = $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name ?: '-';
+            $lines = [($index + 1).'. '.$item->productDisplayNameWithSize().($item->product?->sku ? ' ('.$item->product->sku.')' : ''),
+                $label('qty').': '.$this->quantity($item->ordered_quantity).' '.$unit];
+            if ((float) $item->purchase_conversion_factor > 1) {
+                $lines[] = $label('conversion').': '.$this->quantity($item->purchase_conversion_factor).' '.$stockUnit.' / '.$unit;
+            }
+            if ($canCost) {
+                $lines[] = $label('unit_price').': '.$this->currency($company).' '.$this->money($item->cost_price);
+                $lines[] = $label('total').': '.$this->currency($company).' '.$this->money($item->line_total);
+            }
+
+            return implode("\n", $lines);
+        })->implode("\n\n");
+
+        return $this->render($company, 'purchase_order_created', [
+            'po_number' => $purchase->reference_number,
+            'supplier' => $purchase->supplier?->name ?: '-',
+            'branch' => $purchase->branch?->name ?: '-',
+            'created_by' => $purchase->creator?->name ?: '-',
+            'date' => $this->localization->date($company, $purchase->purchase_date),
+            'products' => $products ?: '-',
+            'products_count' => $purchase->items->count(),
+            'order_value' => $canCost ? $this->money($purchase->total_amount) : self::HIDDEN_COST,
+            'company_name' => $company->company_name,
+        ], $canCost);
+    }
+
+    public function receiptMessage(Company $company, GoodsReceivingNote $receipt, WhatsAppRecipient $recipient): string
+    {
+        $canCost = $this->canViewCost($recipient);
+        $label = fn (string $key): string => $this->label($company, $key);
+        $locations = $receipt->items->pluck('stockLocation.name')->filter()->unique()->values();
+        $receivingLocation = $locations->implode(', ') ?: ($receipt->stockLocation?->name ?: '-');
+        $products = $receipt->items->values()->map(function ($item, int $index) use ($company, $canCost, $label): string {
+            $unit = $item->purchase_unit_code_snapshot ?: $item->purchase_unit_name_snapshot ?: '-';
+            $stockUnit = $item->stock_unit_code_snapshot ?: '-';
+            $remaining = max(0, (float) $item->ordered_quantity - (float) $item->previously_received_quantity - (float) $item->received_quantity);
+            $lines = [($index + 1).'. '.($item->purchaseItem?->productDisplayNameWithSize() ?: $item->product?->displayNameWithSize() ?: '-')
+                .($item->product?->sku ? ' ('.$item->product->sku.')' : ''),
+                $label('ordered_qty').': '.$this->quantity($item->ordered_quantity).' '.$unit,
+                $label('received_this_grn').': '.$this->quantity($item->received_quantity).' '.$unit,
+                $label('previously_received').': '.$this->quantity($item->previously_received_quantity).' '.$unit,
+                $label('remaining').': '.$this->quantity($remaining).' '.$unit];
+            if ((float) $item->conversion_factor_snapshot > 1) {
+                $lines[] = $label('conversion').': '.$this->quantity($item->conversion_factor_snapshot).' '.$stockUnit.' / '.$unit
+                    .' ('.$this->quantity($item->stock_quantity).' '.$stockUnit.')';
+            }
+            if ($canCost) {
+                $lines[] = $label('purchase_cost_unit').': '.$this->currency($company).' '.$this->money($item->cost_price);
+                $lines[] = $label('goods_value').': '.$this->currency($company).' '.$this->money($item->supplier_line_cost);
+                $lines[] = $label('allocated_cost').': '.$this->currency($company).' '.$this->money($item->allocated_additional_cost);
+                $lines[] = $label('landed_cost_unit').': '.$this->currency($company).' '.$this->money($item->landed_unit_cost, 4);
+                $lines[] = $label('landed_value').': '.$this->currency($company).' '.$this->money($item->landed_line_cost);
+            }
+
+            return implode("\n", $lines);
+        })->implode("\n\n");
+        $costLines = $receipt->additionalCosts->filter(fn ($cost) => (float) $cost->amount > 0)
+            ->map(fn ($cost): string => $cost->cost_type_name_snapshot.': '.$this->currency($company).' '.$this->money($cost->amount))
+            ->values();
+        $additionalCosts = $canCost && $costLines->isNotEmpty()
+            ? '*'.$label('additional_costs')."*\n".$costLines->implode("\n")."\n"
+            : ($canCost ? '' : self::HIDDEN_COST);
+
+        return $this->render($company, 'goods_received_grn', [
+            'grn_number' => $receipt->grn_number,
+            'po_number' => $receipt->purchase?->reference_number ?: '-',
+            'supplier' => $receipt->purchase?->supplier?->name ?: '-',
+            'receiving_location' => $receivingLocation,
+            'received_by' => $receipt->receiver?->name ?: $receipt->postedBy?->name ?: '-',
+            'date' => $this->localization->date($company, $receipt->received_date),
+            'products' => $products ?: '-',
+            'products_count' => $receipt->items->count(),
+            'total_received_quantity' => $this->quantity($receipt->items->sum('received_quantity')),
+            'goods_value' => $canCost ? $this->money($receipt->goods_value) : self::HIDDEN_COST,
+            'additional_costs' => $additionalCosts,
+            'additional_cost_total' => $canCost ? $this->money($receipt->additional_cost_total) : self::HIDDEN_COST,
+            'landed_value' => $canCost ? $this->money($receipt->landed_total) : self::HIDDEN_COST,
+            'company_name' => $company->company_name,
+        ], $canCost);
+    }
+
+    private function render(Company $company, string $key, array $values, bool $canCost): string
+    {
+        $message = $this->templates->render($company, $key, $values);
+        if (! $canCost) {
+            $message = preg_replace('/^.*'.self::HIDDEN_COST.'.*(?:\r?\n|$)/m', '', $message) ?: '';
+        }
+
+        return trim(preg_replace("/\n{3,}/", "\n\n", $message) ?: '');
+    }
+
+    private function canViewCost(WhatsAppRecipient $recipient): bool
+    {
+        return $recipient->user?->can('purchases.view_cost') === true;
+    }
+
+    private function label(Company $company, string $key): string
+    {
+        return (string) $this->localization->get($company, 'purchase_notifications.'.$key);
+    }
+
+    private function currency(Company $company): string
+    {
+        return $company->currency ?: 'TZS';
+    }
+
+    private function money(mixed $value, int $decimals = 2): string
+    {
+        return rtrim(rtrim(number_format((float) $value, $decimals, '.', ','), '0'), '.');
+    }
+
+    private function quantity(mixed $value): string
+    {
+        return rtrim(rtrim(number_format((float) $value, 4, '.', ','), '0'), '.');
+    }
+}

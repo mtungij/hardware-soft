@@ -7,6 +7,7 @@ use App\Models\WhatsAppNotification;
 use App\Services\Gowa;
 use App\Services\WhatsAppDebtPdfService;
 use App\Services\WhatsAppDebtReminderService;
+use App\Support\WhatsAppCategories;
 use Carbon\CarbonImmutable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -48,6 +49,12 @@ class SendWhatsAppNotification implements ShouldQueue
         $notification = WhatsAppNotification::withoutGlobalScopes()->find($this->notificationId);
 
         if (! $notification || in_array($notification->status, WhatsAppNotification::TERMINAL_STATUSES, true)) {
+            return;
+        }
+
+        if (! WhatsAppCategories::allows($notification->company_id, $notification->category)) {
+            $this->suppress($notification, 'Company manufacturing module is disabled.');
+
             return;
         }
 

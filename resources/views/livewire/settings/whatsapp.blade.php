@@ -12,6 +12,7 @@ use App\Services\WhatsAppNotificationService;
 use App\Services\WhatsAppLocalization;
 use App\Services\WhatsAppTemplateService;
 use App\Support\WhatsAppPhone;
+use App\Support\WhatsAppCategories;
 use Illuminate\Validation\Rule;
 
 use function Livewire\Volt\layout;
@@ -61,8 +62,9 @@ mount(function (): void {
     $company = Company::current();
     abort_unless($company, 404);
     $this->companyId = $company->id;
+    $this->recipient_categories = WhatsAppCategories::filter($company->id, $this->recipient_categories);
     app(WhatsAppTemplateService::class)->seedDefaults($company);
-    $this->template_bodies = WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $company->id)->pluck('body', 'key')->all();
+    $this->template_bodies = WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $company->id)->whereIn('category', array_keys(WhatsAppCategories::available($company->id)))->pluck('body', 'key')->all();
     $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->firstOrCreate(
         ['company_id' => $company->id],
         ['timezone' => $company->timezone ?: 'Africa/Dar_es_Salaam', 'whatsapp_notification_language' => 'en', 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES]
@@ -75,24 +77,10 @@ mount(function (): void {
         }
         $this->{$field} = $value instanceof DateTimeInterface ? $value->format('d M Y H:i') : ($value ?? $this->{$field});
     }
+    $this->enabled_categories = WhatsAppCategories::filter($company->id, $this->enabled_categories);
 });
 
-$categories = fn (): array => [
-    'daily_summary' => 'Daily Management Summary',
-    'stock_alerts' => 'Low / Out of Stock',
-    'sales' => 'Sales',
-    'security' => 'Cancellation / Security',
-    'customer_payments' => 'Customer Payments',
-    'customer_debt' => 'Customer Debt Reminders',
-    'purchases' => 'Purchases / Goods Received',
-    'customer_materials' => 'Customer Material Accounts',
-    'production' => 'Production / Curing',
-    'customer_requests' => 'Customer Request Alerts',
-    'quotations' => 'Quotation Sent to Customer',
-    'quotation_acceptance' => 'Quotation Accepted',
-        'customer_invoices' => 'Final Invoice to Customer',
-        'customer_portal' => 'Customer Portal Credentials',
-];
+$categories = fn (): array => WhatsAppCategories::available($this->companyId);
 
 $save = function (Gowa $gowa, WhatsAppAuditService $audit): void {
     abort_unless(auth()->user()->can('whatsapp.manage_settings'), 403);
@@ -246,7 +234,7 @@ $saveTemplates = function (WhatsAppAuditService $audit): void {
     abort_unless(auth()->user()->can('whatsapp.manage_templates'), 403);
     $this->validate(['template_bodies' => ['required', 'array'], 'template_bodies.*' => ['required', 'string', 'max:4000']]);
     foreach ($this->template_bodies as $key => $body) {
-        WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $this->companyId)->where('key', $key)->update(['body' => $body]);
+        WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $this->companyId)->whereIn('category', array_keys($this->categories()))->where('key', $key)->update(['body' => $body]);
     }
     $audit->record($this->companyId, 'templates_updated', null, ['template_keys' => array_keys($this->template_bodies)]);
     session()->flash('success', 'WhatsApp templates saved.');
@@ -325,7 +313,7 @@ $saveTemplates = function (WhatsAppAuditService $audit): void {
             <h2 class="text-lg font-black">Message Templates</h2>
             <p class="mt-1 text-sm text-slate-500">Only the listed placeholders are replaced. HARDEX supplies authorized values; templates cannot query other data.</p>
             <form wire:submit="saveTemplates" class="mt-4 grid gap-4 lg:grid-cols-3">
-                @foreach(WhatsAppTemplate::withoutGlobalScopes()->where('company_id',$companyId)->orderBy('name')->get() as $template)
+                @foreach(WhatsAppTemplate::withoutGlobalScopes()->where('company_id',$companyId)->whereIn('category', array_keys($this->categories()))->orderBy('name')->get() as $template)
                     <label class="block text-sm font-bold">{{ $template->name }}<textarea wire:model="template_bodies.{{ $template->key }}" class="mt-1 min-h-52 w-full rounded-lg border-slate-200 font-mono text-xs dark:bg-navy-950"></textarea></label>
                 @endforeach
                 <div class="lg:col-span-3"><button class="rounded-xl border px-4 py-2.5 text-sm font-black">Save Templates</button></div>

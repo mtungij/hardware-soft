@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\CompanyWhatsAppSetting;
 use App\Models\WhatsAppNotification;
 use App\Models\WhatsAppRecipient;
+use App\Support\WhatsAppCategories;
 use App\Support\WhatsAppPhone;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -30,6 +31,10 @@ class WhatsAppNotificationService
         array $metadata = [],
         ?callable $recipientFilter = null,
     ): array {
+        if (! WhatsAppCategories::allows($company->id, $category)) {
+            return [];
+        }
+
         $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $company->id)->first();
 
         if (! $setting?->enabled || ! $setting->categoryEnabled($category)) {
@@ -137,6 +142,12 @@ class WhatsAppNotificationService
             return;
         }
 
+        if (! WhatsAppCategories::allows($notification->company_id, $notification->category)) {
+            $notification->update(['status' => 'suppressed', 'failure_reason' => 'Company manufacturing module is disabled.']);
+
+            return;
+        }
+
         $notification->update([
             'status' => 'queued',
             'failure_reason' => null,
@@ -172,6 +183,10 @@ class WhatsAppNotificationService
         } catch (Throwable $exception) {
             $phone = preg_replace('/\D+/', '', $phone) ?: 'invalid';
             $suppression = $exception->getMessage();
+        }
+
+        if (! WhatsAppCategories::allows($company->id, $category)) {
+            $suppression = 'Company manufacturing module is disabled.';
         }
 
         $recipientToken = $idempotencyRecipientToken ?: ($recipient?->id ?: hash('sha256', $phone));

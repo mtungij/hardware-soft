@@ -5,7 +5,6 @@ namespace App\Observers;
 use App\Models\Company;
 use App\Models\CustomerMaterialCashTransaction;
 use App\Models\CustomerMaterialIssue;
-use App\Models\GoodsReceivingNote;
 use App\Models\ProductionCuringAction;
 use App\Models\ProductionCuringRelease;
 use App\Models\WhatsAppRecipient;
@@ -25,15 +24,6 @@ class OperationalWhatsAppObserver implements ShouldHandleEventsAfterCommit
         $service = app(WhatsAppNotificationService::class);
         $localization = app(WhatsAppLocalization::class);
         $label = fn (string $key): string => $localization->get($company, 'operational.'.$key);
-
-        if ($model instanceof GoodsReceivingNote && $model->status === 'posted') {
-            $model->loadMissing(['purchase.supplier', 'branch']);
-            $service->queueForRecipients($company, 'purchases', 'goods_received', "grn:{$model->id}:received", implode("\n", [
-                $label('goods_received_title'), "GRN: {$model->grn_number}",
-                $label('supplier').': '.($model->purchase?->supplier?->name ?: '-'), $label('branch').': '.($model->branch?->name ?: '-'),
-                $label('received').': '.$localization->date($company, $model->received_date),
-            ]), (int) $model->branch_id, metadata: ['goods_receiving_note_id' => $model->id]);
-        }
 
         if ($model instanceof CustomerMaterialCashTransaction && $model->transaction_type === 'deposit') {
             $model->loadMissing(['account.customer', 'branch']);

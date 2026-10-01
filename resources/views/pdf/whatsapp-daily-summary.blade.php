@@ -43,7 +43,40 @@
 
 @isset($data['purchases'])
 <h2>Purchases</h2>
-<table><tr><td>Purchases for the Day</td><td>TZS {{ number_format($data['purchases']['amount'], 0) }}</td></tr><tr><td>Goods Received</td><td>{{ $data['purchases']['goods_received'] }}</td></tr><tr><td>Outstanding Purchase Orders</td><td>{{ $data['purchases']['outstanding_orders'] }}</td></tr></table>
+<table>
+    @if($data['purchases']['amount'] !== null)<tr><td>Purchases for the Day</td><td>TZS {{ number_format($data['purchases']['amount'], 0) }}</td></tr>@endif
+    <tr><td>Goods Received</td><td>{{ $data['purchases']['goods_received'] }}</td></tr>
+    <tr><td>Outstanding Purchase Orders</td><td>{{ $data['purchases']['outstanding_orders'] }}</td></tr>
+</table>
+@endisset
+
+@isset($data['purchase_orders_today'])
+<h2>Purchase Orders Created Today</h2>
+<table>
+    <tr><td>Purchase Orders</td><td>{{ $data['purchase_orders_today']['count'] }}</td></tr>
+    @if($data['purchase_orders_today']['value'] !== null)<tr><td>Total Ordered Value</td><td>TZS {{ number_format($data['purchase_orders_today']['value'], 0) }}</td></tr>@endif
+    @foreach($data['purchase_orders_today']['orders'] as $order)
+        <tr><td>{{ $order['number'] }} · {{ $order['supplier'] }}</td><td>{{ $order['value'] !== null ? 'TZS '.number_format($order['value'], 0) : '' }}</td></tr>
+    @endforeach
+</table>
+@endisset
+
+@isset($data['goods_received_today'])
+<h2>Goods Received Today</h2>
+<table>
+    <tr><td>GRNs</td><td>{{ $data['goods_received_today']['count'] }}</td></tr>
+    @foreach($data['goods_received_today']['numbers'] as $number)
+        <tr><td>{{ $number }}</td><td></td></tr>
+    @endforeach
+    @if($data['goods_received_today']['goods_value'] !== null)
+        <tr><td>Goods Value</td><td>TZS {{ number_format($data['goods_received_today']['goods_value'], 0) }}</td></tr>
+        <tr><td>Additional Costs</td><td>TZS {{ number_format($data['goods_received_today']['additional_costs'], 0) }}</td></tr>
+        <tr><td>Total Landed Value</td><td>TZS {{ number_format($data['goods_received_today']['landed_value'], 0) }}</td></tr>
+    @endif
+    @foreach($data['goods_received_today']['products'] as $product)
+        <tr><td>{{ $product }}</td><td></td></tr>
+    @endforeach
+</table>
 @endisset
 
 @isset($data['receivables'])

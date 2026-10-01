@@ -2,100 +2,348 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+
     @php
-        $themeColor = is_string($settings?->theme_color ?? null) && preg_match('/^#[0-9A-Fa-f]{6}$/', $settings->theme_color) ? $settings->theme_color : '#f97316';
+        $themeColor = is_string($settings?->theme_color ?? null)
+            && preg_match('/^#[0-9A-Fa-f]{6}$/', $settings->theme_color)
+                ? $settings->theme_color
+                : '#0891b2';
+
+        $logoPath = null;
+
+        if (!empty($settings?->company_logo)) {
+            $candidate = public_path('storage/'.$settings->company_logo);
+
+            if (is_file($candidate)) {
+                $logoPath = $candidate;
+            }
+        }
     @endphp
+
     <style>
-        body { font-family: DejaVu Sans, sans-serif; color: #0f172a; font-size: 12px; }
-        .header { border-bottom: 3px solid {{ $themeColor }}; padding-bottom: 14px; margin-bottom: 18px; }
-        .brand { font-size: 22px; font-weight: bold; color: #0d2e50; }
-        .muted { color: #64748b; }
-        table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-        th { background: #0d2e50; color: white; padding: 8px; text-align: left; }
-        td { border-bottom: 1px solid #e2e8f0; padding: 8px; }
-        .right { text-align: right; }
-        .box { border: 1px solid #e2e8f0; padding: 10px; border-radius: 6px; }
-        .grid { width: 100%; }
-        .grid td { border: 0; vertical-align: top; }
-        .total { font-size: 16px; font-weight: bold; color: #0d2e50; }
-        .signature { margin-top: 50px; width: 45%; border-top: 1px solid #334155; padding-top: 8px; }
+        body {
+            font-family: DejaVu Sans, sans-serif;
+            color: #0f172a;
+            font-size: 11px;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header-table {
+            width: 100%;
+            border-collapse: collapse;
+            border-bottom: 3px solid #0891b2;
+            margin-bottom: 18px;
+        }
+
+        .header-table td {
+            border: none;
+            padding-bottom: 14px;
+            vertical-align: middle;
+        }
+
+        .logo {
+            max-height: 65px;
+            max-width: 140px;
+        }
+
+        .company-name {
+            font-size: 22px;
+            font-weight: bold;
+            color: #0f172a;
+            margin-bottom: 3px;
+        }
+
+        .company-info {
+            font-size: 10px;
+            color: #64748b;
+            line-height: 1.6;
+        }
+
+        .document-title {
+            text-align: right;
+            font-size: 20px;
+            font-weight: bold;
+            color: #0891b2;
+        }
+
+        .document-reference {
+            text-align: right;
+            font-size: 10px;
+            color: #475569;
+            margin-top: 4px;
+        }
+
+        .info-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 8px 0;
+            margin: 0 -8px 18px -8px;
+        }
+
+        .info-table td {
+            width: 50%;
+            border: none;
+            vertical-align: top;
+        }
+
+        .card {
+            border: 1px solid #a5f3fc;
+            background: #f0fdff;
+            padding: 12px;
+            border-radius: 6px;
+            line-height: 1.6;
+        }
+
+        .card-title {
+            color: #0891b2;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            border: 1px solid #67e8f9;
+        }
+
+        .items-table th {
+            background: #0891b2;
+            color: #ffffff;
+            padding: 10px 8px;
+            font-size: 10px;
+            font-weight: bold;
+            text-align: left;
+            border: 1px solid #67e8f9;
+        }
+
+        .items-table td {
+            padding: 10px 8px;
+            border: 1px solid #a5f3fc;
+            vertical-align: middle;
+        }
+
+        .items-table tbody tr:nth-child(odd) {
+            background: #ffffff;
+        }
+
+        .items-table tbody tr:nth-child(even) {
+            background: #ecfeff;
+        }
+
+        .product-name {
+            font-weight: bold;
+            color: #0f172a;
+        }
+
+        .size {
+            font-size: 9px;
+            color: #64748b;
+            margin-top: 2px;
+        }
+
+        .qty {
+            text-align: right;
+            font-weight: bold;
+        }
+
+        .unit {
+            font-weight: 600;
+        }
+
+        .note {
+            margin-top: 22px;
+            padding: 11px 13px;
+            background: #f0fdff;
+            border-left: 4px solid #0891b2;
+            color: #475569;
+            line-height: 1.6;
+        }
+
+        .signature-table {
+            width: 100%;
+            margin-top: 42px;
+            border-collapse: collapse;
+        }
+
+        .signature-table td {
+            border: none;
+        }
+
+        .signature-line {
+            width: 220px;
+            border-top: 1px solid #334155;
+            padding-top: 7px;
+            color: #475569;
+            font-size: 10px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 8px;
+            text-align: center;
+            font-size: 9px;
+            color: #94a3b8;
+        }
     </style>
 </head>
+
 <body>
-    <div class="header">
-        @if ($settings?->company_logo)
-            <img src="{{ public_path('storage/'.$settings->company_logo) }}" style="max-height: 60px; margin-bottom: 8px;" alt="{{ $settings->company_name }}">
-        @endif
-        <div class="brand">{{ $settings?->company_name ?? 'Hardex POS' }}</div>
-        <div class="muted">{{ $settings?->company_phone }} | {{ $settings?->company_email }}</div>
-        <div class="muted">{{ $settings?->company_address }}</div>
-    </div>
 
-    <table class="grid">
+<table class="header-table">
+    <tr>
+        <td width="20%">
+            @if ($logoPath)
+                <img src="{{ $logoPath }}" class="logo" alt="Company Logo">
+            @endif
+        </td>
+
+        <td width="50%">
+            <div class="company-name">
+                {{ $settings?->company_name ?? 'HARDEX ERP' }}
+            </div>
+
+            <div class="company-info">
+                @if ($settings?->company_phone)
+                    {{ $settings->company_phone }}
+                @endif
+
+                @if ($settings?->company_email)
+                    @if ($settings?->company_phone) | @endif
+                    {{ $settings->company_email }}
+                @endif
+
+                @if ($settings?->company_address)
+                    <br>{{ $settings->company_address }}
+                @endif
+            </div>
+        </td>
+
+        <td width="30%">
+            <div class="document-title">PURCHASE ORDER</div>
+            <div class="document-reference">
+                {{ $purchase->reference_number }}
+            </div>
+        </td>
+    </tr>
+</table>
+
+
+<table class="info-table">
+    <tr>
+        <td>
+            <div class="card">
+                <div class="card-title">Supplier</div>
+
+                <strong>{{ $purchase->supplier?->name ?: '-' }}</strong>
+
+                @if ($purchase->supplier?->phone)
+                    <br>{{ $purchase->supplier->phone }}
+                @endif
+
+                @if ($purchase->supplier?->email)
+                    <br>{{ $purchase->supplier->email }}
+                @endif
+
+                @if ($purchase->supplier?->address)
+                    <br>{{ $purchase->supplier->address }}
+                @endif
+            </div>
+        </td>
+
+        <td>
+            <div class="card">
+                <div class="card-title">Order Details</div>
+
+                <strong>Reference:</strong>
+                {{ $purchase->reference_number }}
+
+                <br>
+
+                <strong>Date:</strong>
+                {{ $purchase->purchase_date?->format('d M Y') }}
+
+                <br>
+
+            </div>
+        </td>
+    </tr>
+</table>
+
+
+<table class="items-table">
+    <thead>
         <tr>
-            <td width="50%">
-                <div class="box">
-                    <strong>Supplier</strong><br>
-                    {{ $purchase->supplier?->name }}<br>
-                    {{ $purchase->supplier?->phone }}<br>
-                    {{ $purchase->supplier?->email }}<br>
-                    {{ $purchase->supplier?->address }}
-                </div>
-            </td>
-            <td width="50%">
-                <div class="box">
-                    <strong>Purchase Order</strong><br>
-                    Reference: {{ $purchase->reference_number }}<br>
-                    Invoice: {{ $purchase->invoice_number ?: '-' }}<br>
-                    Date: {{ $purchase->purchase_date?->format('M d, Y') }}<br>
-                    Branch: {{ $purchase->branch?->name }}
-                </div>
-            </td>
+            <th style="width: 10%; text-align: center;">S/NO.</th>
+            <th style="width: 54%;">PRODUCT</th>
+            <th style="width: 18%; text-align: right;">QUANTITY</th>
+            <th style="width: 18%;">UNIT</th>
         </tr>
-    </table>
+    </thead>
 
-    <table>
-        <thead>
+    <tbody>
+        @foreach ($purchase->items as $index => $item)
             <tr>
-                <th>Product</th>
-                <th>SKU</th>
-                <th class="right">Quantity</th>
-                <th>Unit</th>
-                <th class="right">Cost</th>
-                <th class="right">Line Total</th>
+                <td style="text-align: center;">
+                    {{ $index + 1 }}
+                </td>
+
+                <td>
+                    <div class="product-name">
+                        {{ $item->product?->displayName() ?: '-' }}
+                    </div>
+
+                    @if ($item->sizeLabel())
+                        <div class="size">
+                            Size: {{ $item->sizeLabel() }}
+                        </div>
+                    @endif
+                </td>
+
+                <td class="qty">
+                    {{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}
+                </td>
+
+                <td class="unit">
+                    {{ $item->purchaseUnit?->short_name
+                        ?: $item->purchase_unit_code_snapshot
+                        ?: $item->purchase_unit_name_snapshot
+                        ?: '-' }}
+                </td>
             </tr>
-        </thead>
-        <tbody>
-            @foreach ($purchase->items as $item)
-                <tr>
-                    <td>
-                        {{ $item->product?->displayName() }}
-                        @if ($item->sizeLabel())
-                            <br><small>Size: {{ $item->sizeLabel() }}</small>
-                        @endif
-                    </td>
-                    <td>{{ $item->product?->sku }}</td>
-                    <td class="right">{{ \App\Support\NumberFormatter::quantity($item->ordered_quantity) }}</td>
-                    <td>{{ $item->purchaseUnit?->short_name }}</td>
-                    <td class="right">{{ \App\Support\NumberFormatter::money($item->cost_price) }} / {{ $item->purchaseUnit?->short_name }}</td>
-                    <td class="right">{{ \App\Support\NumberFormatter::money($item->line_total) }}</td>
-                </tr>
-            @endforeach
-        </tbody>
-    </table>
+        @endforeach
+    </tbody>
+</table>
 
-    @php
-        $subtotal = (float) $purchase->items->sum('line_total');
-        $tax = 0;
-    @endphp
-    <table>
-        <tr><td class="right">Subtotal</td><td class="right" width="25%">{{ $settings?->currency ?? 'TZS' }} {{ \App\Support\NumberFormatter::money($subtotal) }}</td></tr>
-        <tr><td class="right">Tax</td><td class="right">{{ $settings?->currency ?? 'TZS' }} {{ \App\Support\NumberFormatter::money($tax) }}</td></tr>
-        <tr><td class="right total">Grand Total</td><td class="right total">{{ $settings?->currency ?? 'TZS' }} {{ \App\Support\NumberFormatter::money($purchase->total_amount) }}</td></tr>
-    </table>
 
-    <p class="muted">Thank you for supplying Hardex POS. Please confirm availability and expected delivery date.</p>
+<div class="note">
+    <strong>Supplier Action Required</strong><br>
+    Please confirm product availability, your unit prices, and the expected delivery date.
+</div>
 
-    <div class="signature">Authorized Signature</div>
+
+<table class="signature-table">
+    <tr>
+        <td width="60%">
+            <div class="signature-line">
+                Authorized Signature
+            </div>
+        </td>
+
+        <td width="40%" style="text-align:right; color:#64748b;">
+            {{ $settings?->company_name }}
+        </td>
+    </tr>
+</table>
+
+
+<div class="footer">
+    Purchase Order generated by HARDEX ERP
+</div>
+
 </body>
 </html>
