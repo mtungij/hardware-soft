@@ -73,7 +73,7 @@ class CustomerPortalApiController extends Controller
     {
         $account = $request->user()->load('customer');
         $data = $request->validate([
-            'invoice_id' => ['nullable', Rule::exists('sales', 'id')->where('customer_id', $account->customer_id)],
+            'invoice_id' => ['nullable', Rule::exists('sales', 'id')->where('customer_id', $account->customer_id)->where('company_id', $account->company_id)],
             'amount' => ['required', 'numeric', 'gt:0'],
             'payment_method' => ['required', 'in:mobile_money,bank,cash_deposit'],
             'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_receipts', 'reference_number')->where('customer_id', $account->customer_id)],
@@ -81,13 +81,14 @@ class CustomerPortalApiController extends Controller
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $sale = filled($data['invoice_id'] ?? null) ? Sale::where('customer_id', $account->customer_id)->findOrFail($data['invoice_id']) : null;
+        $sale = filled($data['invoice_id'] ?? null) ? Sale::where('company_id', $account->company_id)->where('customer_id', $account->customer_id)->findOrFail($data['invoice_id']) : null;
 
         if ($sale && (float) $data['amount'] > (float) $sale->balance_amount) {
             throw ValidationException::withMessages(['amount' => 'Receipt amount cannot exceed the selected invoice balance.']);
         }
 
         $receipt = CustomerReceipt::create([
+            'company_id' => $account->company_id,
             'customer_account_id' => $account->id,
             'customer_id' => $account->customer_id,
             'sale_id' => $sale?->id,
@@ -124,6 +125,7 @@ class CustomerPortalApiController extends Controller
         ]);
 
         $deposit = CustomerDeposit::create([
+            'company_id' => $account->company_id,
             'customer_account_id' => $account->id,
             'customer_id' => $account->customer_id,
             'branch_id' => $account->customer?->branch_id,

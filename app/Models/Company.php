@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\CustomerAccount;
+
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -56,6 +58,12 @@ class Company extends Model
 
             if ($user instanceof User && ! $user->is_system_owner && $user->company_id) {
                 return self::query()->find($user->company_id);
+            }
+
+            $customer = Auth::guard('customer')->user();
+
+            if ($customer instanceof CustomerAccount && $customer->company_id) {
+                return self::query()->find($customer->company_id);
             }
 
             return self::query()->first();

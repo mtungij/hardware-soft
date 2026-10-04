@@ -3,6 +3,7 @@
 namespace App\Models\Concerns;
 
 use App\Models\Company;
+use App\Models\CustomerAccount;
 use App\Models\Scopes\CompanyScope;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,24 +17,24 @@ trait HasCompany
         static::addGlobalScope(new CompanyScope);
 
         static::creating(function ($model): void {
-            $guard = Auth::guard('web');
-
-            if (! $guard->hasUser()) {
-                return;
-            }
-
-            $user = $guard->user();
-
-            if (! $user instanceof User || ! $user->company_id) {
-                return;
-            }
-
             if (! Schema::hasColumn($model->getTable(), 'company_id')) {
                 return;
             }
 
-            if (! $user->is_system_owner || blank($model->company_id)) {
-                $model->company_id = $user->company_id;
+            $webUser = Auth::guard('web')->user();
+
+            if ($webUser instanceof User && $webUser->company_id) {
+                if (! $webUser->is_system_owner || blank($model->company_id)) {
+                    $model->company_id = $webUser->company_id;
+                }
+
+                return;
+            }
+
+            $customerUser = Auth::guard('customer')->user();
+
+            if ($customerUser instanceof CustomerAccount && $customerUser->company_id) {
+                $model->company_id = $customerUser->company_id;
             }
         });
     }
