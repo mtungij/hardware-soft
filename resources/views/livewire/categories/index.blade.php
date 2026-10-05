@@ -16,9 +16,9 @@ uses([WithPagination::class]);
 state([
     'search' => '',
     'statusFilter' => '',
-    'branchFilter' => '',
+    'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'editingId' => null,
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'name' => '',
     'code' => '',
     'description' => '',
@@ -116,7 +116,7 @@ $deleteCategory = function (int $categoryId) {
 
                     <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                         Branch
-                        <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                        <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                             <option value="">Global category</option>
                             @foreach (Branch::orderBy('name')->get() as $branch)
                                 <option value="{{ $branch->id }}">{{ $branch->name }}</option>
@@ -163,7 +163,7 @@ $deleteCategory = function (int $categoryId) {
                     <option value="active">Active</option>
                     <option value="inactive">Inactive</option>
                 </select>
-                <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     <option value="">All branches</option>
                     @foreach (Branch::orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>

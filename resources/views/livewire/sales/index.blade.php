@@ -28,7 +28,7 @@ state([
     'product_id' => '',
     'category_id' => '',
     'cashier_id' => '',
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'payment_method' => '',
     'view' => 'items',
     'date_from' => '',
@@ -45,7 +45,7 @@ mount(function () {
     $this->product_id = request('product_id', $this->product_id);
     $this->category_id = request('category_id', $this->category_id);
     $this->cashier_id = request('cashier_id', $this->cashier_id);
-    $this->branch_id = request('branch_id', $this->branch_id);
+    $this->branch_id = (string) (\App\Support\BranchAccess::resolve(auth()->user(), request('branch_id', $this->branch_id) ? (int) request('branch_id', $this->branch_id) : null) ?? '');
     $this->payment_method = request('payment_method', $this->payment_method);
     $this->view = request('view', $this->view);
     $this->date_from = request('date_from', $this->date_from);
@@ -189,7 +189,7 @@ mount(function () {
                     <option value="{{ $method }}">{{ $paymentLabel($method) }}</option>
                 @endforeach
             </select>
-            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                 <option value="">{{ $t('all_branches') }}</option>
                 @foreach (Branch::orderBy('name')->get() as $branch)
                     <option value="{{ $branch->id }}">{{ $branch->name }}</option>

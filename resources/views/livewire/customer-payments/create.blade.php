@@ -11,7 +11,7 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['customer_id' => '', 'branch_id' => '', 'amount' => '', 'payment_method' => 'cash', 'reference_number' => '', 'payment_date' => '', 'notes' => '']);
+state(['customer_id' => '', 'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'amount' => '', 'payment_method' => 'cash', 'reference_number' => '', 'payment_date' => '', 'notes' => '']);
 
 rules([
     'customer_id' => ['required', 'exists:customers,id'],
@@ -49,7 +49,7 @@ $save = function (AccountingService $accounting) {
                 </select>
             </label>
             <label class="block text-sm font-bold">Branch
-                <select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+                <select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
             </label>
             <x-money-input label="Amount" name="amount" wire:model="amount" required />
             <label class="block text-sm font-bold">Payment Method<select wire:model="payment_method" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="cash">Cash</option><option value="mobile_money">Mobile Money</option><option value="bank">Bank</option></select></label>

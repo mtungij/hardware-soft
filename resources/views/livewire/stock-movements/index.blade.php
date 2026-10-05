@@ -10,7 +10,7 @@ use function Livewire\Volt\uses;
 layout('layouts.app');
 uses([WithPagination::class]);
 
-state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateFrom' => '', 'dateTo' => '', 'branch_id' => '', 'receipts_today' => ''])->url();
+state(['productFilter' => '', 'locationFilter' => '', 'typeFilter' => '', 'dateFrom' => '', 'dateTo' => '', 'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'receipts_today' => ''])->url();
 
 ?>
 

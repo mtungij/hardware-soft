@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Services\ProductionReportService;
 use App\Services\ReportExportService;
+use App\Support\BranchAccess;
 use App\Support\CompanyFeatures;
 use Illuminate\Http\Request;
 
@@ -26,6 +27,7 @@ class ProductionReportExportController extends Controller
             abort_if(now()->parse($validated['date_from'])->diffInDays(now()->parse($validated['date_to'])) > 366, 422, 'Exports are limited to 366 days.');
         }
 
+        BranchAccess::resolve($request->user(), ! empty($validated['branch_id']) ? (int) $validated['branch_id'] : null);
         $data = $reports->report($report, $validated, export: true);
         $company = CompanyFeatures::currentCompany();
         $branch = ! empty($validated['branch_id']) ? Branch::query()->where('company_id', $company?->id)->find($validated['branch_id']) : null;

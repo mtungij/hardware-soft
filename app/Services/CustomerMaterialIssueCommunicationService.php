@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CompanyWhatsAppSetting;
 use App\Models\CustomerMaterialIssue;
+use App\Models\Scopes\CompanyScope;
 use App\Models\WhatsAppNotification;
 use App\Support\WhatsAppPhone;
 use Throwable;
@@ -19,7 +20,7 @@ class CustomerMaterialIssueCommunicationService
     public function queueCustomerReceipt(CustomerMaterialIssue $issue): ?WhatsAppNotification
     {
         $issue->loadMissing(['company', 'account.customer']);
-        $setting = CompanyWhatsAppSetting::withoutGlobalScopes()
+        $setting = CompanyWhatsAppSetting::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $issue->company_id)
             ->first();
 

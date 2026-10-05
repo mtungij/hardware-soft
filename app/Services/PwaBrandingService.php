@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Company;
+use App\Models\Scopes\CompanyScope;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -27,7 +28,7 @@ class PwaBrandingService
         }
 
         try {
-            return Setting::withoutGlobalScopes()->where('company_id', $company->id)->first();
+            return Setting::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->first();
         } catch (\Throwable) {
             return null;
         }

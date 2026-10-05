@@ -9,6 +9,7 @@ use App\Models\GoodsReceivingNote;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\SalePayment;
+use App\Models\Scopes\CompanyScope;
 use App\Models\User;
 use App\Models\WhatsAppRecipient;
 use App\Support\AuthorizationScope;
@@ -27,7 +28,7 @@ class WhatsAppDailySummaryService
      */
     public function build(Company $company, WhatsAppRecipient $recipient, CarbonInterface $date): array
     {
-        $sales = Sale::withoutGlobalScopes()
+        $sales = Sale::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $company->id)
             ->whereDate('sale_date', $date->toDateString())
             ->where('status', 'completed');
@@ -35,7 +36,7 @@ class WhatsAppDailySummaryService
 
         $saleIds = (clone $sales)->pluck('id');
         $total = (float) (clone $sales)->sum('total_amount');
-        $credit = (float) SalePayment::withoutGlobalScopes()
+        $credit = (float) SalePayment::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $company->id)
             ->whereIn('sale_id', $saleIds->all() ?: [0])
             ->where('payment_method', 'credit')
@@ -73,12 +74,12 @@ class WhatsAppDailySummaryService
         }
 
         if ($this->canViewReceivables($user)) {
-            $payments = CustomerPayment::withoutGlobalScopes()
+            $payments = CustomerPayment::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $company->id)
                 ->whereDate('payment_date', $date->toDateString());
             $this->scopeActivity($payments, $recipient, 'received_by');
 
-            $receivables = Sale::withoutGlobalScopes()
+            $receivables = Sale::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $company->id)
                 ->where('status', 'completed')
                 ->where('balance_amount', '>', 0);
@@ -96,13 +97,13 @@ class WhatsAppDailySummaryService
         }
 
         if ($user?->hasAnyPermission(['purchases.view', 'reports.purchases'])) {
-            $purchases = Purchase::withoutGlobalScopes()->where('company_id', $company->id)
+            $purchases = Purchase::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)
                 ->whereDate('purchase_date', $date->toDateString());
             $this->scopeActivity($purchases, $recipient, 'created_by');
-            $grns = GoodsReceivingNote::withoutGlobalScopes()->where('company_id', $company->id)
+            $grns = GoodsReceivingNote::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)
                 ->whereDate('received_date', $date->toDateString());
             $this->scopeActivity($grns, $recipient, 'received_by');
-            $outstanding = Purchase::withoutGlobalScopes()->where('company_id', $company->id)
+            $outstanding = Purchase::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)
                 ->whereIn('status', ['draft', 'ordered', 'partial']);
             $this->scopeActivity($outstanding, $recipient, 'created_by');
 
@@ -113,10 +114,10 @@ class WhatsAppDailySummaryService
                 'outstanding_orders' => $outstanding->count(),
             ];
 
-            $ordersToday = Purchase::withoutGlobalScopes()->where('company_id', $company->id)
+            $ordersToday = Purchase::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)
                 ->whereDate('created_at', $date->toDateString());
             $this->scopeActivity($ordersToday, $recipient, 'created_by');
-            $receiptsToday = GoodsReceivingNote::withoutGlobalScopes()->where('company_id', $company->id)
+            $receiptsToday = GoodsReceivingNote::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)
                 ->where('status', 'posted')->whereDate('posted_at', $date->toDateString());
             $this->scopeActivity($receiptsToday, $recipient, 'received_by');
             $orderList = (clone $ordersToday)->with('supplier')->orderBy('id')->limit(5)->get();
@@ -148,7 +149,7 @@ class WhatsAppDailySummaryService
                 ->where('company_id', $company->id)
                 ->whereIn('sale_id', $saleIds->all() ?: [0])
                 ->sum(DB::raw('CASE WHEN base_unit_cost IS NOT NULL THEN base_quantity * base_unit_cost ELSE quantity * COALESCE(unit_cost, 0) END'));
-            $expenses = Expense::withoutGlobalScopes()->where('company_id', $company->id)
+            $expenses = Expense::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)
                 ->whereDate('expense_date', $date->toDateString());
             $this->scopeActivity($expenses, $recipient, 'paid_by');
             $expenseTotal = (float) $expenses->sum('amount');
@@ -319,7 +320,7 @@ class WhatsAppDailySummaryService
 
     private function cancelledSales(Company $company, WhatsAppRecipient $recipient, CarbonInterface $date): int
     {
-        $query = Sale::withoutGlobalScopes()->where('company_id', $company->id)
+        $query = Sale::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)
             ->whereDate('cancelled_at', $date->toDateString())->where('status', 'cancelled');
         $this->scopeSales($query, $recipient);
 

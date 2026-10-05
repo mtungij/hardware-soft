@@ -2,13 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\Scopes\CompanyScope;
 use App\Models\WhatsAppSettingAudit;
 
 class WhatsAppAuditService
 {
     public function record(int $companyId, string $action, ?array $before = null, ?array $after = null): void
     {
-        WhatsAppSettingAudit::withoutGlobalScopes()->create([
+        WhatsAppSettingAudit::withoutGlobalScope(CompanyScope::class)->create([
             'company_id' => $companyId,
             'user_id' => auth()->id(),
             'action' => $action,

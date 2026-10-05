@@ -33,6 +33,9 @@ use LogicException;
     'transaction_unit_price',
     'reference_type',
     'reference_id',
+    'stock_transfer_id',
+    'stock_transfer_item_id',
+    'original_movement_id',
     'production_curing_batch_id',
     'production_curing_release_id',
     'posting_reference',
@@ -45,9 +48,9 @@ class StockMovement extends Model
 {
     use HasCompany, HasFactory;
 
-    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'internal_sale_in', 'transfer_in', 'adjustment_in', 'return_in', 'direct_stock_in', 'opening_stock', 'production_output', 'curing_release_in'];
+    public const POSITIVE_TYPES = ['purchase_in', 'purchase_receipt', 'internal_sale_in', 'transfer_in', 'transfer_cancel_in', 'adjustment_in', 'return_in', 'direct_stock_in', 'opening_stock', 'production_output', 'curing_release_in'];
 
-    public const NEGATIVE_TYPES = ['sale_out', 'internal_sale_out', 'transfer_out', 'adjustment_out', 'damage_out', 'purchase_receipt_reversal', 'production_consumption', 'curing_release_out', 'curing_damage'];
+    public const NEGATIVE_TYPES = ['sale_out', 'internal_sale_out', 'transfer_out', 'transfer_cancel_out', 'adjustment_out', 'damage_out', 'purchase_receipt_reversal', 'production_consumption', 'curing_release_out', 'curing_damage'];
 
     protected static function booted(): void
     {

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Branch;
 use App\Models\Company;
+use App\Models\Scopes\CompanyScope;
 use App\Models\StockLocation;
 use Illuminate\Support\Facades\DB;
 
@@ -18,9 +19,9 @@ class StockLocationDefaultService
 
             // Lock the parent so concurrent default changes for one branch serialize.
             if ($branchId !== null) {
-                Branch::withoutGlobalScopes()->where('company_id', $companyId)->whereKey($branchId)->lockForUpdate()->firstOrFail();
+                Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->whereKey($branchId)->lockForUpdate()->firstOrFail();
             } else {
-                Company::withoutGlobalScopes()->whereKey($companyId)->lockForUpdate()->firstOrFail();
+                Company::withoutGlobalScope(CompanyScope::class)->whereKey($companyId)->lockForUpdate()->firstOrFail();
             }
 
             if ($attributes['is_default'] ?? false) {

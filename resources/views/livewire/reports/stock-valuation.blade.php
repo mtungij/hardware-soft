@@ -7,14 +7,14 @@ use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
-state(['branch_id' => '', 'stock_location_id' => '', 'search' => ''])->url();
+state(['branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'stock_location_id' => '', 'search' => ''])->url();
 
 $updatedBranchId = function () {
     $this->stock_location_id = '';
 };
 
 mount(function () {
-    $this->branch_id = request('branch_id', $this->branch_id);
+    $this->branch_id = (string) (\App\Support\BranchAccess::resolve(auth()->user(), request('branch_id', $this->branch_id) ? (int) request('branch_id', $this->branch_id) : null) ?? '');
     $this->stock_location_id = request('stock_location_id', $this->stock_location_id);
     $this->search = request('search', $this->search);
 });
@@ -38,7 +38,7 @@ mount(function () {
     <x-card>
         <div class="grid gap-3 md:grid-cols-3">
             <label class="text-sm font-bold">Branch
-                <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border px-3 py-2 text-sm dark:bg-navy-950">
+                <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border px-3 py-2 text-sm dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     <option value="">All authorized branches</option>
                     @foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
                 </select>

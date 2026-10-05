@@ -10,7 +10,7 @@ use function Livewire\Volt\uses;
 
 layout('layouts.app');
 uses([WithPagination::class]);
-state(['search' => '', 'status' => '', 'branch_id' => '']);
+state(['search' => '', 'status' => '', 'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : '')]);
 ?>
 
 <div>
@@ -29,7 +29,7 @@ state(['search' => '', 'status' => '', 'branch_id' => '']);
         <div class="mb-4 grid gap-3 md:grid-cols-3">
             <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" placeholder="Customer, phone, project or reference">
             <select wire:model.live="status" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All statuses</option>@foreach (CustomerMaterialAccount::STATUSES as $value)<option value="{{ $value }}">{{ str($value)->title() }}</option>@endforeach</select>
-            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
         </div>
         <x-table :headers="['Reference / Project', 'Customer', 'Branch', 'Project Value', 'Deposited', 'Issued', 'Available', 'Status']">
             @forelse ($accounts as $account)

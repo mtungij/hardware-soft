@@ -5,6 +5,7 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Models\Concerns\HasCompany;
 use App\Notifications\HardexResetPassword;
+use App\Support\BranchAccess;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -40,6 +41,16 @@ class User extends Authenticatable
 
         $locale = in_array($locale, ['en', 'sw'], true) ? $locale : config('app.fallback_locale', 'en');
         $this->notify((new HardexResetPassword((string) $token, $locale))->locale($locale));
+    }
+
+    public function accessibleBranchIds(): array
+    {
+        return BranchAccess::branches($this)->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    public function canAccessBranch(?int $branchId): bool
+    {
+        return BranchAccess::canAccessBranch($this, $branchId);
     }
 
     public function branch(): BelongsTo
@@ -83,13 +94,23 @@ class User extends Authenticatable
 
     public function permittedStockLocations(string $ability = 'can_view', ?int $branchId = null): Collection
     {
+        if (BranchAccess::restricted($this)) {
+            if ($branchId !== null && ! $this->canAccessBranch($branchId)) {
+                return collect();
+            }
+            $branchId = (int) $this->branch_id;
+        }
         $hasExplicitAssignments = $this->stockLocations()
+            ->where('stock_locations.company_id', $this->company_id)
+            ->when(BranchAccess::restricted($this), fn ($query) => $query->where('stock_locations.branch_id', $this->branch_id))
             ->when($branchId, fn ($query) => $query->where(fn ($locations) => $locations
                 ->where('stock_locations.branch_id', $branchId)
                 ->orWhereNull('stock_locations.branch_id')))
             ->exists();
 
         $locations = $this->stockLocations()
+            ->where('stock_locations.company_id', $this->company_id)
+            ->when(BranchAccess::restricted($this), fn ($query) => $query->where('stock_locations.branch_id', $this->branch_id))
             ->wherePivot($ability, true)
             ->where('stock_locations.is_active', true)
             ->where('stock_locations.status', 'active')
@@ -118,6 +139,8 @@ class User extends Authenticatable
         }
 
         return StockLocation::query()
+            ->where('company_id', $this->company_id)
+            ->when(BranchAccess::restricted($this), fn ($query) => $query->where('branch_id', $this->branch_id))
             ->where(fn ($query) => $query->where('branch_id', $branchId)->orWhereNull('branch_id'))
             ->whereIn('type', $this->allowedSalesLocationTypes())
             ->where('status', 'active')

@@ -23,7 +23,7 @@ uses([WithPagination::class]);
 abort_unless(InventorySettings::warehouseEnabled(), 403);
 
 state([
-    'branchFilter' => '',
+    'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'locationFilter' => '',
     'categoryFilter' => '',
     'brandFilter' => '',
@@ -139,7 +139,7 @@ $locationBadge = function (?string $type): string {
             ->when(auth()->user()?->company_id, fn ($query, $companyId) => $query->where('company_id', $companyId))
             ->groupBy('company_id', 'branch_id', 'product_id', 'stock_location_id');
 
-        $baseRows = DB::table('products')
+        $baseRows = DB::table('products')->whereIn('products.id', \App\Models\Product::query()->select('id'))
             ->crossJoin('stock_locations')
             ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
             ->leftJoin('units', 'units.id', '=', 'products.unit_id')
@@ -236,7 +236,7 @@ $locationBadge = function (?string $type): string {
 
     <x-card class="mt-5">
         <div class="mb-4 grid gap-3 lg:grid-cols-4 xl:grid-cols-5">
-            <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+            <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                 <option value="">All Branches</option>
                 @foreach (Branch::query()->when(auth()->user()?->company_id, fn ($query, $companyId) => $query->where('company_id', $companyId))->orderBy('name')->get() as $branch)
                     <option value="{{ $branch->id }}">{{ $branch->name }}</option>

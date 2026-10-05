@@ -7,7 +7,7 @@ use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
-state(['branch_id' => '', 'date_from' => '', 'date_to' => '']);
+state(['branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'date_from' => '', 'date_to' => '']);
 mount(function () {
     $this->date_from = now()->startOfMonth()->toDateString();
     $this->date_to = today()->toDateString();
@@ -25,7 +25,7 @@ mount(function () {
             ? $reports->profitLoss($branch_id ? (int) $branch_id : null, $date_from, $date_to) : null;
     @endphp
     <x-card><div class="grid gap-3 md:grid-cols-3">
-        <select wire:model.live="branch_id" class="rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">All authorized branches</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+        <select wire:model.live="branch_id" class="rounded-lg border px-3 py-2 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All authorized branches</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
         <input wire:model.live="date_from" type="date" class="rounded-lg border px-3 py-2 dark:bg-navy-950">
         <input wire:model.live="date_to" type="date" class="rounded-lg border px-3 py-2 dark:bg-navy-950">
     </div></x-card>

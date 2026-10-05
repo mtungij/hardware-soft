@@ -25,7 +25,7 @@ uses([WithFileUploads::class, ManagesProductUnitConversionRows::class]);
 
 state([
     'product' => null,
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'category_id' => '',
     'measurement_type_id' => '',
     'purchase_unit_id' => '',
@@ -709,7 +709,7 @@ $save = function () {
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Branch
-                <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     <option value="">Global product</option>
                     @foreach (\App\Models\Branch::orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>

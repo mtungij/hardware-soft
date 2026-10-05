@@ -40,7 +40,7 @@ rules(fn () => [
     'password' => ['required'],
     'status' => ['required', 'in:active,inactive'],
     'role' => ['required', 'exists:roles,name'],
-    'branch_id' => ['nullable', 'exists:branches,id'],
+    'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', auth()->user()->company_id)->where(fn ($query) => $query->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('id', auth()->user()->branch_id)))],
     'profile_photo' => ['nullable', 'string', 'max:255'],
     'sales_location_access' => [
         'nullable',
@@ -348,6 +348,7 @@ $save = function () {
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                     @endforeach
                 </select>
+                <p class="mt-1 text-xs font-normal text-slate-500">If a branch is assigned, this user will only access data for that branch. Leave blank to allow access to all company branches.</p>
                 @error('branch_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 

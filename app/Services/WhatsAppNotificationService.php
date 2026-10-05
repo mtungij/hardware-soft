@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Jobs\SendWhatsAppNotification;
 use App\Models\Company;
 use App\Models\CompanyWhatsAppSetting;
+use App\Models\Scopes\CompanyScope;
 use App\Models\WhatsAppNotification;
 use App\Models\WhatsAppRecipient;
 use App\Support\WhatsAppCategories;
@@ -35,13 +36,13 @@ class WhatsAppNotificationService
             return [];
         }
 
-        $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $company->id)->first();
+        $setting = CompanyWhatsAppSetting::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->first();
 
         if (! $setting?->enabled || ! $setting->categoryEnabled($category)) {
             return [];
         }
 
-        $recipients = WhatsAppRecipient::withoutGlobalScopes()
+        $recipients = WhatsAppRecipient::withoutGlobalScope(CompanyScope::class)
             ->with(['user' => fn ($query) => $query->withoutGlobalScopes()->with('roles')])
             ->where('company_id', $company->id)
             ->where('active', true)
@@ -72,7 +73,7 @@ class WhatsAppNotificationService
 
     public function queueTest(Company $company, string $phone, string $message): WhatsAppNotification
     {
-        $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $company->id)->firstOrFail();
+        $setting = CompanyWhatsAppSetting::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->firstOrFail();
 
         return $this->create($company, $setting, $phone, 'test_message', 'system', 'test:'.now()->format('YmdHis'), $message);
     }
@@ -192,7 +193,7 @@ class WhatsAppNotificationService
         $recipientToken = $idempotencyRecipientToken ?: ($recipient?->id ?: hash('sha256', $phone));
         $idempotencyKey = substr($eventKey.':recipient:'.$recipientToken, 0, 191);
 
-        $notification = WhatsAppNotification::withoutGlobalScopes()->firstOrCreate(
+        $notification = WhatsAppNotification::withoutGlobalScope(CompanyScope::class)->firstOrCreate(
             ['company_id' => $company->id, 'idempotency_key' => $idempotencyKey],
             [
                 'branch_id' => $branchId,

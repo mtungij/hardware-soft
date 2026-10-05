@@ -18,7 +18,7 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 
 state([
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'stock_location_id' => '',
     'search' => '',
     'barcode' => '',
@@ -1223,7 +1223,7 @@ $completeSale = function (InventoryService $inventory) {
 
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                     {{ $t('Branch') }}
-                    <select wire:model="quick_customer_branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <select wire:model="quick_customer_branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         <option value="">{{ $t('Global customer') }}</option>
                         @foreach (Branch::orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>

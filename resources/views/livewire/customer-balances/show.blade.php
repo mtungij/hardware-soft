@@ -18,7 +18,7 @@ state([
     'activeTab' => 'statement',
     'date_from' => '',
     'date_to' => '',
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'transaction_type' => '',
     'sale_number' => '',
     'product_id' => '',
@@ -30,7 +30,7 @@ mount(function (Customer $customer) {
     $this->activeTab = request('tab', 'statement');
     $this->date_from = request('date_from', now()->startOfMonth()->toDateString());
     $this->date_to = request('date_to', today()->toDateString());
-    $this->branch_id = request('branch_id', '');
+    $this->branch_id = (string) (\App\Support\BranchAccess::resolve(auth()->user(), request('branch_id', '') ? (int) request('branch_id', '') : null) ?? '');
     $this->transaction_type = request('transaction_type', '');
     $this->sale_number = request('sale_number', '');
     $this->product_id = request('product_id', '');
@@ -157,7 +157,7 @@ $setTab = fn (string $tab) => $this->activeTab = $tab;
         <div class="grid gap-3 md:grid-cols-4 xl:grid-cols-7">
             <input wire:model.live="date_from" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
             <input wire:model.live="date_to" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All Branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
             <select wire:model.live="transaction_type" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Transactions</option><option value="credit_sale">Credit Sale</option><option value="payment">Payment</option><option value="return">Return</option><option value="adjustment">Adjustment</option></select>
             <input wire:model.live.debounce.300ms="sale_number" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" placeholder="Sale number">
             <select wire:model.live="product_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Products</option>@foreach (Product::with('size')->orderBy('name')->get() as $product)<option value="{{ $product->id }}">{{ $product->displayNameWithSize() }}</option>@endforeach</select>

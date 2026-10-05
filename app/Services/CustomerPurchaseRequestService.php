@@ -8,6 +8,7 @@ use App\Models\CustomerAccount;
 use App\Models\CustomerPurchaseRequest;
 use App\Models\DocumentSequence;
 use App\Models\Product;
+use App\Models\Scopes\CompanyScope;
 use App\Models\User;
 use App\Support\AuthorizationScope;
 use App\Support\NumberFormatter;
@@ -26,14 +27,14 @@ class CustomerPurchaseRequestService
     /** @param array<int, array<string, mixed>> $items */
     public function submit(CustomerAccount $account, ?int $branchId, ?string $notes, array $items, string $submissionKey): CustomerPurchaseRequest
     {
-        $existing = CustomerPurchaseRequest::withoutGlobalScopes()
+        $existing = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)
             ->where('customer_account_id', $account->id)->where('submission_key', $submissionKey)->first();
         if ($existing) {
             return $existing;
         }
 
         $request = DB::transaction(function () use ($account, $branchId, $notes, $items, $submissionKey): CustomerPurchaseRequest {
-            $account = CustomerAccount::withoutGlobalScopes()->with('customer')->lockForUpdate()->findOrFail($account->id);
+            $account = CustomerAccount::withoutGlobalScope(CompanyScope::class)->with('customer')->lockForUpdate()->findOrFail($account->id);
             if (! $account->isActive() || ! $account->customer || (int) $account->customer->company_id !== (int) $account->company_id) {
                 throw ValidationException::withMessages(['account' => 'The customer account is not active or is not linked correctly.']);
             }
@@ -41,13 +42,13 @@ class CustomerPurchaseRequestService
                 throw ValidationException::withMessages(['items' => 'Add at least one product.']);
             }
             $branch = $branchId
-                ? Branch::withoutGlobalScopes()->where('company_id', $account->company_id)->where('status', 'active')->find($branchId)
-                : Branch::withoutGlobalScopes()->where('company_id', $account->company_id)->where('status', 'active')->orderByDesc('is_default')->first();
+                ? Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $account->company_id)->where('status', 'active')->find($branchId)
+                : Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $account->company_id)->where('status', 'active')->orderByDesc('is_default')->first();
             if (! $branch) {
                 throw ValidationException::withMessages(['branch_id' => 'Select an active branch belonging to this company.']);
             }
 
-            $request = CustomerPurchaseRequest::withoutGlobalScopes()->create([
+            $request = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)->create([
                 'company_id' => $account->company_id,
                 'branch_id' => $branch->id,
                 'customer_id' => $account->customer_id,
@@ -60,7 +61,7 @@ class CustomerPurchaseRequestService
             ]);
 
             foreach ($items as $index => $row) {
-                $product = Product::withoutGlobalScopes()->with(['unit', 'unitConversions.unit'])
+                $product = Product::withoutGlobalScope(CompanyScope::class)->with(['unit', 'unitConversions.unit'])
                     ->where('company_id', $account->company_id)->where('status', 'active')
                     ->find($row['product_id'] ?? null);
                 if (! $product) {
@@ -137,7 +138,7 @@ class CustomerPurchaseRequestService
         }
 
         return DB::transaction(function () use ($request, $staff): CustomerPurchaseRequest {
-            $request = CustomerPurchaseRequest::withoutGlobalScopes()->lockForUpdate()->findOrFail($request->id);
+            $request = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)->lockForUpdate()->findOrFail($request->id);
             if ($request->status === 'pending') {
                 $request->update(['status' => 'under_review', 'reviewed_by' => $staff->id, 'reviewed_at' => now()]);
                 $this->audit->record($request, 'purchase_request', 'review_started', $staff);

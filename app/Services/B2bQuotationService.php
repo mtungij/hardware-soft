@@ -14,9 +14,10 @@ use App\Models\Product;
 use App\Models\Quotation;
 use App\Models\Sale;
 use App\Models\SalesInvoice;
+use App\Models\Scopes\CompanyScope;
 use App\Models\StockLocation;
 use App\Models\User;
-use App\Support\AuthorizationScope;
+use App\Support\BranchAccess;
 use App\Support\NumberFormatter;
 use App\Support\QuotationTemplateRegistry;
 use Carbon\CarbonImmutable;
@@ -46,7 +47,7 @@ class B2bQuotationService
         }
 
         return DB::transaction(function () use ($request, $staff, $lines, $documentType, $validUntil, $notes, $terms, $additionalCharges, $quotationTemplateKey): Quotation {
-            $request = CustomerPurchaseRequest::withoutGlobalScopes()->with('items')->lockForUpdate()->findOrFail($request->id);
+            $request = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)->with('items')->lockForUpdate()->findOrFail($request->id);
             if (! in_array($request->status, ['pending', 'under_review'], true)) {
                 throw ValidationException::withMessages(['request' => 'Only pending or under-review requests can be quoted.']);
             }
@@ -72,7 +73,7 @@ class B2bQuotationService
                 if ($discountPerUnit > 0 && ! $staff->can('sales.discount')) {
                     throw new AuthorizationException('You are not allowed to apply discounts.');
                 }
-                $product = Product::withoutGlobalScopes()->with('unit')->where('company_id', $request->company_id)->where('status', 'active')->findOrFail($requestItem->product_id);
+                $product = Product::withoutGlobalScope(CompanyScope::class)->with('unit')->where('company_id', $request->company_id)->where('status', 'active')->findOrFail($requestItem->product_id);
                 $conversion = $this->conversions->resolveForSale($product, $requestItem->product_unit_conversion_id);
                 $factor = $conversion ? (float) $requestItem->conversion_factor_snapshot : 1.0;
                 $baseQuantity = round($quantity * $factor, 4);
@@ -89,7 +90,7 @@ class B2bQuotationService
             $type = $documentType === 'proforma' ? DocumentSequence::PROFORMA : DocumentSequence::QUOTATION;
             $preparedCharges = $this->prepareAdditionalCharges((int) $request->company_id, $staff, $additionalCharges);
             $chargeTotal = collect($preparedCharges)->sum('amount');
-            $quotation = Quotation::withoutGlobalScopes()->create([
+            $quotation = Quotation::withoutGlobalScope(CompanyScope::class)->create([
                 'company_id' => $request->company_id, 'branch_id' => $request->branch_id,
                 'customer_id' => $request->customer_id, 'customer_purchase_request_id' => $request->id,
                 'created_by' => $staff->id, 'quotation_number' => $this->numbers->next($request->company_id, $type, $prefix),
@@ -149,7 +150,7 @@ class B2bQuotationService
         }
 
         return DB::transaction(function () use ($customer, $staff, $branchId, $lines, $documentType, $validUntil, $creationKey, $notes, $terms, $additionalCharges, $quotationTemplateKey): Quotation {
-            $existing = Quotation::withoutGlobalScopes()
+            $existing = Quotation::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $customer->company_id)
                 ->where('creation_key', $creationKey)
                 ->first();
@@ -162,7 +163,7 @@ class B2bQuotationService
             $chargeTotal = collect($preparedCharges)->sum('amount');
             $prefix = $documentType === 'proforma' ? 'PRO' : 'QT';
             $type = $documentType === 'proforma' ? DocumentSequence::PROFORMA : DocumentSequence::QUOTATION;
-            $quotation = Quotation::withoutGlobalScopes()->create([
+            $quotation = Quotation::withoutGlobalScope(CompanyScope::class)->create([
                 'company_id' => $customer->company_id,
                 'branch_id' => $branchId,
                 'customer_id' => $customer->id,
@@ -212,7 +213,7 @@ class B2bQuotationService
         $quotation->update(['status' => 'sent', 'sent_at' => $quotation->sent_at ?: now(), 'pdf_path' => $path]);
         $this->audit->record($quotation, 'quotation', 'sent', $staff);
         $quotation->loadMissing(['company', 'customer']);
-        $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $quotation->company_id)->first();
+        $setting = CompanyWhatsAppSetting::withoutGlobalScope(CompanyScope::class)->where('company_id', $quotation->company_id)->first();
         if ($setting?->enabled && $setting->categoryEnabled('quotations') && filled($quotation->customer->phone)) {
             $localization = app(WhatsAppLocalization::class);
             $document = $localization->get($quotation->company, 'b2b.'.($quotation->document_type === 'proforma' ? 'proforma_document' : 'quotation_document'));
@@ -251,7 +252,7 @@ class B2bQuotationService
         }
 
         return DB::transaction(function () use ($quotation, $staff, $reason): Quotation {
-            $quotation = Quotation::withoutGlobalScopes()->with('purchaseRequest')->lockForUpdate()->findOrFail($quotation->id);
+            $quotation = Quotation::withoutGlobalScope(CompanyScope::class)->with('purchaseRequest')->lockForUpdate()->findOrFail($quotation->id);
             if ($quotation->status === 'accepted') {
                 return $quotation;
             }
@@ -276,14 +277,14 @@ class B2bQuotationService
         $this->authorizeStaff($staff, $quotation->company_id, $quotation->branch_id, $permission);
 
         $sale = DB::transaction(function () use ($quotation, $staff, $stockLocationId, $payments): Sale {
-            $quotation = Quotation::withoutGlobalScopes()->with(['items', 'additionalCharges', 'purchaseRequest'])->lockForUpdate()->findOrFail($quotation->id);
+            $quotation = Quotation::withoutGlobalScope(CompanyScope::class)->with(['items', 'additionalCharges', 'purchaseRequest'])->lockForUpdate()->findOrFail($quotation->id);
             if ($quotation->converted_sale_id) {
-                return Sale::withoutGlobalScopes()->findOrFail($quotation->converted_sale_id);
+                return Sale::withoutGlobalScope(CompanyScope::class)->findOrFail($quotation->converted_sale_id);
             }
             if ($quotation->status !== 'accepted') {
                 throw ValidationException::withMessages(['quotation' => 'Only an accepted quotation can be converted to sale.']);
             }
-            $location = StockLocation::withoutGlobalScopes()->where('company_id', $quotation->company_id)
+            $location = StockLocation::withoutGlobalScope(CompanyScope::class)->where('company_id', $quotation->company_id)
                 ->where('branch_id', $quotation->branch_id)->findOrFail($stockLocationId);
             $shortages = collect($this->availability($quotation, $location->id))->where('shortage', '>', 0);
             if ($shortages->isNotEmpty()) {
@@ -315,9 +316,9 @@ class B2bQuotationService
             );
             $quotation->update(['status' => 'converted', 'converted_sale_id' => $sale->id]);
             $quotation->purchaseRequest?->update(['status' => 'converted', 'sale_id' => $sale->id, 'converted_at' => now()]);
-            $invoice = SalesInvoice::withoutGlobalScopes()->where('sale_id', $sale->id)->first();
+            $invoice = SalesInvoice::withoutGlobalScope(CompanyScope::class)->where('sale_id', $sale->id)->first();
             if (! $invoice) {
-                $invoice = SalesInvoice::withoutGlobalScopes()->create([
+                $invoice = SalesInvoice::withoutGlobalScope(CompanyScope::class)->create([
                     'sale_id' => $sale->id, 'company_id' => $sale->company_id,
                     'customer_id' => $sale->customer_id, 'quotation_id' => $quotation->id,
                     'source_type' => 'quotation',
@@ -329,7 +330,7 @@ class B2bQuotationService
             return $sale;
         });
 
-        $invoiceId = SalesInvoice::withoutGlobalScopes()->where('sale_id', $sale->id)->value('id');
+        $invoiceId = SalesInvoice::withoutGlobalScope(CompanyScope::class)->where('sale_id', $sale->id)->value('id');
         if ($invoiceId) {
             $this->generateAndSendInvoice((int) $invoiceId);
         }
@@ -389,9 +390,9 @@ class B2bQuotationService
                 true,
                 $preparedCharges,
             );
-            $invoice = SalesInvoice::withoutGlobalScopes()->where('sale_id', $sale->id)->first();
+            $invoice = SalesInvoice::withoutGlobalScope(CompanyScope::class)->where('sale_id', $sale->id)->first();
             if (! $invoice) {
-                $invoice = SalesInvoice::withoutGlobalScopes()->create([
+                $invoice = SalesInvoice::withoutGlobalScope(CompanyScope::class)->create([
                     'sale_id' => $sale->id,
                     'company_id' => $sale->company_id,
                     'customer_id' => $sale->customer_id,
@@ -405,7 +406,7 @@ class B2bQuotationService
             return $sale;
         });
 
-        $invoiceId = SalesInvoice::withoutGlobalScopes()->where('sale_id', $sale->id)->value('id');
+        $invoiceId = SalesInvoice::withoutGlobalScope(CompanyScope::class)->where('sale_id', $sale->id)->value('id');
         if ($invoiceId) {
             $this->generateAndSendInvoice((int) $invoiceId);
         }
@@ -426,7 +427,7 @@ class B2bQuotationService
     private function customerDecision(Quotation $quotation, CustomerAccount $account, bool $accept, ?string $reason): Quotation
     {
         $quotation = DB::transaction(function () use ($quotation, $account, $accept, $reason): Quotation {
-            $quotation = Quotation::withoutGlobalScopes()->with(['purchaseRequest', 'customer'])->lockForUpdate()->findOrFail($quotation->id);
+            $quotation = Quotation::withoutGlobalScope(CompanyScope::class)->with(['purchaseRequest', 'customer'])->lockForUpdate()->findOrFail($quotation->id);
             if ((int) $quotation->company_id !== (int) $account->company_id || (int) $quotation->customer_id !== (int) $account->customer_id) {
                 throw new AuthorizationException('This quotation does not belong to this customer account.');
             }
@@ -474,14 +475,14 @@ class B2bQuotationService
     private function generateAndSendInvoice(int $invoiceId): void
     {
         try {
-            $invoice = SalesInvoice::withoutGlobalScopes()->with(['company', 'customer', 'sale'])->findOrFail($invoiceId);
+            $invoice = SalesInvoice::withoutGlobalScope(CompanyScope::class)->with(['company', 'customer', 'sale'])->findOrFail($invoiceId);
             $newlyGenerated = blank($invoice->pdf_path);
             $path = $invoice->pdf_path ?: $this->pdfs->invoice($invoice);
             $invoice->update(['pdf_path' => $path, 'generated_at' => $invoice->generated_at ?: now()]);
             if ($newlyGenerated) {
                 $this->audit->record($invoice, 'sales_invoice', 'generated', metadata: ['sale_id' => $invoice->sale_id]);
             }
-            $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $invoice->company_id)->first();
+            $setting = CompanyWhatsAppSetting::withoutGlobalScope(CompanyScope::class)->where('company_id', $invoice->company_id)->first();
             if (! $setting?->enabled || ! $setting->categoryEnabled('customer_invoices') || blank($invoice->customer?->phone)) {
                 return;
             }
@@ -518,7 +519,7 @@ class B2bQuotationService
         }
 
         return collect($lines)->values()->map(function (array $line, int $index) use ($companyId, $staff): array {
-            $product = Product::withoutGlobalScopes()->with('unit')->where('company_id', $companyId)->where('status', 'active')->find($line['product_id'] ?? null);
+            $product = Product::withoutGlobalScope(CompanyScope::class)->with('unit')->where('company_id', $companyId)->where('status', 'active')->find($line['product_id'] ?? null);
             if (! $product) {
                 throw ValidationException::withMessages(["lines.{$index}.product_id" => 'Select an active product belonging to this company.']);
             }
@@ -564,7 +565,7 @@ class B2bQuotationService
         }
 
         return $charges->map(function (array $charge, int $index) use ($companyId): array {
-            $type = AdditionalChargeType::withoutGlobalScopes()
+            $type = AdditionalChargeType::withoutGlobalScope(CompanyScope::class)
                 ->where('company_id', $companyId)
                 ->where('is_active', true)
                 ->find($charge['additional_charge_type_id'] ?? null);
@@ -615,7 +616,7 @@ class B2bQuotationService
         if ($customer->status !== 'active') {
             throw ValidationException::withMessages(['customer_id' => 'Select an active customer.']);
         }
-        $validBranch = Branch::withoutGlobalScopes()->where('company_id', $customer->company_id)->where('status', 'active')->whereKey($branchId)->exists();
+        $validBranch = Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $customer->company_id)->where('status', 'active')->whereKey($branchId)->exists();
         if (! $validBranch) {
             throw ValidationException::withMessages(['branch_id' => 'Select an active branch belonging to this company.']);
         }
@@ -636,8 +637,7 @@ class B2bQuotationService
         if ((int) $staff->company_id !== $companyId || ! $staff->can($permission)) {
             throw new AuthorizationException;
         }
-        if (AuthorizationScope::scopeFor($staff, $scopeColumn, AuthorizationScope::BRANCH) !== AuthorizationScope::COMPANY
-            && (int) $staff->branch_id !== $branchId) {
+        if (! BranchAccess::canAccessBranch($staff, $branchId)) {
             throw new AuthorizationException;
         }
     }

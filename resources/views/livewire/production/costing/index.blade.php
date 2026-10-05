@@ -16,7 +16,7 @@ use function Livewire\Volt\uses;
 
 layout('layouts.app');
 uses([WithPagination::class]);
-state(['search'=>'','statusFilter'=>'','branchFilter'=>'','productFilter'=>'','machineFilter'=>'','dateFrom'=>'','dateTo'=>'']);
+state(['search'=>'','statusFilter'=>'','branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),'productFilter'=>'','machineFilter'=>'','dateFrom'=>'','dateTo'=>'']);
 mount(fn()=>abort_unless(CompanyFeatures::manufacturingEnabled() && collect(['production.view_costing','production.manage_costing','production.finalize_costing'])->contains(fn($p)=>auth()->user()?->can($p)),403));
 $calculate=function(int $orderId):void{
     $order=ProductionOrder::query()->forCurrentCompany()->findOrFail($orderId);
@@ -32,7 +32,7 @@ $calculate=function(int $orderId):void{
         <div class="mb-5 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
             <input wire:model.live.debounce.300ms="search" placeholder="Costing, order, product, machine…" class="rounded-lg border-slate-200 md:col-span-2 dark:bg-navy-950">
             <select wire:model.live="statusFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All costings</option><option value="uncosted">Uncosted</option><option value="calculated">Provisional / calculated</option><option value="finalized">Finalized</option><option value="missing">Cost missing</option><option value="unfavorable">Unfavorable variance</option></select>
-            <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All branches</option>@foreach(Branch::query()->where('company_id',CompanyFeatures::companyId())->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+            <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All branches</option>@foreach(Branch::query()->where('company_id',CompanyFeatures::companyId())->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
             <select wire:model.live="productFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All products</option>@foreach(Product::query()->where('company_id',CompanyFeatures::companyId())->manufactured()->orderBy('name')->get() as $product)<option value="{{ $product->id }}">{{ $product->name }}</option>@endforeach</select>
             <select wire:model.live="machineFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All machines</option>@foreach(Machine::query()->forCurrentCompany()->orderBy('name')->get() as $machine)<option value="{{ $machine->id }}">{{ $machine->name }}</option>@endforeach</select>
             <input type="date" wire:model.live="dateFrom" class="rounded-lg border-slate-200 dark:bg-navy-950"><input type="date" wire:model.live="dateTo" class="rounded-lg border-slate-200 dark:bg-navy-950">

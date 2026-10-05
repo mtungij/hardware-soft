@@ -36,6 +36,8 @@ state([
 ]);
 
 mount(function (User $user) {
+    abort_unless((int) $user->company_id === (int) auth()->user()->company_id, 404);
+    abort_unless(! \App\Support\BranchAccess::restricted() || (int) $user->branch_id === (int) auth()->user()->branch_id, 403);
     $this->user = $user;
     $this->name = $user->name;
     $this->email = $user->email;
@@ -64,7 +66,7 @@ rules(fn () => [
     'password' => ['nullable'],
     'status' => ['required', 'in:active,inactive'],
     'role' => ['required', 'exists:roles,name'],
-    'branch_id' => ['nullable', 'exists:branches,id'],
+    'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', auth()->user()->company_id)->where(fn ($query) => $query->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('id', auth()->user()->branch_id)))],
     'profile_photo' => ['nullable', 'string', 'max:255'],
     'sales_location_access' => [
         'nullable',
@@ -381,6 +383,7 @@ $save = function () {
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                     @endforeach
                 </select>
+                <p class="mt-1 text-xs font-normal text-slate-500">If a branch is assigned, this user will only access data for that branch. Leave blank to allow access to all company branches.</p>
                 @error('branch_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 

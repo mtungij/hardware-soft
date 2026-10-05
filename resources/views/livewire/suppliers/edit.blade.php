@@ -12,7 +12,7 @@ layout('layouts.app');
 
 state([
     'supplier' => null,
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'name' => '',
     'contact_person' => '',
     'phone' => '',
@@ -81,7 +81,7 @@ $save = function () {
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Branch
-                <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     <option value="">Global supplier</option>
                     @foreach (Branch::orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>

@@ -25,7 +25,7 @@ uses([WithPagination::class]);
 
 state([
     'selectedDate' => '',
-    'branchFilter' => '',
+    'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'machineStatusFilter' => '',
     'productFilter' => '',
     'editingId' => null,
@@ -35,7 +35,7 @@ state([
     'production_mould_id' => '',
     'product_id' => '',
     'production_recipe_id' => '',
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'target_quantity' => '',
     'planned_start_time' => '',
     'planned_end_time' => '',
@@ -501,7 +501,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                         @error('production_recipe_id')<span class="text-xs text-red-600">{{ $message }}</span>@enderror
                     </label>
                     <label class="block text-sm font-bold">Branch / Production Site
-                        <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
+                        <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                             <option value="">Company-wide</option>
                             @foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->orderBy('name')->get() as $branch)
                                 <option value="{{ $branch->id }}">{{ $branch->name }}</option>
@@ -533,7 +533,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
 
         <x-card title="Schedule">
             <div class="mb-4 grid gap-3 md:grid-cols-3">
-                <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
+                <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     <option value="">All branches</option>
                     @foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
                 </select>

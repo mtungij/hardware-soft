@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\CompanyPaymentMethod;
 use App\Models\Quotation;
+use App\Models\Scopes\CompanyScope;
 use App\Support\NumberFormatter;
 use App\Support\QuotationTemplateRegistry;
 use Illuminate\Support\Facades\Storage;
@@ -23,7 +24,7 @@ class QuotationDocumentService
         }
         $currency = $company->currency ?: 'TZS';
         $money = fn ($value) => $currency.' '.NumberFormatter::money($value);
-        $methods = CompanyPaymentMethod::withoutGlobalScopes()->where('company_id', $quotation->company_id)->forDocument('quotation')->get();
+        $methods = CompanyPaymentMethod::withoutGlobalScope(CompanyScope::class)->where('company_id', $quotation->company_id)->forDocument('quotation')->get();
 
         return [
             'company' => $this->companyData($company),

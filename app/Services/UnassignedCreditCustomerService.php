@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Customer;
+use App\Models\Scopes\CompanyScope;
 use App\Models\StockLocation;
 
 class UnassignedCreditCustomerService
@@ -11,15 +12,16 @@ class UnassignedCreditCustomerService
     {
         $companyId = $location->company_id;
 
-        return Customer::withoutGlobalScopes()->firstOrCreate(
+        return Customer::withoutGlobalScope(CompanyScope::class)->firstOrCreate(
             [
                 'company_id' => $companyId,
+                'branch_id' => $location->branch_id,
                 'is_unassigned_credit_customer' => true,
             ],
             [
-                'branch_id' => null,
+                'branch_id' => $location->branch_id,
                 'name' => 'Mteja wa Mkopo Ambaye Hajatajwa',
-                'phone' => 'UNASSIGNED-CREDIT-'.$companyId,
+                'phone' => 'UNASSIGNED-CREDIT-'.$companyId.'-'.$location->branch_id,
                 'email' => null,
                 'address' => null,
                 'customer_type' => 'credit',

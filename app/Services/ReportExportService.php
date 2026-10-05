@@ -22,6 +22,7 @@ use App\Models\Supplier;
 use App\Models\Unit;
 use App\Models\User;
 use App\Support\AuthorizationScope;
+use App\Support\BranchAccess;
 use App\Support\InventorySettings;
 use App\Support\NumberFormatter;
 use Illuminate\Http\Request;
@@ -33,10 +34,10 @@ class ReportExportService
     public function getCompanyHeader(Request $request): array
     {
         $settings = Setting::query()->first();
-        $branchId = $request->integer('branch_id') ?: $request->integer('branchFilter');
+        $branchId = BranchAccess::resolve($request->user(), $request->integer('branch_id') ?: $request->integer('branchFilter') ?: null);
         $locationId = $request->integer('stock_location_id');
         $branch = $branchId ? Branch::find($branchId) : null;
-        $location = $locationId ? StockLocation::find($locationId) : null;
+        $location = $locationId ? StockLocation::findOrFail($locationId) : null;
 
         return [
             'company_name' => $settings?->company_name ?: config('app.name', 'HARDEX ERP'),
@@ -107,7 +108,7 @@ class ReportExportService
 
     private function rows(string $key, Request $request): array
     {
-        $branchId = $request->integer('branch_id') ?: $request->integer('branchFilter') ?: null;
+        $branchId = BranchAccess::resolve($request->user(), $request->integer('branch_id') ?: $request->integer('branchFilter') ?: null);
         $from = $request->string('date_from')->toString() ?: $request->string('created_from')->toString();
         $to = $request->string('date_to')->toString() ?: $request->string('created_to')->toString();
         $search = $request->string('search')->toString();
@@ -598,14 +599,12 @@ class ReportExportService
         );
 
         $totalBuyingValue = $rows->sum(
-            fn (Product $product) =>
-                (float) ($stockByProduct[$product->id] ?? 0)
+            fn (Product $product) => (float) ($stockByProduct[$product->id] ?? 0)
                 * (float) $product->buying_price
         );
 
         $totalSellingValue = $rows->sum(
-            fn (Product $product) =>
-                (float) ($stockByProduct[$product->id] ?? 0)
+            fn (Product $product) => (float) ($stockByProduct[$product->id] ?? 0)
                 * (float) $product->selling_price
         );
 
@@ -671,7 +670,7 @@ class ReportExportService
             ->when($companyId, fn ($query) => $query->where('company_id', $companyId))
             ->groupBy('company_id', 'branch_id', 'product_id', 'stock_location_id');
 
-        $rows = DB::table('products')
+        $rows = DB::table('products')->whereIn('products.id', Product::query()->select('id'))
             ->crossJoin('stock_locations')
             ->leftJoin('categories', 'categories.id', '=', 'products.category_id')
             ->leftJoin('units', 'units.id', '=', 'products.unit_id')
@@ -797,7 +796,7 @@ class ReportExportService
 
     private function users(Request $request, string $search): array
     {
-        $rows = User::with(['branch', 'company', 'roles'])->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%"))->latest()->get();
+        $rows = User::with(['branch', 'company', 'roles'])->when(BranchAccess::restricted(), fn ($query) => $query->where('branch_id', $request->user()->branch_id))->when($search, fn ($q) => $q->where(fn ($query) => $query->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%")))->latest()->get();
 
         return ['Users', ['Name', 'Email', 'Phone', 'Roles', 'Sales Location', 'Company', 'Branch', 'Status'], $rows->map(fn ($u) => [$u->name, $u->email, $u->phone, $u->roles->pluck('name')->join(', '), $u->sales_location_access, $u->company?->company_name, $u->branch?->name, ucfirst($u->status)])->all(), []];
     }

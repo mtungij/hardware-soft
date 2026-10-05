@@ -24,7 +24,7 @@ state([
     'name' => '',
     'code' => '',
     'type' => 'store',
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'description' => '',
     'is_default' => false,
     'is_active' => true,
@@ -353,7 +353,7 @@ $metrics = function (StockLocation $location): array {
                     @error('type') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Branch
-                    <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         <option value="">All branches</option>
                         @foreach (Branch::where('status', 'active')->orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>

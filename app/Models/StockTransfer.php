@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
+use App\Support\AuthorizationScope;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'completed_at',
     'cancelled_by',
     'cancelled_at',
+    'cancellation_reason',
 ])]
 class StockTransfer extends Model
 {
@@ -61,6 +63,19 @@ class StockTransfer extends Model
     public function items(): HasMany
     {
         return $this->hasMany(StockTransferItem::class);
+    }
+
+    public function canCancel(User $user): bool
+    {
+        if ((int) $this->company_id !== (int) $user->company_id
+            || (! $user->hasAnyRole(['Admin', 'Super Admin']) && ! $user->can('cancel stock transfers'))) {
+            return false;
+        }
+
+        $locations = AuthorizationScope::stockLocationsForBranch($user, 'can_view', (int) $this->branch_id);
+
+        return $locations->contains('id', $this->from_location_id)
+            && $locations->contains('id', $this->to_location_id);
     }
 
     public function canBeModified(): bool

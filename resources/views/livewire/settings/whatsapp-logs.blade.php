@@ -22,7 +22,7 @@ mount(function (): void {
     abort_unless($this->companyId, 404);
 });
 
-with(fn () => ['notifications' => WhatsAppNotification::withoutGlobalScopes()->with(['recipient', 'branch'])
+with(fn () => ['notifications' => WhatsAppNotification::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->with(['recipient', 'branch'])
     ->where('company_id', $this->companyId)
     ->when($this->status, fn ($query) => $query->where('status', $this->status))
     ->when($this->category, fn ($query) => $query->where('category', $this->category))
@@ -31,13 +31,13 @@ with(fn () => ['notifications' => WhatsAppNotification::withoutGlobalScopes()->w
 
 $retry = function (int $id, WhatsAppNotificationService $service): void {
     abort_unless(auth()->user()->can('whatsapp.retry_failed'), 403);
-    $notification = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $this->companyId)->findOrFail($id);
+    $notification = WhatsAppNotification::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $this->companyId)->findOrFail($id);
     $service->retry($notification);
 };
 
 $cancel = function (int $id): void {
     abort_unless(auth()->user()->can('whatsapp.retry_failed'), 403);
-    WhatsAppNotification::withoutGlobalScopes()->where('company_id', $this->companyId)->whereKey($id)->whereIn('status', ['pending', 'queued', 'failed'])->update(['status' => 'cancelled', 'failure_reason' => 'Cancelled by '.auth()->user()->name]);
+    WhatsAppNotification::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $this->companyId)->whereKey($id)->whereIn('status', ['pending', 'queued', 'failed'])->update(['status' => 'cancelled', 'failure_reason' => 'Cancelled by '.auth()->user()->name]);
 };
 
 ?>

@@ -16,12 +16,12 @@ uses([WithPagination::class]);
 
 state([
     'search' => '',
-    'branchFilter' => '',
+    'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'dateFilter' => 'today',
     'date_from' => '',
     'date_to' => '',
     'editingId' => null,
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'expense_category_id' => '',
     'amount' => '',
     'payment_method' => 'cash',
@@ -42,7 +42,7 @@ rules([
 
 mount(function () {
     $this->search = request('search', $this->search);
-    $this->branchFilter = request('branchFilter', $this->branchFilter);
+    $this->branchFilter = (string) (\App\Support\BranchAccess::resolve(auth()->user(), request('branchFilter', $this->branchFilter) ? (int) request('branchFilter', $this->branchFilter) : null) ?? '');
     $this->date_from = request('date_from', today()->toDateString());
     $this->date_to = request('date_to', today()->toDateString());
     $this->dateFilter = request('dateFilter', $this->dateFilter);
@@ -140,7 +140,7 @@ $delete = function (int $id) {
         <x-card :title="$editingId ? 'Edit Expense' : 'Create Expense'">
             <form wire:submit="save" class="space-y-4">
                 <label class="block text-sm font-bold">Branch
-                    <select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         @foreach (Branch::orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach
@@ -181,7 +181,7 @@ $delete = function (int $id) {
                 </div>
                 <div class="mb-4 grid gap-3 md:grid-cols-4">
                     <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search category/ref">
-                    <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+                    <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
                     <input wire:model.live="date_from" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                     <input wire:model.live="date_to" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 </div>

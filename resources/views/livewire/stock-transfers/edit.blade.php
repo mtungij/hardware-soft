@@ -17,7 +17,7 @@ layout('layouts.app');
 
 abort_unless(InventorySettings::warehouseEnabled(), 403);
 
-state(['stockTransfer' => null, 'branch_id' => '', 'transfer_number' => '', 'from_location_id' => '', 'to_location_id' => '', 'transfer_date' => '', 'notes' => '', 'items' => []]);
+state(['stockTransfer' => null, 'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'transfer_number' => '', 'from_location_id' => '', 'to_location_id' => '', 'transfer_date' => '', 'notes' => '', 'items' => []]);
 
 mount(function (StockTransfer $stockTransfer) {
     abort_unless($stockTransfer->canBeModified(), 403);

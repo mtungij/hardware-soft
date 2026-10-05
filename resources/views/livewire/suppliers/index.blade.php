@@ -11,7 +11,7 @@ use function Livewire\Volt\uses;
 layout('layouts.app');
 uses([WithPagination::class]);
 
-state(['search' => '', 'statusFilter' => '', 'branchFilter' => '']);
+state(['search' => '', 'statusFilter' => '', 'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : '')]);
 
 $canManage = fn () => auth()->user()->hasAnyRole(['Super Admin', 'Admin']);
 
@@ -53,7 +53,7 @@ $deleteSupplier = function (int $supplierId) {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
             </select>
-            <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+            <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                 <option value="">All branches</option>
                 @foreach (Branch::orderBy('name')->get() as $branch)
                     <option value="{{ $branch->id }}">{{ $branch->name }}</option>

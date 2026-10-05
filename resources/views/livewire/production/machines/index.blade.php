@@ -18,12 +18,12 @@ uses([WithPagination::class]);
 state([
     'search' => '',
     'statusFilter' => '',
-    'branchFilter' => '',
+    'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'editingId' => null,
     'viewingId' => null,
     'name' => '',
     'code' => '',
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'daily_capacity' => '',
     'capacity_unit' => 'pcs_per_day',
     'status' => Machine::STATUS_ACTIVE,
@@ -144,7 +144,7 @@ $archiveMachine = function (int $machineId): void {
                     <x-form-input label="Machine Name / Jina la Mashine" name="name" wire:model="name" required />
                     <x-form-input label="Machine Code / Kodi ya Mashine" name="code" wire:model="code" />
                     <label class="block text-sm font-bold">Branch / Production Site
-                        <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
+                        <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                             <option value="">Company-wide</option>
                             @foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->orderBy('name')->get() as $branch)
                                 <option value="{{ $branch->id }}">{{ $branch->name }}</option>
@@ -190,7 +190,7 @@ $archiveMachine = function (int $machineId): void {
                 <select wire:model.live="statusFilter" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
                     <option value="">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="maintenance">Maintenance</option>
                 </select>
-                <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
+                <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     <option value="">All branches</option>
                     @foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>

@@ -15,7 +15,7 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 
 state([
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'stock_location_id' => '',
     'opening_date' => '',
     'notes' => '',
@@ -146,7 +146,7 @@ $save = function (OpeningStockService $service): void {
         <x-card title="Taarifa za Opening Stock">
             <div class="grid gap-4 md:grid-cols-2">
                 <label class="block text-sm font-bold">Tawi
-                    <select wire:model.live="branch_id" class="erp-input mt-1"><option value="">Chagua tawi</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+                    <select wire:model.live="branch_id" class="erp-input mt-1" @disabled(\App\Support\BranchAccess::restricted())><option value="">Chagua tawi</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
                     @error('branch_id') <span class="erp-error">{{ $message }}</span> @enderror
                 </label>
                 <label class="block text-sm font-bold">Eneo la Stoo

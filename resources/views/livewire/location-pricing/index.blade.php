@@ -15,7 +15,7 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['branch_id' => '', 'stock_location_id' => '', 'search' => '', 'rows' => []]);
+state(['branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'stock_location_id' => '', 'search' => '', 'rows' => []]);
 
 $branches = function () {
     $user = auth()->user();
@@ -149,7 +149,7 @@ $savePrices = function (LocationPriceService $service): void {
     <x-card>
         <div class="grid gap-3 md:grid-cols-3">
             <label class="text-sm font-bold">Branch
-                <select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 dark:bg-navy-950">
+                <select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     @foreach ($this->branches() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
                 </select>
             </label>

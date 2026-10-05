@@ -22,7 +22,7 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 
 state([
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'supplier_id' => '',
     'purchase_date' => '',
     'invoice_number' => '',
@@ -412,7 +412,7 @@ $submitPurchase = function () {
                     @error('supplier_id') <span class="text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Branch
-                    <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         @foreach (Branch::where('status', 'active')->orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach

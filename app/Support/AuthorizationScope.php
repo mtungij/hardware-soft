@@ -23,33 +23,19 @@ final class AuthorizationScope
      */
     public static function sales(Builder $query, User $user, string $prefix = ''): Builder
     {
-        $companyColumn = $prefix.'company_id';
-        $branchColumn = $prefix.'branch_id';
-        $soldByColumn = $prefix.'sold_by';
-        $createdByColumn = $prefix.'created_by';
+        BranchAccess::scopeAccessibleToUser($query, $user, $prefix);
+        $scopes = $user->roles->pluck('sales_scope');
+        if (BranchAccess::restricted($user) && $scopes->contains(self::OWN)
+            && ! $scopes->contains(self::BRANCH) && ! $scopes->contains(self::COMPANY)) {
+            $query->where(fn ($owned) => $owned->where($prefix.'sold_by', $user->id)->orWhere($prefix.'created_by', $user->id));
+        }
 
-        $query->where($companyColumn, $user->company_id);
-
-        return match (self::scopeFor($user, 'sales_scope', self::BRANCH)) {
-            self::COMPANY => $query,
-            self::OWN => $query->where(fn (Builder $owned) => $owned
-                ->where($soldByColumn, $user->id)
-                ->orWhere($createdByColumn, $user->id)),
-            default => $query->where($branchColumn, $user->branch_id),
-        };
+        return $query;
     }
 
     public static function reports(Builder $query, User $user, string $prefix = ''): Builder
     {
-        $query->where($prefix.'company_id', $user->company_id);
-
-        return match (self::scopeFor($user, 'report_scope', self::BRANCH)) {
-            self::COMPANY => $query,
-            self::OWN => $query->where(fn (Builder $owned) => $owned
-                ->where($prefix.'sold_by', $user->id)
-                ->orWhere($prefix.'created_by', $user->id)),
-            default => $query->where($prefix.'branch_id', $user->branch_id),
-        };
+        return BranchAccess::scopeAccessibleToUser($query, $user, $prefix);
     }
 
     public static function canAccessSale(User $user, Sale $sale): bool
@@ -65,14 +51,15 @@ final class AuthorizationScope
     /** @return Collection<int, int> */
     public static function stockLocationIds(User $user, string $ability = 'can_view'): Collection
     {
-        $query = StockLocation::withoutGlobalScopes()
+        $query = StockLocation::query()
             ->where('company_id', $user->company_id)
+            ->when(BranchAccess::restricted($user), fn ($query) => $query->where('branch_id', $user->branch_id))
             ->where('status', 'active')
             ->where('is_active', true);
 
         return match (self::scopeFor($user, 'stock_scope', self::ASSIGNED_LOCATIONS)) {
             self::COMPANY => $query->pluck('id')->map(fn ($id): int => (int) $id),
-            self::BRANCH => $query->where('branch_id', $user->branch_id)->pluck('id')->map(fn ($id): int => (int) $id),
+            self::BRANCH => $query->when($user->branch_id !== null, fn ($query) => $query->where('branch_id', $user->branch_id))->pluck('id')->map(fn ($id): int => (int) $id),
             default => $user->permittedStockLocations($ability, $user->branch_id)->pluck('id')->map(fn ($id): int => (int) $id),
         };
     }
@@ -84,14 +71,19 @@ final class AuthorizationScope
 
     /**
      * Return active stock locations the user may use for a branch workflow.
-     * Company-wide locations (a null branch_id) remain eligible for every branch.
+     * Assigned staff are limited to locations owned by their branch.
+     * Company-wide locations are available only to staff without an assigned branch.
      *
      * @return Collection<int, StockLocation>
      */
     public static function stockLocationsForBranch(User $user, string $ability, int $branchId): Collection
     {
-        $query = StockLocation::withoutGlobalScopes()
+        if (! $user->canAccessBranch($branchId)) {
+            return collect();
+        }
+        $query = StockLocation::query()
             ->where('company_id', $user->company_id)
+            ->when(BranchAccess::restricted($user), fn ($query) => $query->where('branch_id', $user->branch_id))
             ->where('status', 'active')
             ->where('is_active', true)
             ->where(fn (Builder $locations) => $locations
@@ -100,7 +92,7 @@ final class AuthorizationScope
 
         return match (self::scopeFor($user, 'stock_scope', self::ASSIGNED_LOCATIONS)) {
             self::COMPANY => $query->orderByDesc('is_default')->orderBy('name')->get(),
-            self::BRANCH => (int) $user->branch_id === $branchId
+            self::BRANCH => $user->canAccessBranch($branchId)
                 ? $query->orderByDesc('is_default')->orderBy('name')->get()
                 : collect(),
             default => $user->permittedStockLocations($ability, $branchId),
@@ -109,6 +101,12 @@ final class AuthorizationScope
 
     public static function scopeFor(User $user, string $column, string $default): string
     {
+        if ($column === 'stock_scope' && $user->branch_id === null) {
+            return self::COMPANY;
+        }
+        if (in_array($column, ['sales_scope', 'report_scope'], true)) {
+            return BranchAccess::restricted($user) ? self::BRANCH : self::COMPANY;
+        }
         $priority = match ($column) {
             'stock_scope' => [self::COMPANY, self::BRANCH, self::ASSIGNED_LOCATIONS],
             default => [self::COMPANY, self::BRANCH, self::OWN],

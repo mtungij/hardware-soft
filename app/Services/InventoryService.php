@@ -11,6 +11,7 @@ use App\Models\Purchase;
 use App\Models\PurchaseCostType;
 use App\Models\PurchaseItem;
 use App\Models\Sale;
+use App\Models\Scopes\CompanyScope;
 use App\Models\StockAdjustment;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
@@ -19,6 +20,7 @@ use App\Models\StockTransferItem;
 use App\Models\User;
 use App\Support\AuthorizationScope;
 use App\Support\InventorySettings;
+use App\Support\NumberFormatter;
 use App\Support\UiText;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\QueryException;
@@ -273,7 +275,7 @@ class InventoryService
             $idempotencyKey = filled($data['idempotency_key'] ?? null) ? (string) $data['idempotency_key'] : null;
 
             if ($idempotencyKey) {
-                $existing = StockMovement::withoutGlobalScopes()
+                $existing = StockMovement::withoutGlobalScope(CompanyScope::class)
                     ->where('company_id', $companyId)
                     ->where('idempotency_key', $idempotencyKey)
                     ->first();
@@ -286,7 +288,7 @@ class InventoryService
                     }
 
                     return filled($existing->posting_reference)
-                        ? StockMovement::withoutGlobalScopes()
+                        ? StockMovement::withoutGlobalScope(CompanyScope::class)
                             ->where('company_id', $companyId)
                             ->where('movement_type', 'direct_stock_in')
                             ->where('posting_reference', $existing->posting_reference)
@@ -469,7 +471,7 @@ class InventoryService
 
             $preferredLocation = StockLocation::query()->whereKey($stockLocationId)->lockForUpdate()->firstOrFail();
             $companyId = (int) $preferredLocation->company_id;
-            $cashier = User::withoutGlobalScopes()->where('company_id', $companyId)->findOrFail($createdBy);
+            $cashier = User::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->findOrFail($createdBy);
             $discountMode = $discountDetails === [] ? 'legacy' : (string) ($discountDetails['mode'] ?? 'none');
             if (! in_array($discountMode, ['legacy', 'none', 'item', 'order'], true)) {
                 throw ValidationException::withMessages(['discount_mode' => 'The selected discount mode is invalid.']);
@@ -488,7 +490,7 @@ class InventoryService
             }
 
             if (filled($idempotencyKey)) {
-                $existingSale = Sale::withoutGlobalScopes()
+                $existingSale = Sale::withoutGlobalScope(CompanyScope::class)
                     ->where('company_id', $companyId)
                     ->where('idempotency_key', $idempotencyKey)
                     ->first();
@@ -1424,7 +1426,7 @@ class InventoryService
 
     private function grnExists(int $companyId, string $grnNumber): bool
     {
-        return GoodsReceivingNote::withoutGlobalScopes()
+        return GoodsReceivingNote::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $companyId)
             ->where('grn_number', $grnNumber)
             ->exists();
@@ -1665,6 +1667,121 @@ class InventoryService
         });
     }
 
+    public function cancelStockTransfer(int $stockTransferId, int $cancelledBy, string $reason): StockTransfer
+    {
+        // Never accept a caller-supplied identity as authorization.
+        $user = auth()->user();
+        abort_unless($user instanceof User && (int) $user->id === $cancelledBy, 403);
+
+        return DB::transaction(function () use ($stockTransferId, $user, $reason) {
+            $transfer = StockTransfer::query()->where('company_id', $user->company_id)
+                ->whereKey($stockTransferId)->lockForUpdate()->firstOrFail();
+            abort_unless($transfer->canCancel($user), 403);
+            app(StockTransferNoteService::class)->authorize($transfer, $user);
+
+            if ($transfer->status !== 'completed' || $transfer->cancelled_at !== null) {
+                throw ValidationException::withMessages(['transfer' => __('Only completed, uncancelled transfers can be cancelled.')]);
+            }
+            $reason = trim($reason);
+            Validator::make(['cancellation_reason' => $reason], [
+                'cancellation_reason' => ['required', 'string', 'max:2000'],
+            ])->validate();
+
+            // Locations serialize against completion and sales; products and ledger
+            // rows also protect inventory writers using those existing conventions.
+            $locations = StockLocation::query()->where('company_id', $transfer->company_id)
+                ->whereIn('id', [$transfer->from_location_id, $transfer->to_location_id])
+                ->orderBy('id')->lockForUpdate()->get();
+            abort_unless($locations->count() === 2, 404);
+            $items = StockTransferItem::withoutGlobalScope(CompanyScope::class)
+                ->where('stock_transfer_id', $transfer->id)->orderBy('id')->lockForUpdate()->get();
+            abort_if($items->contains(fn ($item) => (int) $item->company_id !== (int) $transfer->company_id), 404);
+            if ($items->isEmpty()) {
+                throw ValidationException::withMessages(['transfer' => 'Transfer has no items to reverse.']);
+            }
+            $products = Product::query()->where('company_id', $transfer->company_id)
+                ->whereIn('id', $items->pluck('product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            abort_unless($products->count() === $items->pluck('product_id')->unique()->count(), 404);
+            $ledger = StockMovement::query()->where('company_id', $transfer->company_id)
+                ->where('branch_id', $transfer->branch_id)
+                ->whereIn('stock_location_id', $locations->pluck('id'))
+                ->whereIn('product_id', $products->keys())->orderBy('id')->lockForUpdate()->get();
+            $originals = $ledger->where('reference_type', StockTransfer::class)->where('reference_id', $transfer->id);
+            if ($originals->contains(fn ($row) => in_array($row->movement_type, ['transfer_cancel_in', 'transfer_cancel_out'], true))) {
+                throw ValidationException::withMessages(['transfer' => 'Transfer reversal has already been posted.']);
+            }
+
+            // Aggregate duplicate product lines before checking available stock.
+            foreach ($items->groupBy('product_id') as $productId => $lines) {
+                // Use the locked current-read ledger, avoiding a stale MySQL
+                // repeatable-read snapshot after waiting for another writer.
+                $available = $ledger->where('product_id', $productId)
+                    ->where('stock_location_id', $transfer->to_location_id)
+                    ->sum(fn (StockMovement $movement) => $movement->signedQuantity());
+                $required = round((float) $lines->sum('quantity'), 4);
+                if ($required <= 0 || $lines->contains(fn ($item) => (float) $item->quantity <= 0)) {
+                    throw ValidationException::withMessages(['transfer' => 'Transfer quantities must be positive.']);
+                }
+                if ($required > round($available, 4)) {
+                    throw ValidationException::withMessages(['transfer' => __('Insufficient destination stock for :product. Available: :available; required: :required.', [
+                        'product' => $products[$productId]->displayNameWithSize(),
+                        'available' => NumberFormatter::quantity($available),
+                        'required' => NumberFormatter::quantity($required),
+                    ])]);
+                }
+            }
+
+            $used = [];
+            foreach ($items as $item) {
+                foreach ([['transfer_in', 'transfer_cancel_out', $transfer->to_location_id], ['transfer_out', 'transfer_cancel_in', $transfer->from_location_id]] as [$originalType, $type, $locationId]) {
+                    // Older posted transfers have no item link. Match each original
+                    // exactly once by product, location and base quantity.
+                    $original = $originals->first(fn ($row) => ! isset($used[$row->id])
+                        && $row->movement_type === $originalType
+                        && (int) $row->product_id === (int) $item->product_id
+                        && (int) $row->stock_location_id === (int) $locationId
+                        && ($row->stock_transfer_item_id === null || (int) $row->stock_transfer_item_id === (int) $item->id)
+                        && $row->quantity === $item->quantity);
+                    if (! $original) {
+                        throw ValidationException::withMessages(['transfer' => 'Original transfer movements could not be matched. Review the transfer audit history.']);
+                    }
+                    $used[$original->id] = true;
+                    StockMovement::create([
+                        'company_id' => $transfer->company_id,
+                        'branch_id' => $transfer->branch_id,
+                        'product_id' => $item->product_id,
+                        'stock_location_id' => $locationId,
+                        'source_location_id' => $transfer->to_location_id,
+                        'destination_location_id' => $transfer->from_location_id,
+                        'movement_type' => $type,
+                        'quantity' => $item->quantity,
+                        'quantity_in' => $type === 'transfer_cancel_in' ? $item->quantity : 0,
+                        'quantity_out' => $type === 'transfer_cancel_out' ? $item->quantity : 0,
+                        'unit_cost' => $original->unit_cost,
+                        'location_acquisition_unit_cost' => $original->location_acquisition_unit_cost,
+                        'reference_type' => StockTransfer::class,
+                        'reference_id' => $transfer->id,
+                        'stock_transfer_id' => $transfer->id,
+                        'stock_transfer_item_id' => $item->id,
+                        'original_movement_id' => $original->id,
+                        'notes' => $reason,
+                        'created_by' => $user->id,
+                        'movement_date' => today(),
+                    ]);
+                }
+            }
+            if (count($used) !== $originals->count()) {
+                throw ValidationException::withMessages(['transfer' => 'Original transfer movements are inconsistent. Review the transfer audit history.']);
+            }
+            $transfer->update([
+                'status' => 'cancelled', 'cancelled_at' => now(),
+                'cancelled_by' => $user->id, 'cancellation_reason' => $reason,
+            ]);
+
+            return $transfer->refresh();
+        }, 3);
+    }
+
     public function completeStockTransfer(int $stockTransferId, int $completedBy): StockTransfer
     {
         return DB::transaction(function () use ($stockTransferId, $completedBy) {
@@ -1783,6 +1900,8 @@ class InventoryService
                     'quantity_out' => $item->quantity,
                     'reference_type' => StockTransfer::class,
                     'reference_id' => $transfer->id,
+                    'stock_transfer_id' => $transfer->id,
+                    'stock_transfer_item_id' => $item->id,
                     'notes' => "Transfer {$transfer->transfer_number} out",
                     'created_by' => $completedBy,
                     'movement_date' => $transfer->transfer_date,
@@ -1801,6 +1920,8 @@ class InventoryService
                     'quantity_out' => 0,
                     'reference_type' => StockTransfer::class,
                     'reference_id' => $transfer->id,
+                    'stock_transfer_id' => $transfer->id,
+                    'stock_transfer_item_id' => $item->id,
                     'notes' => "Transfer {$transfer->transfer_number} in",
                     'created_by' => $completedBy,
                     'movement_date' => $transfer->transfer_date,

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Database\Seeders\DatabaseSeeder;
 use Livewire\Volt\Volt;
 
 test('login screen can be rendered', function () {
@@ -44,7 +45,9 @@ test('users can not authenticate with invalid password', function () {
 });
 
 test('navigation menu can be rendered', function () {
-    $user = User::factory()->create();
+    $this->seed(DatabaseSeeder::class);
+    $user = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    $user->forceFill(['is_system_owner' => false])->save();
 
     $this->actingAs($user);
 

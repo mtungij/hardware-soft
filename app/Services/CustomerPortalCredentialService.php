@@ -7,6 +7,7 @@ use App\Models\CompanyWhatsAppSetting;
 use App\Models\Customer;
 use App\Models\CustomerAccount;
 use App\Models\CustomerPortalSecurityEvent;
+use App\Models\Scopes\CompanyScope;
 use App\Models\User;
 use App\Support\WhatsAppPhone;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +27,7 @@ class CustomerPortalCredentialService
         $this->assertPhoneAvailable($phone);
 
         $result = DB::transaction(function () use ($data, $actor, $operationKey, $phone): array {
-            $customer = Customer::withoutGlobalScopes()->create([
+            $customer = Customer::withoutGlobalScope(CompanyScope::class)->create([
                 ...$data,
                 'company_id' => $actor->company_id,
                 'phone' => $phone,
@@ -55,8 +56,8 @@ class CustomerPortalCredentialService
         abort_unless((int) $actor->company_id === (int) $customer->company_id, 403);
 
         $result = DB::transaction(function () use ($customer, $actor, $operationKey, $reset): array {
-            $customer = Customer::withoutGlobalScopes()->lockForUpdate()->findOrFail($customer->id);
-            $existing = CustomerAccount::withoutGlobalScopes()
+            $customer = Customer::withoutGlobalScope(CompanyScope::class)->lockForUpdate()->findOrFail($customer->id);
+            $existing = CustomerAccount::withoutGlobalScope(CompanyScope::class)
                 ->where('customer_id', $customer->id)
                 ->oldest('id')
                 ->lockForUpdate()
@@ -88,12 +89,12 @@ class CustomerPortalCredentialService
         }
 
         $normalized = $this->normalizePhone($phone);
-        $account = CustomerAccount::withoutGlobalScopes()->where('customer_id', $customer->id)->oldest('id')->first();
+        $account = CustomerAccount::withoutGlobalScope(CompanyScope::class)->where('customer_id', $customer->id)->oldest('id')->first();
         $this->assertPhoneAvailable($normalized, $account?->id);
 
         $changed = DB::transaction(function () use ($customer, $account, $normalized, $actor): bool {
             $oldPhone = $customer->phone;
-            Customer::withoutGlobalScopes()->whereKey($customer->id)->update(['phone' => $normalized]);
+            Customer::withoutGlobalScope(CompanyScope::class)->whereKey($customer->id)->update(['phone' => $normalized]);
 
             if ($account) {
                 $account->update(['phone' => $normalized, 'login_phone' => $normalized]);
@@ -143,13 +144,13 @@ class CustomerPortalCredentialService
             return;
         }
 
-        $account = CustomerAccount::withoutGlobalScopes()->where('login_phone', $normalized)->first();
+        $account = CustomerAccount::withoutGlobalScope(CompanyScope::class)->where('login_phone', $normalized)->first();
         if (! $account || ! $account->isActive()) {
             return;
         }
 
         $result = DB::transaction(function () use ($account, $operationKey): ?array {
-            $locked = CustomerAccount::withoutGlobalScopes()->lockForUpdate()->findOrFail($account->id);
+            $locked = CustomerAccount::withoutGlobalScope(CompanyScope::class)->lockForUpdate()->findOrFail($account->id);
             if ($locked->last_credential_operation_key === $operationKey) {
                 return null;
             }
@@ -201,7 +202,7 @@ class CustomerPortalCredentialService
             ])->save();
             $account->tokens()->delete();
         } else {
-            $account = CustomerAccount::withoutGlobalScopes()->create([
+            $account = CustomerAccount::withoutGlobalScope(CompanyScope::class)->create([
                 'company_id' => $customer->company_id,
                 'customer_id' => $customer->id,
                 'name' => $customer->name,
@@ -229,7 +230,7 @@ class CustomerPortalCredentialService
     {
         try {
             $company = Company::query()->findOrFail($customer->company_id);
-            $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->firstOrCreate(
+            $setting = CompanyWhatsAppSetting::withoutGlobalScope(CompanyScope::class)->firstOrCreate(
                 ['company_id' => $company->id],
                 ['enabled' => false, 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES],
             );
@@ -263,7 +264,7 @@ class CustomerPortalCredentialService
 
         try {
             $company = Company::query()->findOrFail($customer->company_id);
-            $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->firstOrCreate(['company_id' => $company->id], ['enabled' => false]);
+            $setting = CompanyWhatsAppSetting::withoutGlobalScope(CompanyScope::class)->firstOrCreate(['company_id' => $company->id], ['enabled' => false]);
             $this->whatsApp->queuePhone(
                 $company,
                 $setting,
@@ -322,13 +323,13 @@ class CustomerPortalCredentialService
 
     private function assertPhoneAvailable(string $phone, ?int $exceptAccountId = null): void
     {
-        $query = CustomerAccount::withoutGlobalScopes()
+        $query = CustomerAccount::withoutGlobalScope(CompanyScope::class)
             ->where('login_phone', $phone)
             ->when($exceptAccountId, fn ($query) => $query->whereKeyNot($exceptAccountId));
         $conflict = $query->exists();
 
         if (! $conflict) {
-            $conflict = CustomerAccount::withoutGlobalScopes()
+            $conflict = CustomerAccount::withoutGlobalScope(CompanyScope::class)
                 ->when($exceptAccountId, fn ($accounts) => $accounts->whereKeyNot($exceptAccountId))
                 ->whereNotNull('phone')
                 ->cursor()
@@ -348,7 +349,7 @@ class CustomerPortalCredentialService
 
     private function audit(Customer $customer, ?CustomerAccount $account, string $event, User|CustomerAccount|null $actor, array $metadata = []): void
     {
-        CustomerPortalSecurityEvent::withoutGlobalScopes()->create([
+        CustomerPortalSecurityEvent::withoutGlobalScope(CompanyScope::class)->create([
             'company_id' => $customer->company_id,
             'customer_id' => $customer->id,
             'customer_account_id' => $account?->id,

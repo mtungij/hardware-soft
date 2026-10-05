@@ -20,7 +20,7 @@ $openPermissions = function (int $userId) {
 };
 
 $givePermission = function (int $permissionId) {
-    $user = User::findOrFail($this->selected_user_id);
+    $user = User::query()->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('branch_id', auth()->user()->branch_id))->findOrFail($this->selected_user_id);
     $permission = Permission::findOrFail($permissionId);
 
     $user->givePermissionTo($permission);
@@ -30,7 +30,7 @@ $givePermission = function (int $permissionId) {
 };
 
 $removePermission = function (int $permissionId) {
-    $user = User::findOrFail($this->selected_user_id);
+    $user = User::query()->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('branch_id', auth()->user()->branch_id))->findOrFail($this->selected_user_id);
     $permission = Permission::findOrFail($permissionId);
 
     $user->revokePermissionTo($permission);
@@ -40,7 +40,7 @@ $removePermission = function (int $permissionId) {
 };
 
 $toggleStatus = function (int $userId) {
-    $user = User::findOrFail($userId);
+    $user = User::query()->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('branch_id', auth()->user()->branch_id))->findOrFail($userId);
 
     if ($user->hasRole('Super Admin') && User::role('Super Admin')->where('status', 'active')->count() <= 1) {
         session()->flash('error', 'You cannot deactivate the last active Super Admin.');
@@ -53,7 +53,7 @@ $toggleStatus = function (int $userId) {
 };
 
 $deleteUser = function (int $userId) {
-    $user = User::findOrFail($userId);
+    $user = User::query()->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('branch_id', auth()->user()->branch_id))->findOrFail($userId);
 
     if ($user->hasRole('Super Admin') && User::role('Super Admin')->count() <= 1) {
         session()->flash('error', 'You cannot delete the last Super Admin.');
@@ -83,7 +83,7 @@ $deleteUser = function (int $userId) {
         </div>
 
         @php
-            $users = User::query()
+            $users = User::query()->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('branch_id', auth()->user()->branch_id))
                 ->with(['branch', 'company', 'roles', 'stockLocations.branch'])
                 ->when($search, fn ($query) => $query->where(fn ($q) => $q
                     ->where('name', 'like', "%{$search}%")
@@ -145,7 +145,7 @@ $deleteUser = function (int $userId) {
 
     @php
         $selectedUser = $selected_user_id
-            ? User::with(['roles.permissions', 'permissions'])->find($selected_user_id)
+            ? User::with(['roles.permissions', 'permissions'])->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('branch_id', auth()->user()->branch_id))->find($selected_user_id)
             : null;
         $allPermissions = Permission::query()->where('guard_name', 'web')->orderBy('name')->get();
         $directPermissionIds = $selectedUser?->permissions->pluck('id') ?? collect();

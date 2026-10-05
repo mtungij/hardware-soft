@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\CompanyWhatsAppSetting;
 use App\Models\Sale;
+use App\Models\Scopes\CompanyScope;
 use App\Models\User;
 use App\Models\WhatsAppNotification;
 use App\Models\WhatsAppRecipient;
@@ -149,7 +150,7 @@ class WhatsAppDebtReminderService
         $saleId = (int) data_get($notification->metadata, 'receivable_id');
         $customerId = (int) data_get($notification->metadata, 'customer_id');
         $originalKind = (string) data_get($notification->metadata, 'debt_kind');
-        $sale = Sale::withoutGlobalScopes()->with('customer')
+        $sale = Sale::withoutGlobalScope(CompanyScope::class)->with('customer')
             ->where('company_id', $notification->company_id)
             ->where('customer_id', $customerId)
             ->whereKey($saleId)
@@ -171,7 +172,7 @@ class WhatsAppDebtReminderService
 
     public function authoritativeReceivables(Company $company): Builder
     {
-        return Sale::withoutGlobalScopes()
+        return Sale::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $company->id)
             ->where('status', 'completed')
             ->where('balance_amount', '>', 0)

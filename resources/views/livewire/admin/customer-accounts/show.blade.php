@@ -70,7 +70,7 @@ $suspend = function () {
                 <div><dt class="text-xs font-black uppercase text-slate-400">Last Login</dt><dd class="font-bold">{{ $account->last_login_at?->format('M d, Y H:i') ?: 'Never' }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Portal Access</dt><dd class="font-bold">{{ $account->login_phone ? 'Enabled' : 'Disabled' }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Login Phone</dt><dd class="font-bold">{{ $account->login_phone ?: '-' }}</dd></div>
-                @php($credentialNotification = $account->last_credentials_notification_id ? WhatsAppNotification::withoutGlobalScopes()->find($account->last_credentials_notification_id) : null)
+                @php($credentialNotification = $account->last_credentials_notification_id ? WhatsAppNotification::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->find($account->last_credentials_notification_id) : null)
                 <div><dt class="text-xs font-black uppercase text-slate-400">Credential Delivery</dt><dd class="font-bold">{{ $credentialNotification ? str($credentialNotification->status)->title() : 'Not queued' }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">Last Credentials Queued</dt><dd class="font-bold">{{ $credentialNotification?->created_at?->format('M d, Y H:i') ?: '-' }}</dd></div>
             </dl>

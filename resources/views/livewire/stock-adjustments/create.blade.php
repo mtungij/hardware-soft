@@ -14,7 +14,7 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 
 state([
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'stock_location_id' => '',
     'adjustment_date' => '',
     'reference_number' => '',
@@ -165,7 +165,7 @@ $save = function (InventoryService $inventory) {
         <form wire:submit="save" class="space-y-5">
             <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Branch
-                    <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         @foreach (Branch::query()->when(auth()->user()?->company_id, fn ($query, $companyId) => $query->where('company_id', $companyId))->orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach

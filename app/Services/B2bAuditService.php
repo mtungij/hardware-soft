@@ -3,13 +3,14 @@
 namespace App\Services;
 
 use App\Models\B2bDocumentEvent;
+use App\Models\Scopes\CompanyScope;
 use Illuminate\Database\Eloquent\Model;
 
 class B2bAuditService
 {
     public function record(Model $document, string $documentType, string $event, mixed $actor = null, ?string $reason = null, array $metadata = []): B2bDocumentEvent
     {
-        return B2bDocumentEvent::withoutGlobalScopes()->create([
+        return B2bDocumentEvent::withoutGlobalScope(CompanyScope::class)->create([
             'company_id' => $document->company_id,
             'document_type' => $documentType,
             'document_id' => $document->getKey(),

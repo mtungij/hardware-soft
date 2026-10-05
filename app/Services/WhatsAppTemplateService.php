@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Company;
+use App\Models\Scopes\CompanyScope;
 use App\Models\WhatsAppTemplate;
 
 class WhatsAppTemplateService
@@ -21,7 +22,7 @@ class WhatsAppTemplateService
     public function seedDefaults(Company $company): void
     {
         foreach (self::DEFAULTS as $key => [$category, $name, $body]) {
-            WhatsAppTemplate::withoutGlobalScopes()->firstOrCreate(
+            WhatsAppTemplate::withoutGlobalScope(CompanyScope::class)->firstOrCreate(
                 ['company_id' => $company->id, 'key' => $key],
                 ['category' => $category, 'name' => $name, 'body' => $body, 'active' => true],
             );
@@ -33,7 +34,7 @@ class WhatsAppTemplateService
         $language = $this->localization->language($company);
         $default = $this->localization->get($company, 'templates.'.$key);
         $stored = $language === 'en'
-            ? WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $company->id)->where('key', $key)->where('active', true)->value('body')
+            ? WhatsAppTemplate::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->where('key', $key)->where('active', true)->value('body')
             : null;
         $requiresProducts = in_array($key, ['sale_completed', 'purchase_order_created', 'goods_received_grn'], true);
         $body = $requiresProducts && $stored && ! str_contains($stored, '{{products}}')

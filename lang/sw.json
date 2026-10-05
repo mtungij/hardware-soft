@@ -20,5 +20,22 @@
     "Reports": "Ripoti",
     "Stock": "Stock",
     "Retail": "Rejareja",
-    "Wholesale": "Jumla"
+    "Wholesale": "Jumla",
+    "Cancel Transfer": "Ghairi Uhamisho",
+    "Cancelled By": "Aliyeghairi",
+    "Cancelled Date": "Tarehe ya Kughairi",
+    "Cancellation Reason": "Sababu ya Kughairi",
+    "Reason": "Sababu",
+    "Confirm Cancellation": "Thibitisha Kughairi",
+    "Cancelled": "Umeghairiwa",
+    "Transfer Out": "Uhamisho Uliotoka",
+    "Transfer In": "Uhamisho Ulioingia",
+    "Cancellation Out": "Marejesho Yanayotoka",
+    "Cancellation In": "Marejesho Yanayoingia",
+    "Original Movement": "Rekodi ya Awali",
+    "Cancelling reverses this transfer: stock is removed from the destination and returned to the source. Original stock movements remain in the audit history.": "Kughairi kunarejesha uhamisho huu: bidhaa zinaondolewa mahali zilipopelekwa na kurudishwa mahali zilipotoka. Rekodi za awali zinabaki kwenye historia ya ukaguzi.",
+    "I confirm that I want to cancel this transfer and reverse its stock movements.": "Ninathibitisha kuwa ninataka kughairi uhamisho huu na kurejesha bidhaa mahali zilipotoka.",
+    "Only completed, uncancelled transfers can be cancelled.": "Uhamisho uliokamilika na ambao haujaghairiwa pekee unaweza kughairiwa.",
+    "Stock transfer cancelled. Stock movements have been reversed.": "Uhamisho umeghairiwa. Bidhaa zimerejeshwa mahali zilipotoka.",
+    "Insufficient destination stock for :product. Available: :available; required: :required.": "Bidhaa :product hazitoshi mahali zilipopelekwa. Zilizopo: :available; zinazohitajika: :required."
 }

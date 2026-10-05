@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\CompanyPaymentMethod;
 use App\Models\Quotation;
 use App\Models\SalesInvoice;
+use App\Models\Scopes\CompanyScope;
 use App\Support\QuotationTemplateRegistry;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -25,7 +26,7 @@ class B2bDocumentPdfService
         }
 
         $quotation->loadMissing(['company', 'branch', 'customer', 'creator', 'items', 'additionalCharges']);
-        $paymentMethods = CompanyPaymentMethod::withoutGlobalScopes()
+        $paymentMethods = CompanyPaymentMethod::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $quotation->company_id)
             ->forDocument($quotation->document_type)
             ->get();
@@ -38,7 +39,7 @@ class B2bDocumentPdfService
     public function invoice(SalesInvoice $invoice): string
     {
         $invoice->loadMissing(['company', 'customer', 'quotation', 'sale.branch', 'sale.createdBy', 'sale.payments', 'sale.items.product', 'sale.additionalCharges']);
-        $paymentMethods = CompanyPaymentMethod::withoutGlobalScopes()
+        $paymentMethods = CompanyPaymentMethod::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $invoice->company_id)
             ->forDocument('invoice')
             ->get();

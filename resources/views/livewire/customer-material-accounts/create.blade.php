@@ -11,7 +11,7 @@ use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
-state(['customer_id' => '', 'branch_id' => '', 'project_name' => '', 'description' => '', 'project_location' => '', 'status' => 'active', 'lines' => []]);
+state(['customer_id' => '', 'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'project_name' => '', 'description' => '', 'project_location' => '', 'status' => 'active', 'lines' => []]);
 $newLine = fn () => ['key' => (string) Str::uuid(), 'product_id' => '', 'product_unit_conversion_id' => '', 'planned_quantity' => 1, 'agreed_unit_price' => ''];
 mount(function () { $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::value('id')); $this->lines = [$this->newLine()]; });
 $addLine = function () { $this->lines[] = $this->newLine(); };
@@ -37,7 +37,7 @@ $save = function (CustomerMaterialAccountService $service) {
         <x-card title="Project">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <label class="text-sm font-bold">Customer<select wire:model="customer_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"><option value="">Select customer</option>@foreach(Customer::where(fn($q) => $q->where('is_system_customer', false)->orWhereNull('is_system_customer'))->orderBy('name')->get() as $customer)<option value="{{ $customer->id }}">{{ $customer->name }} — {{ $customer->phone }}</option>@endforeach</select>@error('customer_id')<span class="text-xs text-red-600">{{ $message }}</span>@enderror</label>
-                <label class="text-sm font-bold">Branch<select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">@foreach(Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
+                <label class="text-sm font-bold">Branch<select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>@foreach(Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
                 <x-form-input label="Project Name" name="project_name" wire:model="project_name" required />
                 <x-form-input label="Project Location" name="project_location" wire:model="project_location" />
                 <label class="text-sm font-bold">Initial Status<select wire:model="status" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"><option value="active">Active</option><option value="draft">Draft</option></select></label>

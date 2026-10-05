@@ -17,7 +17,7 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['purchase' => null, 'branch_id' => '', 'supplier_id' => '', 'purchase_date' => '', 'invoice_number' => '', 'reference_number' => '', 'notes' => '', 'paid_amount' => '0', 'items' => [],]);
+state(['purchase' => null, 'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'supplier_id' => '', 'purchase_date' => '', 'invoice_number' => '', 'reference_number' => '', 'notes' => '', 'paid_amount' => '0', 'items' => [],]);
 
 mount(function (Purchase $purchase) {
     abort_unless($purchase->canBeModified(), 403);

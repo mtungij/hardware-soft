@@ -13,6 +13,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Support\AuthorizationScope;
+use App\Support\BranchAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -143,7 +144,7 @@ class FinancialReportService
             return collect();
         }
 
-        if ($branchId !== null && AuthorizationScope::scopeFor($user, 'stock_scope', AuthorizationScope::ASSIGNED_LOCATIONS) !== AuthorizationScope::COMPANY && $branchId !== (int) $user->branch_id) {
+        if ($branchId !== null && BranchAccess::restricted($user) && $branchId !== (int) $user->branch_id) {
             return collect();
         }
 
@@ -162,7 +163,7 @@ class FinancialReportService
         }
 
         return Branch::query()->where('company_id', $user->company_id)
-            ->when(AuthorizationScope::scopeFor($user, 'stock_scope', AuthorizationScope::ASSIGNED_LOCATIONS) !== AuthorizationScope::COMPANY,
+            ->when(BranchAccess::restricted($user),
                 fn ($query) => $query->whereKey($user->branch_id))
             ->orderBy('name')->get();
     }

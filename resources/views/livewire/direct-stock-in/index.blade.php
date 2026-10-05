@@ -23,7 +23,7 @@ layout('layouts.app');
 uses([WithPagination::class]);
 
 state([
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'product_id' => '',
     'stock_in_unit_options' => [],
     'stock_in_lines' => [],

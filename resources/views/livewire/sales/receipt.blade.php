@@ -25,7 +25,7 @@ mount(function (Sale $sale) {
         'items.stockLocation',
         'payments',
     ]);
-    $this->settings = Setting::withoutGlobalScopes()
+    $this->settings = Setting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)
         ->where('company_id', $sale->company_id)
         ->first();
 });

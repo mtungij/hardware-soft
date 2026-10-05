@@ -34,7 +34,7 @@ layout('layouts.app');
 
 state([
     'dateFilter' => 'this_month',
-    'branchFilter' => '',
+    'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'customFrom' => '',
     'customTo' => '',
 ]);
@@ -53,7 +53,7 @@ $dateRange = function (): array {
 };
 
 $canViewAllBranches = fn (): bool => Schema::hasTable('branches')
-    && AuthorizationScope::scopeFor(auth()->user(), 'report_scope', AuthorizationScope::BRANCH) === AuthorizationScope::COMPANY;
+    && ! \App\Support\BranchAccess::restricted(auth()->user());
 
 $activeBranchId = function (): ?int {
     if ($this->canViewAllBranches()) {

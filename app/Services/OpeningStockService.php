@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\OpeningStock;
 use App\Models\Product;
+use App\Models\Scopes\CompanyScope;
 use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
@@ -31,7 +32,7 @@ class OpeningStockService
     {
         $date = date('Ymd', strtotime($openingDate));
         $prefix = 'OPEN-'.$date.'-';
-        $last = OpeningStock::withoutGlobalScopes()
+        $last = OpeningStock::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $user->company_id)
             ->where('reference_number', 'like', $prefix.'%')
             ->orderByDesc('reference_number')
@@ -47,7 +48,7 @@ class OpeningStockService
         if (! $user->can('opening_stock.create')) {
             throw new AuthorizationException('You cannot create Opening Stock.');
         }
-        if (! (bool) Setting::withoutGlobalScopes()->where('company_id', $user->company_id)->value('enable_warehouse')) {
+        if (! (bool) Setting::withoutGlobalScope(CompanyScope::class)->where('company_id', $user->company_id)->value('enable_warehouse')) {
             throw ValidationException::withMessages(['opening_stock' => 'Opening Stock is available only when Warehouse is enabled.']);
         }
 
@@ -69,14 +70,14 @@ class OpeningStockService
         return DB::transaction(function () use ($data, $user): OpeningStock {
             $companyId = (int) $user->company_id;
             // Serializes company-scoped reference generation on databases that support row locks.
-            Company::withoutGlobalScopes()->whereKey($companyId)->lockForUpdate()->firstOrFail();
-            $branch = Branch::withoutGlobalScopes()->where('company_id', $companyId)
+            Company::withoutGlobalScope(CompanyScope::class)->whereKey($companyId)->lockForUpdate()->firstOrFail();
+            $branch = Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)
                 ->where('status', 'active')->find($data['branch_id']);
             if (! $branch) {
                 throw ValidationException::withMessages(['branch_id' => 'Select an active branch in your company.']);
             }
             $branchId = (int) $branch->id;
-            $location = StockLocation::withoutGlobalScopes()->where('company_id', $companyId)
+            $location = StockLocation::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)
                 ->where('status', 'active')->where('is_active', true)
                 ->where('can_receive_stock', true)->find($data['stock_location_id']);
             if (! $location || ($location->branch_id !== null && (int) $location->branch_id !== $branchId)
@@ -86,7 +87,7 @@ class OpeningStockService
 
             $prepared = [];
             foreach (array_values($data['lines']) as $index => $line) {
-                $product = Product::withoutGlobalScopes()->with('unit.measurementType')
+                $product = Product::withoutGlobalScope(CompanyScope::class)->with('unit.measurementType')
                     ->where('company_id', $companyId)->where('status', 'active')
                     ->where(fn ($query) => $query->whereNull('branch_id')->orWhere('branch_id', $branchId))
                     ->whereKey($line['product_id'])->lockForUpdate()->first();

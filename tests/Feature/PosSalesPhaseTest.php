@@ -365,7 +365,7 @@ test('continue without customer completes sale with system customer', function (
         ->call('continueWithoutCustomer');
 
     $sale = Sale::query()->latest('id')->firstOrFail();
-    $systemCustomer = Customer::withoutGlobalScopes()->where('company_id', $branch->company_id)->where('is_unassigned_credit_customer', true)->firstOrFail();
+    $systemCustomer = Customer::withoutGlobalScopes()->where('company_id', $branch->company_id)->where('branch_id', $branch->id)->where('is_unassigned_credit_customer', true)->firstOrFail();
 
     expect($sale->customer_id)->toBe($systemCustomer->id);
     expect($sale->credit_customer_unassigned)->toBeTrue();
@@ -814,7 +814,8 @@ test('fractional return restores converted base quantity', function () {
 });
 
 test('cashier can access pos but cannot open cancel page', function () {
-    $cashier = User::factory()->create(['status' => 'active']);
+    $branch = Branch::where('code', 'MAIN')->firstOrFail();
+    $cashier = User::factory()->create(['company_id' => $branch->company_id, 'branch_id' => $branch->id, 'status' => 'active']);
     $cashier->assignRole('Cashier');
     $sale = posPhaseSale($this);
 

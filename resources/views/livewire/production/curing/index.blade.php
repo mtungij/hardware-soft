@@ -13,7 +13,7 @@ use function Livewire\Volt\uses;
 
 layout('layouts.app');
 uses([WithPagination::class]);
-state(['search' => '', 'branchFilter' => '', 'productFilter' => '', 'statusFilter' => '', 'productionDate' => '', 'sellableDate' => '']);
+state(['search' => '', 'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'productFilter' => '', 'statusFilter' => '', 'productionDate' => '', 'sellableDate' => '']);
 mount(fn () => abort_unless(
     CompanyFeatures::manufacturingEnabled()
     && collect(['production.view_curing', 'production.manage_curing', 'production.release_curing'])->contains(fn ($permission) => auth()->user()?->can($permission)),
@@ -25,7 +25,7 @@ mount(fn () => abort_unless(
     <x-card>
         <div class="mb-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             <input wire:model.live.debounce.300ms="search" placeholder="Batch, order, product, machine…" class="rounded-lg border-slate-200 md:col-span-2 dark:bg-navy-950">
-            <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All branches</option>@foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+            <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All branches</option>@foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
             <select wire:model.live="productFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All products</option>@foreach (Product::query()->where('company_id', CompanyFeatures::companyId())->manufactured()->where('requires_curing', true)->orderBy('name')->get() as $product)<option value="{{ $product->id }}">{{ $product->name }}</option>@endforeach</select>
             <select wire:model.live="statusFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All statuses</option><option value="curing">Still curing</option><option value="ready_for_release">Ready For Release</option><option value="eligible">Eligible today</option><option value="full">Overdue / fully cured</option><option value="partially_released">Partially released</option><option value="released">Released</option><option value="quarantined">Quarantined</option></select>
             <input type="date" wire:model.live="productionDate" title="Production date" class="rounded-lg border-slate-200 dark:bg-navy-950">

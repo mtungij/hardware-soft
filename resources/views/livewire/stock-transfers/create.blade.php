@@ -18,11 +18,11 @@ layout('layouts.app');
 
 abort_unless(InventorySettings::warehouseEnabled(), 403);
 
-state(['branch_id' => '', 'transfer_number' => '', 'from_location_id' => '', 'to_location_id' => '', 'transfer_date' => '', 'notes' => '', 'items' => []]);
+state(['branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'transfer_number' => '', 'from_location_id' => '', 'to_location_id' => '', 'transfer_date' => '', 'notes' => '', 'items' => []]);
 
 $authorizedBranches = function () {
     $user = auth()->user();
-    $query = Branch::withoutGlobalScopes()
+    $query = Branch::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)
         ->where('company_id', $user->company_id)
         ->where('status', 'active');
 
@@ -198,7 +198,7 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
         <form class="space-y-6">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Branch
-                    <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         @foreach ($this->authorizedBranches() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach

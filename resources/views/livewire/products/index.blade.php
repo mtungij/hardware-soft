@@ -21,13 +21,13 @@ uses([WithPagination::class]);
 state([
     'search' => '',
     'statusFilter' => '',
-    'branchFilter' => '',
+    'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'categoryFilter' => '',
     'created_from' => '',
     'created_to' => '',
     'editing_product_id' => null,
     'deleting_product_id' => null,
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'category_id' => '',
     'unit_id' => '',
     'product_size_id' => '',
@@ -48,7 +48,7 @@ state([
 mount(function () {
     $this->search = request('search', $this->search);
     $this->statusFilter = request('statusFilter', $this->statusFilter);
-    $this->branchFilter = request('branchFilter', $this->branchFilter);
+    $this->branchFilter = (string) (\App\Support\BranchAccess::resolve(auth()->user(), request('branchFilter', $this->branchFilter) ? (int) request('branchFilter', $this->branchFilter) : null) ?? '');
     $this->categoryFilter = request('categoryFilter', $this->categoryFilter);
     $this->created_from = request('created_from', $this->created_from);
     $this->created_to = request('created_to', $this->created_to);
@@ -180,7 +180,7 @@ $queueProductDeletedNotification = function (Product $product): void {
         return;
     }
 
-    $setting = \App\Models\CompanyWhatsAppSetting::withoutGlobalScopes()
+    $setting = \App\Models\CompanyWhatsAppSetting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)
         ->where('company_id', $company->id)
         ->first();
 
@@ -305,7 +305,7 @@ $deleteConfirmedProduct = function () use ($queueProductDeletedNotification) {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
             </select>
-            <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+            <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                 <option value="">All branches</option>
                 @foreach (Branch::orderBy('name')->get() as $branch)
                     <option value="{{ $branch->id }}">{{ $branch->name }}</option>
@@ -440,7 +440,7 @@ $deleteConfirmedProduct = function () use ($queueProductDeletedNotification) {
                         @endforeach
                     </x-form-select>
 
-                    <x-form-select label="Branch" name="branch_id" wire:model="branch_id">
+                    <x-form-select label="Branch" name="branch_id" wire:model="branch_id" :disabled="\App\Support\BranchAccess::restricted()">
                         <option value="">Global product</option>
                         @foreach (Branch::orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>

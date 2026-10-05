@@ -13,7 +13,7 @@ use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
 
 layout('layouts.app'); uses([WithPagination::class]);
-state(['search' => '', 'statusFilter' => '', 'branchFilter' => '', 'machineFilter' => '', 'productFilter' => '', 'dateFrom' => '', 'dateTo' => '']);
+state(['search' => '', 'statusFilter' => '', 'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'machineFilter' => '', 'productFilter' => '', 'dateFrom' => '', 'dateTo' => '']);
 mount(fn () => abort_unless(CompanyFeatures::manufacturingEnabled() && collect(['production.view_orders','production.create_orders','production.execute_orders','production.complete_orders','production.cancel_orders'])->contains(fn ($p) => auth()->user()?->can($p)), 403));
 ?>
 <div>
@@ -24,7 +24,7 @@ mount(fn () => abort_unless(CompanyFeatures::manufacturingEnabled() && collect([
         <div class="mb-4 grid gap-3 md:grid-cols-4">
             <input wire:model.live.debounce.300ms="search" placeholder="Order, product, machine..." class="rounded-lg border-slate-200 md:col-span-2 dark:bg-navy-950">
             <select wire:model.live="statusFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All statuses</option>@foreach (ProductionOrder::STATUSES as $status)<option value="{{ $status }}">{{ str($status)->headline() }}</option>@endforeach</select>
-            <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All branches</option>@foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+            <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All branches</option>@foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
             <select wire:model.live="machineFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All machines</option>@foreach (Machine::query()->forCurrentCompany()->get() as $machine)<option value="{{ $machine->id }}">{{ $machine->name }}</option>@endforeach</select>
             <select wire:model.live="productFilter" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All products</option>@foreach (Product::query()->where('company_id', CompanyFeatures::companyId())->manufactured()->get() as $product)<option value="{{ $product->id }}">{{ $product->name }}</option>@endforeach</select>
             <input type="date" wire:model.live="dateFrom" class="rounded-lg border-slate-200 dark:bg-navy-950"><input type="date" wire:model.live="dateTo" class="rounded-lg border-slate-200 dark:bg-navy-950">

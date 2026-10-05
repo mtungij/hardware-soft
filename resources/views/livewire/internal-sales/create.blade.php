@@ -14,7 +14,7 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 state([
-    'branch_id' => '', 'from_location_id' => '', 'to_location_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'from_location_id' => '', 'to_location_id' => '',
     'internal_sale_number' => '', 'sale_date' => '', 'notes' => '', 'editingSaleId' => null,
     'items' => [['selection' => '', 'quantity' => '1', 'internal_unit_price' => '', 'price_source' => '', 'manual_override' => false]],
 ]);
@@ -228,7 +228,7 @@ $completeSale = function (InternalSaleService $service): void {
             <div class="grid gap-4 md:grid-cols-3">
                 <label class="text-sm font-bold">Number<input wire:model="internal_sale_number" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error('internal_sale_number')<span class="text-red-600">{{ $message }}</span>@enderror</label>
                 <label class="text-sm font-bold">Date<input wire:model="sale_date" type="date" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error('sale_date')<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                <label class="text-sm font-bold">Branch<select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">Choose branch</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>@error('branch_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                <label class="text-sm font-bold">Branch<select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">Choose branch</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>@error('branch_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
                 <label class="text-sm font-bold">Source<select wire:model.live="from_location_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">Choose source</option>@foreach($sources as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select>@error('from_location_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
                 <label class="text-sm font-bold">Destination<select wire:model="to_location_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">Choose destination</option>@foreach($destinations as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select>@error('to_location_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
                 <label class="text-sm font-bold">Notes<input wire:model="notes" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"></label>

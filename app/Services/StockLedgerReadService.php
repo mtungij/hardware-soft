@@ -14,6 +14,7 @@ use App\Models\StockMovement;
 use App\Models\StockTransfer;
 use App\Models\User;
 use App\Support\AuthorizationScope;
+use App\Support\BranchAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -49,6 +50,7 @@ class StockLedgerReadService
             ->join('stock_locations as locations', 'locations.id', '=', 'movements.stock_location_id')
             ->whereColumn('movements.branch_id', 'locations.branch_id')
             ->where('movements.company_id', $user->company_id)
+            ->when(BranchAccess::restricted($user), fn ($query) => $query->where('movements.branch_id', $user->branch_id))
             ->where('locations.company_id', $user->company_id)
             ->whereIn('movements.product_id', $rows->pluck('product_id')->unique()->all())
             ->whereIn('movements.stock_location_id', $rows->pluck('stock_location_id')->unique()->all())
@@ -117,6 +119,8 @@ class StockLedgerReadService
             'sale_out' => 'Sale Out',
             'transfer_in' => 'Transfer In',
             'transfer_out' => 'Transfer Out',
+            'transfer_cancel_out' => 'Cancellation Out',
+            'transfer_cancel_in' => 'Cancellation In',
             'opening_stock' => 'Opening Stock',
             'adjustment_in', 'adjustment_out' => 'Stock Adjustment',
             'production_output' => 'Production In',

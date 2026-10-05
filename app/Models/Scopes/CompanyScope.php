@@ -4,6 +4,7 @@ namespace App\Models\Scopes;
 
 use App\Models\CustomerAccount;
 use App\Models\User;
+use App\Support\BranchAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
@@ -18,10 +19,15 @@ class CompanyScope implements Scope
             return;
         }
 
-        $webUser = Auth::guard('web')->user();
+        $webUser = BranchAccess::staff();
 
         if ($webUser instanceof User) {
-            if ($webUser->is_system_owner || ! $webUser->company_id) {
+            if ($webUser->is_system_owner) {
+                return;
+            }
+            if (! $webUser->company_id) {
+                $builder->whereRaw('1 = 0');
+
                 return;
             }
 
@@ -33,7 +39,11 @@ class CompanyScope implements Scope
             return;
         }
 
-        $customerUser = Auth::guard('customer')->user();
+        $customerUser = Auth::guard('customer')->hasUser() ? Auth::guard('customer')->user() : null;
+        if (! $customerUser && Auth::getDefaultDriver() !== 'web') {
+            $guard = Auth::guard();
+            $customerUser = $guard->hasUser() ? $guard->user() : null;
+        }
 
         if ($customerUser instanceof CustomerAccount && $customerUser->company_id) {
             $builder->where(

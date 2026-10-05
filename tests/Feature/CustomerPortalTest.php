@@ -68,3 +68,14 @@ test('admin can open customer portal review queues', function () {
     $this->actingAs($admin)->get('/admin/customer-receipts')->assertOk()->assertSeeVolt('admin.customer-receipts.index');
     $this->actingAs($admin)->get('/admin/customer-deposits')->assertOk()->assertSeeVolt('admin.customer-deposits.index');
 });
+
+test('customer portal access is independent of a simultaneous staff branch session', function () {
+    $account = portalCustomerAccount();
+    $branch = Branch::create(['company_id' => $account->company_id, 'name' => 'Staff Only Branch', 'code' => 'STAFF-ONLY', 'status' => 'active']);
+    $staff = User::factory()->create(['company_id' => $account->company_id, 'branch_id' => $branch->id, 'is_system_owner' => false, 'status' => 'active']);
+    $staff->assignRole('Super Admin');
+
+    $this->actingAs($staff, 'web')->actingAs($account, 'customer')
+        ->get('/customer/dashboard')->assertOk();
+    expect(Customer::find($account->customer_id))->not->toBeNull();
+});

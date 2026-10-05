@@ -12,12 +12,12 @@ use function Livewire\Volt\uses;
 layout('layouts.app');
 uses([WithPagination::class]);
 
-state(['search' => '', 'statusFilter' => '', 'branchFilter' => '', 'typeFilter' => '', 'created_from' => '', 'created_to' => '']);
+state(['search' => '', 'statusFilter' => '', 'branchFilter' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'typeFilter' => '', 'created_from' => '', 'created_to' => '']);
 
 mount(function () {
     $this->search = request('search', $this->search);
     $this->statusFilter = request('statusFilter', $this->statusFilter);
-    $this->branchFilter = request('branchFilter', $this->branchFilter);
+    $this->branchFilter = (string) (\App\Support\BranchAccess::resolve(auth()->user(), request('branchFilter', $this->branchFilter) ? (int) request('branchFilter', $this->branchFilter) : null) ?? '');
     $this->typeFilter = request('typeFilter', $this->typeFilter);
     $this->created_from = request('created_from', $this->created_from);
     $this->created_to = request('created_to', $this->created_to);
@@ -75,7 +75,7 @@ $deleteCustomer = function (int $customerId) {
                 <option value="contractor">Contractor</option>
                 <option value="wholesale">Wholesale</option>
             </select>
-            <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+            <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                 <option value="">All branches</option>
                 @foreach (Branch::orderBy('name')->get() as $branch)
                     <option value="{{ $branch->id }}">{{ $branch->name }}</option>

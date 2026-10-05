@@ -11,7 +11,7 @@ use function Livewire\Volt\uses;
 
 layout('layouts.app'); uses([WithPagination::class]);
 state(['report' => '']);
-state(['date_from' => '', 'date_to' => '', 'branch_id' => '', 'family_id' => '', 'product_id' => '', 'machine_id' => '', 'mould_id' => '', 'status' => '', 'group_by' => '', 'search' => ''])->url(except: '');
+state(['date_from' => '', 'date_to' => '', 'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'family_id' => '', 'product_id' => '', 'machine_id' => '', 'mould_id' => '', 'status' => '', 'group_by' => '', 'search' => ''])->url(except: '');
 mount(function (): void {
     $this->report = (string) request()->route('report');
     app(ProductionReportService::class)->definition($this->report);

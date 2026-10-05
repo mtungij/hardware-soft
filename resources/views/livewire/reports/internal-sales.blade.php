@@ -13,7 +13,7 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 state([
     'tab' => 'outgoing', 'date_from' => '', 'date_to' => '',
-    'branch_id' => '', 'from_location_id' => '', 'to_location_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'from_location_id' => '', 'to_location_id' => '',
     'product_id' => '', 'status' => 'completed', 'number' => '',
 ]);
 
@@ -78,7 +78,7 @@ $updatedTab = function (): void {
         <div class="grid gap-3 md:grid-cols-4">
             <label class="text-xs font-bold">Date From<input wire:model.live="date_from" type="date" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"></label>
             <label class="text-xs font-bold">Date To<input wire:model.live="date_to" type="date" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"></label>
-            <label class="text-xs font-bold">Branch<select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">All authorized branches</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
+            <label class="text-xs font-bold">Branch<select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All authorized branches</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
             <label class="text-xs font-bold">Source Location<select wire:model.live="from_location_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">All visible sources</option>@foreach($locations as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select></label>
             <label class="text-xs font-bold">Destination Location<select wire:model.live="to_location_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">All visible destinations</option>@foreach($locations as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select></label>
             <label class="text-xs font-bold">Product<select wire:model.live="product_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">All products</option>@foreach($products as $product)<option value="{{ $product->id }}">{{ $product->displayNameWithSize() }}</option>@endforeach</select></label>

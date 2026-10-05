@@ -17,7 +17,7 @@ layout('layouts.app');
 
 state([
     'customer' => null,
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'name' => '',
     'phone' => '',
     'email' => '',
@@ -77,7 +77,7 @@ $save = function (CustomerPortalCredentialService $credentials) {
     DB::transaction(function () use ($validated, $phone, $credentials): void {
         $this->customer->update($validated);
         $normalized = $credentials->updateLoginPhone($this->customer, $phone, auth()->user());
-        CustomerAccount::withoutGlobalScopes()->where('customer_id', $this->customer->id)->update([
+        CustomerAccount::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('customer_id', $this->customer->id)->update([
             'name' => $validated['name'],
             'email' => $validated['email'] ?: null,
             'phone' => $normalized,
@@ -132,7 +132,7 @@ $resetPortalPassword = function (CustomerPortalCredentialService $credentials) {
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
                 Branch
-                <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     <option value="">Global customer</option>
                     @foreach (Branch::orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
@@ -181,9 +181,9 @@ $resetPortalPassword = function (CustomerPortalCredentialService $credentials) {
     </x-card>
 
     @php
-        $portalAccount = CustomerAccount::withoutGlobalScopes()->where('customer_id', $customer->id)->oldest('id')->first();
+        $portalAccount = CustomerAccount::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('customer_id', $customer->id)->oldest('id')->first();
         $credentialNotification = $portalAccount?->last_credentials_notification_id
-            ? WhatsAppNotification::withoutGlobalScopes()->find($portalAccount->last_credentials_notification_id)
+            ? WhatsAppNotification::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->find($portalAccount->last_credentials_notification_id)
             : null;
     @endphp
     <x-card title="Portal Access" class="mt-6">

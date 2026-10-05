@@ -14,7 +14,7 @@ use function Livewire\Volt\uses;
 layout('layouts.app');
 uses([WithPagination::class]);
 
-state(['branch_id' => '', 'session_date' => '', 'opening_cash' => '', 'notes' => '']);
+state(['branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''), 'session_date' => '', 'opening_cash' => '', 'notes' => '']);
 
 rules([
     'branch_id' => ['required', 'exists:branches,id'],
@@ -49,7 +49,7 @@ $openSession = function (CashbookService $cashbook) {
         @can('manage cashbook')
             <x-card title="Open Cashbook">
                 <form wire:submit="openSession" class="space-y-4">
-                    <label class="block text-sm font-bold">Branch<select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
+                    <label class="block text-sm font-bold">Branch<select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select></label>
                     <x-form-input label="Session Date" name="session_date" wire:model="session_date" type="date" required />
                     <x-money-input label="Opening Cash" name="opening_cash" wire:model="opening_cash" required />
                     <button class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Open Session</button>

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Scopes\CompanyScope;
 use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\User;
@@ -22,7 +23,7 @@ class ProductionLocationService
     /** @return array{raw: StockLocation, curing: StockLocation, finished: StockLocation} */
     public function defaults(int $companyId, ?int $branchId): array
     {
-        $setting = Setting::withoutGlobalScopes()->where('company_id', $companyId)->first();
+        $setting = Setting::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->first();
         $locations = [
             self::RAW => $setting?->default_raw_material_location_id,
             self::CURING => $setting?->default_curing_location_id,
@@ -70,7 +71,7 @@ class ProductionLocationService
 
     private function eligibleQuery(string $purpose, int $companyId, ?int $branchId): Builder
     {
-        $query = StockLocation::withoutGlobalScopes()
+        $query = StockLocation::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $companyId)
             ->where('status', 'active')
             ->where('is_active', true)

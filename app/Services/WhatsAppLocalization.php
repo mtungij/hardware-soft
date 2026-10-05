@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\CompanyWhatsAppSetting;
+use App\Models\Scopes\CompanyScope;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Lang;
 
@@ -15,7 +16,7 @@ class WhatsAppLocalization
             return $context->notificationLanguage();
         }
 
-        $value = CompanyWhatsAppSetting::withoutGlobalScopes()
+        $value = CompanyWhatsAppSetting::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $context->id)
             ->value('whatsapp_notification_language');
 

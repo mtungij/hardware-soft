@@ -64,8 +64,8 @@ mount(function (): void {
     $this->companyId = $company->id;
     $this->recipient_categories = WhatsAppCategories::filter($company->id, $this->recipient_categories);
     app(WhatsAppTemplateService::class)->seedDefaults($company);
-    $this->template_bodies = WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $company->id)->whereIn('category', array_keys(WhatsAppCategories::available($company->id)))->pluck('body', 'key')->all();
-    $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->firstOrCreate(
+    $this->template_bodies = WhatsAppTemplate::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $company->id)->whereIn('category', array_keys(WhatsAppCategories::available($company->id)))->pluck('body', 'key')->all();
+    $setting = CompanyWhatsAppSetting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->firstOrCreate(
         ['company_id' => $company->id],
         ['timezone' => $company->timezone ?: 'Africa/Dar_es_Salaam', 'whatsapp_notification_language' => 'en', 'enabled_categories' => CompanyWhatsAppSetting::DEFAULT_CATEGORIES]
     );
@@ -142,9 +142,9 @@ $save = function (Gowa $gowa, WhatsAppAuditService $audit): void {
         $data['last_checked_at'] = now();
     }
 
-    $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $this->companyId)->first();
+    $setting = CompanyWhatsAppSetting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $this->companyId)->first();
     $before = $setting?->only(array_keys($data));
-    $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->updateOrCreate(['company_id' => $this->companyId], $data);
+    $setting = CompanyWhatsAppSetting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->updateOrCreate(['company_id' => $this->companyId], $data);
     $audit->record($this->companyId, 'settings_updated', $before, $setting->only(array_keys($data)));
     $this->last_device_state = $data['last_device_state'] ?? $this->last_device_state;
     $this->last_checked_at = isset($data['last_checked_at']) ? now()->format('d M Y H:i') : $this->last_checked_at;
@@ -156,7 +156,7 @@ $testConnection = function (Gowa $gowa): void {
     $this->validate(['device_id' => ['required', 'string', 'max:255']]);
     try {
         $state = $gowa->deviceState($gowa->deviceStatus(trim($this->device_id)));
-        CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $this->companyId)->update(['last_device_state' => $state, 'last_checked_at' => now()]);
+        CompanyWhatsAppSetting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $this->companyId)->update(['last_device_state' => $state, 'last_checked_at' => now()]);
         $this->last_device_state = $state;
         $this->last_checked_at = now()->format('d M Y H:i');
         session()->flash($state === 'logged_in' ? 'success' : 'error', $state === 'logged_in' ? 'WhatsApp device is connected and logged in.' : 'WhatsApp device is not connected. Re-link it before enabling notifications.');
@@ -201,7 +201,7 @@ $addRecipient = function (WhatsAppAuditService $audit): void {
         return;
     }
 
-    $recipient = WhatsAppRecipient::withoutGlobalScopes()->create([
+    $recipient = WhatsAppRecipient::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->create([
         'company_id' => $this->companyId, 'name' => $data['recipient_name'],
         'phone' => $phone,
         'user_id' => $data['recipient_user_id'] ?: null,
@@ -216,7 +216,7 @@ $addRecipient = function (WhatsAppAuditService $audit): void {
 
 $toggleRecipient = function (int $id, WhatsAppAuditService $audit): void {
     abort_unless(auth()->user()->can('whatsapp.manage_recipients'), 403);
-    $recipient = WhatsAppRecipient::withoutGlobalScopes()->where('company_id', $this->companyId)->findOrFail($id);
+    $recipient = WhatsAppRecipient::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $this->companyId)->findOrFail($id);
     $before = $recipient->only(['id', 'active']);
     $recipient->update(['active' => ! $recipient->active]);
     $audit->record($this->companyId, 'recipient_status_changed', $before, $recipient->only(['id', 'active']));
@@ -224,7 +224,7 @@ $toggleRecipient = function (int $id, WhatsAppAuditService $audit): void {
 
 $deleteRecipient = function (int $id, WhatsAppAuditService $audit): void {
     abort_unless(auth()->user()->can('whatsapp.manage_recipients'), 403);
-    $recipient = WhatsAppRecipient::withoutGlobalScopes()->where('company_id', $this->companyId)->findOrFail($id);
+    $recipient = WhatsAppRecipient::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $this->companyId)->findOrFail($id);
     $before = $recipient->only(['id', 'name', 'phone', 'user_id', 'branch_id', 'scope', 'categories', 'active']);
     $recipient->delete();
     $audit->record($this->companyId, 'recipient_removed', $before);
@@ -234,7 +234,7 @@ $saveTemplates = function (WhatsAppAuditService $audit): void {
     abort_unless(auth()->user()->can('whatsapp.manage_templates'), 403);
     $this->validate(['template_bodies' => ['required', 'array'], 'template_bodies.*' => ['required', 'string', 'max:4000']]);
     foreach ($this->template_bodies as $key => $body) {
-        WhatsAppTemplate::withoutGlobalScopes()->where('company_id', $this->companyId)->whereIn('category', array_keys($this->categories()))->where('key', $key)->update(['body' => $body]);
+        WhatsAppTemplate::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $this->companyId)->whereIn('category', array_keys($this->categories()))->where('key', $key)->update(['body' => $body]);
     }
     $audit->record($this->companyId, 'templates_updated', null, ['template_keys' => array_keys($this->template_bodies)]);
     session()->flash('success', 'WhatsApp templates saved.');
@@ -300,20 +300,20 @@ $saveTemplates = function (WhatsAppAuditService $audit): void {
             <form wire:submit="addRecipient" class="mt-4 space-y-3">
                 <x-form-input label="Name / Role" name="recipient_name" wire:model="recipient_name" />
                 <x-form-input label="Phone" name="recipient_phone" wire:model="recipient_phone" />
-                <label class="block text-sm font-bold">Staff User<select wire:model="recipient_user_id" class="mt-1 w-full rounded-lg border-slate-200 dark:bg-navy-950"><option value="">Phone-only recipient</option>@foreach(User::withoutGlobalScopes()->where('company_id',$companyId)->where('status','active')->orderBy('name')->get() as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select></label>
+                <label class="block text-sm font-bold">Staff User<select wire:model="recipient_user_id" class="mt-1 w-full rounded-lg border-slate-200 dark:bg-navy-950"><option value="">Phone-only recipient</option>@foreach(User::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id',$companyId)->where('status','active')->orderBy('name')->get() as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select></label>
                 <label class="block text-sm font-bold">Scope<select wire:model.live="recipient_scope" class="mt-1 w-full rounded-lg border-slate-200 dark:bg-navy-950"><option value="company">Company</option><option value="branch">Branch</option></select></label>
-                @if($recipient_scope === 'branch')<label class="block text-sm font-bold">Branch<select wire:model="recipient_branch_id" class="mt-1 w-full rounded-lg border-slate-200 dark:bg-navy-950"><option value="">Select branch</option>@foreach(Branch::withoutGlobalScopes()->where('company_id',$companyId)->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>@error('recipient_branch_id')<span class="text-xs text-red-600">{{ $message }}</span>@enderror</label>@endif
+                @if($recipient_scope === 'branch')<label class="block text-sm font-bold">Branch<select wire:model="recipient_branch_id" class="mt-1 w-full rounded-lg border-slate-200 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">Select branch</option>@foreach(Branch::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id',$companyId)->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>@error('recipient_branch_id')<span class="text-xs text-red-600">{{ $message }}</span>@enderror</label>@endif
                 <div class="space-y-1">@foreach($this->categories() as $key => $label)<label class="flex gap-2 text-xs"><input type="checkbox" value="{{ $key }}" wire:model="recipient_categories" class="rounded text-build-orange"> {{ $label }}</label>@endforeach</div>
                 <button class="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white dark:bg-white dark:text-slate-900">Add Recipient</button>
             </form>
-            <div class="mt-5 space-y-2">@foreach(WhatsAppRecipient::withoutGlobalScopes()->where('company_id',$companyId)->latest()->get() as $recipient)<div wire:key="recipient-{{ $recipient->id }}" class="rounded-xl border p-3 text-sm dark:border-slate-700"><div class="flex justify-between gap-2"><div><div class="font-black">{{ $recipient->name }}</div><div class="text-xs text-slate-500">{{ $recipient->phone }} · {{ ucfirst($recipient->scope) }}</div></div><div class="flex gap-1"><button wire:click="toggleRecipient({{ $recipient->id }})" class="text-xs font-bold {{ $recipient->active ? 'text-emerald-600' : 'text-slate-400' }}">{{ $recipient->active ? 'Active' : 'Paused' }}</button><button wire:click="deleteRecipient({{ $recipient->id }})" wire:confirm="Remove this recipient?" class="text-xs font-bold text-red-600">Remove</button></div></div></div>@endforeach</div>
+            <div class="mt-5 space-y-2">@foreach(WhatsAppRecipient::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id',$companyId)->latest()->get() as $recipient)<div wire:key="recipient-{{ $recipient->id }}" class="rounded-xl border p-3 text-sm dark:border-slate-700"><div class="flex justify-between gap-2"><div><div class="font-black">{{ $recipient->name }}</div><div class="text-xs text-slate-500">{{ $recipient->phone }} · {{ ucfirst($recipient->scope) }}</div></div><div class="flex gap-1"><button wire:click="toggleRecipient({{ $recipient->id }})" class="text-xs font-bold {{ $recipient->active ? 'text-emerald-600' : 'text-slate-400' }}">{{ $recipient->active ? 'Active' : 'Paused' }}</button><button wire:click="deleteRecipient({{ $recipient->id }})" wire:confirm="Remove this recipient?" class="text-xs font-bold text-red-600">Remove</button></div></div></div>@endforeach</div>
         </x-card>
 
         <x-card class="xl:col-span-3">
             <h2 class="text-lg font-black">Message Templates</h2>
             <p class="mt-1 text-sm text-slate-500">Only the listed placeholders are replaced. HARDEX supplies authorized values; templates cannot query other data.</p>
             <form wire:submit="saveTemplates" class="mt-4 grid gap-4 lg:grid-cols-3">
-                @foreach(WhatsAppTemplate::withoutGlobalScopes()->where('company_id',$companyId)->whereIn('category', array_keys($this->categories()))->orderBy('name')->get() as $template)
+                @foreach(WhatsAppTemplate::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id',$companyId)->whereIn('category', array_keys($this->categories()))->orderBy('name')->get() as $template)
                     <label class="block text-sm font-bold">{{ $template->name }}<textarea wire:model="template_bodies.{{ $template->key }}" class="mt-1 min-h-52 w-full rounded-lg border-slate-200 font-mono text-xs dark:bg-navy-950"></textarea></label>
                 @endforeach
                 <div class="lg:col-span-3"><button class="rounded-xl border px-4 py-2.5 text-sm font-black">Save Templates</button></div>

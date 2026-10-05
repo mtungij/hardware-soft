@@ -15,7 +15,7 @@ state([
     'date_from' => '',
     'date_to' => '',
     'customer_id' => '',
-    'branch_id' => '',
+    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'payment_method' => '',
     'received_by' => '',
 ]);
@@ -24,7 +24,7 @@ mount(function () {
     $this->date_from = request('date_from', today()->toDateString());
     $this->date_to = request('date_to', today()->toDateString());
     $this->customer_id = request('customer_id', '');
-    $this->branch_id = request('branch_id', '');
+    $this->branch_id = (string) (\App\Support\BranchAccess::resolve(auth()->user(), request('branch_id', '') ? (int) request('branch_id', '') : null) ?? '');
     $this->payment_method = request('payment_method', '');
     $this->received_by = request('received_by', '');
 });
@@ -60,7 +60,7 @@ mount(function () {
             <input wire:model.live="date_from" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
             <input wire:model.live="date_to" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
             <select wire:model.live="customer_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Customers</option>@foreach (Customer::where(fn ($q) => $q->where('is_system_customer', false)->orWhereNull('is_system_customer'))->orderBy('name')->get() as $customer)<option value="{{ $customer->id }}">{{ $customer->name }}</option>@endforeach</select>
-            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All Branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
             <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Methods</option>@foreach ($methods as $method)<option value="{{ $method }}">{{ $methodLabel($method) }}</option>@endforeach</select>
             <select wire:model.live="received_by" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Received By</option>@foreach (User::orderBy('name')->get() as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select>
         </div>

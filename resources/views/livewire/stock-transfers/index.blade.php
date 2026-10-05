@@ -41,18 +41,23 @@ $completeTransfer = function (int $transferId, InventoryService $inventory) {
 $cancelTransfer = function (int $transferId) {
     abort_unless($this->canCancel(), 403);
 
-    $transfer = StockTransfer::findOrFail($transferId);
+    \Illuminate\Support\Facades\DB::transaction(function () use ($transferId) {
+        $transfer = StockTransfer::query()->where('company_id', auth()->user()->company_id)
+            ->whereKey($transferId)->lockForUpdate()->firstOrFail();
+        app(\App\Services\StockTransferNoteService::class)->authorize($transfer, auth()->user());
 
-    if ($transfer->status === 'completed') {
-        session()->flash('error', 'Completed transfers cannot be cancelled.');
-        return;
-    }
+        if ($transfer->status !== 'draft') {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'transfer' => 'Only draft transfers can be cancelled here. Use the transfer details to reverse a completed transfer.',
+            ]);
+        }
 
-    $transfer->update([
-        'status' => 'cancelled',
-        'cancelled_by' => auth()->id(),
-        'cancelled_at' => now(),
-    ]);
+        $transfer->update([
+            'status' => 'cancelled',
+            'cancelled_by' => auth()->id(),
+            'cancelled_at' => now(),
+        ]);
+    });
 
     session()->flash('success', 'Stock transfer cancelled.');
 };
@@ -66,6 +71,8 @@ $cancelTransfer = function (int $transferId) {
             <a href="{{ route('stock-transfers.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Transfer</a>
         @endif
     </x-page-header>
+
+    @error('transfer') <p role="alert" class="mb-4 text-red-600">{{ $message }}</p> @enderror
 
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-6">
@@ -125,7 +132,7 @@ $cancelTransfer = function (int $transferId) {
                                 <a href="{{ route('stock-transfers.edit', $transfer) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">Edit</a>
                                 <button wire:click="completeTransfer({{ $transfer->id }})" class="rounded-lg bg-build-orange px-3 py-1.5 text-xs font-bold text-white">Complete</button>
                             @endif
-                            @if ($transfer->status !== 'completed' && $this->canCancel())
+                            @if ($transfer->status === 'draft' && $this->canCancel())
                                 <button wire:click="cancelTransfer({{ $transfer->id }})" wire:confirm="Cancel this transfer?" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white">Cancel</button>
                             @endif
                         </div>

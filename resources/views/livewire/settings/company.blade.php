@@ -59,7 +59,7 @@ mount(function () {
     $this->authorizeCompanySettings();
     $this->company = Company::current();
     $companyId = $this->company?->id ?: auth()->user()?->company_id;
-    $setting = Setting::withoutGlobalScopes()->where('company_id', $companyId)->first();
+    $setting = Setting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $companyId)->first();
 
     $this->company_name = $this->company?->company_name ?: $setting?->company_name ?: '';
     $this->business_type = $this->company?->business_type ?: $setting?->business_type ?: 'Hardware Store';
@@ -159,7 +159,7 @@ $save = function () {
         'manufacturing_enabled' => (bool) $data['manufacturing_enabled'],
     ])->save();
 
-    $setting = Setting::withoutGlobalScopes()
+    $setting = Setting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)
         ->where('company_id', $company->id)
         ->first() ?: new Setting(['company_id' => $company->id]);
     $canManageProductionDefaults = auth()->user()?->can('production.manage_location_defaults') ?? false;
@@ -225,7 +225,7 @@ $removeLogo = function () {
         $this->company->update(['logo' => null]);
     }
 
-    Setting::withoutGlobalScopes()
+    Setting::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)
         ->where('company_id', $this->company?->id)
         ->first()
         ?->update(['company_logo' => null]);
