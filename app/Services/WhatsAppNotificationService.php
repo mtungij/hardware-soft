@@ -11,6 +11,7 @@ use App\Models\WhatsAppRecipient;
 use App\Support\WhatsAppCategories;
 use App\Support\WhatsAppPhone;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class WhatsAppNotificationService
@@ -214,8 +215,14 @@ class WhatsAppNotificationService
             ]
         );
 
-        if ($notification->wasRecentlyCreated && $notification->status === 'queued') {
-            SendWhatsAppNotification::dispatch($notification->id)->onQueue('whatsapp')->afterCommit();
+        if ($notification->status === 'queued') {
+            $lock = Cache::lock("whatsapp-notification-dispatch:{$notification->id}", 30);
+
+            if ($lock->get()) {
+                SendWhatsAppNotification::dispatch($notification->id)
+                    ->onQueue('whatsapp')
+                    ->afterCommit();
+            }
         }
 
         return $notification;
