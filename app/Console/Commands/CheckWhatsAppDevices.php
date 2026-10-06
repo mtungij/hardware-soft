@@ -2,10 +2,10 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\SendWhatsAppNotification;
 use App\Models\CompanyWhatsAppSetting;
 use App\Models\WhatsAppNotification;
 use App\Services\Gowa;
+use App\Services\WhatsAppNotificationService;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -33,8 +33,7 @@ class CheckWhatsAppDevices extends Command
                             ->where(fn ($query) => $query->whereNull('available_at')->orWhere('available_at', '<=', now()))
                             ->orderBy('id')->limit(100)->get()
                             ->each(function (WhatsAppNotification $notification): void {
-                                $notification->update(['status' => 'queued', 'queued_at' => now(), 'failure_reason' => null]);
-                                SendWhatsAppNotification::dispatch($notification->id)->onQueue('whatsapp');
+                                app(WhatsAppNotificationService::class)->resumePending($notification);
                             });
                     }
                 } catch (Throwable $exception) {

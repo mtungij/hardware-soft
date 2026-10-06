@@ -24,6 +24,7 @@ use App\Services\Gowa;
 use App\Services\WhatsAppDailySummaryService;
 use App\Services\WhatsAppMessageFactory;
 use App\Services\WhatsAppNotificationService;
+use App\Services\WhatsAppQueueInspector;
 use App\Services\WhatsAppStockAlertPdfService;
 use App\Services\WhatsAppStockAlertService;
 use App\Support\WhatsAppCategories;
@@ -305,6 +306,8 @@ test('branch recipients are excluded from another branch event', function () {
 
 test('device health command stores state and resumes eligible pending notifications', function () {
     Queue::fake();
+    // The queue fake cannot expose backend ready/delayed/reserved payloads.
+    $this->mock(WhatsAppQueueInspector::class)->shouldReceive('pendingNotificationIds')->andReturn([]);
     $company = whatsappCompany();
     $setting = whatsappSetting($company, ['last_device_state' => 'disconnected']);
     $recipient = whatsappRecipient($company);

@@ -14,7 +14,8 @@ use function Livewire\Volt\with;
 
 layout('layouts.app');
 uses([WithPagination::class]);
-state(['companyId' => null, 'status' => '', 'category' => '', 'date' => '']);
+state(['companyId' => null])->locked();
+state(['status' => '', 'category' => '', 'date' => '']);
 
 mount(function (): void {
     abort_unless(auth()->user()->can('whatsapp.view_logs'), 403);
@@ -43,6 +44,12 @@ $cancel = function (int $id): void {
 ?>
 <div>
     <x-page-header title="WhatsApp Notification Log" description="Queued is not sent. This log records the actual delivery lifecycle returned by GOWA." :breadcrumbs="['Dashboard'=>route('dashboard'),'WhatsApp'=>route('settings.whatsapp'),'Log'=>null]" />
+    @if (WhatsAppNotification::withoutGlobalScope(\App\Models\Scopes\CompanyScope::class)->where('company_id', $companyId)->where('status', 'queued')->where('attempts', 0)->where('queued_at', '<=', now()->subMinutes(5))->where(fn ($query) => $query->whereNull('available_at')->orWhere('available_at', '<=', now()))->exists())
+        <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100" role="status">
+            Some notifications have waited over five minutes without a delivery attempt. Check the WhatsApp queue worker and backlog. Rate limits and scheduled delays can also cause waiting; this does not prove the worker is stopped.
+        </div>
+    @endif
+    <p class="mb-3 text-sm text-slate-500">Queued: waiting for processing. Sending: delivery attempt in progress. Sent: GOWA accepted delivery. Attempts count actual delivery attempts, including GOWA number checks.</p>
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-3"><select wire:model.live="status" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All statuses</option>@foreach(['pending','queued','sending','sent','failed','cancelled','suppressed'] as $value)<option value="{{ $value }}">{{ ucfirst($value) }}</option>@endforeach</select><select wire:model.live="category" class="rounded-lg border-slate-200 dark:bg-navy-950"><option value="">All categories</option>@foreach(WhatsAppCategories::available($companyId) + ['system' => 'System'] as $value => $label)<option value="{{ $value }}">{{ $label }}</option>@endforeach</select><input type="date" wire:model.live="date" class="rounded-lg border-slate-200 dark:bg-navy-950"></div>
         <div class="overflow-x-auto"><table class="min-w-full text-left text-sm"><thead><tr class="border-b dark:border-slate-700"><th class="p-3">Created</th><th class="p-3">Type / Reference</th><th class="p-3">Recipient</th><th class="p-3">Device</th><th class="p-3">Status</th><th class="p-3">Attempts</th><th class="p-3">Queued</th><th class="p-3">Sent</th><th class="p-3">Failure / Suppression</th><th class="p-3"></th></tr></thead><tbody>@forelse($notifications as $row)<tr class="border-b align-top dark:border-slate-800"><td class="p-3 whitespace-nowrap">{{ $row->created_at->format('d M H:i') }}</td><td class="p-3"><div class="font-bold">{{ $row->notification_type === 'goods_received_grn' ? 'Goods Received / GRN' : str($row->notification_type)->replace('_',' ')->title() }}</div><div class="max-w-xs truncate text-xs text-slate-500">{{ $row->metadata['grn_number'] ?? $row->metadata['po_number'] ?? $row->idempotency_key }}</div></td><td class="p-3">{{ $row->recipient?->name ?: $row->phone }}<div class="text-xs text-slate-500">{{ $row->branch?->name }}</div></td><td class="p-3 font-mono text-xs">{{ $row->device_id ?: '-' }}</td><td class="p-3 font-bold">{{ ucfirst($row->status) }}</td><td class="p-3">{{ $row->attempts }}</td><td class="p-3 whitespace-nowrap">{{ $row->queued_at?->format('d M H:i') ?: '-' }}</td><td class="p-3 whitespace-nowrap">{{ $row->sent_at?->format('d M H:i') ?: '-' }}</td><td class="p-3 max-w-xs text-xs text-red-600">{{ $row->failure_reason }}</td><td class="p-3"><div class="flex gap-2">@if(in_array($row->status,['failed','suppressed']))<button wire:click="retry({{ $row->id }})" class="text-xs font-black text-build-orange">Retry</button>@endif @if(in_array($row->status,['pending','queued','failed']))<button wire:click="cancel({{ $row->id }})" class="text-xs font-black text-red-600">Cancel</button>@endif</div></td></tr>@empty<tr><td colspan="10" class="p-8 text-center text-slate-500">No WhatsApp notifications found.</td></tr>@endforelse</tbody></table></div>

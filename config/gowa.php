@@ -7,4 +7,6 @@ return [
     'timeout' => (int) env('GOWA_TIMEOUT', 30),
     'connect_timeout' => (int) env('GOWA_CONNECT_TIMEOUT', 10),
     'number_check_ttl' => (int) env('GOWA_NUMBER_CHECK_TTL', 86400),
+    'recovery_enabled' => (bool) env('WHATSAPP_QUEUE_RECOVERY_ENABLED', false),
+    'recovery_company_id' => (int) env('WHATSAPP_QUEUE_RECOVERY_COMPANY_ID', 0),
 ];

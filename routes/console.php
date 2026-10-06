@@ -55,3 +55,6 @@ Schedule::command('whatsapp:check-devices')->everyFiveMinutes()->withoutOverlapp
 Schedule::command('whatsapp:daily-summary')->everyMinute()->withoutOverlapping();
 Schedule::command('whatsapp:stock-alerts')->everyThirtyMinutes()->withoutOverlapping();
 Schedule::command('whatsapp:debt-reminders')->everyMinute()->withoutOverlapping();
+Schedule::command('whatsapp:recover-queued --dispatch --company='.(int) config('gowa.recovery_company_id'))
+    ->everyFiveMinutes()->withoutOverlapping()
+    ->when(fn () => config('gowa.recovery_enabled') && config('gowa.recovery_company_id') > 0);

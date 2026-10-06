@@ -11,8 +11,8 @@ use App\Models\WhatsAppNotification;
 use App\Models\WhatsAppRecipient;
 use App\Support\WhatsAppCategories;
 use App\Support\WhatsAppPhone;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class WhatsAppNotificationService
@@ -141,27 +141,94 @@ class WhatsAppNotificationService
         });
     }
 
-    public function retry(WhatsAppNotification $notification): void
+    public function retry(WhatsAppNotification $notification): bool
     {
-        if (in_array($notification->status, ['sent', 'sending'], true)) {
-            return;
-        }
+        return DB::transaction(function () use ($notification): bool {
+            $notification = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $notification->company_id)->lockForUpdate()->findOrFail($notification->id);
+            if (in_array($notification->status, ['sent', 'sending', 'cancelled'], true)) {
+                return false;
+            }
 
-        if (! WhatsAppCategories::allows($notification->company_id, $notification->category)) {
-            $notification->update(['status' => 'suppressed', 'failure_reason' => 'Company manufacturing module is disabled.']);
+            if (! WhatsAppCategories::allows($notification->company_id, $notification->category)) {
+                $notification->update(['status' => 'suppressed', 'failure_reason' => 'Company manufacturing module is disabled.']);
 
-            return;
-        }
+                return false;
+            }
 
-        $notification->update([
-            'status' => 'queued',
-            'failure_reason' => null,
-            'failed_at' => null,
-            'available_at' => now(),
-            'queued_at' => now(),
-        ]);
+            if ($notification->status === 'queued') {
+                $ids = app(WhatsAppQueueInspector::class)->pendingNotificationIds();
+                if ($ids === null || in_array($notification->id, $ids, true)) {
+                    return false;
+                }
+            }
 
-        SendWhatsAppNotification::dispatch($notification->id)->onQueue('whatsapp')->afterCommit();
+            $notification->update([
+                'status' => 'queued',
+                'failure_reason' => null,
+                'failed_at' => null,
+                'available_at' => now(),
+                'queued_at' => now(),
+            ]);
+
+            SendWhatsAppNotification::dispatch($notification->id)->onQueue('whatsapp')->afterCommit();
+
+            return true;
+        });
+    }
+
+    public function resumePending(WhatsAppNotification $notification): void
+    {
+        DB::transaction(function () use ($notification): void {
+            $notification = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $notification->company_id)->lockForUpdate()->findOrFail($notification->id);
+            if ($notification->status !== 'pending' || $notification->available_at?->isFuture()) {
+                return;
+            }
+            $ids = app(WhatsAppQueueInspector::class)->pendingNotificationIds();
+            if ($ids === null || in_array($notification->id, $ids, true)) {
+                return;
+            }
+            $this->retry($notification);
+        });
+    }
+
+    public function recoverQueued(int $companyId, int $notificationId, bool $dispatch = false): string
+    {
+        return DB::transaction(function () use ($companyId, $notificationId, $dispatch): string {
+            $notification = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $companyId)->lockForUpdate()->find($notificationId);
+            if (! $notification || $notification->status !== 'queued' || $notification->attempts !== 0
+                || $notification->notification_type === 'debug_after_commit'
+                || ! $notification->queued_at || $notification->queued_at->gt(now()->subMinutes(5))
+                || $notification->created_at->lt(now()->subHour()) || $notification->available_at?->isFuture()) {
+                return 'ineligible';
+            }
+            $setting = CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $companyId)->first();
+            if (! $setting?->enabled || $setting->sending_paused || $setting->last_device_state !== 'logged_in'
+                || blank($setting->device_id) || $setting->device_id !== $notification->device_id
+                || ! $setting->categoryEnabled($notification->category)
+                || ! WhatsAppCategories::allows($companyId, $notification->category)) {
+                return 'ineligible';
+            }
+            if ($notification->recipient_id) {
+                $recipient = WhatsAppRecipient::withoutGlobalScopes()->where('company_id', $companyId)->find($notification->recipient_id);
+                if (! $recipient?->accepts($notification->category, $notification->branch_id) || $recipient->phone !== $notification->phone) {
+                    return 'ineligible';
+                }
+            }
+            $ids = app(WhatsAppQueueInspector::class)->pendingNotificationIds();
+            if ($ids === null) {
+                return 'unverified';
+            }
+            if (in_array($notification->id, $ids, true)) {
+                return 'job-exists';
+            }
+            if (! $dispatch) {
+                return 'eligible';
+            }
+
+            // Refresh the eligibility timestamp while holding the row lock. A
+            // concurrent recovery cannot dispatch again after this commit.
+            return $this->retry($notification) ? 'dispatched' : 'unverified';
+        });
     }
 
     private function create(
@@ -218,7 +285,7 @@ class WhatsAppNotificationService
             ]
         );
 
-        if ($notification->status === 'queued') {
+        if ($notification->wasRecentlyCreated && $notification->status === 'queued') {
             $lock = Cache::lock("whatsapp-notification-dispatch:{$notification->id}", 30);
 
             if ($lock->get()) {

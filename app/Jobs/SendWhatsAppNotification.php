@@ -17,6 +17,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
@@ -30,7 +31,24 @@ class SendWhatsAppNotification implements ShouldQueue
 
     public int $timeout = 60;
 
-    public function __construct(public int $notificationId) {}
+    public int $maxExceptions = 3;
+
+    public bool $failOnTimeout = true;
+
+    public int $retryDeadline;
+
+    public function __construct(public int $notificationId)
+    {
+        $this->onQueue('whatsapp');
+        $this->retryDeadline = now()->addDay()->timestamp;
+    }
+
+    // A release for quiet hours, throttling or overlap is not a failed send.
+    // Laravel uses this fixed deadline instead of the reservation attempt limit.
+    public function retryUntil(): CarbonImmutable
+    {
+        return CarbonImmutable::createFromTimestamp($this->retryDeadline ?? now()->addDay()->timestamp);
+    }
 
     public function backoff(): array
     {
@@ -48,7 +66,13 @@ class SendWhatsAppNotification implements ShouldQueue
     {
         $notification = WhatsAppNotification::withoutGlobalScopes()->find($this->notificationId);
 
-        if (! $notification || in_array($notification->status, WhatsAppNotification::TERMINAL_STATUSES, true)) {
+        if (! $notification || ! in_array($notification->status, ['queued', 'pending'], true)) {
+            return;
+        }
+
+        if ($notification->notification_type === 'debug_after_commit') {
+            $this->suppress($notification, 'Diagnostic notification is not eligible for delivery.');
+
             return;
         }
 
@@ -67,20 +91,20 @@ class SendWhatsAppNotification implements ShouldQueue
         }
 
         if ($setting->last_device_state !== 'logged_in') {
-            $notification->update(['status' => 'pending', 'failure_reason' => 'WhatsApp device is not connected.']);
+            $this->defer($notification, ['status' => 'pending', 'failure_reason' => 'WhatsApp device is not connected.']);
 
             return;
         }
 
         if ($delay = $this->quietHoursDelay($setting)) {
-            $notification->update(['status' => 'pending', 'available_at' => now()->addSeconds($delay)]);
+            $this->defer($notification, ['status' => 'pending', 'available_at' => now()->addSeconds($delay)]);
             $this->release($delay);
 
             return;
         }
 
         if ($delay = $this->throttleDelay($setting)) {
-            $notification->update(['status' => 'queued', 'available_at' => now()->addSeconds($delay)]);
+            $this->defer($notification, ['status' => 'queued', 'available_at' => now()->addSeconds($delay)]);
             $this->release($delay);
 
             return;
@@ -90,18 +114,28 @@ class SendWhatsAppNotification implements ShouldQueue
             return;
         }
 
-        $numberCacheKey = 'whatsapp:number:'.hash('sha256', $setting->device_id.'|'.$notification->phone);
-        $isOnWhatsApp = Cache::remember($numberCacheKey, (int) config('gowa.number_check_ttl', 86400), fn (): bool => $gowa->isOnWhatsApp($setting->device_id, $notification->phone));
+        $claimed = DB::transaction(function () use ($notification): bool {
+            $current = WhatsAppNotification::withoutGlobalScopes()->where('company_id', $notification->company_id)->lockForUpdate()->find($notification->id);
+            if (! $current || ! in_array($current->status, ['queued', 'pending'], true)) {
+                return false;
+            }
+            $current->update(['status' => 'sending', 'attempts' => $current->attempts + 1, 'failure_reason' => null]);
 
-        if (! $isOnWhatsApp) {
-            $this->suppress($notification, 'Recipient number is not registered on WhatsApp.');
-
+            return true;
+        });
+        if (! $claimed) {
             return;
         }
-
-        $notification->update(['status' => 'sending', 'attempts' => $notification->attempts + 1, 'failure_reason' => null]);
+        $notification->refresh();
 
         try {
+            $numberCacheKey = 'whatsapp:number:'.hash('sha256', $setting->device_id.'|'.$notification->phone);
+            $isOnWhatsApp = Cache::remember($numberCacheKey, (int) config('gowa.number_check_ttl', 86400), fn (): bool => $gowa->isOnWhatsApp($setting->device_id, $notification->phone));
+            if (! $isOnWhatsApp) {
+                $this->suppress($notification, 'Recipient number is not registered on WhatsApp.');
+
+                return;
+            }
             $message = $notification->resolvedDeliveryMessage();
             $response = match ($notification->attachment_type) {
                 'file' => $gowa->sendFile($setting->device_id, $notification->phone, $this->attachmentPath($notification), $message),
@@ -109,15 +143,8 @@ class SendWhatsAppNotification implements ShouldQueue
                 default => $gowa->sendText($setting->device_id, $notification->phone, $message),
             };
 
-            $notification->update([
-                'status' => 'sent',
-                'sent_at' => now(),
-                'message_id' => data_get($response, 'results.message_id'),
-                'failed_at' => null,
-            ]);
-            Cache::put('whatsapp:last-send:'.hash('sha256', $setting->device_id), now()->timestamp, 3600);
-        } catch (RequestException $exception) {
-            $status = $exception->response?->status();
+        } catch (Throwable $exception) {
+            $status = $exception instanceof RequestException ? $exception->response?->status() : null;
             $notification->update(['status' => 'queued', 'failure_reason' => $this->safeFailure($exception)]);
 
             if ($status === 429 || $status === null || $status >= 500) {
@@ -125,16 +152,29 @@ class SendWhatsAppNotification implements ShouldQueue
             }
 
             $notification->update(['status' => 'failed', 'failed_at' => now()]);
+
+            return;
         }
+
+        // Once GOWA accepts the send, a local bookkeeping/cache failure must
+        // never reset it to queued and trigger another recipient send.
+        $notification->update([
+            'status' => 'sent',
+            'sent_at' => now(),
+            'message_id' => data_get($response, 'results.message_id'),
+            'failed_at' => null,
+        ]);
+        Cache::put('whatsapp:last-send:'.hash('sha256', $setting->device_id), now()->timestamp, 3600);
     }
 
     public function failed(?Throwable $exception): void
     {
-        WhatsAppNotification::withoutGlobalScopes()->whereKey($this->notificationId)->update([
-            'status' => 'failed',
-            'failed_at' => now(),
-            'failure_reason' => $exception ? $this->safeFailure($exception) : 'WhatsApp delivery exhausted all retries.',
-        ]);
+        WhatsAppNotification::withoutGlobalScopes()->whereKey($this->notificationId)
+            ->whereIn('status', ['queued', 'pending', 'sending'])->update([
+                'status' => 'failed',
+                'failed_at' => now(),
+                'failure_reason' => $exception ? $this->safeFailure($exception) : 'WhatsApp delivery exhausted all retries.',
+            ]);
     }
 
     private function quietHoursDelay(CompanyWhatsAppSetting $setting): ?int
@@ -259,7 +299,15 @@ class SendWhatsAppNotification implements ShouldQueue
 
     private function suppress(WhatsAppNotification $notification, string $reason): void
     {
-        $notification->update(['status' => 'suppressed', 'failure_reason' => $reason, 'failed_at' => now()]);
+        WhatsAppNotification::withoutGlobalScopes()->where('company_id', $notification->company_id)->whereKey($notification->id)
+            ->whereIn('status', ['queued', 'pending', 'sending'])
+            ->update(['status' => 'suppressed', 'failure_reason' => $reason, 'failed_at' => now()]);
+    }
+
+    private function defer(WhatsAppNotification $notification, array $attributes): void
+    {
+        WhatsAppNotification::withoutGlobalScopes()->where('company_id', $notification->company_id)->whereKey($notification->id)
+            ->whereIn('status', ['queued', 'pending'])->update($attributes);
     }
 
     private function safeFailure(Throwable $exception): string

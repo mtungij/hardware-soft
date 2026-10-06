@@ -21,11 +21,33 @@ Do not put a global device ID in the environment. Each company configures its ow
 WhatsApp delivery uses the `whatsapp` queue on the application's configured queue connection. Production must run a persistent worker and Laravel scheduler, for example:
 
 ```bash
-php artisan queue:work --queue=whatsapp,default --tries=3 --timeout=90
+php artisan queue:work database --queue=whatsapp,default --sleep=3 --tries=3 --timeout=90
 php artisan schedule:work
 ```
 
-Use the repository/deployment platform's existing process supervisor to keep both processes running. The database queue driver is the repository default, so queued notifications survive web-request completion and worker restarts.
+Locally, `composer dev` starts a queue listener for `whatsapp,default` alongside the web/Vite processes. It uses the configured connection, so Redis is not required when `QUEUE_CONNECTION=database`. Run either this launcher or the standalone worker above. Starting only `php artisan serve` does not start a worker. A default-only worker does not consume WhatsApp jobs.
+
+Production process definitions are in `deploy/supervisor/hardex-queue.conf`. Adjust `/var/www/hardex`, `/usr/bin/php`, and `www-data` to match the host, then install the file in `/etc/supervisor/conf.d/` and run `supervisorctl reread` followed by `supervisorctl update`. Both worker and scheduler autostart and restart on failure. Run one scheduler mechanism; omit the scheduler program if cron already invokes it. The production worker omits an explicit connection and therefore respects `QUEUE_CONNECTION` (database or Redis). Use a shared persistent cache for worker locks/rate limits on multi-host deployments.
+
+Set `DB_QUEUE_RETRY_AFTER=120` for database, or `REDIS_QUEUE_RETRY_AFTER=120` for Redis. The reservation timeout must exceed the worker's 90-second timeout. The WhatsApp job itself has a 60-second timeout, a fixed 24-hour retry deadline, and at most three thrown delivery exceptions. Quiet-hour, device-lock and rate-limit releases do not consume that exception budget. Existing serialized jobs retain their original retry policy; do not retry historical failed jobs indiscriminately.
+
+After configuration changes, refresh the deployment configuration cache and run `php artisan queue:restart`. After code changes, restart existing long-lived workers so they load the new code. Do not activate a worker against an unreviewed historical backlog: it will process already-enqueued jobs. `debug_after_commit` notifications are blocked at delivery, even if their jobs already exist.
+
+### Missing-job recovery
+
+Inspect without changing or delivering messages:
+
+```bash
+php artisan whatsapp:recover-queued --company=3
+```
+
+After reviewing the eligible records, use the same command with `--dispatch`. It handles up to 100 records per run, only for that company: queued for at least five minutes, created within the last hour, zero delivery attempts, available now, current enabled/unpaused company/device/category/recipient settings. It excludes debug, failed, sent, sending, suppressed, cancelled, attempted, scheduled-future and historical records. It uses the existing retry/after-commit dispatch path.
+
+Database ready/delayed/reserved jobs and Redis ready/delayed/reserved lists are checked before dispatch. An existing job is never replaced or duplicated. Unknown drivers, unavailable backends, unreadable payloads or a scan above 1,000 jobs fail closed. A row lock and refreshed queue timestamp protect concurrent recovery. Event idempotency only dispatches newly-created outbox rows; workers atomically claim eligible rows, and sent/cancelled/suppressed/failed rows are not delivered by duplicate jobs. No `queue:retry all` is needed.
+
+Automatic recovery is disabled by default. To explicitly enable it for a reviewed company, set `WHATSAPP_QUEUE_RECOVERY_ENABLED=true` and `WHATSAPP_QUEUE_RECOVERY_COMPANY_ID=<company-id>`. The scheduler checks that company's recent eligible rows every five minutes. Repeat manual recovery for other companies as needed. Drain/review the old backend before switching connections; recovery can inspect only the active connection.
+
+The log warns when available queued rows have waited over five minutes with zero attempts; this is a backlog indicator, not proof that a worker is stopped. Attempts increment immediately before the GOWA number check/send phase, never for worker reservations, throttle releases, or recovery. Timeout/exhausted exceptions mark the notification failed with a reason and timestamp. Unexpected termination during a send can leave an ambiguous `sending` result: recovery deliberately does not resend it. GOWA does not provide a documented provider-side idempotency guarantee, so delivery after an ambiguous network failure cannot guarantee exactly once.
 
 Scheduled tasks:
 
