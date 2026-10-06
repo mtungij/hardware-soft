@@ -1,12 +1,15 @@
 <?php
 
+use App\Models\Product;
 use App\Models\ProductLocationSetting;
 use App\Models\Purchase;
 use App\Models\PurchaseCostType;
-use App\Services\PurchaseCostBreakdownService;
 use App\Models\StockLocation;
+use App\Services\GoodsReceiptCostingService;
 use App\Services\InventoryService;
+use App\Services\PurchaseCostBreakdownService;
 use App\Support\InventorySettings;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 use function Livewire\Volt\layout;
@@ -15,9 +18,9 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
+state(['purchase' => null, 'purchase_id' => null])->locked();
+
 state([
-    'purchase' => null,
-    'purchase_id' => null,
     'grn_number' => '',
     'received_date' => '',
     'supplier_delivery_note_number' => '',
@@ -60,6 +63,8 @@ mount(function (Purchase $purchase, InventoryService $inventory) {
 
         $this->lines[$item->id] = [
             'quantity' => '0',
+            'markup_percentage' => '20',
+            'preview_selling_price' => auth()->user()->can('products.view_selling_price') ? (string) ($item->product?->selling_price ?? 0) : '',
             'stock_location_id' => (string) $locationId,
             'batch_number' => '',
             'expiry_date' => '',
@@ -140,8 +145,6 @@ $receiveAll = function () {
 $summary = function (): array {
     $purchase = Purchase::query()->with('items')->findOrFail($this->purchase_id);
     $selectedLines = 0;
-    $quantity = 0;
-    $cost = 0;
     $remainingAfter = 0;
     $locations = collect();
 
@@ -155,33 +158,56 @@ $summary = function (): array {
         }
 
         $selectedLines++;
-        $quantity += $lineQuantity;
-        $cost += $lineQuantity * (float) $item->cost_price;
         $locations->push((int) ($line['stock_location_id'] ?? 0));
     }
 
-    $additional = collect($this->additional_costs)->sum(fn ($row) => is_numeric($row['amount'] ?? null) ? (float) $row['amount'] : 0);
+    $additionalCents = collect($this->additional_costs)->sum(fn ($row) => is_numeric($row['amount'] ?? null) ? max(0, (int) round((float) $row['amount'] * 100)) : 0);
+    $costing = app(GoodsReceiptCostingService::class)->calculate($purchase->items, $this->lines, $additionalCents);
 
-    return [
-        'additional' => $additional,
-        'landed' => $cost + $additional,
+    return $costing + [
         'selected_lines' => $selectedLines,
-        'quantity' => $quantity,
-        'cost' => $cost,
         'locations' => $locations->filter()->unique()->count(),
         'remaining_after' => $remainingAfter,
     ];
 };
 
+$canApplySuggestedPrice = fn () => auth()->user()?->can('products.edit')
+    && auth()->user()?->can('products.edit_selling_price')
+    && auth()->user()?->can('products.view_selling_price');
+
+$applySuggestedPrice = function (int $itemId) {
+    abort_unless($this->canApplySuggestedPrice(), 403);
+    DB::transaction(function () use ($itemId) {
+        $purchase = Purchase::query()->where('company_id', auth()->user()->company_id)->lockForUpdate()->findOrFail($this->purchase_id);
+        abort_if(in_array($purchase->status, ['received', 'cancelled'], true), 403);
+        $item = $purchase->items()->where('company_id', $purchase->company_id)->lockForUpdate()->findOrFail($itemId);
+        $this->validateReceiving();
+        $this->validate(["lines.{$itemId}.markup_percentage" => ['required', 'numeric', 'min:0', 'max:10000', 'decimal:0,2']]);
+        if ((float) ($this->lines[$itemId]['quantity'] ?? 0) > $item->remainingQuantity()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(["lines.{$itemId}.quantity" => 'Quantity cannot exceed remaining quantity.']);
+        }
+        $costing = $this->summary();
+        if (! isset($costing['rows'][$itemId])) {
+            throw \Illuminate\Validation\ValidationException::withMessages(["lines.{$itemId}.quantity" => 'Enter a received quantity before applying a price.']);
+        }
+        $product = Product::query()->where('company_id', $purchase->company_id)->lockForUpdate()->findOrFail($item->product_id);
+        $price = $costing['rows'][$itemId]['suggested_selling_price'];
+        $product->update(['selling_price' => $price]);
+        $this->lines[$itemId]['preview_selling_price'] = (string) $price;
+    });
+    $this->purchase = $this->purchase->fresh(['items.product', 'items.purchaseUnit.measurementType', 'items.stockUnit', 'supplier', 'branch', 'creator']);
+    $this->dispatch('hardex-notify', message: 'Suggested selling price applied.', tone: 'success');
+};
+
 $locationBreakdown = function () {
     $locations = $this->availableReceivingLocations()->keyBy('id');
 
-    return collect($this->lines)
-        ->filter(fn ($line) => (float) ($line['quantity'] ?? 0) > 0)
-        ->groupBy(fn ($line) => (int) ($line['stock_location_id'] ?? 0))
+    return collect($this->summary()['rows'])
+        ->map(fn ($row, $itemId) => $row + ['stock_location_id' => (int) ($this->lines[$itemId]['stock_location_id'] ?? 0)])
+        ->groupBy('stock_location_id')
         ->map(fn ($rows, $locationId) => [
             'name' => $locations->get((int) $locationId)?->name ?? 'Unknown',
-            'quantity' => $rows->sum(fn ($line) => (float) ($line['quantity'] ?? 0)),
+            'quantity' => $rows->sum('stock_quantity'),
         ])
         ->values();
 };
@@ -209,6 +235,8 @@ $validateReceiving = function () {
         'additional_costs.*.payment_method' => ['nullable', 'string', 'max:100'],
         'additional_costs.*.payment_reference' => ['nullable', 'string', 'max:255'],
         'additional_costs.*.notes' => ['nullable', 'string', 'max:1000'],
+        'lines.*.markup_percentage' => ['nullable', 'numeric', 'min:0', 'max:10000', 'decimal:0,2'],
+        'lines.*.preview_selling_price' => ['nullable', 'numeric', 'min:0'],
         'lines.*.quantity' => ['nullable', 'numeric', 'min:0'],
         'lines.*.stock_location_id' => ['required', Rule::in($locationIds)],
         'lines.*.notes' => ['nullable', 'string', 'max:1000'],
@@ -372,7 +400,7 @@ $postReceipt = function (InventoryService $inventory) {
                             <th class="px-3 py-3 text-right">Remaining Quantity</th>
                             <th class="px-3 py-3">Received Quantity</th>
                             <th class="px-3 py-3">Stock Increase</th>
-                            <th class="px-3 py-3">Supplier Unit Cost</th>
+                            <th class="px-3 py-3">Supplier Buying Price</th>
                             <th class="px-3 py-3">Receive Into Location</th>
                             @if ($showBatchColumn)
                                 <th class="px-3 py-3">Batch Number</th>
@@ -411,7 +439,14 @@ $postReceipt = function (InventoryService $inventory) {
                                     {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}
                                 </td>
                                 <td class="px-3 py-3">
-                                    TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }}
+                                    <p>TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }} / purchase unit</p>
+                                    @if ($costRow = $summary['rows'][$item->id] ?? null)
+                                        <dl class="mt-2 space-y-1 text-xs">
+                                            <dt>Supplier Buying Price / Base Unit</dt><dd>TZS {{ \App\Support\NumberFormatter::money($costRow['supplier_base_unit_cost']) }}</dd>
+                                            <dt>Landed Cost / Unit</dt><dd>TZS {{ \App\Support\NumberFormatter::money($costRow['landed_cost_per_unit']) }}</dd>
+                                            <dt class="font-black">Final Unit Cost / Base Unit</dt><dd class="font-black">TZS {{ \App\Support\NumberFormatter::money($costRow['final_unit_cost']) }}</dd>
+                                        </dl>
+                                    @endif
                                 </td>
                                 <td class="px-3 py-3">
                                     <select wire:model="lines.{{ $item->id }}.stock_location_id" class="w-52 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
@@ -491,13 +526,49 @@ $postReceipt = function (InventoryService $inventory) {
                 @endforeach
             </div>
 
+            <p class="text-sm text-slate-500">Additional costs are shared by actual received base units. Supplier prices stay separate. Line allocations reconcile to the receipt total, including cent rounding.</p>
+            @if (auth()->user()->can('products.view_selling_price'))
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach ($purchase->items as $item)
+                        @if ($costRow = $summary['rows'][$item->id] ?? null)
+                            <div wire:key="pricing-{{ $item->id }}" class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                                <h3 class="font-black">{{ $item->product?->displayName() }}</h3>
+                                <p class="text-xs text-slate-500">Prices and profit below are per {{ $item->product?->sellingUnit?->short_name ?: $item->stockUnit?->short_name ?: 'selling unit' }}.</p>
+                                <p>Final Unit Cost: TZS {{ \App\Support\NumberFormatter::money($costRow['final_selling_unit_cost']) }}</p>
+                                <label class="mt-3 block text-sm font-bold">Markup % (Custom)
+                                    <input wire:model.live.debounce.300ms="lines.{{ $item->id }}.markup_percentage" type="number" min="0" max="10000" step="0.01" class="w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950">
+                                </label>
+                                @error("lines.{$item->id}.markup_percentage") <p class="text-red-600">{{ $message }}</p> @enderror
+                                <div class="my-2 flex flex-wrap gap-2">
+                                    @foreach ([10, 15, 20, 25, 30] as $preset)
+                                        <button type="button" wire:click="$set('lines.{{ $item->id }}.markup_percentage', '{{ $preset }}')" class="rounded border px-2 py-1 text-xs">{{ $preset }}%</button>
+                                    @endforeach
+                                </div>
+                                <p class="font-bold">Suggested Selling Price: TZS {{ \App\Support\NumberFormatter::money($costRow['suggested_selling_price'] ?? 0) }}</p>
+                                <p class="text-xs text-slate-500">Advisory only. Receiving does not update product prices.</p>
+                                @if ($this->canApplySuggestedPrice())
+                                    <button type="button" wire:click="applySuggestedPrice({{ $item->id }})" wire:loading.attr="disabled" class="my-2 rounded-lg bg-build-orange px-3 py-2 font-bold text-white">Apply Suggested Price</button>
+                                @endif
+                                <label class="block text-sm font-bold">Selling Price for Profit Preview
+                                    <input wire:model.live.debounce.300ms="lines.{{ $item->id }}.preview_selling_price" type="number" min="0" step="0.01" class="w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950">
+                                </label>
+                                @error("lines.{$item->id}.preview_selling_price") <p class="text-red-600">{{ $message }}</p> @enderror
+                                <p>Profit Per Unit: TZS {{ \App\Support\NumberFormatter::money($costRow['profit_per_unit']) }}</p>
+                                <p>Profit Margin: {{ $costRow['profit_margin'] }}%</p>
+                            </div>
+                        @endif
+                    @endforeach
+                </div>
+            @endif
+
             <div class="grid gap-3 md:grid-cols-5">
                 @foreach ([
                     'Selected Products' => number_format($summary['selected_lines']),
-                    'Quantity to Receive' => \App\Support\NumberFormatter::quantity($summary['quantity']),
+                    'Total Received Qty (Base Units)' => \App\Support\NumberFormatter::quantity($summary['quantity']),
                     'Purchase Goods Value' => 'TZS '.\App\Support\NumberFormatter::money($summary['cost']),
                     'Additional Costs' => 'TZS '.\App\Support\NumberFormatter::money($summary['additional']),
-                    'Total Landed Cost' => 'TZS '.\App\Support\NumberFormatter::money($summary['landed']),
+                    'Landed Cost / Unit' => 'TZS '.\App\Support\NumberFormatter::money($summary['landed_per_unit']),
+                    'Total Landed Value' => 'TZS '.\App\Support\NumberFormatter::money($summary['landed']),
                     'Receiving Locations' => number_format($summary['locations']),
                     'Remaining After Receipt' => \App\Support\NumberFormatter::quantity($summary['remaining_after']),
                 ] as $label => $value)
@@ -522,10 +593,10 @@ $postReceipt = function (InventoryService $inventory) {
                 <p><span class="font-bold">Purchase:</span> {{ $purchase->reference_number }}</p>
                 <p><span class="font-bold">Supplier:</span> {{ $purchase->supplier?->name }}</p>
                 <p><span class="font-bold">Receiving Date:</span> {{ $received_date }}</p>
-                <p><span class="font-bold">Total Quantity:</span> {{ \App\Support\NumberFormatter::quantity($summary['quantity']) }}</p>
+                <p><span class="font-bold">Total Received Qty (Base Units):</span> {{ \App\Support\NumberFormatter::quantity($summary['quantity']) }}</p>
                 <p><span class="font-bold">Goods Value:</span> TZS {{ \App\Support\NumberFormatter::money($summary['cost']) }}</p>
                 <p><span class="font-bold">Additional Costs:</span> TZS {{ \App\Support\NumberFormatter::money($summary['additional']) }}</p>
-                <p><span class="font-bold">Total Landed Cost:</span> TZS {{ \App\Support\NumberFormatter::money($summary['landed']) }}</p>
+                <p><span class="font-bold">Total Landed Value:</span> TZS {{ \App\Support\NumberFormatter::money($summary['landed']) }}</p>
             </div>
             <div class="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 @foreach ($this->locationBreakdown() as $row)

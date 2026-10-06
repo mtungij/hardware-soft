@@ -1177,22 +1177,20 @@ class InventoryService
                             'notes' => trim((string) ($raw['notes'] ?? '')) ?: null,
                         ];
                     }
-                    $goodsCents = 0;
+                    foreach ($receivable as $line) {
+                        $itemId = $line['item']->id;
+                        Validator::make(is_array($receivedLines[$itemId] ?? null) ? $receivedLines[$itemId] : [], [
+                            'markup_percentage' => ['nullable', 'numeric', 'min:0', 'max:10000', 'decimal:0,2'],
+                        ])->validate();
+                    }
+                    $costing = app(GoodsReceiptCostingService::class)->calculate(
+                        $items, collect($receivable)->mapWithKeys(fn ($line) => [
+                            $line['item']->id => array_merge(is_array($receivedLines[$line['item']->id] ?? null) ? $receivedLines[$line['item']->id] : [], ['quantity' => $line['quantity']]),
+                        ])->all(), $additionalCents,
+                    );
+                    $goodsCents = (int) round($costing['cost'] * 100);
                     foreach ($receivable as &$line) {
-                        $line['goods_cents'] = (int) round($line['quantity'] * $line['unit_cost'] * 100);
-                        $goodsCents += $line['goods_cents'];
-                    }
-                    unset($line);
-                    if ($additionalCents > 0 && $goodsCents <= 0) {
-                        throw ValidationException::withMessages(['additional_costs' => 'A positive goods value is required to allocate additional costs.']);
-                    }
-                    $allocatedCents = 0;
-                    foreach ($receivable as $index => &$line) {
-                        $share = $index === count($receivable) - 1
-                            ? $additionalCents - $allocatedCents
-                            : min($additionalCents - $allocatedCents, (int) round($additionalCents * $line['goods_cents'] / max(1, $goodsCents)));
-                        $line['allocated_cents'] = $share;
-                        $allocatedCents += $share;
+                        $line = array_merge($line, $costing['rows'][$line['item']->id]);
                     }
                     unset($line);
 
@@ -1277,6 +1275,10 @@ class InventoryService
                             'landed_line_cost' => $landedTotal,
                             'landed_unit_cost' => round($landedTotal / $quantity, 4),
                             'landed_base_unit_cost' => $stockUnitCost,
+                            'markup_percentage' => $line['markup_percentage'],
+                            'suggested_selling_price' => $line['suggested_selling_price'],
+                            'suggested_selling_unit_code_snapshot' => $line['markup_percentage'] === null ? null : ($item->product?->sellingUnit?->short_name ?: $item->product?->unit?->short_name),
+                            'suggested_selling_conversion_factor' => $line['markup_percentage'] === null ? null : $item->product?->saleConversionFactor(),
                             'batch_number' => $line['batch_number'],
                             'expiry_date' => $line['expiry_date'],
                             'notes' => $line['notes'],

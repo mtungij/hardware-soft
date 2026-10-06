@@ -34,6 +34,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'landed_line_cost',
     'landed_unit_cost',
     'landed_base_unit_cost',
+    'markup_percentage',
+    'suggested_selling_price',
+    'suggested_selling_unit_code_snapshot',
+    'suggested_selling_conversion_factor',
     'batch_number',
     'expiry_date',
     'notes',
@@ -93,6 +97,9 @@ class GoodsReceivingNoteItem extends Model
             'landed_line_cost' => 'decimal:2',
             'landed_unit_cost' => 'decimal:4',
             'landed_base_unit_cost' => 'decimal:6',
+            'markup_percentage' => 'decimal:2',
+            'suggested_selling_price' => 'decimal:2',
+            'suggested_selling_conversion_factor' => 'decimal:6',
             'expiry_date' => 'date',
         ];
     }

@@ -14,10 +14,12 @@ use App\Models\User;
 use App\Services\InventoryService;
 use App\Services\PurchaseCostBreakdownService;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
+use Spatie\Permission\Models\Role;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
@@ -269,7 +271,7 @@ test('receipt landed costs are snapshotted and valued separately from supplier p
         ->and((float) $receipt->items()->first()->landed_unit_cost)->toBe(17000.0);
 });
 
-test('additional cost allocation follows received goods value and each partial receipt has its own cost', function () {
+test('additional cost allocation follows received base quantity and each partial receipt has its own cost', function () {
     [$purchase, $first] = grnPurchase($this->branch, $this->admin, 100);
     $first->update(['cost_price' => 15000, 'line_total' => 1500000]);
     $secondProduct = Product::whereKeyNot($first->product_id)->firstOrFail();
@@ -289,8 +291,8 @@ test('additional cost allocation follows received goods value and each partial r
         $second->id => ['quantity' => 100, 'stock_location_id' => $this->location->id],
     ], today()->toDateString(), $this->admin->id,
         header: ['additional_costs' => [['type_id' => $transport->id, 'amount' => '500000']]]);
-    expect((float) $receipt->items()->where('purchase_item_id', $first->id)->first()->allocated_additional_cost)->toBe(150000.0)
-        ->and((float) $receipt->items()->where('purchase_item_id', $second->id)->first()->allocated_additional_cost)->toBe(350000.0);
+    expect((float) $receipt->items()->where('purchase_item_id', $first->id)->first()->allocated_additional_cost)->toBe(250000.0)
+        ->and((float) $receipt->items()->where('purchase_item_id', $second->id)->first()->allocated_additional_cost)->toBe(250000.0);
 
     [$partialPurchase, $partialItem] = grnPurchase($this->branch, $this->admin, 100);
     $partialItem->update(['cost_price' => 15000]);
@@ -378,4 +380,83 @@ test('receiver can add a configured cost type and post additional costs from the
     expect((float) $receipt->goods_value)->toBe(200.0)
         ->and((float) $receipt->landed_total)->toBe(225.5)
         ->and($receipt->additionalCosts()->first()->payee)->toBe('Port agent');
+});
+
+test('live receiving sums charges and persists advisory snapshots without updating product prices', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 10);
+    $item->update(['purchase_conversion_factor' => 1, 'cost_price' => 95000]);
+    $item->product->update(['selling_price' => 90000]);
+    app(PurchaseCostBreakdownService::class)->ensureDefaultTypes($purchase->company_id);
+    $types = PurchaseCostType::where('name', '!=', 'Product Cost')->take(2)->get();
+    $costs = $types->map(fn ($type) => ['type_id' => $type->id, 'amount' => '50000'])->all();
+    $component = Volt::test('purchases.receive', ['purchase' => $purchase])
+        ->set("lines.{$item->id}.quantity", '10')->set('additional_costs', $costs)
+        ->set("lines.{$item->id}.markup_percentage", '20')
+        ->assertSee('Final Unit Cost')->assertSee('105,000')->assertSee('126,000');
+    expect((float) $item->product->fresh()->selling_price)->toBe(90000.0);
+    $component->call('postReceipt')->assertHasNoErrors()->assertRedirect(route('purchases.show', $purchase));
+    $receipt = $purchase->goodsReceivingNotes()->latest('id')->firstOrFail();
+    $line = $receipt->items()->firstOrFail();
+    expect((float) $line->unit_cost)->toBe(95000.0)
+        ->and((float) $line->landed_base_unit_cost)->toBe(105000.0)
+        ->and((float) $line->markup_percentage)->toBe(20.0)
+        ->and((float) $line->suggested_selling_price)->toBe(126000.0)
+        ->and((float) $receipt->additional_cost_total)->toBe(100000.0)
+        ->and((float) $receipt->landed_total)->toBe(1050000.0)
+        ->and((float) $item->product->fresh()->selling_price)->toBe(90000.0);
+});
+
+test('authorized user explicitly applies a freshly calculated suggested price', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 10);
+    $item->update(['purchase_conversion_factor' => 1, 'cost_price' => 95000]);
+    $item->product->update(['selling_price' => 90000]);
+    $this->admin->update(['is_system_owner' => false]);
+    $this->admin->syncRoles(['Admin']);
+    Volt::test('purchases.receive', ['purchase' => $purchase])
+        ->set("lines.{$item->id}.quantity", '10')
+        ->set("lines.{$item->id}.markup_percentage", '20')
+        ->set("lines.{$item->id}.preview_selling_price", '1')
+        ->call('applySuggestedPrice', $item->id)->assertHasNoErrors();
+    expect((float) $item->product->fresh()->selling_price)->toBe(114000.0)
+        ->and((float) $item->product->fresh()->buying_price)->toBe((float) $item->product->buying_price)
+        ->and($purchase->goodsReceivingNotes()->count())->toBe(0);
+});
+
+test('receiving user without price editing permission cannot apply a price', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 10);
+    $user = User::factory()->create(['company_id' => $this->admin->company_id, 'branch_id' => $this->branch->id, 'status' => 'active']);
+    $user->assignRole('Store Keeper');
+    $user->givePermissionTo('products.view_selling_price');
+    $role = Role::findByName('Store Keeper');
+    $role->revokePermissionTo('products.edit_selling_price');
+    $before = $item->product->selling_price;
+    $this->actingAs($user);
+    Volt::test('purchases.receive', ['purchase' => $purchase])
+        ->assertDontSee('Apply Suggested Price')->call('applySuggestedPrice', $item->id)->assertForbidden();
+    expect($item->product->fresh()->selling_price)->toBe($before);
+});
+
+test('over receiving is rejected in both the live preview confirmation and locked backend', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 10);
+    $item->update(['received_quantity' => 3]);
+    Volt::test('purchases.receive', ['purchase' => $purchase])
+        ->set("lines.{$item->id}.quantity", '8')->call('openConfirmation')->assertHasErrors("lines.{$item->id}.quantity");
+    expect(fn () => app(InventoryService::class)->receivePurchase($purchase, [
+        $item->id => ['quantity' => 8, 'stock_location_id' => $this->location->id],
+    ], today()->toDateString(), $this->admin->id))->toThrow(ValidationException::class)
+        ->and($purchase->goodsReceivingNotes()->count())->toBe(0);
+});
+
+test('price application cannot use an item from another tenant', function () {
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 10);
+    $other = Company::create(['company_name' => 'Foreign Pricing Company', 'business_type' => 'hardware', 'phone' => '123', 'whatsapp_number' => '123']);
+    $foreignId = DB::table('purchase_items')->insertGetId([
+        'company_id' => $other->id, 'purchase_id' => $purchase->id, 'product_id' => $item->product_id,
+        'ordered_quantity' => 10, 'received_quantity' => 0, 'cost_price' => 1, 'line_total' => 10,
+    ]);
+    $before = $item->product->selling_price;
+    expect(fn () => Volt::test('purchases.receive', ['purchase' => $purchase])
+        ->set("lines.{$item->id}.quantity", '1')->set("lines.{$foreignId}.markup_percentage", '20')
+        ->call('applySuggestedPrice', $foreignId))->toThrow(ModelNotFoundException::class);
+    expect($item->product->fresh()->selling_price)->toBe($before);
 });
