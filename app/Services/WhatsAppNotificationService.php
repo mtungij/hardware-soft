@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Jobs\SendWhatsAppNotification;
 use App\Models\Company;
 use App\Models\CompanyWhatsAppSetting;
+use App\Models\Scopes\BranchScope;
 use App\Models\Scopes\CompanyScope;
 use App\Models\WhatsAppNotification;
 use App\Models\WhatsAppRecipient;
@@ -43,7 +44,9 @@ class WhatsAppNotificationService
             return [];
         }
 
-        $recipients = WhatsAppRecipient::withoutGlobalScope(CompanyScope::class)
+        // Delivery follows the event's tenant and recipient subscriptions, including
+        // company-wide recipients, rather than the acting staff member's branch.
+        $recipients = WhatsAppRecipient::withoutGlobalScopes([CompanyScope::class, BranchScope::class])
             ->with(['user' => fn ($query) => $query->withoutGlobalScopes()->with('roles')])
             ->where('company_id', $company->id)
             ->where('active', true)

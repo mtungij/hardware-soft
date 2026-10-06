@@ -228,7 +228,7 @@ TEXT;
                 company: $company,
                 category: 'security',
                 notificationType: 'product_deleted',
-                eventKey: 'product_deleted:'.$product->id.':'.now()->format('YmdHis'),
+                eventKey: 'product_deleted:'.$product->id,
                 message: $message,
                 branchId: $product->branch_id,
                 metadata: [

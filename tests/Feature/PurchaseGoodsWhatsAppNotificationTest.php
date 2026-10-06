@@ -18,7 +18,10 @@ use App\Services\WhatsAppDailySummaryService;
 use App\Services\WhatsAppPurchaseNotificationService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Livewire\Features\SupportTesting\Testable;
+use Livewire\Volt\Volt;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
@@ -223,4 +226,118 @@ test('posted GRN lists every received product and disabled category suppresses d
         ->firstOrFail()->update(['enabled_categories' => ['purchase_order_created']]);
     expect($notificationService->queueReceipt($receipt))->toBe([])
         ->and(WhatsAppNotification::withoutGlobalScopes()->count())->toBe(1);
+});
+
+function browserNotificationRecipients(Company $company, Branch $branch, string $category): array
+{
+    $companyRecipient = purchaseNotificationRecipient($company, ['categories' => [$category]]);
+    $branchRecipient = purchaseNotificationRecipient($company, ['phone' => '255764123457',
+        'scope' => 'branch', 'branch_id' => $branch->id, 'categories' => [$category]]);
+    $otherBranch = Branch::withoutGlobalScopes()->create(['company_id' => $company->id,
+        'name' => 'Other Browser Branch', 'code' => 'BROWSER-OTHER', 'status' => 'active']);
+    purchaseNotificationRecipient($company, ['phone' => '255764123458', 'scope' => 'branch',
+        'branch_id' => $otherBranch->id, 'categories' => [$category]]);
+    $otherCompany = Company::create(['company_name' => 'Other Browser Tenant', 'business_type' => 'hardware',
+        'phone' => '255700200200', 'whatsapp_number' => '255700200200']);
+    CompanyWhatsAppSetting::withoutGlobalScopes()->create(['company_id' => $otherCompany->id,
+        'enabled' => true, 'device_id' => 'other-browser-device', 'enabled_categories' => [$category]]);
+    purchaseNotificationRecipient($otherCompany, ['phone' => '255764123459', 'categories' => [$category]]);
+
+    return [$companyRecipient, $branchRecipient];
+}
+
+function browserPurchaseComponent(Branch $branch): Testable
+{
+    $supplier = Supplier::query()->create(['name' => 'Browser Supplier', 'phone' => '255765123456',
+        'branch_id' => $branch->id, 'status' => 'active']);
+    $product = Product::query()->firstOrFail();
+
+    return Volt::test('purchases.create')
+        ->set('supplier_id', (string) $supplier->id)
+        ->call('selectProduct', 0, (string) $product->id);
+}
+
+test('Volt purchase submission automatically creates the PO outbox after commit with tenant and branch isolation', function () {
+    $recipients = browserNotificationRecipients($this->company, $this->branch, 'purchase_order_created');
+    $this->admin->update(['is_system_owner' => false]);
+    $component = browserPurchaseComponent($this->branch);
+    $component->assertSee('wire:submit="submitPurchase"', false)
+        ->call('submitPurchase')->assertHasNoErrors()->assertRedirect(route('purchases.index'));
+    $purchase = Purchase::query()->sole();
+    $logs = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'purchase_order_created')->get();
+    expect($logs)->toHaveCount(2)
+        ->and($logs->pluck('recipient_id')->sort()->values()->all())->toBe(collect($recipients)->pluck('id')->sort()->values()->all())
+        ->and($logs->pluck('company_id')->unique()->all())->toBe([$this->company->id])
+        ->and($logs->first()->message)->toContain($purchase->items->first()->product->name);
+    // Replay the same event after real submission: one row per event/recipient.
+    app(PurchaseGoodsWhatsAppObserver::class)->created($purchase);
+    app(PurchaseGoodsWhatsAppObserver::class)->created($purchase);
+    expect(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'purchase_order_created')->count())->toBe(2);
+    Queue::assertPushed(SendWhatsAppNotification::class, 2);
+});
+
+test('Volt Product confirmation automatically creates the deletion outbox after commit with tenant and branch isolation', function () {
+    CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $this->company->id)->firstOrFail()->update(['enabled_categories' => ['security']]);
+    $recipients = browserNotificationRecipients($this->company, $this->branch, 'security');
+    $product = Product::query()->firstOrFail();
+    $this->admin->update(['is_system_owner' => false]);
+    $component = Volt::test('products.index');
+    $component->assertSee('wire:click="deleteConfirmedProduct"', false)
+        ->call('confirmDeleteProduct', $product->id)->assertSet('deleting_product_id', $product->id)
+        ->assertDispatched('open-modal', 'delete-product');
+    expect($product->fresh()->trashed())->toBeFalse()
+        ->and(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'product_deleted')->count())->toBe(0);
+    $component->call('deleteConfirmedProduct')->assertSet('deleting_product_id', null)
+        ->assertDispatched('close-modal', 'delete-product');
+    expect($product->fresh()->trashed())->toBeTrue();
+    $logs = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'product_deleted')->get();
+    expect($logs)->toHaveCount(2)
+        ->and($logs->pluck('recipient_id')->sort()->values()->all())->toBe(collect($recipients)->pluck('id')->sort()->values()->all())
+        ->and($logs->pluck('company_id')->unique()->all())->toBe([$this->company->id]);
+    // A retried notification callback must retain its event identity across seconds.
+    $this->travel(2)->seconds();
+    $component->call('queueProductDeletedNotification', $product->fresh());
+    expect(WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'product_deleted')->count())->toBe(2);
+    Queue::assertPushed(SendWhatsAppNotification::class, 2);
+});
+
+test('rolled back Volt purchase submission creates no outbox rows', function () {
+    purchaseNotificationRecipient($this->company);
+    $this->admin->update(['is_system_owner' => false]);
+    $component = browserPurchaseComponent($this->branch);
+    DB::beginTransaction();
+    try {
+        $component->call('submitPurchase')->assertHasNoErrors();
+        expect(Purchase::query()->count())->toBe(1)
+            ->and(WhatsAppNotification::withoutGlobalScopes()->count())->toBe(0);
+    } finally {
+        DB::rollBack();
+    }
+    expect(Purchase::query()->count())->toBe(0)
+        ->and(WhatsAppNotification::withoutGlobalScopes()->count())->toBe(0);
+    // Commit unrelated work to prove rollback discarded the pending callback.
+    DB::transaction(fn () => null);
+    expect(WhatsAppNotification::withoutGlobalScopes()->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+test('rolled back Volt Product confirmation creates no outbox rows', function () {
+    CompanyWhatsAppSetting::withoutGlobalScopes()->where('company_id', $this->company->id)->firstOrFail()->update(['enabled_categories' => ['security']]);
+    purchaseNotificationRecipient($this->company, ['categories' => ['security']]);
+    $product = Product::query()->firstOrFail();
+    $this->admin->update(['is_system_owner' => false]);
+    $component = Volt::test('products.index')->call('confirmDeleteProduct', $product->id);
+    DB::beginTransaction();
+    try {
+        $component->call('deleteConfirmedProduct');
+        expect($product->fresh()->trashed())->toBeTrue()
+            ->and(WhatsAppNotification::withoutGlobalScopes()->count())->toBe(0);
+    } finally {
+        DB::rollBack();
+    }
+    expect($product->fresh()->trashed())->toBeFalse()
+        ->and(WhatsAppNotification::withoutGlobalScopes()->count())->toBe(0);
+    DB::transaction(fn () => null);
+    expect(WhatsAppNotification::withoutGlobalScopes()->count())->toBe(0);
+    Queue::assertNothingPushed();
 });
