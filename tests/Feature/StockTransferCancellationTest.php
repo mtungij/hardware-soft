@@ -167,12 +167,54 @@ test('cross-company cancellation is rejected even for super admin', function () 
 });
 
 test('reason and explicit confirmation are required by livewire', function () {
+    app()->setLocale('en');
     $component = Volt::test('stock-transfers.show', ['stockTransfer' => $this->transfer]);
     $component->call('openCancellation')->assertDispatched('open-modal')
         ->call('cancelTransfer')->assertHasErrors(['cancellationReason', 'confirmCancellation'])
+        ->assertNoRedirect()->assertNotDispatched('close-modal')
         ->set('cancellationReason', 'Wrong destination')->call('cancelTransfer')->assertHasErrors('confirmCancellation')
-        ->set('confirmCancellation', true)->call('cancelTransfer')->assertHasNoErrors()->assertDispatched('close-modal');
+        ->assertNoRedirect()->assertNotDispatched('close-modal')
+        ->set('confirmCancellation', true)->call('cancelTransfer')->assertHasNoErrors()->assertDispatched('close-modal', 'cancel-stock-transfer')
+        ->assertRedirect(route('stock-transfers.index'));
+    expect($component->effects['redirectUsingNavigate'])->toBeTrue();
+    expect(session('success'))->toBe(__('Stock transfer cancelled. Stock movements have been reversed.'));
     expect($this->transfer->fresh()->status)->toBe('cancelled');
+
+    $this->withSession(['staff_locale' => 'en'])->get(route('stock-transfers.index'))->assertOk()
+        ->assertSee($this->transfer->transfer_number)->assertSee('>Cancelled</span>', false);
+});
+
+test('failed livewire cancellation keeps the modal open and displays the inventory error', function () {
+    app()->setLocale('en');
+    cancelTransferMovement($this, $this->product, $this->destination, 2, 4000, 'sale_out');
+    $before = StockMovement::orderBy('id')->get()->toJson();
+
+    Volt::test('stock-transfers.show', ['stockTransfer' => $this->transfer])
+        ->call('openCancellation')
+        ->set('cancellationReason', 'Return stock')->set('confirmCancellation', true)
+        ->call('cancelTransfer')->assertHasErrors('transfer')
+        ->assertSee('Insufficient destination stock')->assertSee('Available: 0.5')
+        ->assertNoRedirect()->assertNotDispatched('close-modal');
+
+    expect(session('success'))->toBeNull()
+        ->and(StockMovement::orderBy('id')->get()->toJson())->toBe($before)
+        ->and($this->transfer->fresh()->status)->toBe('completed');
+});
+
+test('cancellation form delegates validation to livewire and has a guarded submit button', function () {
+    $component = Volt::test('stock-transfers.show', ['stockTransfer' => $this->transfer]);
+    $dom = new DOMDocument;
+    @$dom->loadHTML($component->html());
+    $xpath = new DOMXPath($dom);
+    $form = $xpath->query('//form[@*[name()="wire:submit"]="cancelTransfer"]')->item(0);
+
+    expect($form)->not->toBeNull()
+        ->and($form->hasAttribute('novalidate'))->toBeTrue()
+        ->and($xpath->query('.//textarea[@*[name()="wire:model"]="cancellationReason"]', $form)->length)->toBe(1)
+        ->and($xpath->query('.//input[@type="checkbox" and @*[name()="wire:model"]="confirmCancellation"]', $form)->length)->toBe(1);
+    $button = $xpath->query('.//button[@type="submit"]', $form)->item(0);
+    expect($button->getAttribute('wire:loading.attr'))->toBe('disabled')
+        ->and($button->getAttribute('wire:target'))->toBe('cancelTransfer');
 });
 
 test('blank reason and non-completed transfers are rejected by the service', function () {

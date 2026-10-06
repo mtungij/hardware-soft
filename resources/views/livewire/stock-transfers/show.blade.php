@@ -41,9 +41,12 @@ $cancelTransfer = function (\App\Services\InventoryService $inventory) {
         'confirmCancellation' => ['accepted'],
     ]);
     $inventory->cancelStockTransfer($this->stockTransfer->id, auth()->id(), $this->cancellationReason);
-    $this->stockTransfer = $this->stockTransfer->fresh(['branch', 'fromLocation', 'toLocation', 'createdBy', 'completedBy', 'cancelledBy', 'items.product.unit']);
+
     $this->dispatch('close-modal', 'cancel-stock-transfer');
+
     session()->flash('success', __('Stock transfer cancelled. Stock movements have been reversed.'));
+
+    return $this->redirectRoute('stock-transfers.index', navigate: true);
 };
 
 ?>
@@ -134,7 +137,8 @@ $cancelTransfer = function (\App\Services\InventoryService $inventory) {
         </x-table>
     </x-card>
     <x-modal name="cancel-stock-transfer" maxWidth="lg" focusable>
-        <form wire:submit="cancelTransfer" class="space-y-4 overflow-y-auto p-6">
+        {{-- Let Livewire render validation errors inside the modal instead of native validation blocking submission. --}}
+        <form wire:submit="cancelTransfer" novalidate class="space-y-4 overflow-y-auto p-6">
             <h2 class="text-lg font-black">{{ __('Cancel Transfer') }}</h2>
             <p>{{ __('Cancelling reverses this transfer: stock is removed from the destination and returned to the source. Original stock movements remain in the audit history.') }}</p>
             <p class="font-bold">{{ $stockTransfer->toLocation?->name }} → {{ $stockTransfer->fromLocation?->name }}</p>
@@ -149,8 +153,11 @@ $cancelTransfer = function (\App\Services\InventoryService $inventory) {
             @error('confirmCancellation') <p role="alert" class="text-red-600">{{ $message }}</p> @enderror
             @error('transfer') <p role="alert" class="text-red-600">{{ $message }}</p> @enderror
             <div class="flex justify-end gap-3">
-                <button type="button" x-on:click="$dispatch('close-modal', 'cancel-stock-transfer')" class="rounded-lg border px-4 py-2">{{ __('Back') }}</button>
-                <button type="submit" wire:loading.attr="disabled" class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white">{{ __('Confirm Cancellation') }}</button>
+                <button type="button" x-on:click="$dispatch('close-modal', 'cancel-stock-transfer')" wire:loading.attr="disabled" wire:target="cancelTransfer" class="rounded-lg border px-4 py-2">{{ __('Back') }}</button>
+                <button type="submit" wire:loading.attr="disabled" wire:target="cancelTransfer" class="rounded-lg bg-red-600 px-4 py-2 font-bold text-white">
+                    <span wire:loading.remove wire:target="cancelTransfer">{{ __('Confirm Cancellation') }}</span>
+                    <span wire:loading wire:target="cancelTransfer">{{ __('Cancelling...') }}</span>
+                </button>
             </div>
         </form>
     </x-modal>

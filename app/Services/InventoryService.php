@@ -1701,7 +1701,7 @@ class InventoryService
             if ($items->isEmpty()) {
                 throw ValidationException::withMessages(['transfer' => 'Transfer has no items to reverse.']);
             }
-            $products = Product::query()->where('company_id', $transfer->company_id)
+            $products = Product::withoutGlobalScopes()->where('company_id', $transfer->company_id)
                 ->whereIn('id', $items->pluck('product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             abort_unless($products->count() === $items->pluck('product_id')->unique()->count(), 404);
             $ledger = StockMovement::query()->where('company_id', $transfer->company_id)
