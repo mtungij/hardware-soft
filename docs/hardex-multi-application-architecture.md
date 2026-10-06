@@ -987,8 +987,10 @@ php artisan queue:restart
 Run workers under Supervisor or systemd:
 
 ```text
-php artisan queue:work redis --sleep=1 --tries=3 --timeout=120
+php artisan queue:work redis --queue=whatsapp,default --sleep=3 --tries=3 --timeout=90
 ```
+
+This example is for Redis deployments; local database deployments use the database connection. Keep the queue connection's `retry_after` above the worker timeout (120 seconds for this command). See [WhatsApp worker setup](whatsapp-notifications.md#queue-and-scheduler) and `deploy/supervisor/hardex-queue.conf` for the persistent worker and scheduler configuration.
 
 ## 18. Scalability Plan
 
@@ -1045,4 +1047,3 @@ This workspace already contains a combined Laravel implementation with many of t
 - Customer-facing Livewire pages
 
 For strict production compliance with the requested architecture, split the customer-facing Livewire portal into its own Laravel 13 application and replace direct model access there with the `HardexErpClient` API client. Keep the current `/api/customer/*` implementation in the ERP app as the master integration boundary.
-
