@@ -210,7 +210,20 @@ class InventoryService
 
     public function generatePurchaseReference(): string
     {
-        return 'PO-'.now()->format('Ymd').'-'.str_pad((string) (Purchase::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
+        $prefix = 'PO-'.now()->format('Ymd').'-';
+        $lastNumber = 0;
+
+        // References are globally unique, even when purchases are hidden by access scopes.
+        // Read the reference itself: creation dates and row counts can diverge after imports or deletions.
+        foreach (Purchase::withoutGlobalScopes()->where('reference_number', 'like', $prefix.'%')->pluck('reference_number') as $reference) {
+            $suffix = substr($reference, strlen($prefix));
+
+            if (ctype_digit($suffix)) {
+                $lastNumber = max($lastNumber, (int) $suffix);
+            }
+        }
+
+        return $prefix.str_pad((string) ($lastNumber + 1), 4, '0', STR_PAD_LEFT);
     }
 
     /**

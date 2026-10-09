@@ -21,6 +21,8 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
+state(['generated_reference_number' => ''])->locked();
+
 state([
     'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'supplier_id' => '',
@@ -121,6 +123,7 @@ mount(function (InventoryService $inventory) {
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
     $this->purchase_date = now()->toDateString();
     $this->reference_number = $inventory->generatePurchaseReference();
+    $this->generated_reference_number = $this->reference_number;
     $this->items = [$this->newItem()];
     $this->recalculateTotals();
 });
@@ -217,6 +220,12 @@ $canUpdateSellingPrice = fn (): bool => auth()->user()?->hasAnyRole(['Super Admi
 $savePurchase = function (string $status, bool $sendEmail = false) {
     $this->normalizeNumericState();
     $this->recalculateTotals();
+
+    if ($this->reference_number === $this->generated_reference_number
+        && Purchase::withoutGlobalScopes()->where('reference_number', $this->reference_number)->exists()) {
+        $this->reference_number = app(InventoryService::class)->generatePurchaseReference();
+        $this->generated_reference_number = $this->reference_number;
+    }
 
     $validated = $this->validate([
         'branch_id' => ['required', 'exists:branches,id'],
