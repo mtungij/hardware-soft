@@ -9,6 +9,7 @@ use App\Models\PurchaseEmailLog;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Mpdf\Mpdf;
@@ -121,7 +122,10 @@ class PurchaseOrderEmailService
         $settings = $this->settings();
         $html = view('pdf.purchase-order', compact('purchase', 'settings'))->render();
 
+        Storage::disk('local')->makeDirectory('mpdf-temp');
+
         $mpdf = new Mpdf([
+            'tempDir' => Storage::disk('local')->path('mpdf-temp'),
             'mode' => 'utf-8',
             'format' => 'A4',
             'margin_top' => 14,

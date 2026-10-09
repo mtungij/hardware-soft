@@ -12,6 +12,7 @@ use App\Services\PurchaseOrderEmailService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 beforeEach(function () {
@@ -78,6 +79,16 @@ test('queueing purchase order email creates pending log and updates purchase', f
     expect(PurchaseEmailLog::where('purchase_id', $purchase->id)->where('status', 'pending')->exists())->toBeTrue();
     expect($purchase->fresh()->email_status)->toBe('pending');
     expect($purchase->fresh()->email_recipient)->toBe($purchase->supplier->email);
+});
+
+test('purchase order pdf creates its cache in writable application storage', function () {
+    $disk = Storage::fake('local');
+
+    $pdf = app(PurchaseOrderEmailService::class)->pdfBinary(Purchase::firstOrFail());
+
+    expect($pdf)->toStartWith('%PDF-');
+    expect(is_dir($disk->path('mpdf-temp/mpdf/ttfontdata')))->toBeTrue();
+    expect($disk->allFiles('mpdf-temp'))->not->toBeEmpty();
 });
 
 test('purchase order email is blocked when supplier email is invalid', function () {
