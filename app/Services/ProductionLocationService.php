@@ -96,7 +96,7 @@ class ProductionLocationService
                 ->where('can_sell', true)
                 ->where('can_receive_stock', true)
                 ->where('can_issue_stock', true),
-            default => throw new \InvalidArgumentException("Unknown production location purpose [{$purpose}]."),
+            default => throw new \InvalidArgumentException(__('feedback.unknown_purpose', ['purpose' => $purpose])),
         };
     }
 

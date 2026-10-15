@@ -30,13 +30,13 @@ class ProductionCostingService
         return DB::transaction(function () use ($order, $user, $reason): ProductionOrderCosting {
             $order = $this->lockedOrder($order, $user);
             if ($order->status !== ProductionOrder::STATUS_COMPLETED || ! $order->posted_at) {
-                throw ValidationException::withMessages(['order' => 'Only completed, posted production orders can be costed.']);
+                throw ValidationException::withMessages(['order' => __('application.only_completed_posted_production_orders_can_be_costed_b7079a82')]);
             }
 
             $costing = ProductionOrderCosting::query()->forCurrentCompany()
                 ->where('production_order_id', $order->id)->lockForUpdate()->first();
             if ($costing?->status === ProductionOrderCosting::STATUS_FINALIZED) {
-                throw ValidationException::withMessages(['costing' => 'Finalized costing cannot be recalculated.']);
+                throw ValidationException::withMessages(['costing' => __('application.finalized_costing_cannot_be_recalculated_994426c0')]);
             }
             if (! $costing) {
                 $costing = ProductionOrderCosting::query()->create([
@@ -200,7 +200,7 @@ class ProductionCostingService
             $line = ProductionOrderCostingLine::query()->whereKey($line->id)->with('costing.productionOrder')->lockForUpdate()->firstOrFail();
             abort_unless((int) $line->company_id === (int) $user->company_id, 404);
             if ($line->line_type === ProductionOrderCostingLine::INVENTORY || $line->costing->status === ProductionOrderCosting::STATUS_FINALIZED) {
-                throw ValidationException::withMessages(['actual_cost' => 'This costing line cannot be manually adjusted.']);
+                throw ValidationException::withMessages(['actual_cost' => __('application.this_costing_line_cannot_be_manually_adjusted_f3f6c506')]);
             }
             $line->update([
                 'actual_total_cost' => $actualCost,
@@ -226,15 +226,15 @@ class ProductionCostingService
                 return $costing;
             }
             if ($costing->status !== ProductionOrderCosting::STATUS_CALCULATED) {
-                throw ValidationException::withMessages(['costing' => 'Calculate costing before finalization.']);
+                throw ValidationException::withMessages(['costing' => __('application.calculate_costing_before_finalization_f90744b0')]);
             }
             if ($costing->has_missing_cost) {
-                throw ValidationException::withMessages(['costing' => 'Resolve missing cost warnings before finalization.']);
+                throw ValidationException::withMessages(['costing' => __('application.resolve_missing_cost_warnings_before_finalization_8e929e3d')]);
             }
             $batch = $costing->productionOrder?->curingBatch;
             if ($batch && ! in_array($batch->status, [ProductionCuringBatch::STATUS_RELEASED, ProductionCuringBatch::STATUS_CLOSED], true)
                 && bccomp((string) $batch->remaining_quantity, '0', self::QUANTITY_SCALE) > 0) {
-                throw ValidationException::withMessages(['costing' => 'Curing costing remains provisional until all accepted quantity is released or accounted for as damage.']);
+                throw ValidationException::withMessages(['costing' => __('application.curing_costing_remains_provisional_until_all_accepted_quantity_is_released__5067b9b8')]);
             }
             $costing->update([
                 'status' => ProductionOrderCosting::STATUS_FINALIZED, 'finalized_at' => now(),
@@ -314,7 +314,7 @@ class ProductionCostingService
     private function nonNegativeMoney(mixed $value): string
     {
         if (! is_numeric($value) || bccomp((string) $value, '0', self::MONEY_SCALE) < 0) {
-            throw ValidationException::withMessages(['actual_cost' => 'Actual cost must be zero or greater.']);
+            throw ValidationException::withMessages(['actual_cost' => __('application.actual_cost_must_be_zero_or_greater_4ac50ab2')]);
         }
 
         return $this->money($value);
@@ -323,7 +323,7 @@ class ProductionCostingService
     private function requiredReason(string $reason): string
     {
         if (trim($reason) === '') {
-            throw ValidationException::withMessages(['reason' => 'A reason is required for manual cost adjustments.']);
+            throw ValidationException::withMessages(['reason' => __('application.a_reason_is_required_for_manual_cost_adjustments_14f0bc59')]);
         }
 
         return trim($reason);

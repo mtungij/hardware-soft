@@ -17,7 +17,7 @@ state(['amount' => '', 'payment_method' => 'mobile_money', 'reference_number' =>
 rules(fn () => [
     'amount' => ['required', 'numeric', 'gt:0'],
     'payment_method' => ['required', 'in:mobile_money,bank,cash_deposit'],
-    'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_deposits', 'reference_number')->where('customer_id', auth('customer')->user()->customer_id)],
+    'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_deposits', 'reference_number')->where('company_id', auth('customer')->user()->company_id)->where('customer_id', auth('customer')->user()->customer_id)],
     'receipt_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
     'notes' => ['nullable', 'string', 'max:1000'],
 ]);

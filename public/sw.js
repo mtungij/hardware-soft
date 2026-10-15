@@ -1,8 +1,9 @@
-const CACHE_VERSION = 'hardex-pwa-v5';
+const CACHE_VERSION = 'hardex-pwa-v6';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const SHELL_ASSETS = [
-    '/offline',
+    '/offline?locale=en',
+    '/offline?locale=sw',
     '/images/hardex.png',
     '/icons/icon-192x192.png',
     '/icons/icon-512x512.png'
@@ -42,6 +43,12 @@ self.addEventListener('message', (event) => {
     if (event.data?.type === 'SKIP_WAITING') {
         self.skipWaiting();
     }
+    if (event.data?.type === 'SET_LOCALE' && ['en', 'sw'].includes(event.data.locale)) {
+        const scope = event.data.scope === 'customer' ? 'customer' : 'staff';
+        event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put(
+            `/__locale_${scope}`, new Response(event.data.locale)
+        )));
+    }
 });
 
 self.addEventListener('fetch', (event) => {
@@ -55,7 +62,12 @@ self.addEventListener('fetch', (event) => {
     }
 
     if (request.mode === 'navigate') {
-        event.respondWith(fetch(request).catch(() => caches.match('/offline')));
+        event.respondWith(fetch(request).catch(async () => {
+            const scope = url.pathname.startsWith('/customer/') ? 'customer' : 'staff';
+            const saved = await caches.match(`/__locale_${scope}`);
+            const language = saved ? await saved.text() : 'en';
+            return caches.match(`/offline?locale=${language === 'sw' ? 'sw' : 'en'}`);
+        }));
         return;
     }
 

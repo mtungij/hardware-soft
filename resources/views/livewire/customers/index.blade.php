@@ -33,7 +33,7 @@ $toggleStatus = function (int $customerId) {
 
     $customer->update(['status' => $customer->status === 'active' ? 'inactive' : 'active']);
 
-    session()->flash('success', 'Customer status updated.');
+    session()->flash('success', __('application.customer_status_updated_3848f854'));
 };
 
 $deleteCustomer = function (int $customerId) {
@@ -43,40 +43,40 @@ $deleteCustomer = function (int $customerId) {
     abort_if($customer->is_system_customer, 403);
 
     $customer->delete();
-    session()->flash('success', 'Customer deleted.');
+    session()->flash('success', __('application.customer_deleted_c9ce4d2d'));
 };
 
 ?>
 
 <div>
     <x-page-header
-        title="Customers"
-        description="Maintain cash, credit, contractor, and wholesale customer records."
+        title="{{ __('application.customers_035eae60') }}"
+        description="{{ __('application.maintain_cash_credit_contractor_and_wholesale_customer_records_fa002441') }}"
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Customers' => null]"
     >
         <x-export-actions export="tables.customers" :params="compact('search', 'statusFilter', 'branchFilter', 'typeFilter', 'created_from', 'created_to')" />
         @if ($this->canManage())
-            <a href="{{ route('customers.create') }}" wire:navigate data-tour="add-customer" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Customer</a>
+            <a href="{{ route('customers.create') }}" wire:navigate data-tour="add-customer" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ __('application.create_customer_2bd83aec') }}</a>
         @endif
     </x-page-header>
 
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-5">
-            <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 md:col-span-2" placeholder="Search customers...">
+            <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 md:col-span-2" placeholder="{{ __('application.search_customers_8159bd4e') }}">
             <select wire:model.live="statusFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                <option value="">All statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="">{{ __('application.all_statuses_6405179d') }}</option>
+                <option value="active">{{ __('application.active_a733b809') }}</option>
+                <option value="inactive">{{ __('application.inactive_09af574c') }}</option>
             </select>
             <select wire:model.live="typeFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                <option value="">All types</option>
-                <option value="cash">Cash</option>
-                <option value="credit">Credit</option>
-                <option value="contractor">Contractor</option>
-                <option value="wholesale">Wholesale</option>
+                <option value="">{{ __('application.all_types_30c8a0fc') }}</option>
+                <option value="cash">{{ __('application.cash_758ec54e') }}</option>
+                <option value="credit">{{ __('application.credit_8a45d339') }}</option>
+                <option value="contractor">{{ __('application.contractor_76bb2328') }}</option>
+                <option value="wholesale">{{ __('application.wholesale_21c1aef4') }}</option>
             </select>
             <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
-                <option value="">All branches</option>
+                <option value="">{{ __('application.all_branches_25c23746') }}</option>
                 @foreach (Branch::orderBy('name')->get() as $branch)
                     <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                 @endforeach
@@ -100,29 +100,29 @@ $deleteCustomer = function (int $customerId) {
                 ->paginate(10);
         @endphp
 
-        <x-table data-tour="customers-list" :headers="['Customer', 'Phone', 'Type', 'Branch', 'Opening Balance', 'Status', 'Actions']">
+        <x-table data-tour="customers-list" :headers="[__('application.customer_0e85749a'), __('application.phone_77064d52'), __('application.type_3deb7456'), __('application.branch_1627510b'), __('application.opening_balance_1a1a6305'), __('application.status_bae7d5be'), __('application.actions_c3cd636a')]">
             @forelse ($customers as $customer)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
-                    <td class="px-4 py-3"><p class="font-black">{{ $customer->name }}</p><p class="text-xs text-slate-500">{{ $customer->email ?? '-' }}</p></td>
+                    <td class="px-4 py-3"><p class="font-black">{{ $customer->displayName() }}</p><p class="text-xs text-slate-500">{{ $customer->email ?? '-' }}</p></td>
                     <td class="px-4 py-3">{{ $customer->phone }}</td>
-                    <td class="px-4 py-3 capitalize">{{ $customer->customer_type }}</td>
-                    <td class="px-4 py-3">{{ $customer->branch?->name ?? 'Global' }}</td>
+                    <td class="px-4 py-3 capitalize">{{ \App\Support\UiText::label($customer->customer_type) }}</td>
+                    <td class="px-4 py-3">{{ $customer->branch?->name ?? __('terminology.global_5f1184f7') }}</td>
                     <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($customer->opening_balance) }}</td>
-                    <td class="px-4 py-3"><span class="{{ $customer->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ ucfirst($customer->status) }}</span></td>
+                    <td class="px-4 py-3"><span class="{{ $customer->status === 'active' ? 'badge-success' : 'badge-warning' }}">{{ \App\Support\UiText::status($customer->status) }}</span></td>
                     <td class="px-4 py-3">
                         @if ($this->canManage())
                             <div class="flex flex-wrap gap-2">
-                                <a href="{{ route('customers.edit', $customer) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">Edit</a>
-                                <button wire:click="toggleStatus({{ $customer->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ $customer->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
-                                <button wire:click="deleteCustomer({{ $customer->id }})" wire:confirm="Delete this customer?" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white">Delete</button>
+                                <a href="{{ route('customers.edit', $customer) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ __('application.edit_5301648d') }}</a>
+                                <button wire:click="toggleStatus({{ $customer->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ $customer->status === 'active' ? __('application.deactivate_d65ded94') : __('application.activate_92ef0832') }}</button>
+                                <button wire:click="deleteCustomer({{ $customer->id }})" wire:confirm="{{ __('application.delete_this_customer_02a7de5d') }}" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white">{{ __('application.delete_f6fdbe48') }}</button>
                             </div>
                         @else
-                            <span class="text-xs text-slate-500">View only</span>
+                            <span class="text-xs text-slate-500">{{ __('application.view_only_5559dd04') }}</span>
                         @endif
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No customers found.</td></tr>
+                <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">{{ __('application.no_customers_found_99ff0325') }}</td></tr>
             @endforelse
         </x-table>
 

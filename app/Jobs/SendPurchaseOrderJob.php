@@ -19,12 +19,27 @@ class SendPurchaseOrderJob implements ShouldQueue
 
     public int $backoff = 60;
 
+    public string $documentLocale;
+
     public function __construct(
         public int $purchaseId,
         public int $logId,
-    ) {}
+    ) {
+        $this->documentLocale = app()->getLocale();
+    }
 
     public function handle(PurchaseOrderEmailService $service): void
+    {
+        $originalLocale = app()->getLocale();
+        try {
+            app()->setLocale($this->documentLocale ?? config('app.locale'));
+            $this->send($service);
+        } finally {
+            app()->setLocale($originalLocale);
+        }
+    }
+
+    private function send(PurchaseOrderEmailService $service): void
     {
         $purchase = Purchase::with(['supplier', 'branch', 'items.product.unit'])->findOrFail($this->purchaseId);
         $log = PurchaseEmailLog::findOrFail($this->logId);
@@ -67,5 +82,4 @@ class SendPurchaseOrderJob implements ShouldQueue
             throw $exception;
         }
     }
-
 }

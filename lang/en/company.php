@@ -1,10 +1,4 @@
 <?php
 
-return [
-    'title' => 'Company Information', 'name' => 'Company Name', 'phone' => 'Phone', 'email' => 'Email', 'address' => 'Address', 'language' => 'Language',
-    'manufacturing' => [
-        'title' => 'Manufacturing / Production',
-        'enable' => 'Enable Production Module',
-        'description' => 'Enables machines, recipes, production orders, curing, and production reports.',
-    ],
-];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/company.php';

@@ -11,8 +11,8 @@ layout('layouts.customer');
 uses([WithPagination::class]);
 
 $deposits = computed(fn () => CustomerDeposit::where('customer_account_id', auth('customer')->id())->latest()->paginate(10));
-$statusLabel = fn (string $status) => __("messages.status.$status") === "messages.status.$status" ? str($status)->replace('_', ' ')->title() : __("messages.status.$status");
-$methodLabel = fn (string $method) => __("messages.methods.$method") === "messages.methods.$method" ? str($method)->replace('_', ' ')->title() : __("messages.methods.$method");
+$statusLabel = fn (string $status) => __("messages.status.$status") === "messages.status.$status" ? \App\Support\UiText::label($status) : __("messages.status.$status");
+$methodLabel = fn (string $method) => __("messages.methods.$method") === "messages.methods.$method" ? \App\Support\UiText::label($method) : __("messages.methods.$method");
 
 ?>
 
@@ -24,7 +24,7 @@ $methodLabel = fn (string $method) => __("messages.methods.$method") === "messag
         <x-table :headers="[__('messages.table.date'), __('messages.table.reference'), __('messages.table.method'), __('messages.table.amount'), __('messages.deposits.used'), __('messages.table.balance'), __('messages.table.status'), __('messages.deposits.file')]">
             @forelse ($this->deposits as $deposit)
                 <tr>
-                    <td class="px-4 py-3">{{ $deposit->created_at->format('M d, Y') }}</td>
+                    <td class="px-4 py-3">{{ $deposit->created_at->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
                     <td class="px-4 py-3">{{ $deposit->reference_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $this->methodLabel($deposit->payment_method) }}</td>
                     <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->amount) }}</td>

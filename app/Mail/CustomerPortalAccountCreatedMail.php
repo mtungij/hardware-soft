@@ -7,9 +7,10 @@ use App\Models\Customer;
 use App\Models\CustomerAccount;
 use App\Models\Setting;
 use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
 class CustomerPortalAccountCreatedMail extends Mailable
@@ -23,7 +24,9 @@ class CustomerPortalAccountCreatedMail extends Mailable
         public string $portalUrl,
         public ?Company $company,
         public ?Setting $settings,
-    ) {}
+    ) {
+        $this->locale(in_array($account->preferred_locale, ['en', 'sw'], true) ? $account->preferred_locale : app()->getLocale());
+    }
 
     public function envelope(): Envelope
     {
@@ -31,9 +34,9 @@ class CustomerPortalAccountCreatedMail extends Mailable
 
         return new Envelope(
             from: $this->settings?->mail_from_email
-                ? new \Illuminate\Mail\Mailables\Address($this->settings->mail_from_email, $this->settings->mail_from_name ?: $companyName)
+                ? new Address($this->settings->mail_from_email, $this->settings->mail_from_name ?: $companyName)
                 : null,
-            subject: "Karibu {$companyName} Customer Portal",
+            subject: __('mail.portal.subject', ['company' => $companyName], $this->locale),
         );
     }
 

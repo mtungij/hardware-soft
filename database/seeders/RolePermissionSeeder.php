@@ -130,6 +130,7 @@ class RolePermissionSeeder extends Seeder
         }
 
         $b2bPermissions = [
+            'sales.backdate',
             'customer_requests.view', 'customer_requests.review', 'customer_requests.create_quotation', 'customer_requests.convert_to_sale',
             'quotations.view', 'quotations.create', 'quotations.edit', 'quotations.send', 'quotations.cancel', 'quotations.convert',
             'invoices.view', 'invoices.send', 'invoices.export',
@@ -244,6 +245,8 @@ class RolePermissionSeeder extends Seeder
         ];
 
         Role::findByName('Cashier', $this->guard)->syncPermissions([
+            'customer_requests.view', 'customer_requests.review', 'customer_requests.create_quotation', 'customer_requests.convert_to_sale',
+            'quotations.view', 'quotations.create', 'quotations.send', 'quotations.convert', 'invoices.view',
             'view dashboard',
             'dashboard.view',
             'dashboard.sales_summary',

@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'purchase_in' => 'Risiti ya Ununuzi',
+    'purchase_receipt' => 'Risiti ya Ununuzi',
+    'internal_sale_in' => 'Mauzo ya Ndani ya Kuingia',
+    'internal_sale_out' => 'Mauzo ya Ndani ya Kutoka',
+    'purchase_receipt_reversal' => 'Marejesho ya Risiti ya Ununuzi',
+    'sale_out' => 'Mauzo Yanayotoka',
+    'transfer_in' => 'Uhamisho wa Kuingia',
+    'transfer_out' => 'Uhamisho wa Kutoka',
+    'transfer_cancel_out' => 'Ughairi wa Kutoka',
+    'transfer_cancel_in' => 'Ughairi wa Kuingia',
+    'opening_stock' => 'Hisa za Mwanzo',
+    'adjustment_in' => 'Marekebisho ya Hisa',
+    'adjustment_out' => 'Marekebisho ya Hisa',
+    'production_output' => 'Uzalishaji wa Kuingia',
+    'production_consumption' => 'Matumizi ya Uzalishaji',
+    'curing_release_in' => 'Utoaji wa Ukomazaji wa Kuingia',
+    'curing_release_out' => 'Utoaji wa Ukomazaji wa Kutoka',
+    'curing_damage' => 'Uharibifu wa Ukomazaji',
+    'return_in' => 'Marejesho ya Kuingia',
+    'direct_stock_in' => 'Uingizaji wa Hisa wa Moja kwa Moja',
+    'damage_out' => 'Uharibifu Unaotoka',
+    'no_movement' => 'Hakuna mzunguko',
+    'movement' => 'Mzunguko wa Hisa',
+];

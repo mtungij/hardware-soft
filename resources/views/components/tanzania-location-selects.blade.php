@@ -56,7 +56,7 @@
         data-hs-select='@json($regionSelectOptions)'
         class="hidden"
     >
-        <option value="" @selected(blank($region))>Tafuta au chagua mkoa</option>
+        <option value="" @selected(blank($region))>{{ __('application.search_or_select_a_region_ce8a7bdb') }}</option>
         @foreach ($regions as $regionNameOption => $regionDistricts)
             <option value="{{ $regionNameOption }}" @selected($region === $regionNameOption)>{{ $regionNameOption }}</option>
         @endforeach
@@ -77,13 +77,13 @@
             class="hidden"
             @disabled(! $region)
         >
-            <option value="" @selected(blank($district))>{{ $region ? 'Tafuta au chagua wilaya' : 'Tafadhali chagua mkoa kwanza' }}</option>
+            <option value="" @selected(blank($district))>{{ $region ? __('terminology.search_or_select_a_district_696b05f0') : __('terminology.please_select_a_region_first_eb4615a0') }}</option>
             @foreach ($districts as $districtNameOption)
                 <option value="{{ $districtNameOption }}" @selected($district === $districtNameOption)>{{ $districtNameOption }}</option>
             @endforeach
         </select>
         @if (! $region)
-            <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">Tafadhali chagua mkoa kwanza.</span>
+            <span class="mt-1 block text-xs font-semibold text-slate-500 dark:text-slate-400">{{ __('application.please_select_a_region_first_d87e3131') }}</span>
         @endif
         @error($districtModel)
             <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span>

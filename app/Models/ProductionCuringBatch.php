@@ -45,7 +45,7 @@ class ProductionCuringBatch extends Model
 
     protected static function booted(): void
     {
-        static::deleting(fn () => throw new LogicException('Curing batches cannot be permanently deleted.'));
+        static::deleting(fn () => throw new LogicException(__('application.curing_batches_cannot_be_permanently_deleted_c9099bd6')));
     }
 
     protected function casts(): array

@@ -41,7 +41,7 @@ $recordDamage = function (): void {
 };
 ?>
 <div>
-    <x-page-header :title="$batch->batch_number" :description="__('production.curing.details.page_description')" :breadcrumbs="[__('production.curing.details.dashboard')=>route('dashboard'),__('production.curing.title')=>route('production.curing.index'),$batch->batch_number=>null]" />
+    <x-page-header :title="$batch->batch_number"  :translate-title="false" :description="__('production.curing.details.page_description')" :breadcrumbs="[__('production.curing.details.dashboard')=>route('dashboard'),__('production.curing.title')=>route('production.curing.index'),$batch->batch_number=>null]" />
     @if(session('success'))<div class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-bold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">{{ session('success') }}</div>@endif
     @php
         $t = fn (string $key, array $replace = []) => __('production.curing.details.'.$key, $replace);
@@ -86,7 +86,7 @@ $recordDamage = function (): void {
         } elseif (bccomp((string) $batch->remaining_quantity, '0', 12) <= 0) {
             $releaseBlocker = $t('completed_block');
         } elseif (! $batch->isEligibleForRelease($now)) {
-            $releaseBlocker = $t('date_block', ['date' => $earliestAt->format('d M Y')]);
+            $releaseBlocker = $t('date_block', ['date' => $earliestAt->locale(app()->getLocale())->translatedFormat('d M Y')]);
         }
         $releaseReady = $releaseBlocker === null && $batch->isEligibleForRelease($now);
         $currentFlowStage = $fullyReleased
@@ -218,14 +218,14 @@ $recordDamage = function (): void {
                 @foreach([
                     $t('batch_number')=>$batch->batch_number, $t('production_order')=>$batch->productionOrder?->order_number,
                     $t('product')=>$batch->product?->name, $t('machine')=>$batch->machine?->name, 'Mould'=>$batch->mould?->name,
-                    $t('production_date')=>$batch->production_date->format('d M Y'),
+                    $t('production_date')=>$batch->production_date->locale(app()->getLocale())->translatedFormat('d M Y'),
                     $t('curing_location')=>$batch->sourceLocation?->name, $t('release_location')=>$batch->defaultReleaseLocation?->name,
                 ] as $label=>$value)<div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ $label }}</dt><dd class="mt-1 font-black text-slate-950 dark:text-white">{{ $value ?: '—' }}</dd></div>@endforeach
             </dl>
         </x-card>
 
         <x-card :title="$t('curing_progress')">
-            <div class="flex items-end justify-between gap-4"><p class="text-4xl font-black text-cyan-700 dark:text-cyan-300">{{ $progress }}%</p><span class="inline-flex rounded-full border px-3 py-1 text-xs font-black {{ $statusClasses[$resolvedStatus] ?? $statusClasses[ProductionCuringBatch::STATUS_CURING] }}">{{ $statusLabels[$resolvedStatus] ?? str($resolvedStatus)->headline() }}</span></div>
+            <div class="flex items-end justify-between gap-4"><p class="text-4xl font-black text-cyan-700 dark:text-cyan-300">{{ $progress }}%</p><span class="inline-flex rounded-full border px-3 py-1 text-xs font-black {{ $statusClasses[$resolvedStatus] ?? $statusClasses[ProductionCuringBatch::STATUS_CURING] }}">{{ $statusLabels[$resolvedStatus] ?? \App\Support\UiText::label($resolvedStatus) }}</span></div>
             @if($activeHold)<div class="mt-3 inline-flex rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-black text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">{{ $t('quality_hold') }}</div>@endif
             <div class="mt-4 h-3 overflow-hidden rounded-full border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800" role="progressbar" aria-label="{{ $t('curing_progress') }}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $progress }}">
                 <div class="h-full rounded-full bg-cyan-500 transition-all dark:bg-cyan-400" style="width: {{ $progress }}%"></div>
@@ -233,12 +233,12 @@ $recordDamage = function (): void {
             <p class="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-300">{{ $progressSummary }}</p>
             <dl class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 @foreach([
-                    $t('started')=>[$startedAt->format('d M Y'),$startedAt->format('d M Y H:i T')],
-                    $t('current_age')=>[$currentAge,$startedAt->format('d M Y H:i T')],
-                    $t('earliest_release')=>[$earliestAt->format('d M Y'),$earliestAt->format('d M Y H:i T')],
-                    $t('days_remaining')=>[$timeUntilRelease,$earliestAt->format('d M Y H:i T')],
-                    $t('full_curing')=>[$fullAt->format('d M Y'),$fullAt->format('d M Y H:i T')],
-                    $t('status')=>[$statusLabels[$resolvedStatus] ?? str($resolvedStatus)->headline(),null],
+                    $t('started')=>[$startedAt->locale(app()->getLocale())->translatedFormat('d M Y'),$startedAt->locale(app()->getLocale())->translatedFormat('d M Y H:i T')],
+                    $t('current_age')=>[$currentAge,$startedAt->locale(app()->getLocale())->translatedFormat('d M Y H:i T')],
+                    $t('earliest_release')=>[$earliestAt->locale(app()->getLocale())->translatedFormat('d M Y'),$earliestAt->locale(app()->getLocale())->translatedFormat('d M Y H:i T')],
+                    $t('days_remaining')=>[$timeUntilRelease,$earliestAt->locale(app()->getLocale())->translatedFormat('d M Y H:i T')],
+                    $t('full_curing')=>[$fullAt->locale(app()->getLocale())->translatedFormat('d M Y'),$fullAt->locale(app()->getLocale())->translatedFormat('d M Y H:i T')],
+                    $t('status')=>[$statusLabels[$resolvedStatus] ?? \App\Support\UiText::label($resolvedStatus),null],
                 ] as $label=>$data)<div><dt class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{{ $label }}</dt><dd class="mt-1 font-black text-slate-950 dark:text-white" @if($data[1]) title="{{ $data[1] }}" @endif>{{ $data[0] }}</dd></div>@endforeach
             </dl>
         </x-card>
@@ -313,7 +313,7 @@ $recordDamage = function (): void {
                                 <h3 class="font-black text-slate-950 dark:text-white">{{ $event['title'] }}</h3>
                                 <span class="rounded-full border px-2 py-1 text-[11px] font-bold {{ $badgeClass }}">{{ $event['badge'] }}</span>
                             </div>
-                            <time class="mt-1 block text-sm font-semibold text-slate-600 dark:text-slate-300" datetime="{{ $event['at']->toIso8601String() }}">{{ $event['at']->copy()->timezone($timezone)->format('d M Y H:i') }}</time>
+                            <time class="mt-1 block text-sm font-semibold text-slate-600 dark:text-slate-300" datetime="{{ $event['at']->toIso8601String() }}">{{ $event['at']->copy()->timezone($timezone)->locale(app()->getLocale())->translatedFormat('d M Y H:i') }}</time>
                             @if($event['actor'])<p class="mt-1 text-xs font-semibold text-slate-700 dark:text-slate-300">{{ $t('by_actor', ['name' => $event['actor']]) }}</p>@endif
                             @if($event['detail'])<p class="mt-2 break-words text-sm text-slate-600 dark:text-slate-400">{{ $event['detail'] }}</p>@endif
                         </article>
@@ -332,7 +332,7 @@ $recordDamage = function (): void {
                             <dl class="mt-4 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1">
                                 <div><dt class="font-bold text-emerald-700 dark:text-emerald-300">{{ $t('released_quantity') }}</dt><dd class="font-black">{{ $formatQuantity($batch->released_quantity) }} {{ $unit }}</dd></div>
                                 <div><dt class="font-bold text-emerald-700 dark:text-emerald-300">{{ $t('released_by') }}</dt><dd class="font-black">{{ $finalRelease?->releaser?->name ?: '—' }}</dd></div>
-                                <div><dt class="font-bold text-emerald-700 dark:text-emerald-300">{{ $t('released_at') }}</dt><dd class="font-black">{{ $finalRelease?->released_at?->copy()->timezone($timezone)->format('d M Y H:i') ?: '—' }}</dd></div>
+                                <div><dt class="font-bold text-emerald-700 dark:text-emerald-300">{{ $t('released_at') }}</dt><dd class="font-black">{{ $finalRelease?->released_at?->copy()->timezone($timezone)->locale(app()->getLocale())->translatedFormat('d M Y H:i') ?: '—' }}</dd></div>
                                 <div><dt class="font-bold text-emerald-700 dark:text-emerald-300">{{ $t('destination') }}</dt><dd class="font-black">{{ $finalRelease?->destinationLocation?->name ?: '—' }}</dd></div>
                                 <div class="sm:col-span-2 xl:col-span-1"><dt class="font-bold text-emerald-700 dark:text-emerald-300">{{ $t('posting_reference') }}</dt><dd class="break-words font-black">{{ $finalRelease?->posting_reference ?: '—' }}</dd></div>
                             </dl>
@@ -342,7 +342,7 @@ $recordDamage = function (): void {
                         <span class="inline-flex rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide {{ $releaseReady ? 'border-emerald-300 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-slate-950' : 'border-red-300 bg-red-600 text-white dark:border-red-400 dark:bg-red-500 dark:text-white' }}">{{ $releaseReady ? $t('ready_for_release') : $t('release_locked') }}</span>
                         <p class="mt-3 text-xs font-bold uppercase tracking-wide {{ $releaseReady ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300' }}">{{ $t('status') }}</p>
                         <h2 class="mt-1 text-lg font-black {{ $releaseReady ? 'text-emerald-900 dark:text-emerald-100' : 'text-amber-900 dark:text-amber-100' }}">{{ $releaseReady ? $t('ready_for_release') : $t('not_yet_eligible') }}</h2>
-                        @if($releaseReady)<p class="mt-2 text-sm text-emerald-800 dark:text-emerald-200">{{ $t('ready_for_release_help') }}</p>@else<div class="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1"><div><p class="font-bold text-amber-700 dark:text-amber-300">{{ $t('release_available_on') }}</p><p class="text-amber-950 dark:text-amber-100">{{ $earliestAt->format('d M Y') }}</p></div><div><p class="font-bold text-amber-700 dark:text-amber-300">{{ $t('time_remaining') }}</p><p class="text-amber-950 dark:text-amber-100">{{ $timeUntilRelease }}</p></div><div><p class="font-bold text-amber-700 dark:text-amber-300">{{ $t('full_curing') }}</p><p class="text-amber-950 dark:text-amber-100">{{ $fullAt->format('d M Y') }}</p></div><div class="sm:col-span-2 xl:col-span-1"><p class="font-bold text-red-700 dark:text-red-300">{{ $t('blocked_reason') }}</p><p class="text-red-900 dark:text-red-200">{{ $releaseBlocker }}</p></div></div>@endif
+                        @if($releaseReady)<p class="mt-2 text-sm text-emerald-800 dark:text-emerald-200">{{ $t('ready_for_release_help') }}</p>@else<div class="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-1"><div><p class="font-bold text-amber-700 dark:text-amber-300">{{ $t('release_available_on') }}</p><p class="text-amber-950 dark:text-amber-100">{{ $earliestAt->locale(app()->getLocale())->translatedFormat('d M Y') }}</p></div><div><p class="font-bold text-amber-700 dark:text-amber-300">{{ $t('time_remaining') }}</p><p class="text-amber-950 dark:text-amber-100">{{ $timeUntilRelease }}</p></div><div><p class="font-bold text-amber-700 dark:text-amber-300">{{ $t('full_curing') }}</p><p class="text-amber-950 dark:text-amber-100">{{ $fullAt->locale(app()->getLocale())->translatedFormat('d M Y') }}</p></div><div class="sm:col-span-2 xl:col-span-1"><p class="font-bold text-red-700 dark:text-red-300">{{ $t('blocked_reason') }}</p><p class="text-red-900 dark:text-red-200">{{ $releaseBlocker }}</p></div></div>@endif
                     </section>
                     <form wire:submit="release" class="space-y-3">
                         <x-form-input :label="$t('quantity')" name="release_quantity" type="number" min="0.0001" step="0.0001" wire:model="release_quantity" :disabled="! $releaseReady" class="disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-100 disabled:text-slate-500 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-400" required />

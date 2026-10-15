@@ -16,8 +16,8 @@ class CustomerMaterialIssue extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Posted material issues are immutable.'));
-        static::deleting(fn () => throw new LogicException('Posted material issues cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.posted_material_issues_are_immutable_7558c556')));
+        static::deleting(fn () => throw new LogicException(__('application.posted_material_issues_cannot_be_deleted_0e85ba0a')));
     }
 
     public function account(): BelongsTo

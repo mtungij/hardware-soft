@@ -25,9 +25,9 @@ class CustomerPortalApiController extends Controller
         $account = $request->user()->load('customer');
         $customer = $account->customer;
         $outstanding = $accounting->customerBalance($customer);
-        $depositBalance = CustomerDeposit::where('customer_id', $customer->id)->whereIn('status', ['approved', 'partial'])->sum('balance_amount');
-        $lastPayment = $customer->payments()->latest('payment_date')->first();
-        $lastPurchase = $customer->sales()->where('status', 'completed')->latest('sale_date')->first();
+        $depositBalance = CustomerDeposit::where('company_id', $customer->company_id)->where('customer_id', $customer->id)->whereIn('status', ['approved', 'partial'])->sum('balance_amount');
+        $lastPayment = $customer->payments()->where('company_id', $customer->company_id)->latest('payment_date')->first();
+        $lastPurchase = $customer->sales()->where('company_id', $customer->company_id)->where('status', 'completed')->latest('sale_date')->first();
 
         return response()->json([
             'total_outstanding_debt' => (float) $outstanding,
@@ -36,25 +36,25 @@ class CustomerPortalApiController extends Controller
             'available_credit' => max(0, (float) $customer->credit_limit - (float) $outstanding),
             'last_payment' => $lastPayment ? $this->paymentPayload($lastPayment) : null,
             'last_purchase' => $lastPurchase ? $this->salePayload($lastPurchase) : null,
-            'pending_receipts' => CustomerReceipt::where('customer_id', $customer->id)->where('status', 'pending')->count(),
-            'pending_deposits' => CustomerDeposit::where('customer_id', $customer->id)->where('status', 'pending')->count(),
+            'pending_receipts' => CustomerReceipt::where('company_id', $customer->company_id)->where('customer_id', $customer->id)->where('status', 'pending')->count(),
+            'pending_deposits' => CustomerDeposit::where('company_id', $customer->company_id)->where('customer_id', $customer->id)->where('status', 'pending')->count(),
         ]);
     }
 
     public function debts(Request $request): JsonResponse
     {
         $sales = Sale::with('items.product')
-            ->where('customer_id', $request->user()->customer_id)
+            ->where('company_id', $request->user()->company_id)->where('customer_id', $request->user()->customer_id)
             ->where('status', 'completed')
             ->latest('sale_date')
-            ->paginate((int) $request->integer('per_page', 15));
+            ->paginate(max(1, min(50, $request->integer('per_page', 15))));
 
         return response()->json($sales->through(fn (Sale $sale) => $this->salePayload($sale, true)));
     }
 
     public function debt(Request $request, Sale $sale): JsonResponse
     {
-        abort_unless($sale->customer_id === $request->user()->customer_id, 403);
+        abort_unless((int) $sale->customer_id === (int) $request->user()->customer_id && (int) $sale->company_id === (int) $request->user()->company_id, 403);
 
         return response()->json($this->salePayload($sale->load('items.product', 'payments'), true, true));
     }
@@ -62,9 +62,9 @@ class CustomerPortalApiController extends Controller
     public function receipts(Request $request): JsonResponse
     {
         $receipts = CustomerReceipt::with('sale')
-            ->where('customer_account_id', $request->user()->id)
+            ->where('company_id', $request->user()->company_id)->where('customer_account_id', $request->user()->id)
             ->latest()
-            ->paginate((int) $request->integer('per_page', 15));
+            ->paginate(max(1, min(50, $request->integer('per_page', 15))));
 
         return response()->json($receipts->through(fn (CustomerReceipt $receipt) => $this->receiptPayload($receipt)));
     }
@@ -84,7 +84,7 @@ class CustomerPortalApiController extends Controller
         $sale = filled($data['invoice_id'] ?? null) ? Sale::where('company_id', $account->company_id)->where('customer_id', $account->customer_id)->findOrFail($data['invoice_id']) : null;
 
         if ($sale && (float) $data['amount'] > (float) $sale->balance_amount) {
-            throw ValidationException::withMessages(['amount' => 'Receipt amount cannot exceed the selected invoice balance.']);
+            throw ValidationException::withMessages(['amount' => __('application.receipt_amount_cannot_exceed_the_selected_invoice_balance_6ac26ed3')]);
         }
 
         $receipt = CustomerReceipt::create([
@@ -108,7 +108,7 @@ class CustomerPortalApiController extends Controller
     {
         $deposits = CustomerDeposit::where('customer_account_id', $request->user()->id)
             ->latest()
-            ->paginate((int) $request->integer('per_page', 15));
+            ->paginate(max(1, min(50, $request->integer('per_page', 15))));
 
         return response()->json($deposits->through(fn (CustomerDeposit $deposit) => $this->depositPayload($deposit)));
     }
@@ -148,9 +148,9 @@ class CustomerPortalApiController extends Controller
         $payload = [
             'customer' => $this->customerPayload($customer),
             'outstanding_balance' => $accounting->customerBalance($customer),
-            'sales' => $customer->sales()->where('status', 'completed')->latest('sale_date')->get()->map(fn (Sale $sale) => $this->salePayload($sale))->values(),
-            'payments' => $customer->payments()->latest('payment_date')->get()->map(fn ($payment) => $this->paymentPayload($payment))->values(),
-            'deposits' => CustomerDeposit::where('customer_id', $customer->id)->latest()->get()->map(fn (CustomerDeposit $deposit) => $this->depositPayload($deposit))->values(),
+            'sales' => $customer->sales()->where('company_id', $customer->company_id)->where('status', 'completed')->latest('sale_date')->get()->map(fn (Sale $sale) => $this->salePayload($sale))->values(),
+            'payments' => $customer->payments()->where('company_id', $customer->company_id)->latest('payment_date')->get()->map(fn ($payment) => $this->paymentPayload($payment))->values(),
+            'deposits' => CustomerDeposit::where('company_id', $customer->company_id)->where('customer_id', $customer->id)->latest()->get()->map(fn (CustomerDeposit $deposit) => $this->depositPayload($deposit))->values(),
         ];
 
         if ($request->query('format') === 'pdf') {
@@ -209,13 +209,13 @@ class CustomerPortalApiController extends Controller
     {
         $notifications = CustomerNotification::where('customer_id', $request->user()->customer_id)
             ->latest()
-            ->paginate((int) $request->integer('per_page', 20));
+            ->paginate(max(1, min(50, $request->integer('per_page', 20))));
 
         return response()->json($notifications->through(fn (CustomerNotification $notification) => [
             'id' => $notification->id,
             'type' => $notification->type,
-            'title' => $notification->title,
-            'message' => $notification->message,
+            'title' => $notification->displayTitle(),
+            'message' => $notification->displayMessage(),
             'read_at' => $notification->read_at?->toISOString(),
             'created_at' => $notification->created_at?->toISOString(),
         ]));

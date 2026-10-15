@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Portal ya Wateja', 'dashboard' => 'Dashibodi', 'debts' => 'Madeni', 'receipts' => 'Risiti', 'deposits' => 'Amana', 'statements' => 'Taarifa', 'profile' => 'Wasifu'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/sw/customer_portal.php';

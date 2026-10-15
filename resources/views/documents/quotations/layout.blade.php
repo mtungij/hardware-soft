@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ app()->getLocale() }}">
 <head>
 <meta charset="utf-8">
-<title>Quotation · {{ $document['number'] }}</title>
+<title>{{ __('application.quotation_daf9ab71') }} {{ $document['number'] }}</title>
 <style>
 @page { footer: html_quotationFooter; margin-top: 14mm; margin-right: 14mm; margin-bottom: 18mm; margin-left: 14mm; }
 body { font-family: dejavusans, sans-serif; font-size: 9pt; color: #243247; background: #fff; line-height: 1.45; }
@@ -50,9 +50,9 @@ thead { display: table-header-group; } tr { page-break-inside: avoid; }
 </head>
 <body>
 @if (isset($document['preview']))
-<nav class="preview-toolbar"><b>{{ $document['preview']['name'] }}</b><a href="{{ $document['preview']['back'] }}">Back</a><button onclick="window.print()">Print</button><a href="{{ $document['preview']['download'] }}">Download PDF</a></nav>
+<nav class="preview-toolbar"><b>{{ $document['preview']['name'] }}</b><a href="{{ $document['preview']['back'] }}">{{ __('application.back_b52b36b7') }}</a><button onclick="window.print()">{{ __('application.print_5b221e9c') }}</button><a href="{{ $document['preview']['download'] }}">{{ __('application.download_pdf_98e5ef06') }}</a></nav>
 @endif
 <main class="document">
-@if ($document['sample'])<div class="sample">SAMPLE PREVIEW · NOT A TRANSACTION</div>@endif
+@if ($document['sample'])<div class="sample">{{ __('application.sample_preview_not_a_transaction_3206b6de') }}</div>@endif
 @yield('content')
 </main></body></html>

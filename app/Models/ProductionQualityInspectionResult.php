@@ -17,7 +17,7 @@ class ProductionQualityInspectionResult extends Model
     {
         static::updating(function (self $line): void {
             if ($line->inspection()->where('approval_status', 'approved')->exists()) {
-                throw new LogicException('Approved inspection results are immutable.');
+                throw new LogicException(__('application.approved_inspection_results_are_immutable_f019917b'));
             }
         });
         static::deleting(fn () => throw new LogicException('Inspection results cannot be deleted.'));

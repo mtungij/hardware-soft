@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Categories', 'create' => 'Create Category', 'edit' => 'Edit Category', 'name' => 'Name', 'code' => 'Code', 'products' => 'Products'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/categories.php';

@@ -15,7 +15,6 @@ use App\Services\WhatsAppNotificationService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\Request;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -64,7 +63,7 @@ function createPhoneCustomer(string $operation = 'create-operation'): array
 function temporaryPasswordFor(CustomerAccount $account): string
 {
     $notification = WhatsAppNotification::withoutGlobalScopes()->findOrFail($account->last_credentials_notification_id);
-    preg_match('/Temporary Password:\n([^\n]+)/', $notification->resolvedDeliveryMessage(), $matches);
+    preg_match('/Temporary PIN \(4 digits\):\n(\d{4})/', $notification->resolvedDeliveryMessage(), $matches);
 
     return $matches[1];
 }
@@ -132,12 +131,12 @@ test('credential job reloads and decrypts the real onboarding message only at th
         && str_contains($request['message'], '255629364847')
         && str_contains($request['message'], $temporaryPassword)
         && str_contains($request['message'], '/customer/login')
-        && str_contains($request['message'], 'change your password')
+        && str_contains($request['message'], 'create a new password')
         && ! str_contains($request['message'], 'Encrypted customer portal credential notification.'));
 
     expect($notification->refresh()->status)->toBe('sent')
         ->and($notification->message)->toBe('Encrypted customer portal credential notification.')
-        ->and(DB::table('whatsapp_notifications')->where('id', $notification->id)->value('encrypted_message'))->toBe($rawEncryptedMessage);
+        ->and(DB::table('whatsapp_notifications')->where('id', $notification->id)->value('encrypted_message'))->toBeNull();
     $this->actingAs($this->admin)->get(route('settings.whatsapp.logs'))->assertOk()->assertDontSee($temporaryPassword);
 });
 
@@ -171,7 +170,7 @@ test('credential retry decrypts the same password without rotating the account',
     try {
         (new SendWhatsAppNotification($notification->id))->handle(app(Gowa::class));
         $this->fail('Expected the first GOWA attempt to fail.');
-    } catch (RequestException) {
+    } catch (RuntimeException) {
     }
 
     expect($notification->refresh()->status)->toBe('queued');
@@ -183,7 +182,7 @@ test('credential retry decrypts the same password without rotating the account',
         ->and($notification->refresh()->status)->toBe('sent')
         ->and($account->refresh()->credential_version)->toBe($credentialVersion)
         ->and($account->getRawOriginal('password'))->toBe($passwordHash)
-        ->and(DB::table('whatsapp_notifications')->where('id', $notification->id)->value('encrypted_message'))->toBe($encryptedPayload)
+        ->and(DB::table('whatsapp_notifications')->where('id', $notification->id)->value('encrypted_message'))->toBeNull()
         ->and(WhatsAppNotification::withoutGlobalScopes()->where('id', $notification->id)->count())->toBe(1);
 });
 
@@ -222,10 +221,10 @@ test('all credential sources resolve real protected messages while ordinary noti
     $types = WhatsAppNotification::withoutGlobalScopes()->whereIn('id', $notificationIds)->pluck('notification_type')->all();
     expect($types)->toContain('portal_onboarding', 'portal_password_reset', 'portal_password_recovery', 'portal_access_enabled');
     foreach (WhatsAppNotification::withoutGlobalScopes()->whereIn('id', $notificationIds)->get() as $credentialNotification) {
-        expect($credentialNotification->failure_reason)->toBeNull()
-            ->and($credentialNotification->status)->toBe('sent')
-            ->and($credentialNotification->message)->toBe('Encrypted customer portal credential notification.')
-            ->and($credentialNotification->resolvedDeliveryMessage())->toContain('Temporary Password')->not->toContain('Encrypted customer portal credential notification.');
+        $obsolete = in_array($credentialNotification->id, array_slice($notificationIds, 0, 2));
+        expect($credentialNotification->status)->toBe($obsolete ? 'suppressed' : 'sent')
+            ->and($credentialNotification->message)->toBe(WhatsAppNotification::SENSITIVE_MESSAGE_PLACEHOLDER)
+            ->and($credentialNotification->encrypted_message)->toBeNull();
     }
 
     $ordinary = app(WhatsAppNotificationService::class)->queuePhone(
@@ -260,7 +259,7 @@ test('staff customer form requires phone but accepts missing email', function ()
 test('portal login normalizes Tanzania phone formats rejects email and preserves remember behavior', function () {
     $account = createPhoneCustomer()['account']->refresh();
     $password = temporaryPasswordFor($account);
-    RateLimiter::clear('customer-login:'.hash('sha256', $account->login_phone.'|127.0.0.1'));
+    RateLimiter::clear('customer-auth:'.hash('sha256', $account->login_phone.'|127.0.0.1'));
     $this->withSession([]);
 
     Volt::test('customer.auth.login')
@@ -271,7 +270,7 @@ test('portal login normalizes Tanzania phone formats rejects email and preserves
         ->assertHasNoErrors()
         ->assertRedirect(route('customer.change-password', absolute: false));
     $this->assertAuthenticatedAs($account, 'customer');
-    expect(auth('customer')->user()->getRememberToken())->not->toBeNull();
+    expect(auth('customer')->user()->getRememberToken())->toBeEmpty();
 
     auth('customer')->logout();
     Volt::test('customer.auth.login')
@@ -283,7 +282,7 @@ test('portal login normalizes Tanzania phone formats rejects email and preserves
 
 test('wrong password is generic and repeated customer login attempts are throttled', function () {
     $account = createPhoneCustomer()['account']->refresh();
-    $key = 'customer-login:'.hash('sha256', $account->login_phone.'|127.0.0.1');
+    $key = 'customer-auth:'.hash('sha256', $account->login_phone.'|127.0.0.1');
     RateLimiter::clear($key);
 
     for ($attempt = 1; $attempt <= 5; $attempt++) {
@@ -324,6 +323,8 @@ test('customer self registration uses normalized phone and optional email withou
 test('temporary password forces change then old password stops working and B2B portal remains accessible', function () {
     $account = createPhoneCustomer()['account']->refresh();
     $temporary = temporaryPasswordFor($account);
+    app(CustomerPortalCredentialService::class)->authenticate($account->login_phone, $temporary);
+    $account->refresh();
     $this->withSession([]);
     $this->actingAs($account, 'customer');
 

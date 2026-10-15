@@ -11,11 +11,11 @@ use function Livewire\Volt\layout;
 layout('layouts.customer');
 
 $customer = computed(fn () => auth('customer')->user()->customer);
-$sales = computed(fn () => Sale::where('customer_id', $this->customer->id)->where('status', 'completed')->latest('sale_date')->get());
-$payments = computed(fn () => CustomerPayment::where('customer_id', $this->customer->id)->latest('payment_date')->get());
-$deposits = computed(fn () => CustomerDeposit::where('customer_id', $this->customer->id)->latest()->get());
+$sales = computed(fn () => Sale::where('company_id', $this->customer->company_id)->where('customer_id', $this->customer->id)->where('status', 'completed')->latest('sale_date')->get());
+$payments = computed(fn () => CustomerPayment::where('company_id', $this->customer->company_id)->where('customer_id', $this->customer->id)->latest('payment_date')->get());
+$deposits = computed(fn () => CustomerDeposit::where('company_id', $this->customer->company_id)->where('customer_id', $this->customer->id)->latest()->get());
 $balance = computed(fn () => app(AccountingService::class)->customerBalance($this->customer));
-$methodLabel = fn (string $method) => __("messages.methods.$method") === "messages.methods.$method" ? str($method)->replace('_', ' ')->title() : __("messages.methods.$method");
+$methodLabel = fn (string $method) => __("messages.methods.$method") === "messages.methods.$method" ? \App\Support\UiText::label($method) : __("messages.methods.$method");
 
 ?>
 
@@ -32,7 +32,7 @@ $methodLabel = fn (string $method) => __("messages.methods.$method") === "messag
         <x-card :title="__('messages.statements.purchases')">
             <x-table :headers="[__('messages.table.date'), __('messages.debts.invoice_number'), __('messages.table.total'), __('messages.table.paid'), __('messages.table.balance')]">
                 @forelse ($this->sales as $sale)
-                    <tr><td class="px-4 py-3">{{ $sale->sale_date?->format('M d, Y') }}</td><td class="px-4 py-3 font-bold">{{ $sale->sale_number }}</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</td></tr>
+                    <tr><td class="px-4 py-3">{{ $sale->sale_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td><td class="px-4 py-3 font-bold">{{ $sale->sale_number }}</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</td></tr>
                 @empty
                     <tr><td colspan="5" class="px-4 py-8 text-center text-sm text-slate-500">{{ __('messages.statements.no_purchases') }}</td></tr>
                 @endforelse
@@ -41,7 +41,7 @@ $methodLabel = fn (string $method) => __("messages.methods.$method") === "messag
         <x-card :title="__('messages.statements.payments')">
             <x-table :headers="[__('messages.table.date'), __('messages.table.method'), __('messages.table.reference'), __('messages.table.amount')]">
                 @forelse ($this->payments as $payment)
-                    <tr><td class="px-4 py-3">{{ $payment->payment_date?->format('M d, Y') }}</td><td class="px-4 py-3">{{ $this->methodLabel($payment->payment_method) }}</td><td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td></tr>
+                    <tr><td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td><td class="px-4 py-3">{{ $this->methodLabel($payment->payment_method) }}</td><td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td></tr>
                 @empty
                     <tr><td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500">{{ __('messages.statements.no_payments') }}</td></tr>
                 @endforelse

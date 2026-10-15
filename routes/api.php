@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\CustomerAuthController;
+use App\Http\Controllers\Api\CustomerOrderingController;
 use App\Http\Controllers\Api\CustomerPortalApiController;
+use App\Http\Middleware\SetCustomerApiLocale;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('customer')->middleware('throttle:customer-api')->group(function () {
+Route::prefix('customer')->middleware([SetCustomerApiLocale::class, 'throttle:customer-api'])->group(function () {
     Route::post('login', [CustomerAuthController::class, 'login'])->name('api.customer.login');
     Route::post('register', [CustomerAuthController::class, 'register'])->name('api.customer.register');
     Route::post('forgot-password', [CustomerAuthController::class, 'forgotPassword'])->name('api.customer.forgot-password');
@@ -14,6 +16,11 @@ Route::prefix('customer')->middleware('throttle:customer-api')->group(function (
         Route::post('change-password', [CustomerAuthController::class, 'changePassword'])->name('api.customer.change-password');
 
         Route::middleware('customer.api.active')->group(function () {
+            Route::get('products', [CustomerOrderingController::class, 'products'])->name('api.customer.products');
+            Route::get('requests', [CustomerOrderingController::class, 'requests']);
+            Route::post('requests', [CustomerOrderingController::class, 'store']);
+            Route::get('quotations', [CustomerOrderingController::class, 'quotations']);
+            Route::post('quotations/{quotation}/decision', [CustomerOrderingController::class, 'decide']);
             Route::get('dashboard', [CustomerPortalApiController::class, 'dashboard'])->name('api.customer.dashboard');
             Route::get('debts', [CustomerPortalApiController::class, 'debts'])->name('api.customer.debts');
             Route::get('debts/{sale}', [CustomerPortalApiController::class, 'debt'])->name('api.customer.debts.show');

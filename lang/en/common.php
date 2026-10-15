@@ -1,36 +1,4 @@
 <?php
 
-return [
-    'save' => 'Save',
-    'cancel' => 'Cancel',
-    'delete' => 'Delete',
-    'edit' => 'Edit',
-    'create' => 'Create',
-    'update' => 'Update',
-    'search' => 'Search',
-    'filter' => 'Filter',
-    'export' => 'Export',
-    'print' => 'Print',
-    'download' => 'Download',
-    'upload' => 'Upload',
-    'actions' => 'Actions',
-    'status' => 'Status',
-    'date' => 'Date',
-    'amount' => 'Amount',
-    'total' => 'Total',
-    'balance' => 'Balance',
-    'yes' => 'Yes',
-    'no' => 'No',
-    'all' => 'All',
-    'active' => 'Active',
-    'inactive' => 'Inactive',
-    'retail' => 'Retail',
-    'wholesale' => 'Wholesale',
-    'sale_type' => 'Sale Type',
-    'saved' => 'Saved successfully',
-    'deleted' => 'Deleted successfully',
-    'updated' => 'Updated successfully',
-    'no_records' => 'No records found',
-    'toggle_sidebar' => 'Toggle sidebar',
-    'user' => 'User',
-];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/common.php';

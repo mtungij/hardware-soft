@@ -35,7 +35,7 @@ $completeTransfer = function (int $transferId, InventoryService $inventory) {
     abort_unless($this->canManage(), 403);
 
     $inventory->completeStockTransfer($transferId, auth()->id());
-    session()->flash('success', 'Stock transfer completed.');
+    session()->flash('success', __('application.stock_transfer_completed_8ca94dc0'));
 };
 
 $cancelTransfer = function (int $transferId) {
@@ -48,7 +48,7 @@ $cancelTransfer = function (int $transferId) {
 
         if ($transfer->status !== 'draft') {
             throw \Illuminate\Validation\ValidationException::withMessages([
-                'transfer' => 'Only draft transfers can be cancelled here. Use the transfer details to reverse a completed transfer.',
+                'transfer' => __('application.only_draft_transfers_can_be_cancelled_here_use_the_transfer_details_to_reve_d605ea13'),
             ]);
         }
 
@@ -59,16 +59,16 @@ $cancelTransfer = function (int $transferId) {
         ]);
     });
 
-    session()->flash('success', 'Stock transfer cancelled.');
+    session()->flash('success', __('application.stock_transfer_cancelled_ec32e911'));
 };
 
 ?>
 
 <div>
-    <x-page-header title="Stock Transfers" description="Transfer stock between authorized internal locations." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Transfers' => null]">
+    <x-page-header title="{{ __('application.stock_transfers_5b3d4988') }}" description="{{ __('application.transfer_stock_between_authorized_internal_locations_f33f96ba') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Transfers' => null]">
         <x-export-actions export="tables.stock-transfers" :params="['search' => $search, 'status' => $statusFilter, 'from_location_id' => $fromFilter, 'to_location_id' => $toFilter, 'date_from' => $dateFrom, 'date_to' => $dateTo]" />
         @if ($this->canCreate())
-            <a href="{{ route('stock-transfers.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Create Transfer</a>
+            <a href="{{ route('stock-transfers.create') }}" wire:navigate class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ __('application.create_transfer_c86814b6') }}</a>
         @endif
     </x-page-header>
 
@@ -76,21 +76,21 @@ $cancelTransfer = function (int $transferId) {
 
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-6">
-            <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search transfer...">
+            <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ __('application.search_transfer_1314349b') }}">
             <select wire:model.live="statusFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                <option value="">All statuses</option>
-                <option value="draft">Draft</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
+                <option value="">{{ __('application.all_statuses_6405179d') }}</option>
+                <option value="draft">{{ __('application.draft_23d33e22') }}</option>
+                <option value="completed">{{ __('application.completed_1798b3ba') }}</option>
+                <option value="cancelled">{{ __('application.cancelled_a1bf92ef') }}</option>
             </select>
             <select wire:model.live="fromFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                <option value="">From any</option>
+                <option value="">{{ __('application.from_any_72a37172') }}</option>
                 @foreach (StockLocation::orderBy('name')->get() as $location)
                     <option value="{{ $location->id }}">{{ $location->name }}</option>
                 @endforeach
             </select>
             <select wire:model.live="toFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                <option value="">To any</option>
+                <option value="">{{ __('application.to_any_508fe825') }}</option>
                 @foreach (StockLocation::orderBy('name')->get() as $location)
                     <option value="{{ $location->id }}">{{ $location->name }}</option>
                 @endforeach
@@ -114,32 +114,32 @@ $cancelTransfer = function (int $transferId) {
                 ->paginate(10);
         @endphp
 
-        <x-table :headers="['Transfer #', 'Date', 'From', 'To', 'Items', 'Quantity', 'Created By', 'Status', 'Actions']">
+        <x-table :headers="[__('application.transfer_87c43f1d'), __('application.date_eb9a4bc1'), __('application.from_3f66052a'), __('application.to_ae79ea1e'), __('application.items_44d25b5d'), __('application.quantity_44f6af69'), __('application.created_by_43de2bcd'), __('application.status_bae7d5be'), __('application.actions_c3cd636a')]">
             @forelse ($transfers as $transfer)
                 <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3 font-black">{{ $transfer->transfer_number }}</td>
-                    <td class="px-4 py-3">{{ $transfer->transfer_date->format('d M Y') }}</td>
+                    <td class="px-4 py-3">{{ $transfer->transfer_date->locale(app()->getLocale())->translatedFormat('d M Y') }}</td>
                     <td class="px-4 py-3">{{ $transfer->fromLocation?->name }}</td>
                     <td class="px-4 py-3">{{ $transfer->toLocation?->name }}</td>
                     <td class="px-4 py-3">{{ $transfer->items_count }}</td>
                     <td class="px-4 py-3">{{ \App\Support\NumberFormatter::quantity($transfer->items_sum_quantity) }}</td>
                     <td class="px-4 py-3">{{ $transfer->createdBy?->name }}</td>
-                    <td class="px-4 py-3"><span class="{{ $transfer->status === 'completed' ? 'badge-success' : ($transfer->status === 'cancelled' ? 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ ucfirst($transfer->status) }}</span></td>
+                    <td class="px-4 py-3"><span class="{{ $transfer->status === 'completed' ? 'badge-success' : ($transfer->status === 'cancelled' ? 'rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-700 dark:bg-red-500/15 dark:text-red-300' : 'badge-warning') }}">{{ \App\Support\UiText::status($transfer->status) }}</span></td>
                     <td class="px-4 py-3">
                         <div class="flex flex-wrap gap-2">
-                            <a href="{{ route('stock-transfers.show', $transfer) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">View</a>
+                            <a href="{{ route('stock-transfers.show', $transfer) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ __('application.view_69bd4ef9') }}</a>
                             @if ($transfer->canBeModified() && $this->canManage())
-                                <a href="{{ route('stock-transfers.edit', $transfer) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">Edit</a>
-                                <button wire:click="completeTransfer({{ $transfer->id }})" class="rounded-lg bg-build-orange px-3 py-1.5 text-xs font-bold text-white">Complete</button>
+                                <a href="{{ route('stock-transfers.edit', $transfer) }}" wire:navigate class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ __('application.edit_5301648d') }}</a>
+                                <button wire:click="completeTransfer({{ $transfer->id }})" class="rounded-lg bg-build-orange px-3 py-1.5 text-xs font-bold text-white">{{ __('application.complete_1f5a1abf') }}</button>
                             @endif
                             @if ($transfer->status === 'draft' && $this->canCancel())
-                                <button wire:click="cancelTransfer({{ $transfer->id }})" wire:confirm="Cancel this transfer?" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white">Cancel</button>
+                                <button wire:click="cancelTransfer({{ $transfer->id }})" wire:confirm="{{ __('application.cancel_this_transfer_dc0a31f0') }}" class="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white">{{ __('application.cancel_77dfd213') }}</button>
                             @endif
                         </div>
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No stock transfers found.</td></tr>
+                <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">{{ __('application.no_stock_transfers_found_2245bd2e') }}</td></tr>
             @endforelse
         </x-table>
 

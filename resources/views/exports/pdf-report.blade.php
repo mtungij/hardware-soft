@@ -33,9 +33,9 @@
                 <td>
                     <div class="brand">{{ $header['company_name'] }}</div>
                     <div class="muted">
-                        Phone: {{ $header['phone'] ?: '-' }} |
-                        WhatsApp: {{ $header['whatsapp'] ?: '-' }} |
-                        Email: {{ $header['email'] ?: '-' }}
+                        {{ __('application.phone_daeea4d0') }} {{ $header['phone'] ?: '-' }} |
+                        {{ \App\Support\UiText::translate(__('application.whatsapp_b336fc55')) }}: {{ $header['whatsapp'] ?: '-' }} |
+                        {{ \App\Support\UiText::translate(__('application.email_84add5b2')) }}: {{ $header['email'] ?: '-' }}
                     </div>
                     <div class="muted">
                         {{ $header['address'] ?: '-' }} |
@@ -44,16 +44,16 @@
                 </td>
                 <td width="30%" align="right">
                     <h2>{{ $title }}</h2>
-                    <div class="muted">Printed: {{ $header['printed_date'] }}</div>
+                    <div class="muted">{{ __('application.printed_c6fd1db5') }} {{ $header['printed_date'] }}</div>
                 </td>
             </tr>
         </table>
 
         <table class="meta">
             <tr>
-                <td><strong>Date Range:</strong> {{ $header['date_range'] }}</td>
-                <td><strong>Branch:</strong> {{ $header['branch_name'] }}</td>
-                <td><strong>Printed By:</strong> {{ $header['printed_by'] }}</td>
+                <td><strong>{{ __('application.date_range_e85bcb56') }}</strong> {{ $header['date_range'] }}</td>
+                <td><strong>{{ __('application.branch_8b31d33d') }}</strong> {{ $header['branch_name'] }}</td>
+                <td><strong>{{ __('application.printed_by_fc3328e4') }}</strong> {{ $header['printed_by'] }}</td>
             </tr>
         </table>
     </div>
@@ -74,7 +74,7 @@
                     @endforeach
                 </tr>
             @empty
-                <tr><td colspan="{{ count($headers) }}">No records found.</td></tr>
+                <tr><td colspan="{{ count($headers) }}">{{ __('application.no_records_found_7cd1d44b') }}</td></tr>
             @endforelse
         </tbody>
     </table>
@@ -89,9 +89,9 @@
 
     <table class="signature">
         <tr>
-            <td>Prepared By</td>
-            <td>Checked By</td>
-            <td>Approved By</td>
+            <td>{{ __('application.prepared_by_447abf81') }}</td>
+            <td>{{ __('application.checked_by_80f2a295') }}</td>
+            <td>{{ __('application.approved_by_2b62a43b') }}</td>
         </tr>
     </table>
 </body>

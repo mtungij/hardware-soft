@@ -71,7 +71,7 @@ class ProductUnitConversionService
     {
         $conversion = $this->resolve($product, $conversionId, 'can_purchase', $lockForUpdate);
         if ($conversion && $conversion->unit?->status !== 'active') {
-            throw ValidationException::withMessages(['unit' => 'The selected purchase unit is inactive.']);
+            throw ValidationException::withMessages(['unit' => __('application.the_selected_purchase_unit_is_inactive_86044b4d')]);
         }
 
         return $conversion;
@@ -95,11 +95,11 @@ class ProductUnitConversionService
         bool $lockForUpdate = false,
     ): array {
         if (! is_numeric($transactionQuantity) || (float) $transactionQuantity <= 0) {
-            throw ValidationException::withMessages(['quantity' => 'Quantity must be greater than zero.']);
+            throw ValidationException::withMessages(['quantity' => __('application.quantity_must_be_greater_than_zero_a53d797f')]);
         }
 
         if (! is_numeric($transactionUnitCost) || (float) $transactionUnitCost < 0) {
-            throw ValidationException::withMessages(['cost_price' => 'Buying Price must be zero or greater.']);
+            throw ValidationException::withMessages(['cost_price' => __('application.buying_price_must_be_zero_or_greater_ed6c3338')]);
         }
 
         $quantity = (float) $transactionQuantity;
@@ -108,7 +108,7 @@ class ProductUnitConversionService
         $factor = $conversion ? (float) $conversion->conversion_factor : 1.0;
 
         if ($factor <= 0) {
-            throw ValidationException::withMessages(['product_unit_conversion_id' => 'The selected unit has an invalid conversion factor.']);
+            throw ValidationException::withMessages(['product_unit_conversion_id' => __('application.the_selected_unit_has_an_invalid_conversion_factor_5c57a817')]);
         }
 
         $transactionMeasurement = $conversion?->unit?->measurementType?->code
@@ -116,7 +116,7 @@ class ProductUnitConversionService
             ?? $product->measurementCode();
 
         if ($transactionMeasurement === MeasurementType::COUNT && ! $product->quantityIsWhole($quantity)) {
-            throw ValidationException::withMessages(['quantity' => 'Quantity must be a whole number for the selected unit.']);
+            throw ValidationException::withMessages(['quantity' => __('application.quantity_must_be_a_whole_number_for_the_selected_unit_ea74af67')]);
         }
 
         $baseQuantity = $conversion ? $conversion->baseQuantity($quantity) : round($quantity, 4);
@@ -151,7 +151,7 @@ class ProductUnitConversionService
             ->find($conversionId);
 
         if (! $conversion) {
-            throw ValidationException::withMessages(['unit' => 'The selected product unit is inactive or not allowed for this transaction.']);
+            throw ValidationException::withMessages(['unit' => __('application.the_selected_product_unit_is_inactive_or_not_allowed_for_this_transaction_d0da7eca')]);
         }
 
         return $conversion;

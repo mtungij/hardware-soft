@@ -91,7 +91,7 @@ $save = function () {
     $this->dispatch('buildmart-theme-color-updated', color: $this->theme_color);
     $this->dispatch('hardex-brand-updated', name: $this->company_name, initials: $this->brandInitials($this->company_name), logoUrl: $this->company_logo ? asset('storage/'.$this->company_logo) : '');
 
-    session()->flash('success', 'System settings saved.');
+    session()->flash('success', __('application.system_settings_saved_dac4f17b'));
 };
 
 $brandInitials = function (?string $name): string {
@@ -113,59 +113,59 @@ $removeLogo = function () {
     $this->logo_upload = null;
     $this->dispatch('hardex-brand-updated', name: $this->company_name, initials: $this->brandInitials($this->company_name), logoUrl: '');
 
-    session()->flash('success', 'Company logo removed.');
+    session()->flash('success', __('application.company_logo_removed_3a22f36e'));
 };
 
 ?>
 
 <div>
     <x-page-header
-        title="System Settings"
-        description="Configure company identity, defaults, receipts, tax, and visual theme."
+        title="{{ __('application.system_settings_142fad61') }}"
+        description="{{ __('application.configure_company_identity_defaults_receipts_tax_and_visual_theme_7a82ad05') }}"
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Settings' => null]"
     />
 
     <x-card>
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
-            <x-form-input label="Company Name" name="company_name" wire:model="company_name" required />
+            <x-form-input label="{{ __('application.company_name_8599f5cc') }}" name="company_name" wire:model="company_name" required />
 
             <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800 md:row-span-2">
                 <div class="flex items-start gap-4">
                     <div class="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-white/5">
                         @if ($logo_upload)
-                            <img src="{{ $logo_upload->temporaryUrl() }}" class="h-full w-full object-contain" alt="New company logo preview">
+                            <img src="{{ $logo_upload->temporaryUrl() }}" class="h-full w-full object-contain" alt="{{ __('application.new_company_logo_preview_580fa318') }}">
                         @elseif ($company_logo)
                             <img src="{{ asset('storage/'.$company_logo) }}" class="h-full w-full object-contain" alt="{{ $company_name }} logo">
                         @else
-                            <span class="text-xs font-black uppercase text-slate-400">Logo</span>
+                            <span class="text-xs font-black uppercase text-slate-400">{{ __('application.logo_83fce832') }}</span>
                         @endif
                     </div>
 
                     <div class="min-w-0 flex-1">
-                        <x-file-upload label="Company Logo" name="logo_upload" wire:model="logo_upload" accept="image/png,image/jpeg,image/webp" />
-                        <p class="mt-2 text-xs font-medium text-slate-500">Upload PNG, JPG, or WEBP. Max size 2MB.</p>
-                        <div wire:loading wire:target="logo_upload" class="mt-2 text-xs font-bold text-build-orange">Uploading logo...</div>
+                        <x-file-upload label="{{ __('application.company_logo_b2d0bdaa') }}" name="logo_upload" wire:model="logo_upload" accept="image/png,image/jpeg,image/webp" />
+                        <p class="mt-2 text-xs font-medium text-slate-500">{{ __('application.upload_png_jpg_or_webp_max_size_2mb_dd1076b2') }}</p>
+                        <div wire:loading wire:target="logo_upload" class="mt-2 text-xs font-bold text-build-orange">{{ __('application.uploading_logo_5b3e6949') }}</div>
 
                         @if ($company_logo)
-                            <button type="button" wire:click="removeLogo" wire:confirm="Remove the company logo?" class="mt-3 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-black text-red-600 dark:border-red-500/30 dark:text-red-300">
-                                Remove Logo
+                            <button type="button" wire:click="removeLogo" wire:confirm="{{ __('application.remove_the_company_logo_d96961a8') }}" class="mt-3 rounded-lg border border-red-200 px-3 py-1.5 text-xs font-black text-red-600 dark:border-red-500/30 dark:text-red-300">
+                                {{ __('application.remove_logo_587631f6') }}
                             </button>
                         @endif
                     </div>
                 </div>
             </div>
 
-            <x-form-input label="Company Phone" name="company_phone" wire:model="company_phone" />
-            <x-form-input label="Company Email" name="company_email" type="email" wire:model="company_email" />
-            <x-form-input label="Currency" name="currency" wire:model="currency" required />
-            <x-form-input label="System Theme Color" name="theme_color" type="color" wire:model="theme_color" required />
-            <x-form-input label="Installed App Background Color" name="pwa_background_color" type="color" wire:model="pwa_background_color" required />
-            <p class="md:col-span-2 text-xs text-slate-500">The installed app uses this company's name, logo, theme color, and background color. Some devices need the app re-added to update its home screen name or icon.</p>
+            <x-form-input label="{{ __('application.company_phone_5b4e75ae') }}" name="company_phone" wire:model="company_phone" />
+            <x-form-input label="{{ __('application.company_email_cd917389') }}" name="company_email" type="email" wire:model="company_email" />
+            <x-form-input label="{{ __('application.currency_e070de22') }}" name="currency" wire:model="currency" required />
+            <x-form-input label="{{ __('application.system_theme_color_c235b07e') }}" name="theme_color" type="color" wire:model="theme_color" required />
+            <x-form-input label="{{ __('application.installed_app_background_color_81ba8153') }}" name="pwa_background_color" type="color" wire:model="pwa_background_color" required />
+            <p class="md:col-span-2 text-xs text-slate-500">{{ __('application.the_installed_app_uses_this_company_s_name_logo_theme_color_and_background__938a076e') }}</p>
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Default Branch
+                {{ __('application.default_branch_4d69c866') }}
                 <select wire:model="default_branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">No default branch</option>
+                    <option value="">{{ __('application.no_default_branch_a239734d') }}</option>
                     @foreach (Branch::orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                     @endforeach
@@ -175,17 +175,17 @@ $removeLogo = function () {
 
             <label class="flex items-center gap-3 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-800">
                 <input type="checkbox" wire:model="tax_enabled" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                Tax/VAT enabled
+                {{ __('application.tax_vat_enabled_c8d1ff62') }}
             </label>
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">
-                Company Address
+                {{ __('application.company_address_d2142c60') }}
                 <textarea wire:model="company_address" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
                 @error('company_address') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 
             <div class="md:col-span-2">
-                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save Settings</button>
+                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ __('application.save_settings_0022a3e1') }}</button>
             </div>
         </form>
     </x-card>

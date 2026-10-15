@@ -48,9 +48,9 @@ return [
         'no_material_selected' => 'Chagua angalau bidhaa moja.',
         'quantity_positive' => 'Idadi ya bidhaa lazima iwe zaidi ya sifuri.',
         'quantity_exceeds_remaining' => 'Idadi unayotaka kutoa imezidi iliyobaki kwenye mpango ya :remaining :unit.',
-        'invalid_base_quantity' => ':product inahitaji idadi sahihi ya stock.',
-        'insufficient_stock' => 'Stock haitoshi. Iliyopo: :available :unit; inayohitajika: :required :unit.',
-        'invalid_stock_location' => 'Chagua eneo la stock linaloruhusiwa kutoa bidhaa katika tawi la akaunti.',
+        'invalid_base_quantity' => ':product inahitaji idadi sahihi ya hisa.',
+        'insufficient_stock' => 'Hisa haitoshi. Iliyopo: :available :unit; inayohitajika: :required :unit.',
+        'invalid_stock_location' => 'Chagua eneo la hisa linaloruhusiwa kutoa bidhaa katika tawi la akaunti.',
         'insufficient_funded_balance' => 'Salio halitoshi. Umebakiwa na TZS :available lakini bidhaa unazotaka kutoa zina thamani ya TZS :requested.',
     ],
     'material_issue' => [

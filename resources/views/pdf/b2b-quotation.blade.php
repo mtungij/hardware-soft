@@ -10,27 +10,27 @@ body{font-family:sans-serif;color:#172033;font-size:9pt}.brand{color:#f97316;fon
 @php($paymentMethods=$paymentMethods??collect())
 <div class="brand">{{ $quotation->company->company_name }}</div>
 <div class="muted">{{ $quotation->company->address }} · {{ $quotation->company->phone }} · {{ $quotation->company->email }}</div>
-<h1>{{ $quotation->document_type === 'proforma' ? 'PROFORMA INVOICE' : 'QUOTATION' }}</h1>
+<h1>{{ $quotation->document_type === 'proforma' ? __('terminology.proforma_invoice_21b03d8b') : __('application.quotation_a03402d0') }}</h1>
 <table class="grid">
 <tr>
 <td>
 <b>{{ $quotation->quotation_number }}</b>
-<br>Date: {{ $quotation->quotation_date->format('d M Y') }}<br>Valid Until: {{ $quotation->valid_until->format('d M Y') }}</td>
+<br>{{ __('application.date_81b7d2ea') }} {{ $quotation->quotation_date->locale(app()->getLocale())->translatedFormat('d M Y') }}<br>{{ __('application.valid_until_a4838c38') }} {{ $quotation->valid_until->locale(app()->getLocale())->translatedFormat('d M Y') }}</td>
 <td>
-<b>Customer</b>
-<br>{{ $quotation->customer->name }}<br>{{ $quotation->customer->phone }}<br>{{ $quotation->customer->address }}</td>
+<b>{{ __('application.customer_0e85749a') }}</b>
+<br>{{ $quotation->customer->displayName() }}<br>{{ $quotation->customer->phone }}<br>{{ $quotation->customer->address }}</td>
 </tr>
 </table>
 <table class="items">
 <thead>
 <tr>
 <th>#</th>
-<th>Product</th>
-<th>Unit</th>
-<th class="right">Quantity</th>
-<th class="right">Unit Price</th>
-<th class="right">Discount</th>
-<th class="right">Total</th>
+<th>{{ __('application.product_dd3b86d1') }}</th>
+<th>{{ __('application.unit_f6b935ab') }}</th>
+<th class="right">{{ __('application.quantity_44f6af69') }}</th>
+<th class="right">{{ __('application.unit_price_1eea68d0') }}</th>
+<th class="right">{{ __('application.discount_b524936d') }}</th>
+<th class="right">{{ __('application.total_b25928c6') }}</th>
 </tr>
 </thead>
 <tbody>
@@ -47,33 +47,33 @@ body{font-family:sans-serif;color:#172033;font-size:9pt}.brand{color:#f97316;fon
 </table>
 <table class="summary">
 <tr>
-<td>Subtotal</td>
+<td>{{ __('application.subtotal_97f7359e') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($quotation->subtotal) }}</td>
 </tr>
 <tr>
-<td>Discount</td>
+<td>{{ __('application.discount_b524936d') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($quotation->discount_amount) }}</td>
 </tr>
 <tr>
-<td>Tax</td>
+<td>{{ __('application.tax_9be70f66') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($quotation->tax_amount) }}</td>
 </tr>@foreach($quotation->additionalCharges as $charge)<tr>
 <td>{{ $charge->charge_name_snapshot }}@if($charge->description_snapshot)<br><span class="muted">{{ $charge->description_snapshot }}</span>@endif</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($charge->amount) }}</td>
 </tr>@endforeach<tr class="total">
-<td>Grand Total</td>
+<td>{{ __('application.grand_total_91faafb1') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($quotation->total_amount) }}</td>
 </tr>
 </table>
-@if($quotation->notes)<div class="section">Notes</div>
+@if($quotation->notes)<div class="section">{{ __('application.notes_70440046') }}</div>
 <div>{{ $quotation->notes }}</div>@endif
-@if($quotation->terms)<div class="section">Terms</div>
+@if($quotation->terms)<div class="section">{{ __('application.terms_a55a275a') }}</div>
 <div>{{ $quotation->terms }}</div>@endif
-@if($paymentMethods->isNotEmpty())<div class="section">Payment Instructions</div>
-<div class="muted">Use payment reference: <b>{{ $quotation->quotation_number }}</b>
+@if($paymentMethods->isNotEmpty())<div class="section">{{ __('application.payment_instructions_f3fa021f') }}</div>
+<div class="muted">{{ __('application.use_payment_reference_e3549df1') }} <b>{{ $quotation->quotation_number }}</b>
 </div>@foreach($paymentMethods as $method)<div style="margin-top:2mm">
-<b>{{ $method->display_name }}</b>@if($method->provider) · {{ $method->provider }}@endif@if($method->bank_name) · {{ $method->bank_name }}@endif<br>@if($method->account_name)Account name: {{ $method->account_name }}<br>@endif @if($method->account_number)Account: {{ $method->account_number }}<br>@endif @if($method->phone_or_business_number)Number: {{ $method->phone_or_business_number }}<br>@endif @if($method->branch_name)Branch: {{ $method->branch_name }}<br>@endif @if($method->instructions){{ $method->instructions }}@endif</div>@endforeach @endif
-<div class="section">Prepared By</div>
+<b>{{ $method->display_name }}</b>@if($method->provider) · {{ $method->provider }}@endif@if($method->bank_name) · {{ $method->bank_name }}@endif<br>@if($method->account_name){{ __('application.account_name_3e29c383') }} {{ $method->account_name }}<br>@endif @if($method->account_number){{ __('application.account_ac06ef9e') }} {{ $method->account_number }}<br>@endif @if($method->phone_or_business_number){{ __('application.number_73089985') }} {{ $method->phone_or_business_number }}<br>@endif @if($method->branch_name){{ __('application.branch_8b31d33d') }} {{ $method->branch_name }}<br>@endif @if($method->instructions){{ $method->instructions }}@endif</div>@endforeach @endif
+<div class="section">{{ __('application.prepared_by_447abf81') }}</div>
 <div>{{ $quotation->creator->name }}</div>
 </body>
 </html>

@@ -204,7 +204,7 @@ $completeSale = function (InternalSaleService $service): void {
     $sale = $service->saveDraft($validated, auth()->user(), $existing);
     $sale = $service->complete($sale, auth()->user());
 
-    session()->flash('success', 'Internal Sale completed successfully.');
+    session()->flash('success', __('application.internal_sale_completed_successfully_bdb17c3f'));
 
     $this->redirectRoute('internal-sales.show', $sale, navigate: true);
 };
@@ -212,7 +212,7 @@ $completeSale = function (InternalSaleService $service): void {
 ?>
 
 <div>
-    <x-page-header :title="$editingSaleId ? 'Edit Internal Sale' : 'Create Internal Sale'" description="Move stock at an internal price while retaining company inventory cost." :breadcrumbs="['Dashboard' => route('dashboard'), 'Internal Sales' => route('internal-sales.index'), ($editingSaleId ? 'Edit' : 'Create') => null]" />
+    <x-page-header :title="$editingSaleId ? __('terminology.edit_internal_sale_550e8790') : __('application.create_internal_sale_601715df')" description="{{ __('application.move_stock_at_an_internal_price_while_retaining_company_inventory_cost_ccb712d4') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Internal Sales' => route('internal-sales.index'), ($editingSaleId ? 'Edit' : 'Create') => null]" />
     @php
         $user = auth()->user();
         $service = app(InternalSaleService::class);
@@ -226,41 +226,41 @@ $completeSale = function (InternalSaleService $service): void {
     <form wire:submit="save">
         <x-card>
             <div class="grid gap-4 md:grid-cols-3">
-                <label class="text-sm font-bold">Number<input wire:model="internal_sale_number" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error('internal_sale_number')<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                <label class="text-sm font-bold">Date<input wire:model="sale_date" type="date" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error('sale_date')<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                <label class="text-sm font-bold">Branch<select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">Choose branch</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>@error('branch_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                <label class="text-sm font-bold">Source<select wire:model.live="from_location_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">Choose source</option>@foreach($sources as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select>@error('from_location_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                <label class="text-sm font-bold">Destination<select wire:model="to_location_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">Choose destination</option>@foreach($destinations as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select>@error('to_location_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                <label class="text-sm font-bold">Notes<input wire:model="notes" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"></label>
+                <label class="text-sm font-bold">{{ __('application.number_b7baa1d4') }}<input wire:model="internal_sale_number" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error('internal_sale_number')<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                <label class="text-sm font-bold">{{ __('application.date_eb9a4bc1') }}<input wire:model="sale_date" type="date" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error('sale_date')<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                <label class="text-sm font-bold">{{ __('application.branch_1627510b') }}<select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">{{ __('application.choose_branch_144ee159') }}</option>@foreach($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>@error('branch_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                <label class="text-sm font-bold">{{ __('application.source_6da13add') }}<select wire:model.live="from_location_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">{{ __('application.choose_source_31bf0cd8') }}</option>@foreach($sources as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select>@error('from_location_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                <label class="text-sm font-bold">{{ __('application.destination_d4271349') }}<select wire:model="to_location_id" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">{{ __('application.choose_destination_a311df08') }}</option>@foreach($destinations as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select>@error('to_location_id')<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                <label class="text-sm font-bold">{{ __('application.notes_70440046') }}<input wire:model="notes" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"></label>
             </div>
         </x-card>
         <x-card class="mt-4">
-            <div class="mb-3 flex items-center justify-between"><h3 class="font-bold">Items</h3><div class="flex gap-2"><button type="button" wire:click="loadPrices" class="rounded-lg border px-3 py-2 text-sm font-bold">Load location prices</button><button type="button" wire:click="addItem" class="rounded-lg border px-3 py-2 text-sm font-bold">Add item</button></div></div>
+            <div class="mb-3 flex items-center justify-between"><h3 class="font-bold">{{ __('application.items_44d25b5d') }}</h3><div class="flex gap-2"><button type="button" wire:click="loadPrices" class="rounded-lg border px-3 py-2 text-sm font-bold">{{ __('application.load_location_prices_14179e5a') }}</button><button type="button" wire:click="addItem" class="rounded-lg border px-3 py-2 text-sm font-bold">{{ __('application.add_item_5bcf4db4') }}</button></div></div>
             @error('items')<p class="text-red-600">{{ $message }}</p>@enderror
             @foreach($items as $index => $row)
                 <div wire:key="internal-item-{{ $index }}" class="mb-3 grid gap-3 md:grid-cols-4">
-                    <label class="text-sm">Product / unit<select wire:model.live="items.{{ $index }}.selection" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">Choose product</option>@foreach($products as $product)<option value="{{ $product->id }}:">{{ $product->displayName() }} ({{ $product->unit?->short_name }})</option>@foreach($product->unitConversions->filter(fn ($conversion) => $conversion->active && $conversion->can_sell && $conversion->unit?->status === 'active') as $conversion)<option value="{{ $product->id }}:{{ $conversion->id }}">{{ $product->displayName() }} ({{ $conversion->unit?->short_name }})</option>@endforeach @endforeach</select>@error("items.{$index}.selection")<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                    <label class="text-sm">Quantity<input wire:model="items.{{ $index }}.quantity" type="number" step="0.0001" min="0.0001" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error("items.{$index}.quantity")<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                    <label class="text-sm">Internal unit price<input wire:model.live.debounce.300ms="items.{{ $index }}.internal_unit_price" type="number" step="0.01" min="0" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error("items.{$index}.internal_unit_price")<span class="text-red-600">{{ $message }}</span>@enderror</label>
-                    <div class="self-end flex gap-2"><button type="button" wire:click="resetItemPrice({{ $index }})" class="rounded-lg border px-3 py-2 text-sm">Use suggested price</button><button type="button" wire:click="removeItem({{ $index }})" class="rounded-lg border px-3 py-2 text-sm">Remove</button></div>
-                    <p class="md:col-span-4 text-xs text-slate-500">Price source: {{ $row['price_source'] ?: 'Select a product' }}</p>
+                    <label class="text-sm">{{ __('application.product_unit_8b22f066') }}<select wire:model.live="items.{{ $index }}.selection" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950"><option value="">{{ __('application.choose_product_23d8d26d') }}</option>@foreach($products as $product)<option value="{{ $product->id }}:">{{ $product->displayName() }} ({{ $product->unit?->short_name }})</option>@foreach($product->unitConversions->filter(fn ($conversion) => $conversion->active && $conversion->can_sell && $conversion->unit?->status === 'active') as $conversion)<option value="{{ $product->id }}:{{ $conversion->id }}">{{ $product->displayName() }} ({{ $conversion->unit?->short_name }})</option>@endforeach @endforeach</select>@error("items.{$index}.selection")<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                    <label class="text-sm">{{ __('application.quantity_44f6af69') }}<input wire:model="items.{{ $index }}.quantity" type="number" step="0.0001" min="0.0001" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error("items.{$index}.quantity")<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                    <label class="text-sm">{{ __('application.internal_unit_price_98164503') }}<input wire:model.live.debounce.300ms="items.{{ $index }}.internal_unit_price" type="number" step="0.01" min="0" class="mt-1 w-full rounded-lg border px-3 py-2 dark:bg-navy-950">@error("items.{$index}.internal_unit_price")<span class="text-red-600">{{ $message }}</span>@enderror</label>
+                    <div class="self-end flex gap-2"><button type="button" wire:click="resetItemPrice({{ $index }})" class="rounded-lg border px-3 py-2 text-sm">{{ __('application.use_suggested_price_eedd55e5') }}</button><button type="button" wire:click="removeItem({{ $index }})" class="rounded-lg border px-3 py-2 text-sm">{{ __('application.remove_e963907d') }}</button></div>
+                    <p class="md:col-span-4 text-xs text-slate-500">{{ __('application.price_source_ecb2a5f2') }} {{ $row['price_source'] ?: __('terminology.select_a_product_df0fb482') }}</p>
                 </div>
             @endforeach
-            <p class="text-xs text-slate-500">Manual prices require override permission. Load location prices keeps manual entries; use “Use suggested price” to replace one.</p>
+            <p class="text-xs text-slate-500">{{ __('application.manual_prices_require_override_permission_load_location_prices_keeps_manual_22bdb18e') }}</p>
         </x-card>
         <div class="mt-4 flex flex-wrap gap-3">
             <button type="submit" class="rounded-lg border px-4 py-2 font-bold">
-                {{ $editingSaleId ? 'Update Draft' : 'Save Draft' }}
+                {{ $editingSaleId ? __('terminology.update_draft_9b53e388') : __('application.save_draft_cc1316dd') }}
             </button>
 
             @can('internal_sales.complete')
                 <button type="button" wire:click="completeSale" wire:loading.attr="disabled" class="rounded-lg bg-build-orange px-4 py-2 font-bold text-white">
-                    Complete Internal Sale
+                    {{ __('application.complete_internal_sale_656b3292') }}
                 </button>
             @endcan
 
             <a href="{{ route('internal-sales.index') }}" wire:navigate class="rounded-lg border px-4 py-2">
-                Cancel
+                {{ __('application.cancel_77dfd213') }}
             </a>
         </div>
     </form>

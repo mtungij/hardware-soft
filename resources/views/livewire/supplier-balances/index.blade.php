@@ -15,21 +15,21 @@ state(['search' => '']);
 ?>
 
 <div>
-    <x-page-header title="Supplier Balances" description="Track supplier statements, outstanding purchases, and payments." :breadcrumbs="['Dashboard' => route('dashboard'), 'Supplier Balances' => null]">
-        <a href="{{ route('supplier-payments.create') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Pay Supplier</a>
+    <x-page-header title="{{ __('application.supplier_balances_38694961') }}" description="{{ __('application.track_supplier_statements_outstanding_purchases_and_payments_d225dcfd') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Supplier Balances' => null]">
+        <a href="{{ route('supplier-payments.create') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ __('application.pay_supplier_d359c630') }}</a>
     </x-page-header>
     @php
         $accounting = app(AccountingService::class);
         $suppliers = Supplier::query()->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))->withCount('purchases')->paginate(12);
         $total = Supplier::query()->get()->sum(fn ($supplier) => $accounting->supplierBalance($supplier));
     @endphp
-    <div class="grid gap-4 sm:grid-cols-2"><x-card><p class="text-sm text-slate-500">Supplier Outstanding</p><p class="mt-2 text-2xl font-black text-red-600">TZS {{ \App\Support\NumberFormatter::money($total) }}</p></x-card><x-card><p class="text-sm text-slate-500">Suppliers</p><p class="mt-2 text-2xl font-black">{{ Supplier::count() }}</p></x-card></div>
+    <div class="grid gap-4 sm:grid-cols-2"><x-card><p class="text-sm text-slate-500">{{ __('application.supplier_outstanding_00351594') }}</p><p class="mt-2 text-2xl font-black text-red-600">TZS {{ \App\Support\NumberFormatter::money($total) }}</p></x-card><x-card><p class="text-sm text-slate-500">{{ __('application.suppliers_6f76bb2b') }}</p><p class="mt-2 text-2xl font-black">{{ Supplier::count() }}</p></x-card></div>
     <x-card class="mt-6">
-        <input wire:model.live.debounce.300ms="search" class="mb-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search suppliers">
-        <x-table :headers="['Supplier', 'Opening', 'Outstanding', 'Purchases', 'Actions']">
+        <input wire:model.live.debounce.300ms="search" class="mb-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ __('application.search_suppliers_6224fa99') }}">
+        <x-table :headers="[__('application.supplier_55edd462'), __('application.opening_56e44065'), __('application.outstanding_f8ee57ec'), __('application.purchases_6c4e94f1'), __('application.actions_c3cd636a')]">
             @foreach ($suppliers as $supplier)
                 @php $balance = $accounting->supplierBalance($supplier); @endphp
-                <tr><td class="px-4 py-3"><p class="font-bold">{{ $supplier->name }}</p><p class="text-xs text-slate-500">{{ $supplier->phone }}</p></td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($supplier->opening_balance) }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($balance) }}</td><td class="px-4 py-3">{{ $supplier->purchases_count }}</td><td class="px-4 py-3 text-right"><a href="{{ route('supplier-balances.show', $supplier) }}" wire:navigate class="text-sm font-bold text-build-orange">Statement</a></td></tr>
+                <tr><td class="px-4 py-3"><p class="font-bold">{{ $supplier->name }}</p><p class="text-xs text-slate-500">{{ $supplier->phone }}</p></td><td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($supplier->opening_balance) }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($balance) }}</td><td class="px-4 py-3">{{ $supplier->purchases_count }}</td><td class="px-4 py-3 text-right"><a href="{{ route('supplier-balances.show', $supplier) }}" wire:navigate class="text-sm font-bold text-build-orange">{{ __('application.statement_a72ca256') }}</a></td></tr>
             @endforeach
         </x-table>
         <div class="mt-4">{{ $suppliers->links() }}</div>

@@ -26,13 +26,13 @@ class ProductionQualityPlan extends Model
             if ($plan->getOriginal('status') === 'active') {
                 $allowed = ['status', 'updated_by', 'updated_at'];
                 if (array_diff(array_keys($plan->getDirty()), $allowed) !== []) {
-                    throw new LogicException('Active quality plans are immutable. Duplicate the plan to make changes.');
+                    throw new LogicException(__('terminology.active_quality_plans_are_immutable_duplicate_the_plan_to_make_changes_f8403936'));
                 }
             }
         });
         static::deleting(function (self $plan): void {
             if ($plan->status !== 'draft' || $plan->inspections()->exists()) {
-                throw new LogicException('Historical or active quality plans cannot be deleted.');
+                throw new LogicException(__('application.historical_or_active_quality_plans_cannot_be_deleted_660a3e32'));
             }
         });
     }

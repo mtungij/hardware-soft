@@ -17,7 +17,7 @@ final class WhatsAppPhone
         }
 
         if (! preg_match('/^255[67]\d{8}$/', $digits)) {
-            throw new InvalidArgumentException('Enter a valid Tanzania mobile number.');
+            throw new InvalidArgumentException(__('application.enter_a_valid_tanzania_mobile_number_e27a3051'));
         }
 
         return $digits;

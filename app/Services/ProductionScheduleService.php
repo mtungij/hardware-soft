@@ -35,7 +35,7 @@ class ProductionScheduleService
 
         if ($assignment?->immutableProductionOrder()) {
             throw ValidationException::withMessages([
-                'status' => 'This historical assignment is linked to a production order and cannot be changed. Create a new assignment.',
+                'status' => __('application.this_historical_assignment_is_linked_to_a_production_order_and_cannot_be_ch_bd7fa898'),
             ]);
         }
 
@@ -56,7 +56,7 @@ class ProductionScheduleService
         }
         $method = $product->productFamily?->production_method ?: ProductFamily::METHOD_MACHINE_MOULD;
         if (! in_array($method, ProductFamily::PRODUCTION_METHODS, true)) {
-            throw ValidationException::withMessages(['product_id' => 'The product family has an invalid production method.']);
+            throw ValidationException::withMessages(['product_id' => __('application.the_product_family_has_an_invalid_production_method_fd19f9f7')]);
         }
 
         $machine = null;
@@ -79,7 +79,7 @@ class ProductionScheduleService
             }
         } else {
             if (filled($data['machine_id'] ?? null)) {
-                throw ValidationException::withMessages(['machine_id' => 'A mould-only schedule must not be converted into machine production.']);
+                throw ValidationException::withMessages(['machine_id' => __('application.a_mould_only_schedule_must_not_be_converted_into_machine_production_cf181d7d')]);
             }
             $mould = ProductionMould::query()->forCurrentCompany()->available()->whereKey($data['production_mould_id'] ?? null)->first();
             if (! $mould) {
@@ -184,7 +184,7 @@ class ProductionScheduleService
                         ->whereKey($assignment->id)->lockForUpdate()->firstOrFail();
                     if ($assignment->immutableProductionOrder()) {
                         throw ValidationException::withMessages([
-                            'status' => 'This historical assignment is linked to a production order and cannot be changed. Create a new assignment.',
+                            'status' => __('application.this_historical_assignment_is_linked_to_a_production_order_and_cannot_be_ch_bd7fa898'),
                         ]);
                     }
                     $assignment->update($values);

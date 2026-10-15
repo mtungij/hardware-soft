@@ -1,9 +1,4 @@
 <?php
 
-return [
-    'days' => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-    'months' => ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
-    'today' => 'Today',
-    'yesterday' => 'Yesterday',
-    'tomorrow' => 'Tomorrow',
-];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/date.php';

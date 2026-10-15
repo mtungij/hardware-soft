@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Manunuzi', 'create' => 'Tengeneza Manunuzi', 'edit' => 'Hariri Manunuzi', 'receive' => 'Pokea Manunuzi', 'supplier' => 'Msambazaji', 'product' => 'Bidhaa', 'quantity' => 'Idadi', 'buying_price' => 'Bei ya Kununua'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/sw/purchases.php';

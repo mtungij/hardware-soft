@@ -409,6 +409,13 @@ $recentTransactions = computed(function (): Collection {
 ?>
 
 <div data-tour="dashboard-overview" class="max-w-full min-w-0 overflow-x-hidden space-y-6">
+@can('customer_requests.view')
+    @php
+        $pendingCustomerRequests = \App\Models\CustomerPurchaseRequest::query()->where('company_id', auth()->user()->company_id)->whereIn('status', ['pending','under_review'])->count();
+    @endphp
+    <a href="{{ route('customer-requests.index') }}" wire:navigate class="mb-5 flex min-h-16 items-center justify-between rounded-xl border border-orange-200 bg-orange-50 p-4 font-black text-build-orange dark:border-orange-700 dark:bg-orange-500/10"><span>{{ __('portal.pending_requests') }}</span><span>{{ $pendingCustomerRequests }}</span></a>
+@endcan
+
     @php
         $t = fn ($value) => \App\Support\UiText::translate($value);
         $currency = 'TZS';
@@ -545,8 +552,8 @@ $recentTransactions = computed(function (): Collection {
     @endphp
 
     <x-page-header
-        title="Hardex POS"
-        description="Business dashboard for sales, inventory, cash flow, and operational alerts."
+        title="{{ __('application.hardex_pos_da25962f') }}"
+        description="{{ __('application.business_dashboard_for_sales_inventory_cash_flow_and_operational_alerts_9a1aa2df') }}"
         :breadcrumbs="['Dashboard' => null]"
     >
         <div class="flex flex-wrap gap-2">
@@ -562,20 +569,20 @@ $recentTransactions = computed(function (): Collection {
     <x-card>
         <div class="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
             <label class="block text-sm font-bold">
-                {{ $t('Date Filter') }}
+                {{ $t(__('application.date_filter_900cb837')) }}
                 <select wire:model.live="dateFilter" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="today">{{ $t('Today') }}</option>
-                    <option value="this_week">{{ $t('This Week') }}</option>
-                    <option value="this_month">{{ $t('This Month') }}</option>
-                    <option value="this_year">{{ $t('This Year') }}</option>
-                    <option value="custom">{{ $t('Custom Range') }}</option>
+                    <option value="today">{{ $t(__('application.today_24345a14')) }}</option>
+                    <option value="this_week">{{ $t(__('application.this_week_4e68dca8')) }}</option>
+                    <option value="this_month">{{ $t(__('application.this_month_0f6cc3a8')) }}</option>
+                    <option value="this_year">{{ $t(__('application.this_year_77528c94')) }}</option>
+                    <option value="custom">{{ $t(__('application.custom_range_f130609d')) }}</option>
                 </select>
             </label>
             <label class="block text-sm font-bold">
-                {{ $t('Branch') }}
+                {{ $t(__('application.branch_1627510b')) }}
                 <select wire:model.live="branchFilter" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(! $this->canViewAllBranches())>
                     @if ($this->canViewAllBranches())
-                        <option value="">{{ $t('All branches') }}</option>
+                        <option value="">{{ $t(__('application.all_branches_25c23746')) }}</option>
                     @endif
                     @foreach ($this->branchOptions as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
@@ -583,15 +590,15 @@ $recentTransactions = computed(function (): Collection {
                 </select>
             </label>
             <label class="block text-sm font-bold">
-                {{ $t('From') }}
+                {{ $t(__('application.from_3f66052a')) }}
                 <input wire:model.live="customFrom" type="date" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-navy-950" @disabled($dateFilter !== 'custom')>
             </label>
             <label class="block text-sm font-bold">
-                {{ $t('To') }}
+                {{ $t(__('application.to_ae79ea1e')) }}
                 <input wire:model.live="customTo" type="date" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-navy-950" @disabled($dateFilter !== 'custom')>
             </label>
             <div class="flex items-end">
-                <div wire:loading class="rounded-lg bg-orange-50 px-3 py-2 text-sm font-bold text-build-orange dark:bg-orange-500/10">{{ $t('Refreshing...') }}</div>
+                <div wire:loading class="rounded-lg bg-orange-50 px-3 py-2 text-sm font-bold text-build-orange dark:bg-orange-500/10">{{ $t(__('application.refreshing_5b7bdb61')) }}</div>
             </div>
         </div>
     </x-card>
@@ -610,11 +617,11 @@ $recentTransactions = computed(function (): Collection {
         <!-- <div wire:loading.remove.delay class="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <p class="text-sm font-black text-amber-900 dark:text-amber-100">{{ $t('Email settings have not been configured.') }}</p>
-                    <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">{{ $t('Email sending is currently unavailable because email settings have not been configured.') }}</p>
+                    <p class="text-sm font-black text-amber-900 dark:text-amber-100">{{ $t(__('application.email_settings_have_not_been_configured_160ad2b3')) }}</p>
+                    <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">{{ $t(__('application.email_sending_is_currently_unavailable_because_email_settings_have_not_been_edd099eb')) }}</p>
                 </div>
                 <a href="{{ route('email-settings.index') }}" wire:navigate class="inline-flex min-h-10 items-center justify-center rounded-xl bg-amber-500 px-4 text-sm font-black text-white shadow-sm hover:bg-amber-600">
-                    {{ $t('Configure Email Settings') }}
+                    {{ $t(__('application.configure_email_settings_b5f4b5f2')) }}
                 </a>
             </div>
         </div> -->
@@ -659,27 +666,27 @@ $recentTransactions = computed(function (): Collection {
 
     <div data-tour="dashboard-charts" class="grid min-w-0 gap-6 xl:grid-cols-2">
         @can('settings.manage')
-        <x-card title="Recent Announcements" description="Latest customer notices and read progress.">
+        <x-card title="{{ __('application.recent_announcements_52de58b3') }}" description="{{ __('application.latest_customer_notices_and_read_progress_fb285435') }}">
             <div class="space-y-3">
                 @forelse ($recentAnnouncements as $announcement)
                     <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
                         <div class="flex items-start justify-between gap-3">
                             <div class="min-w-0">
                                 <p class="truncate text-sm font-bold">{{ $announcement->title }}</p>
-                                <p class="mt-1 text-xs text-slate-500">{{ $t(ucfirst($announcement->status)) }} · {{ $t(ucfirst($announcement->priority)) }}</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ $t(\App\Support\UiText::status($announcement->status)) }} · {{ $t(\App\Support\UiText::label($announcement->priority)) }}</p>
                             </div>
-                            <a href="{{ route('admin.announcements.index') }}" wire:navigate class="text-xs font-bold text-build-orange">{{ $t('Open') }}</a>
+                            <a href="{{ route('admin.announcements.index') }}" wire:navigate class="text-xs font-bold text-build-orange">{{ $t(__('application.open_cf9b7706')) }}</a>
                         </div>
                     </div>
                 @empty
-                    <p class="py-6 text-center text-sm text-slate-500">{{ $t('No announcements yet.') }}</p>
+                    <p class="py-6 text-center text-sm text-slate-500">{{ $t(__('application.no_announcements_yet_02975a37')) }}</p>
                 @endforelse
             </div>
         </x-card>
         @endcan
 
         @can('dashboard.sales_summary')
-        <x-card title="Interactive Sales Trend" :description="$user->can('dashboard.profit') ? 'Chart.js view of sales and profit for the last 7 days.' : 'Chart.js view of your authorized sales for the last 7 days.'">
+        <x-card title="{{ __('application.interactive_sales_trend_6e4e80b9') }}" :description="$user->can('dashboard.profit') ? __('application.chart_js_view_of_sales_and_profit_for_the_last_7_days_a5423e96') : __('application.chart_js_view_of_your_authorized_sales_for_the_last_7_days_8c3a6a03')">
             <div
                 class="h-72 min-w-0 overflow-hidden"
                 x-data="{
@@ -700,13 +707,13 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t('Sales trend chart') }}"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t(__('application.sales_trend_chart_24ff750d')) }}"></canvas>
             </div>
         </x-card>
         @endcan
 
         @if ($user->canAny(['dashboard.purchase_summary', 'dashboard.expenses']))
-        <x-card title="Revenue vs Expenses" description="Monthly revenue, purchases, and expenses from database records.">
+        <x-card title="{{ __('application.revenue_vs_expenses_185e7487') }}" description="{{ __('application.monthly_revenue_purchases_and_expenses_from_database_records_f9b348c8') }}">
             <div
                 class="h-72 min-w-0 overflow-hidden"
                 x-data="{
@@ -726,13 +733,13 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t('Monthly revenue versus expenses chart') }}"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t(__('application.monthly_revenue_versus_expenses_chart_cb92fec8')) }}"></canvas>
             </div>
         </x-card>
         @endif
 
         @can('dashboard.sales_summary')
-        <x-card title="Category Performance" description="Sales amount grouped by product category.">
+        <x-card title="{{ __('application.category_performance_74acc0cd') }}" description="{{ __('application.sales_amount_grouped_by_product_category_f85b744e') }}">
             <div
                 class="h-72 min-w-0 overflow-hidden"
                 x-data="{
@@ -749,13 +756,13 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t('Sales by category chart') }}"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t(__('application.sales_by_category_chart_3060ee65')) }}"></canvas>
             </div>
         </x-card>
         @endcan
 
         @can('dashboard.stock_summary')
-        <x-card title="Stock Distribution" description="Current stock quantity grouped by stock location.">
+        <x-card title="{{ __('application.stock_distribution_fbeac3b6') }}" description="{{ __('application.current_stock_quantity_grouped_by_stock_location_f128451d') }}">
             <div
                 class="h-72 min-w-0 overflow-hidden"
                 x-data="{
@@ -772,7 +779,7 @@ $recentTransactions = computed(function (): Collection {
                 }"
                 x-init="render(); window.addEventListener('buildmart-theme-changed', () => render())"
             >
-                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t('Stock distribution chart') }}"></canvas>
+                <canvas class="max-w-full" x-ref="canvas" aria-label="{{ $t(__('application.stock_distribution_chart_51e84c5e')) }}"></canvas>
             </div>
         </x-card>
         @endcan
@@ -780,9 +787,9 @@ $recentTransactions = computed(function (): Collection {
 
     <div class="grid min-w-0 gap-6 xl:grid-cols-2">
         @can('dashboard.sales_summary')
-        <x-card title="Sales Trend" :description="$user->can('dashboard.profit') ? 'Completed sales total and profit for the last 7 days.' : 'Your authorized completed sales for the last 7 days.'">
+        <x-card title="{{ __('application.sales_trend_9644346d') }}" :description="$user->can('dashboard.profit') ? __('application.completed_sales_total_and_profit_for_the_last_7_days_e3814c08') : __('application.your_authorized_completed_sales_for_the_last_7_days_c6361ebb')">
             @if ($this->salesTrendChart->isEmpty())
-                <p class="py-10 text-center text-sm text-slate-500">{{ $t('No sales trend data available.') }}</p>
+                <p class="py-10 text-center text-sm text-slate-500">{{ $t(__('application.no_sales_trend_data_available_e479c006')) }}</p>
             @else
                 <div class="space-y-4">
                     @foreach ($this->salesTrendChart as $row)
@@ -790,7 +797,7 @@ $recentTransactions = computed(function (): Collection {
                             <p class="text-xs font-bold text-slate-500">{{ $row['date'] }}</p>
                             <div>
                                 <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-build-orange" style="width: {{ min(100, ($row['sales'] / $maxTrend) * 100) }}%"></div></div>
-                                <p class="mt-1 text-xs text-slate-500">{{ $t('Sales') }} {{ $formatMoney($row['sales']) }} @if ($user->can('dashboard.profit')) / {{ $t('Profit') }} {{ $formatMoney($row['profit']) }} @endif</p>
+                                <p class="mt-1 text-xs text-slate-500">{{ $t(__('application.sales_d0edfb6e')) }} {{ $formatMoney($row['sales']) }} @if ($user->can('dashboard.profit')) / {{ $t(__('application.profit_8544a477')) }} {{ $formatMoney($row['profit']) }} @endif</p>
                             </div>
                         </div>
                     @endforeach
@@ -800,7 +807,7 @@ $recentTransactions = computed(function (): Collection {
         @endcan
 
         @if ($user->canAny(['dashboard.purchase_summary', 'dashboard.expenses']))
-        <x-card title="Monthly Revenue vs Expenses" description="Sales revenue, purchases, and operating expenses by month.">
+        <x-card title="{{ __('application.monthly_revenue_vs_expenses_d965b6e2') }}" description="{{ __('application.sales_revenue_purchases_and_operating_expenses_by_month_b30e8790') }}">
             <div class="space-y-4">
                 @foreach ($this->monthlyRevenueExpenseChart as $row)
                     <div class="grid min-w-0 grid-cols-[44px_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[48px_minmax(0,1fr)]">
@@ -809,7 +816,7 @@ $recentTransactions = computed(function (): Collection {
                             <div class="h-2 rounded bg-emerald-500" style="width: {{ min(100, ($row['sales'] / $maxMonthly) * 100) }}%"></div>
                             <div class="h-2 rounded bg-navy-700 dark:bg-slate-300" style="width: {{ min(100, ($row['purchases'] / $maxMonthly) * 100) }}%"></div>
                             <div class="h-2 rounded bg-red-500" style="width: {{ min(100, ($row['expenses'] / $maxMonthly) * 100) }}%"></div>
-                            <p class="text-xs text-slate-500">{{ $t('Revenue') }} {{ $formatMoney($row['sales']) }} / {{ $t('Purchases') }} {{ $formatMoney($row['purchases']) }} / {{ $t('Expenses') }} {{ $formatMoney($row['expenses']) }}</p>
+                            <p class="text-xs text-slate-500">{{ $t(__('application.revenue_35cf82f9')) }} {{ $formatMoney($row['sales']) }} / {{ $t(__('application.purchases_6c4e94f1')) }} {{ $formatMoney($row['purchases']) }} / {{ $t(__('application.expenses_8d437dbf')) }} {{ $formatMoney($row['expenses']) }}</p>
                         </div>
                     </div>
                 @endforeach
@@ -818,27 +825,27 @@ $recentTransactions = computed(function (): Collection {
         @endif
 
         @can('dashboard.sales_summary')
-        <x-card title="Sales by Category" description="Category revenue from sold items.">
+        <x-card title="{{ __('application.sales_by_category_7e0d0bd2') }}" description="{{ __('application.category_revenue_from_sold_items_30e4daba') }}">
             @forelse ($this->salesByCategoryChart as $row)
                 <div class="mb-4">
-                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row->category_name === 'Uncategorized' ? $t('Uncategorized') : $row->category_name }}</span><span class="shrink-0">{{ $formatMoney($row->total_sales) }}</span></div>
+                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row->category_name === 'Uncategorized' ? $t(__('application.uncategorized_4ef7d73c')) : $row->category_name }}</span><span class="shrink-0">{{ $formatMoney($row->total_sales) }}</span></div>
                     <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-build-orange" style="width: {{ min(100, ((float) $row->total_sales / $maxCategory) * 100) }}%"></div></div>
                 </div>
             @empty
-                <p class="py-10 text-center text-sm text-slate-500">{{ $t('No category sales found.') }}</p>
+                <p class="py-10 text-center text-sm text-slate-500">{{ $t(__('application.no_category_sales_found_1cf8cac6')) }}</p>
             @endforelse
         </x-card>
         @endcan
 
         @can('dashboard.stock_summary')
-        <x-card title="Stock Distribution" description="Current stock quantities by location.">
+        <x-card title="{{ __('application.stock_distribution_fbeac3b6') }}" description="{{ __('application.current_stock_quantities_by_location_4d0d85d8') }}">
             @forelse ($this->stockDistributionChart as $row)
                 <div class="mb-4">
-                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row['name'] }} <span class="text-xs font-semibold text-slate-500">({{ $t(ucfirst($row['type'])) }})</span></span><span class="shrink-0">{{ $formatQuantity($row['quantity']) }}</span></div>
+                    <div class="mb-1 flex min-w-0 justify-between gap-3 text-sm"><span class="min-w-0 truncate font-bold">{{ $row['name'] }} <span class="text-xs font-semibold text-slate-500">({{ $t(\App\Support\UiText::label($row['type'])) }})</span></span><span class="shrink-0">{{ $formatQuantity($row['quantity']) }}</span></div>
                     <div class="h-3 rounded-full bg-slate-100 dark:bg-white/10"><div class="h-3 rounded-full bg-navy-800 dark:bg-build-orange" style="width: {{ min(100, ($row['quantity'] / $maxStock) * 100) }}%"></div></div>
                 </div>
             @empty
-                <p class="py-10 text-center text-sm text-slate-500">{{ $t('No stock movement data found.') }}</p>
+                <p class="py-10 text-center text-sm text-slate-500">{{ $t(__('application.no_stock_movement_data_found_7bf9b973')) }}</p>
             @endforelse
         </x-card>
         @endcan
@@ -847,7 +854,7 @@ $recentTransactions = computed(function (): Collection {
     @can('dashboard.stock_summary')
     <div class="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         <div class="space-y-6">
-            <x-card title="Inventory Summary">
+            <x-card title="{{ __('application.inventory_summary_d629dc53') }}">
                 <div class="space-y-3">
                     @foreach ([
                         'Total Products' => $this->inventorySummary['total_products'],
@@ -865,7 +872,7 @@ $recentTransactions = computed(function (): Collection {
                 </div>
             </x-card>
 
-            <x-card title="System Snapshot">
+            <x-card title="{{ __('application.system_snapshot_57f91fc1') }}">
                 @foreach ([
                     'Total Users' => User::count(),
                     'Active Branches' => Branch::where('status', 'active')->count(),
@@ -879,18 +886,18 @@ $recentTransactions = computed(function (): Collection {
             </x-card>
         </div>
 
-        <x-card title="Low Stock Alerts" description="Products where current total stock is at or below reorder level.">
+        <x-card title="{{ __('application.low_stock_alerts_b452abc0') }}" description="{{ __('application.products_where_current_total_stock_is_at_or_below_reorder_level_b295a080') }}">
             <x-table>
                 <x-slot:head>
                     <tr>
-                        <th class="px-4 py-3 text-left">{{ $t('Product') }}</th>
-                        <th class="px-4 py-3 text-left">{{ $t('SKU') }}</th>
-                        <th class="px-4 py-3 text-left">{{ $t('Category') }}</th>
-                        <th class="px-4 py-3 text-right">{{ $t('Current') }}</th>
-                        <th class="px-4 py-3 text-right">{{ $t('Reorder') }}</th>
-                        <th class="px-4 py-3 text-left">{{ $t('Location') }}</th>
-                        <th class="px-4 py-3 text-left">{{ $t('Status') }}</th>
-                        <th class="px-4 py-3 text-right">{{ $t('Action') }}</th>
+                        <th class="px-4 py-3 text-left">{{ $t(__('application.product_dd3b86d1')) }}</th>
+                        <th class="px-4 py-3 text-left">{{ $t(__('application.sku_d59192b9')) }}</th>
+                        <th class="px-4 py-3 text-left">{{ $t(__('application.category_a3c686e7')) }}</th>
+                        <th class="px-4 py-3 text-right">{{ $t(__('application.current_4fc0e2bc')) }}</th>
+                        <th class="px-4 py-3 text-right">{{ $t(__('application.reorder_33d9978c')) }}</th>
+                        <th class="px-4 py-3 text-left">{{ $t(__('application.location_d219c681')) }}</th>
+                        <th class="px-4 py-3 text-left">{{ $t(__('application.status_bae7d5be')) }}</th>
+                        <th class="px-4 py-3 text-right">{{ $t(__('application.action_97c89a4d')) }}</th>
                     </tr>
                 </x-slot:head>
                 @forelse ($this->lowStockProducts->take(8) as $row)
@@ -903,15 +910,15 @@ $recentTransactions = computed(function (): Collection {
                             </div>
                         </td>
                         <td class="px-4 py-3">{{ $product->sku }}</td>
-                        <td class="px-4 py-3">{{ $product->category?->name ?? $t('Uncategorized') }}</td>
+                        <td class="px-4 py-3">{{ $product->category?->name ?? $t(__('application.uncategorized_4ef7d73c')) }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatQuantity($row['current_stock']) }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatQuantity($product->reorder_level) }}</td>
-                        <td class="px-4 py-3">{{ $row['locations']->isEmpty() ? $t('No stock location') : $row['locations']->map(fn ($location) => $location['name'].' ('.$formatQuantity($location['quantity']).')')->join(', ') }}</td>
-                        <td class="px-4 py-3"><span class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700 dark:bg-red-500/10 dark:text-red-300">{{ $row['current_stock'] <= 0 ? $t('Out of Stock') : $t('Low Stock') }}</span></td>
-                        <td class="px-4 py-3 text-right"><a href="{{ route('products.index') }}" wire:navigate class="text-sm font-bold text-build-orange">{{ $t('View') }}</a></td>
+                        <td class="px-4 py-3">{{ $row['locations']->isEmpty() ? $t(__('application.no_stock_location_04fc4149')) : $row['locations']->map(fn ($location) => $location['name'].' ('.$formatQuantity($location['quantity']).')')->join(', ') }}</td>
+                        <td class="px-4 py-3"><span class="rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700 dark:bg-red-500/10 dark:text-red-300">{{ $row['current_stock'] <= 0 ? $t(__('application.out_of_stock_bc67a8ae')) : $t(__('application.low_stock_023d1181')) }}</span></td>
+                        <td class="px-4 py-3 text-right"><a href="{{ route('products.index') }}" wire:navigate class="text-sm font-bold text-build-orange">{{ $t(__('application.view_69bd4ef9')) }}</a></td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No low stock products for the selected branch.') }}</td></tr>
+                    <tr><td colspan="8" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t(__('application.no_low_stock_products_for_the_selected_branch_a13b3215')) }}</td></tr>
                 @endforelse
             </x-table>
         </x-card>
@@ -920,21 +927,21 @@ $recentTransactions = computed(function (): Collection {
 
     @can('dashboard.sales_summary')
     <div class="grid min-w-0 gap-6 xl:grid-cols-2">
-        <x-card title="Top Wholesale Customers">
-            <x-table :headers="['Customer', 'Wholesale Total']">
+        <x-card title="{{ __('application.top_wholesale_customers_addb0982') }}">
+            <x-table :headers="[__('application.customer_0e85749a'), __('application.wholesale_total_a2f7fd78')]">
                 @forelse ($topWholesaleCustomers as $customer)
                     <tr>
-                        <td class="px-4 py-3 font-bold">{{ $customer->name }}</td>
+                        <td class="px-4 py-3 font-bold">{{ $customer->displayName() }}</td>
                         <td class="px-4 py-3 text-right">{{ $formatMoney($customer->wholesale_total) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="2" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No wholesale customers yet.') }}</td></tr>
+                    <tr><td colspan="2" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t(__('application.no_wholesale_customers_yet_4e990360')) }}</td></tr>
                 @endforelse
             </x-table>
         </x-card>
 
-        <x-card title="Top Wholesale Products">
-            <x-table :headers="['Product', 'Qty Sold', 'Wholesale Total']">
+        <x-card title="{{ __('application.top_wholesale_products_3b6c8a88') }}">
+            <x-table :headers="[__('application.product_dd3b86d1'), __('application.qty_sold_6d4e3556'), __('application.wholesale_total_a2f7fd78')]">
                 @forelse ($topWholesaleProducts as $row)
                     <tr>
                         <td class="px-4 py-3 font-bold">{{ $row->product?->displayNameWithSize() }}</td>
@@ -942,7 +949,7 @@ $recentTransactions = computed(function (): Collection {
                         <td class="px-4 py-3 text-right">{{ $formatMoney($row->wholesale_total) }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="3" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No wholesale products yet.') }}</td></tr>
+                    <tr><td colspan="3" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t(__('application.no_wholesale_products_yet_bc67e494')) }}</td></tr>
                 @endforelse
             </x-table>
         </x-card>
@@ -951,16 +958,16 @@ $recentTransactions = computed(function (): Collection {
 
     <div class="grid min-w-0 gap-6 xl:grid-cols-2">
         @can('dashboard.sales_summary')
-        <x-card title="Top Selling Products">
+        <x-card title="{{ __('application.top_selling_products_4fe882f9') }}">
             <x-table>
                 <x-slot:head>
                     <tr>
-                        <th class="px-4 py-3 text-left">{{ $t('Product') }}</th>
-                        <th class="px-4 py-3 text-left">{{ $t('SKU') }}</th>
-                        <th class="px-4 py-3 text-right">{{ $t('Qty Sold') }}</th>
-                        <th class="px-4 py-3 text-right">{{ $t('Sales') }}</th>
+                        <th class="px-4 py-3 text-left">{{ $t(__('application.product_dd3b86d1')) }}</th>
+                        <th class="px-4 py-3 text-left">{{ $t(__('application.sku_d59192b9')) }}</th>
+                        <th class="px-4 py-3 text-right">{{ $t(__('application.qty_sold_6d4e3556')) }}</th>
+                        <th class="px-4 py-3 text-right">{{ $t(__('application.sales_d0edfb6e')) }}</th>
                         @if ($user->can('dashboard.profit'))
-                            <th class="px-4 py-3 text-right">{{ $t('Profit') }}</th>
+                            <th class="px-4 py-3 text-right">{{ $t(__('application.profit_8544a477')) }}</th>
                         @endif
                     </tr>
                 </x-slot:head>
@@ -980,24 +987,24 @@ $recentTransactions = computed(function (): Collection {
                         @endif
                     </tr>
                 @empty
-                    <tr><td colspan="{{ $user->can('dashboard.profit') ? 5 : 4 }}" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t('No completed sales yet.') }}</td></tr>
+                    <tr><td colspan="{{ $user->can('dashboard.profit') ? 5 : 4 }}" class="px-4 py-10 text-center text-sm text-slate-500">{{ $t(__('application.no_completed_sales_yet_f0d69c49')) }}</td></tr>
                 @endforelse
             </x-table>
         </x-card>
         @endcan
 
-        <x-card title="Recent Transactions" description="Latest sales, purchases, transfers, expenses, and customer payments.">
+        <x-card title="{{ __('application.recent_transactions_f28b82a4') }}" description="{{ __('application.latest_sales_purchases_transfers_expenses_and_customer_payments_cea61adf') }}">
             <div class="space-y-3">
                 @forelse ($this->recentTransactions as $transaction)
                     <a href="{{ $transaction['route'] }}" wire:navigate class="flex min-w-0 items-center justify-between gap-3 rounded-lg border border-slate-100 p-3 transition hover:border-build-orange/40 hover:bg-orange-50/40 dark:border-slate-800 dark:hover:bg-orange-500/10">
                         <div class="min-w-0">
                             <p class="font-bold">{{ $t($transaction['type']) }} · {{ $transaction['reference'] }}</p>
-                            <p class="text-xs text-slate-500">{{ $transaction['date']->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }} · {{ $t((string) str($transaction['status'])->replace('_', ' ')->title()) }}</p>
+                            <p class="text-xs text-slate-500">{{ $transaction['date']->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }} · {{ $t((string) \App\Support\UiText::label($transaction['status'])) }}</p>
                         </div>
                         <p class="shrink-0 text-sm font-black">{{ is_null($transaction['amount']) ? '-' : $formatMoney($transaction['amount']) }}</p>
                     </a>
                 @empty
-                    <p class="py-10 text-center text-sm text-slate-500">{{ $t('No recent transactions for the selected filters.') }}</p>
+                    <p class="py-10 text-center text-sm text-slate-500">{{ $t(__('application.no_recent_transactions_for_the_selected_filters_d11d5d35')) }}</p>
                 @endforelse
             </div>
         </x-card>

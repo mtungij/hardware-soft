@@ -15,8 +15,8 @@ class ProductionQualityAuditEvent extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Quality audit events are immutable.'));
-        static::deleting(fn () => throw new LogicException('Quality audit events cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.quality_audit_events_are_immutable_0ccafd38')));
+        static::deleting(fn () => throw new LogicException(__('application.quality_audit_events_cannot_be_deleted_8c70910a')));
     }
 
     protected function casts(): array

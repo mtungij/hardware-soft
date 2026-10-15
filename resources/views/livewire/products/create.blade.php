@@ -431,7 +431,7 @@ $save = function () {
         throw $exception;
     }
 
-    session()->flash('success', 'Product created successfully.');
+    session()->flash('success', __('application.product_created_successfully_ec13ac3e'));
     $this->redirectRoute('products.index', navigate: true);
 };
 
@@ -439,8 +439,8 @@ $save = function () {
 
 <div>
     <x-page-header
-        title="Create Product"
-        description="Create product master data. Do not enter stock quantities here."
+        title="{{ __('application.create_product_a0b51f0d') }}"
+        description="{{ __('application.create_product_master_data_do_not_enter_stock_quantities_here_0fa1e55a') }}"
         :breadcrumbs="['Dashboard' => route('dashboard'), 'Products' => route('products.index'), 'Create' => null]"
     />
 
@@ -450,9 +450,9 @@ $save = function () {
                 $showFractionalConfiguration = $this->showsFractionalConfiguration();
             @endphp
 
-            <x-form-input label="Product Name" name="name" wire:model="name" required />
-            <x-form-input label="SKU" name="sku" wire:model="sku" />
-            <x-form-input label="Barcode" name="barcode" wire:model="barcode" />
+            <x-form-input label="{{ __('application.product_name_06bc6513') }}" name="name" wire:model="name" required />
+            <x-form-input label="{{ __('application.sku_d59192b9') }}" name="sku" wire:model="sku" />
+            <x-form-input label="{{ __('application.barcode_8e54dc53') }}" name="barcode" wire:model="barcode" />
 
             <x-product-image-upload :preview-url="$this->imagePreviewUrl()" />
 
@@ -509,9 +509,9 @@ $save = function () {
             @endif
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Category
+                {{ __('application.category_a3c686e7') }}
                 <select wire:model.live="category_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">Select category</option>
+                    <option value="">{{ __('application.select_category_a2a5cafe') }}</option>
                     @foreach (Category::where('status', 'active')->orderBy('name')->get() as $category)
                         <option value="{{ $category->id }}">{{ $category->name }}</option>
                     @endforeach
@@ -520,9 +520,9 @@ $save = function () {
             </label>
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Measurement Type
+                {{ __('application.measurement_type_bbc2cb53') }}
                 <select wire:model.live="measurement_type_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">Select measurement type</option>
+                    <option value="">{{ __('application.select_measurement_type_d334101a') }}</option>
                     @foreach (MeasurementType::orderBy('sort_order')->get() as $type)
                         <option value="{{ $type->id }}">{{ $type->name }}</option>
                     @endforeach
@@ -532,14 +532,14 @@ $save = function () {
 
             @if (auth()->user()->hasAnyRole(['Super Admin', 'Admin']))
                 <div class="self-end text-sm md:col-span-2 xl:col-span-3">
-                    <a href="{{ route('units.index') }}" target="_blank" rel="noopener" class="font-bold text-cyan-700 hover:underline">+ Ongeza Kipimo</a>
+                    <a href="{{ route('units.index') }}" target="_blank" rel="noopener" class="font-bold text-cyan-700 hover:underline">{{ __('application.add_unit_64a2fc8e') }}</a>
                 </div>
             @endif
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Purchase Unit
+                {{ __('application.purchase_unit_9e240a38') }}
                 <select wire:model.live="purchase_unit_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">Select purchase unit</option>
+                    <option value="">{{ __('application.select_purchase_unit_fe2bd674') }}</option>
                     @foreach ($this->purchaseUnits() as $unit)
                         <option value="{{ $unit->id }}">{{ $unit->name }} / {{ $unit->short_name }}</option>
                     @endforeach
@@ -548,9 +548,9 @@ $save = function () {
             </label>
 
             <label wire:key="base-unit-{{ $measurement_type_id ?: 'none' }}" class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Base Stock Unit
+                {{ __('application.base_stock_unit_71a53b67') }}
                 <select wire:model.live="unit_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">Select unit</option>
+                    <option value="">{{ __('application.select_unit_bc6df6de') }}</option>
                     @foreach ($this->baseUnits() as $unit)
                         <option value="{{ $unit->id }}">{{ $unit->name }} / {{ $unit->short_name }}</option>
                     @endforeach
@@ -564,36 +564,36 @@ $save = function () {
                     $stockUnit = \App\Models\Unit::find($unit_id);
                 @endphp
                 <div>
-                    <x-form-input label="Purchase to Stock Factor" name="purchase_conversion_factor" type="number" step="0.0001" wire:model="purchase_conversion_factor" required />
-                    <p class="mt-1 text-xs font-semibold text-slate-500">1 {{ $purchaseUnit?->short_name }} = [factor] {{ $stockUnit?->short_name }}</p>
+                    <x-form-input label="{{ __('application.purchase_to_stock_factor_8d009b8d') }}" name="purchase_conversion_factor" type="number" step="0.0001" wire:model="purchase_conversion_factor" required />
+                    <p class="mt-1 text-xs font-semibold text-slate-500">1 {{ $purchaseUnit?->short_name }} {{ __('application.factor_c1b6886d') }} {{ $stockUnit?->short_name }}</p>
                 </div>
             @endif
 
             <label wire:key="selling-unit-{{ $measurement_type_id ?: 'none' }}" class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Selling Unit
+                {{ __('application.selling_unit_293a9282') }}
                 <select wire:model.live="selling_unit_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">Select selling unit</option>
+                    <option value="">{{ __('application.select_selling_unit_fca4023f') }}</option>
                     @foreach ($this->sellingUnits() as $unit)
                         <option value="{{ $unit->id }}">{{ $unit->name }} / {{ $unit->short_name }}</option>
                     @endforeach
                 </select>
                 @if (filled($measurement_type_id))
-                    <span class="mt-1 block text-xs font-semibold text-slate-500">Filtered for {{ strtolower($this->measurementCode()) }} products.</span>
+                    <span class="mt-1 block text-xs font-semibold text-slate-500">{{ __('application.filtered_for_711ce827') }} {{ strtolower($this->measurementCode()) }} {{ __('application.products_20d2bb00') }}</span>
                 @endif
                 @error('selling_unit_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 
             <label class="flex items-center gap-3 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-800">
                 <input type="checkbox" wire:model.live="uses_product_size" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                Uses Product Size
+                {{ __('application.uses_product_size_be295943') }}
             </label>
 
             @if ($this->showsProductSize())
                 <label wire:transition class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                    Product Size
-                    <input wire:model.live.debounce.300ms="product_size_search" class="mt-1 block w-full rounded-t-lg border border-b-0 border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search size, e.g. 2 × 4">
+                    {{ __('application.product_size_385b50f6') }}
+                    <input wire:model.live.debounce.300ms="product_size_search" class="mt-1 block w-full rounded-t-lg border border-b-0 border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ __('application.search_size_e_g_2_4_ccd328e1') }}">
                     <select wire:model="product_size_id" class="block w-full rounded-b-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="">No size</option>
+                        <option value="">{{ __('application.no_size_595cc0ee') }}</option>
                         @foreach (\App\Models\ProductSize::query()->where('status', 'active')->when($product_size_search, fn ($query) => $query->where(fn ($q) => $q->where('name', 'like', "%{$product_size_search}%")->orWhere('symbol', 'like', "%{$product_size_search}%")))->orderBy('symbol')->limit(50)->get() as $size)
                             <option value="{{ $size->id }}">{{ $size->label() }}</option>
                         @endforeach
@@ -603,46 +603,46 @@ $save = function () {
             @endif
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Branch
+                {{ __('application.branch_1627510b') }}
                 <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
-                    <option value="">Global product</option>
+                    <option value="">{{ __('application.global_product_8bda637d') }}</option>
                     @foreach (\App\Models\Branch::orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                     @endforeach
                 </select>
             </label>
 
-            <x-form-input label="Brand" name="brand" wire:model="brand" />
-            <x-form-input label="Model / Size" name="model_size" wire:model="model_size" />
+            <x-form-input label="{{ __('application.brand_62b4aa57') }}" name="brand" wire:model="brand" />
+            <x-form-input label="{{ __('application.model_size_995b1380') }}" name="model_size" wire:model="model_size" />
             @include('livewire.products.base-unit-pricing-fields')
-            <x-form-input label="Reorder Level" name="reorder_level" type="number" step="0.01" wire:model="reorder_level" required />
+            <x-form-input label="{{ __('application.reorder_level_59ef31e3') }}" name="reorder_level" type="number" step="0.01" wire:model="reorder_level" required />
 
             @include('livewire.products.unit-conversions-fields')
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Status
+                {{ __('application.status_bae7d5be') }}
                 <select wire:model="status" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
+                    <option value="active">{{ __('application.active_a733b809') }}</option>
+                    <option value="inactive">{{ __('application.inactive_09af574c') }}</option>
                 </select>
             </label>
 
             <label class="flex items-center gap-3 self-end rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-800">
                 <input type="checkbox" wire:model="taxable" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                Taxable product
+                {{ __('application.taxable_product_db5954c8') }}
             </label>
 
             <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800 md:col-span-2 xl:col-span-3">
-                <p class="text-sm font-black text-slate-800 dark:text-slate-100">Stock Traceability</p>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Enable only when receiving this product requires batch or expiry information.</p>
+                <p class="text-sm font-black text-slate-800 dark:text-slate-100">{{ __('application.stock_traceability_36820fe2') }}</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ __('application.enable_only_when_receiving_this_product_requires_batch_or_expiry_informatio_2f1d17ae') }}</p>
                 <div class="mt-3 flex flex-wrap gap-5">
                     <label class="flex items-center gap-3 text-sm font-bold">
                         <input type="checkbox" wire:model="tracks_batch" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                        Track Batch Number
+                        {{ __('application.track_batch_number_1213b0fb') }}
                     </label>
                     <label class="flex items-center gap-3 text-sm font-bold">
                         <input type="checkbox" wire:model="tracks_expiry" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                        Track Expiry Date
+                        {{ __('application.track_expiry_date_16fa53b8') }}
                     </label>
                 </div>
             </div>
@@ -651,14 +651,14 @@ $save = function () {
             <div wire:transition class="rounded-xl border border-slate-200 p-4 dark:border-slate-800 md:col-span-2 xl:col-span-3">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <p class="text-sm font-black text-slate-800 dark:text-slate-100">Fractional Selling</p>
+                        <p class="text-sm font-black text-slate-800 dark:text-slate-100">{{ __('application.fractional_selling_320584a3') }}</p>
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            Configure decimal selling for {{ strtolower($this->measurementCode()) }} products.
+                            {{ __('application.configure_decimal_selling_for_c644c59d') }} {{ strtolower($this->measurementCode()) }} {{ __('application.products_20d2bb00') }}
                         </p>
                     </div>
                     <label class="flex items-center gap-3 text-sm font-bold">
                         <input type="checkbox" wire:model.live="allow_fractional_sale" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                        Allow Fraction
+                        {{ __('application.allow_fraction_3d68f14b') }}
                     </label>
                 </div>
 
@@ -669,24 +669,24 @@ $save = function () {
                             $sellingUnit = \App\Models\Unit::find($selling_unit_id);
                         @endphp
                         <div>
-                            <x-form-input label="Conversion Factor" name="conversion_factor" type="number" step="0.0001" wire:model="conversion_factor" required />
+                            <x-form-input label="{{ __('application.conversion_factor_b418345e') }}" name="conversion_factor" type="number" step="0.0001" wire:model="conversion_factor" required />
                             <p class="mt-1 text-xs font-semibold text-slate-500">
-                                1 {{ $baseUnit?->short_name }} = [conversion factor] {{ $sellingUnit?->short_name }}
+                                1 {{ $baseUnit?->short_name }} {{ __('application.conversion_factor_d68ab16f') }} {{ $sellingUnit?->short_name }}
                             </p>
                         </div>
                     @endif
-                    <x-form-input label="Minimum Sale Quantity" name="minimum_sale_quantity" type="number" step="0.0001" wire:model="minimum_sale_quantity" required />
-                    <x-form-input label="Quantity Step" name="quantity_step" type="number" step="0.0001" wire:model="quantity_step" required />
+                    <x-form-input label="{{ __('application.minimum_sale_quantity_9b9e00a9') }}" name="minimum_sale_quantity" type="number" step="0.0001" wire:model="minimum_sale_quantity" required />
+                    <x-form-input label="{{ __('application.quantity_step_73aeca0d') }}" name="quantity_step" type="number" step="0.0001" wire:model="quantity_step" required />
                 </div>
             </div>
             @endif
 
             <div class="flex gap-2 md:col-span-2 xl:col-span-3">
                 <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white" wire:loading.attr="disabled" wire:target="save,image_upload">
-                    <span wire:loading.remove wire:target="save">Save Product</span>
-                    <span wire:loading wire:target="save">Saving...</span>
+                    <span wire:loading.remove wire:target="save">{{ __('application.save_product_1076e8ef') }}</span>
+                    <span wire:loading wire:target="save">{{ __('application.saving_ae7e8875') }}</span>
                 </button>
-                <a href="{{ route('products.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
+                <a href="{{ route('products.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.cancel_77dfd213') }}</a>
             </div>
         </form>
     </x-card>

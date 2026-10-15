@@ -38,14 +38,14 @@ class InternalSaleService
             $branch = Branch::query()->where('company_id', $user->company_id)->findOrFail($branchId);
             $this->authorizeLocations($user, $branchId, (int) ($data['from_location_id'] ?? 0), (int) ($data['to_location_id'] ?? 0));
             if (! is_array($data['items'] ?? null) || $data['items'] === []) {
-                throw ValidationException::withMessages(['items' => 'Add at least one product.']);
+                throw ValidationException::withMessages(['items' => __('application.add_at_least_one_product_e2ed1f2c')]);
             }
 
             if ($existing) {
                 $sale = InternalSale::query()->where('company_id', $user->company_id)
                     ->whereKey($existing->id)->lockForUpdate()->firstOrFail();
                 if ($sale->status !== 'draft') {
-                    throw ValidationException::withMessages(['internal_sale' => 'Only draft Internal Sales can be edited.']);
+                    throw ValidationException::withMessages(['internal_sale' => __('application.only_draft_internal_sales_can_be_edited_be194f43')]);
                 }
                 abort_unless(AuthorizationScope::canAccessStockLocation($user, (int) $sale->from_location_id)
                     && AuthorizationScope::canAccessStockLocation($user, (int) $sale->to_location_id), 403);
@@ -58,12 +58,12 @@ class InternalSaleService
 
             $number = trim((string) ($data['internal_sale_number'] ?? ''));
             if ($number === '' || mb_strlen($number) > 50) {
-                throw ValidationException::withMessages(['internal_sale_number' => 'Enter an Internal Sale number (up to 50 characters).']);
+                throw ValidationException::withMessages(['internal_sale_number' => __('application.enter_an_internal_sale_number_up_to_50_characters_a5537fde')]);
             }
             if (InternalSale::query()->where('company_id', $user->company_id)
                 ->where('internal_sale_number', $number)
                 ->when($sale->exists, fn ($query) => $query->whereKeyNot($sale->id))->exists()) {
-                throw ValidationException::withMessages(['internal_sale_number' => 'This Internal Sale number is already used.']);
+                throw ValidationException::withMessages(['internal_sale_number' => __('application.this_internal_sale_number_is_already_used_0fa218c7')]);
             }
             $sale->fill([
                 'branch_id' => $branch->id,
@@ -86,7 +86,7 @@ class InternalSaleService
                     $product, filled($row['product_unit_conversion_id'] ?? null) ? (int) $row['product_unit_conversion_id'] : null);
                 $key = $product->id.':'.($conversion?->id ?? 0);
                 if (in_array($key, $seen, true)) {
-                    throw ValidationException::withMessages(["items.{$index}" => 'Duplicate product and unit row.']);
+                    throw ValidationException::withMessages(["items.{$index}" => __('application.duplicate_product_and_unit_row_267c87a5')]);
                 }
                 $seen[] = $key;
                 $quantity = (float) ($row['quantity'] ?? 0);
@@ -94,17 +94,17 @@ class InternalSaleService
                 $baseQuantity = round($quantity * $factor, 4);
                 if ($quantity <= 0 || ! $product->acceptsStockQuantity($baseQuantity)
                     || (! $product->allowsDecimalQuantities() && ! $product->quantityIsWhole($quantity))) {
-                    throw ValidationException::withMessages(["items.{$index}.quantity" => 'Enter a valid quantity for the selected unit.']);
+                    throw ValidationException::withMessages(["items.{$index}.quantity" => __('application.enter_a_valid_quantity_for_the_selected_unit_a06be5c9')]);
                 }
                 $resolved = app(LocationPriceService::class)->internalPriceFor($product, $source, $conversion);
                 $configured = $resolved['price'];
                 $entered = $row['internal_unit_price'] ?? null;
                 if (! is_numeric($entered) || (float) $entered < 0 || ! preg_match('/^\d+(?:\.\d{1,2})?$/', trim((string) $entered))) {
-                    throw ValidationException::withMessages(["items.{$index}.internal_unit_price" => 'Enter a valid internal unit price.']);
+                    throw ValidationException::withMessages(["items.{$index}.internal_unit_price" => __('application.enter_a_valid_internal_unit_price_25ef4962')]);
                 }
                 $unitPrice = (float) $entered;
                 if (($configured === null || abs($configured - $unitPrice) > 0.005) && ! $user->can('internal_sales.override_price')) {
-                    throw ValidationException::withMessages(["items.{$index}.internal_unit_price" => 'Internal price override permission is required.']);
+                    throw ValidationException::withMessages(["items.{$index}.internal_unit_price" => __('application.internal_price_override_permission_is_required_b194552f')]);
                 }
                 $lineCents = (int) round($quantity * $unitPrice * 100);
                 $totalCents += $lineCents;
@@ -142,12 +142,12 @@ class InternalSaleService
                 return $sale;
             }
             if ($sale->status !== 'draft') {
-                throw ValidationException::withMessages(['internal_sale' => 'Only draft Internal Sales can be completed.']);
+                throw ValidationException::withMessages(['internal_sale' => __('application.only_draft_internal_sales_can_be_completed_cc2fcf95')]);
             }
             [$from, $to] = $this->authorizeLocations($user, (int) $sale->branch_id,
                 (int) $sale->from_location_id, (int) $sale->to_location_id);
             if ($sale->items->isEmpty()) {
-                throw ValidationException::withMessages(['items' => 'Add at least one product.']);
+                throw ValidationException::withMessages(['items' => __('application.add_at_least_one_product_e2ed1f2c')]);
             }
             $inventory = app(InventoryService::class);
             $requested = [];
@@ -158,7 +158,7 @@ class InternalSaleService
                     ->where('product_id', $item->product_id)->lockForUpdate()->get();
                 $requested[$item->product_id] = ($requested[$item->product_id] ?? 0) + (float) $item->base_quantity;
                 if ($requested[$item->product_id] > $inventory->getProductStock($item->product_id, $from->id, $sale->branch_id)) {
-                    throw ValidationException::withMessages(['items' => 'Source stock is insufficient for '.$item->product?->name.'.']);
+                    throw ValidationException::withMessages(['items' => __('feedback.source_stock_insufficient', ['product' => $item->product?->name])]);
                 }
             }
 
@@ -197,7 +197,7 @@ class InternalSaleService
                         'reference_type' => InternalSale::class,
                         'reference_id' => $sale->id,
                         'idempotency_key' => (string) Str::uuid(),
-                        'notes' => "Internal Sale {$sale->internal_sale_number} / item {$item->id}",
+                        'notes' => __('feedback.internal_sale_item', ['number' => $sale->internal_sale_number, 'item' => $item->id]),
                         'created_by' => $user->id,
                         'movement_date' => $sale->sale_date,
                     ]);
@@ -220,7 +220,7 @@ class InternalSaleService
                 return $sale;
             }
             if ($sale->status !== 'draft') {
-                throw ValidationException::withMessages(['internal_sale' => 'Completed Internal Sales are immutable.']);
+                throw ValidationException::withMessages(['internal_sale' => __('application.completed_internal_sales_are_immutable_ff0ccf34')]);
             }
             abort_unless(AuthorizationScope::canAccessStockLocation($user, (int) $sale->from_location_id)
                 && AuthorizationScope::canAccessStockLocation($user, (int) $sale->to_location_id), 403);
@@ -234,21 +234,21 @@ class InternalSaleService
     private function authorizeLocations(User $user, int $branchId, int $fromId, int $toId): array
     {
         if ($fromId === $toId) {
-            throw ValidationException::withMessages(['to_location_id' => 'Source and destination must differ.']);
+            throw ValidationException::withMessages(['to_location_id' => __('application.source_and_destination_must_differ_9c8d0539')]);
         }
         if (! Branch::query()->where('company_id', $user->company_id)->whereKey($branchId)->exists()) {
-            throw ValidationException::withMessages(['branch_id' => 'Branch does not belong to this company.']);
+            throw ValidationException::withMessages(['branch_id' => __('application.branch_does_not_belong_to_this_company_2d6bbf46')]);
         }
         $from = $this->sourceLocations($user, $branchId)->firstWhere('id', $fromId);
         $to = $this->destinationLocations($user, $branchId)->firstWhere('id', $toId);
         if (! $from) {
-            throw ValidationException::withMessages(['from_location_id' => 'You cannot issue stock from this location.']);
+            throw ValidationException::withMessages(['from_location_id' => __('application.you_cannot_issue_stock_from_this_location_96ff6337')]);
         }
         if (! $to) {
-            throw ValidationException::withMessages(['to_location_id' => 'You cannot receive stock at this location.']);
+            throw ValidationException::withMessages(['to_location_id' => __('application.you_cannot_receive_stock_at_this_location_075b9acb')]);
         }
         if ((int) $from->company_id !== (int) $user->company_id || (int) $to->company_id !== (int) $user->company_id) {
-            throw ValidationException::withMessages(['location' => 'Locations must belong to this company.']);
+            throw ValidationException::withMessages(['location' => __('application.locations_must_belong_to_this_company_14fd0c1c')]);
         }
 
         return [$from, $to];

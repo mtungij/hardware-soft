@@ -1,7 +1,7 @@
 @if ($document_type === 'quotation')
-<label class="block text-sm font-bold">Quotation Template
+<label class="block text-sm font-bold">{{ __('application.quotation_template_7ecff027') }}
     <select wire:model="quotation_template_key" class="mt-1 w-full rounded-xl border-slate-200 dark:bg-navy-950">
-        <option value="">Use Company Default</option>
+        <option value="">{{ __('application.use_company_default_bff8c668') }}</option>
         @foreach (\App\Support\QuotationTemplateRegistry::all() as $template)
             <option value="{{ $template['key'] }}">{{ $template['name'] }}</option>
         @endforeach

@@ -79,7 +79,7 @@ class Product extends Model
         static::updating(function (Product $product): void {
             if ($product->isDirty('unit_id') && $product->exists && $product->stockMovements()->exists()) {
                 throw ValidationException::withMessages([
-                    'unit_id' => 'Base Stock Unit cannot be changed after stock movements exist.',
+                    'unit_id' => __('application.base_stock_unit_cannot_be_changed_after_stock_movements_exist_c1b34c84'),
                 ]);
             }
 
@@ -396,12 +396,12 @@ class Product extends Model
         } elseif ($this->requires_curing) {
             if ((int) $this->curing_days_required <= 0 || (int) $this->sellable_after_days <= 0) {
                 throw ValidationException::withMessages([
-                    'curing_days_required' => 'Full curing period and minimum sellable age must both be greater than zero.',
+                    'curing_days_required' => __('application.full_curing_period_and_minimum_sellable_age_must_both_be_greater_than_zero_888a2273'),
                 ]);
             }
             if ((int) $this->sellable_after_days > (int) $this->curing_days_required) {
                 throw ValidationException::withMessages([
-                    'sellable_after_days' => 'Minimum sellable age cannot exceed the full curing period.',
+                    'sellable_after_days' => __('application.minimum_sellable_age_cannot_exceed_the_full_curing_period_02b704a2'),
                 ]);
             }
         } else {
@@ -440,7 +440,7 @@ class Product extends Model
 
         if (! $belongsToCompany) {
             throw ValidationException::withMessages([
-                'product_family_id' => 'The selected product family does not belong to this company.',
+                'product_family_id' => __('application.the_selected_product_family_does_not_belong_to_this_company_d2c08f39'),
             ]);
         }
     }

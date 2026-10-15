@@ -18,7 +18,7 @@ class ProductionRecipeCalculator
         $yield = $this->decimal($yieldQuantity);
 
         if (bccomp($source, '0', self::QUANTITY_SCALE) <= 0 || bccomp($yield, '0', self::QUANTITY_SCALE) <= 0) {
-            throw new InvalidArgumentException('Source and yield quantities must be greater than zero.');
+            throw new InvalidArgumentException(__('application.source_and_yield_quantities_must_be_greater_than_zero_2b9f8cf9'));
         }
 
         return bcdiv($source, $yield, self::QUANTITY_SCALE);
@@ -29,7 +29,7 @@ class ProductionRecipeCalculator
         $normalized = $this->decimal($quantity);
 
         if (bccomp($normalized, '0', self::QUANTITY_SCALE) <= 0) {
-            throw new InvalidArgumentException('Required quantity must be greater than zero.');
+            throw new InvalidArgumentException(__('application.required_quantity_must_be_greater_than_zero_bdc215e0'));
         }
 
         return bcadd($normalized, '0', self::QUANTITY_SCALE);
@@ -43,7 +43,7 @@ class ProductionRecipeCalculator
         $target = $this->decimal($targetOutput);
 
         if (bccomp($target, '0', self::QUANTITY_SCALE) <= 0) {
-            throw new InvalidArgumentException('Target output must be greater than zero.');
+            throw new InvalidArgumentException(__('application.target_output_must_be_greater_than_zero_d4f3dd9b'));
         }
 
         $recipe->loadMissing(['items.materialProduct', 'items.materialUnit']);
@@ -96,7 +96,7 @@ class ProductionRecipeCalculator
         $normalized = str_replace([',', ' ', "\u{00A0}"], '', trim((string) $value));
 
         if ($normalized === '' || ! is_numeric($normalized)) {
-            throw new InvalidArgumentException('A valid decimal value is required.');
+            throw new InvalidArgumentException(__('application.a_valid_decimal_value_is_required_a6a54f4b'));
         }
 
         return $normalized;

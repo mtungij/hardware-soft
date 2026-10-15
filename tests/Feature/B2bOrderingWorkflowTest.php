@@ -445,6 +445,7 @@ test('direct final sale is idempotent and failure creates no invoice or notifica
 });
 
 test('staff commercial entry points render and remain company scoped', function () {
+    $this->withSession(['staff_locale' => 'en']);
     $quotation = app(B2bQuotationService::class)->createDirect($this->customer, $this->admin, $this->branch->id, [[
         'product_id' => $this->product->id, 'quantity' => 1,
     ]], 'quotation', today()->addWeek(), (string) str()->uuid());

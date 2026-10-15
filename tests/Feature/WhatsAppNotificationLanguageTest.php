@@ -98,13 +98,13 @@ test('stock alert is generated fully in Kiswahili with a localized date', functi
 
     $message = app(WhatsAppStockAlertService::class)->message($company, $recipient, CarbonImmutable::parse('2026-08-31 03:00'), $rows, true, true);
 
-    expect($message)->toContain('TAARIFA YA STOCK - HARDEX')
+    expect($message)->toContain('TAARIFA YA HISA - HARDEX')
         ->toContain('Bidhaa 3 zinahitaji uangalizi.')
-        ->toContain('Zilizoisha Stock: 2')
-        ->toContain('Stock Ndogo: 1')
+        ->toContain('Zilizoisha Hisa: 2')
+        ->toContain('Hisa Ndogo: 1')
         ->toContain('Eneo: mikoposoft (Maeneo yote yaliyoruhusiwa)')
         ->toContain('Imetengenezwa: 31 Ago 2026 03:00')
-        ->toContain('Ripoti kamili ya bidhaa zenye stock ndogo au zilizoisha imeambatanishwa.')
+        ->toContain('Ripoti kamili ya bidhaa zenye hisa ndogo au zilizoisha imeambatanishwa.')
         ->not->toContain('stock items require attention', 'Out of Stock:', 'Generated:');
 });
 
@@ -116,7 +116,7 @@ test('daily summary is generated fully in Kiswahili without translating stored n
 
     expect($message)->toContain('MUHTASARI WA SIKU - HARDEX', 'mikoposoft', '31 Ago 2026')
         ->toContain('Mauzo: TZS 24,289,050', 'Idadi ya Miamala: 32')
-        ->toContain('Mauzo ya Cash: TZS 24,289,050', 'Mauzo ya Mkopo: TZS 0')
+        ->toContain('Mauzo ya Taslimu: TZS 24,289,050', 'Mauzo ya Mkopo: TZS 0')
         ->toContain('Bidhaa Iliyouzwa Zaidi: Mabati Gauge 28 — TZS 12,626,000')
         ->not->toContain('Sales:', 'Transactions:', 'Top Product:');
 });

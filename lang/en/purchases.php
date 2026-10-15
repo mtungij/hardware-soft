@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Purchases', 'create' => 'Create Purchase', 'edit' => 'Edit Purchase', 'receive' => 'Receive Purchase', 'supplier' => 'Supplier', 'product' => 'Product', 'quantity' => 'Quantity', 'buying_price' => 'Buying Price'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/purchases.php';

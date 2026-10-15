@@ -1,9 +1,4 @@
 <?php
 
-return [
-    'days' => ['Jumatatu', 'Jumanne', 'Jumatano', 'Alhamisi', 'Ijumaa', 'Jumamosi', 'Jumapili'],
-    'months' => ['Januari', 'Februari', 'Machi', 'Aprili', 'Mei', 'Juni', 'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba'],
-    'today' => 'Leo',
-    'yesterday' => 'Jana',
-    'tomorrow' => 'Kesho',
-];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/sw/date.php';

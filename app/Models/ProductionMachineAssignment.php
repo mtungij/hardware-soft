@@ -56,7 +56,7 @@ class ProductionMachineAssignment extends Model
         });
         static::updating(function (ProductionMachineAssignment $assignment): void {
             if ($assignment->immutableProductionOrder()) {
-                throw new LogicException('Historical production assignments linked to a non-cancelled production order are immutable.');
+                throw new LogicException(__('application.historical_production_assignments_linked_to_a_non_cancelled_production_orde_72127d73'));
             }
         });
         static::deleting(function (ProductionMachineAssignment $assignment): void {

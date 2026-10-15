@@ -252,7 +252,7 @@ $save = function (): void {
     app(ProductionScheduleService::class)->save($validated, auth()->user(), $assignment);
     $warning = $this->capacityWarning;
     $this->resetForm();
-    session()->flash('success', 'Daily machine assignment saved.');
+    session()->flash('success', __('application.daily_machine_assignment_saved_3df2e7d7'));
     if ($warning) {
         session()->flash('warning', $warning);
     }
@@ -264,7 +264,7 @@ $editAssignment = function (int $assignmentId): void {
         ->with(['product', 'productionOrder'])->findOrFail($assignmentId);
 
     if ($assignment->immutableProductionOrder()) {
-        $this->addError('status', 'This historical assignment is linked to a production order and cannot be changed. Create a new assignment.');
+        $this->addError('status', __('application.this_historical_assignment_is_linked_to_a_production_order_and_cannot_be_ch_bd7fa898'));
         return;
     }
 
@@ -350,7 +350,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
     $assignment = ProductionMachineAssignment::query()->forCurrentCompany()->with('productionOrder')->findOrFail($assignmentId);
 
     if ($assignment->immutableProductionOrder()) {
-        $this->addError('status', 'This historical assignment is linked to a production order and cannot be changed. Create a new assignment.');
+        $this->addError('status', __('application.this_historical_assignment_is_linked_to_a_production_order_and_cannot_be_ch_bd7fa898'));
         return;
     }
 
@@ -403,7 +403,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
 <div x-on:mould-installation-updated.window="$wire.refreshProductOptions()">
     <x-page-header
         :title="__('production.daily_schedule')"
-        description="Plan one manufactured product per machine per day. This schedule does not move stock."
+        description="{{ __('application.plan_one_manufactured_product_per_machine_per_day_this_schedule_does_not_mo_25aec287') }}"
         :breadcrumbs="['Dashboard' => route('dashboard'), __('production.title') => route('production.index'), __('production.daily_schedule') => null]"
     />
 
@@ -412,16 +412,16 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
 
     <x-card class="mb-6">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button wire:click="changeDay(-1)" class="rounded-lg border px-3 py-2 font-bold">← Previous</button>
+            <button wire:click="changeDay(-1)" class="rounded-lg border px-3 py-2 font-bold">{{ __('application.previous_471492a9') }}</button>
             <input type="date" wire:model.live="selectedDate" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
-            <button wire:click="goToday" class="rounded-lg bg-navy-900 px-3 py-2 font-bold text-white">Today</button>
-            <button wire:click="changeDay(1)" class="rounded-lg border px-3 py-2 font-bold">Next →</button>
+            <button wire:click="goToday" class="rounded-lg bg-navy-900 px-3 py-2 font-bold text-white">{{ __('application.today_24345a14') }}</button>
+            <button wire:click="changeDay(1)" class="rounded-lg border px-3 py-2 font-bold">{{ __('application.next_2f04eb15') }}</button>
         </div>
     </x-card>
 
     <div class="grid gap-6 {{ $this->canManage() ? 'xl:grid-cols-[400px_1fr]' : '' }}">
         @if ($this->canManage())
-            <x-card :title="$editingId ? 'Edit / Reactivate Assignment' : 'Create Assignment'">
+            <x-card :title="$editingId ? __('terminology.edit_reactivate_assignment_06ae3b1a') : __('terminology.create_assignment_c2fb5753')">
                 <form wire:submit="save" class="space-y-4">
                     @php
                         $machines = Machine::query()->forCurrentCompany()->active()->orderBy('name')->get();
@@ -440,13 +440,13 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                                 ->first()
                             : null;
                     @endphp
-                    <label class="block text-sm font-bold">Production Method
-                        <select data-testid="assignment-production-method" wire:model.live="production_method" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"><option value="machine_mould">Machine + Mould</option><option value="mould_only">Mould Only</option></select>
+                    <label class="block text-sm font-bold">{{ __('application.production_method_92bcfef4') }}
+                        <select data-testid="assignment-production-method" wire:model.live="production_method" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"><option value="machine_mould">{{ __('application.machine_mould_ff498316') }}</option><option value="mould_only">{{ __('application.mould_only_59c6f80b') }}</option></select>
                     </label>
                     @if($production_method === ProductFamily::METHOD_MACHINE_MOULD)
-                    <label class="block text-sm font-bold">Machine
+                    <label class="block text-sm font-bold">{{ __('application.machine_65bb1b78') }}
                         <select data-testid="assignment-machine-select" wire:model.live="machine_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
-                            <option value="">Select machine</option>
+                            <option value="">{{ __('application.select_machine_118d1f36') }}</option>
                             @foreach ($machines as $machine)
                                 <option value="{{ $machine->id }}">{{ $machine->name }}{{ $machine->code ? " ({$machine->code})" : '' }}</option>
                             @endforeach
@@ -454,10 +454,10 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                         @error('machine_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                     </label>
                     @else
-                    <label class="block text-sm font-bold">Mould
-                        <select data-testid="assignment-mould-select" wire:model.live="production_mould_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"><option value="">Select mould</option>@foreach(ProductionMould::query()->forCurrentCompany()->available()->with('family')->orderBy('name')->get() as $mould)<option value="{{ $mould->id }}">{{ $mould->name }} · {{ $mould->family?->name }}</option>@endforeach</select>
+                    <label class="block text-sm font-bold">{{ __('application.mould_1fdffa4c') }}
+                        <select data-testid="assignment-mould-select" wire:model.live="production_mould_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.select_mould_47b7ae8f') }}</option>@foreach(ProductionMould::query()->forCurrentCompany()->available()->with('family')->orderBy('name')->get() as $mould)<option value="{{ $mould->id }}">{{ $mould->name }} · {{ $mould->family?->name }}</option>@endforeach</select>
                         @error('production_mould_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
-                        <span class="mt-1 block text-xs text-slate-500">Machine is not required; this mould is reserved for the selected day.</span>
+                        <span class="mt-1 block text-xs text-slate-500">{{ __('application.machine_is_not_required_this_mould_is_reserved_for_the_selected_day_8db840e1') }}</span>
                     </label>
                     @endif
                     @if($existingAssignment)
@@ -465,83 +465,83 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                             $existingOrder = $existingAssignment->immutableProductionOrder();
                         @endphp
                         <div data-testid="existing-assignment-notice" class="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
-                            <p class="font-black">{{ $existingOrder ? 'Historical assignment.' : 'Assignment already exists.' }}</p>
-                            <p class="mt-1">{{ $existingAssignment->product?->name ?: __('production.unknown_product') }} · {{ ucfirst($existingAssignment->status) }}</p>
+                            <p class="font-black">{{ $existingOrder ? __('terminology.historical_assignment_1ac2c568') : __('terminology.assignment_already_exists_e3e02495') }}</p>
+                            <p class="mt-1">{{ $existingAssignment->product?->name ?: __('production.unknown_product') }} · {{ \App\Support\UiText::status($existingAssignment->status) }}</p>
                             @if($existingAssignment->historicalProductionOrder())
-                                <p class="mt-1">Linked to completed Production Order {{ $existingOrder->order_number }}. Create a new assignment.</p>
-                                <button type="button" wire:click="createNewAssignmentFrom({{ $existingAssignment->id }})" class="mt-2 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-black text-amber-900 dark:bg-slate-900 dark:text-amber-100">Create New Assignment From This</button>
+                                <p class="mt-1">{{ __('application.linked_to_completed_production_order_d2a52a4c') }} {{ $existingOrder->order_number }}{{ __('application.create_a_new_assignment_872b34bc') }}</p>
+                                <button type="button" wire:click="createNewAssignmentFrom({{ $existingAssignment->id }})" class="mt-2 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-black text-amber-900 dark:bg-slate-900 dark:text-amber-100">{{ __('application.create_new_assignment_from_this_0b552f8a') }}</button>
                             @elseif(! $existingOrder && $existingAssignment->status !== ProductionMachineAssignment::STATUS_COMPLETED)
-                                <button type="button" wire:click="editAssignment({{ $existingAssignment->id }})" class="mt-2 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-black text-amber-900 dark:bg-slate-900 dark:text-amber-100">Edit existing assignment</button>
+                                <button type="button" wire:click="editAssignment({{ $existingAssignment->id }})" class="mt-2 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-black text-amber-900 dark:bg-slate-900 dark:text-amber-100">{{ __('application.edit_existing_assignment_f0805031') }}</button>
                             @endif
                         </div>
                     @endif
                     @if($production_method === ProductFamily::METHOD_MACHINE_MOULD)
                     <dl data-testid="assignment-current-installation" data-installation-id="{{ $selectedInstallation?->id }}" class="grid gap-3 rounded-xl border p-3 text-sm {{ $installedMould ? 'border-cyan-200 bg-cyan-50 dark:border-cyan-500/30 dark:bg-cyan-500/10' : 'border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10' }}">
-                        <div><dt class="text-xs font-bold uppercase text-slate-500 dark:text-slate-300">Installed Mould</dt><dd class="mt-1 font-black text-slate-950 dark:text-white">{{ $installedMould?->name ?: __('production.moulds.none_installed') }}</dd></div>
+                        <div><dt class="text-xs font-bold uppercase text-slate-500 dark:text-slate-300">{{ __('application.installed_mould_bd72d660') }}</dt><dd class="mt-1 font-black text-slate-950 dark:text-white">{{ $installedMould?->name ?: __('production.moulds.none_installed') }}</dd></div>
                         @if($installedMould)
-                            <div><dt class="text-xs font-bold uppercase text-slate-500 dark:text-slate-300">Family</dt><dd class="font-bold text-slate-900 dark:text-slate-100">{{ $installedMould->family?->name ?: '—' }}</dd></div>
-                            <div><dt class="text-xs font-bold uppercase text-slate-500 dark:text-slate-300">Installation Date</dt><dd class="font-bold text-slate-900 dark:text-slate-100">{{ $selectedInstallation?->installed_at?->format('d M Y H:i') ?: '—' }}</dd></div>
+                            <div><dt class="text-xs font-bold uppercase text-slate-500 dark:text-slate-300">{{ __('application.family_4efb6cb7') }}</dt><dd class="font-bold text-slate-900 dark:text-slate-100">{{ $installedMould->family?->name ?: '—' }}</dd></div>
+                            <div><dt class="text-xs font-bold uppercase text-slate-500 dark:text-slate-300">{{ __('application.installation_date_3640ae34') }}</dt><dd class="font-bold text-slate-900 dark:text-slate-100">{{ $selectedInstallation?->installed_at?->locale(app()->getLocale())->translatedFormat('d M Y H:i') ?: '—' }}</dd></div>
                         @endif
                     </dl>
                     @endif
-                    <label class="block text-sm font-bold">Manufactured Product
+                    <label class="block text-sm font-bold">{{ __('application.manufactured_product_37b24a6e') }}
                         <select data-testid="assignment-product-select" wire:model.live="product_id" @disabled($production_method === ProductFamily::METHOD_MACHINE_MOULD ? ! $installedMould : ! $production_mould_id) class="mt-1 block w-full rounded-lg border-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-800">
-                            <option value="">Select product</option>
+                            <option value="">{{ __('application.select_product_596d90e5') }}</option>
                             @foreach ($availableProducts as $product)
                                 <option value="{{ $product['id'] }}">{{ $product['name'] }}</option>
                             @endforeach
                         </select>
                         @error('product_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                     </label>
-                    <label class="block text-sm font-bold">Recipe
+                    <label class="block text-sm font-bold">{{ __('application.recipe_1dcda804') }}
                         <select data-testid="assignment-recipe-select" wire:model.live="production_recipe_id" @disabled(! $product_id) class="mt-1 block w-full rounded-lg border-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-navy-950 dark:disabled:bg-slate-800">
-                            <option value="">Select active recipe</option>
+                            <option value="">{{ __('application.select_active_recipe_3f45f94f') }}</option>
                             @foreach($availableRecipes as $recipe)<option value="{{ $recipe['id'] }}">{{ $recipe['name'] }} · {{ $recipe['version'] ?: '—' }}</option>@endforeach
                         </select>
                         @error('production_recipe_id')<span class="text-xs text-red-600">{{ $message }}</span>@enderror
                     </label>
-                    <label class="block text-sm font-bold">Branch / Production Site
+                    <label class="block text-sm font-bold">{{ __('application.branch_production_site_becf974b') }}
                         <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
-                            <option value="">Company-wide</option>
+                            <option value="">{{ __('application.company_wide_24f7fca3') }}</option>
                             @foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->orderBy('name')->get() as $branch)
                                 <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                             @endforeach
                         </select>
                         @error('branch_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                     </label>
-                    <x-form-input label="Target Quantity" name="target_quantity" type="number" min="0.0001" step="0.0001" wire:model="target_quantity" />
+                    <x-form-input label="{{ __('application.target_quantity_4571cf3a') }}" name="target_quantity" type="number" min="0.0001" step="0.0001" wire:model="target_quantity" />
                     <div class="grid grid-cols-2 gap-3">
-                        <x-form-input label="Start Time" name="planned_start_time" type="time" wire:model="planned_start_time" />
-                        <x-form-input label="End Time" name="planned_end_time" type="time" wire:model="planned_end_time" />
+                        <x-form-input label="{{ __('application.start_time_41c1074d') }}" name="planned_start_time" type="time" wire:model="planned_start_time" />
+                        <x-form-input label="{{ __('application.end_time_4c640e92') }}" name="planned_end_time" type="time" wire:model="planned_end_time" />
                     </div>
-                    <label class="block text-sm font-bold">Status
+                    <label class="block text-sm font-bold">{{ __('application.status_bae7d5be') }}
                         <select wire:model="status" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
-                            <option value="planned">Planned</option><option value="confirmed">Confirmed</option><option value="cancelled">Cancelled</option>
+                            <option value="planned">{{ __('application.planned_9cbe42aa') }}</option><option value="confirmed">{{ __('application.confirmed_8cc7acb8') }}</option><option value="cancelled">{{ __('application.cancelled_a1bf92ef') }}</option>
                         </select>
                     </label>
-                    <label class="block text-sm font-bold">Notes
+                    <label class="block text-sm font-bold">{{ __('application.notes_70440046') }}
                         <textarea wire:model="notes" class="mt-1 block min-h-24 w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"></textarea>
                     </label>
                     @error('status') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
                     <div class="flex gap-2">
-                        <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save Assignment</button>
-                        <button type="button" wire:click="resetForm" class="rounded-xl border px-4 py-2.5 text-sm font-black">Clear</button>
+                        <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ __('application.save_assignment_9e541d8a') }}</button>
+                        <button type="button" wire:click="resetForm" class="rounded-xl border px-4 py-2.5 text-sm font-black">{{ __('application.clear_719ea396') }}</button>
                     </div>
                 </form>
             </x-card>
         @endif
 
-        <x-card title="Schedule">
+        <x-card title="{{ __('application.schedule_0a8adac9') }}">
             <div class="mb-4 grid gap-3 md:grid-cols-3">
                 <select wire:model.live="branchFilter" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
-                    <option value="">All branches</option>
+                    <option value="">{{ __('application.all_branches_25c23746') }}</option>
                     @foreach (Branch::query()->where('company_id', CompanyFeatures::companyId())->orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
                 </select>
                 <select wire:model.live="machineStatusFilter" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">All machine statuses</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="maintenance">Maintenance</option>
+                    <option value="">{{ __('application.all_machine_statuses_d822a6b0') }}</option><option value="active">{{ __('application.active_a733b809') }}</option><option value="inactive">{{ __('application.inactive_09af574c') }}</option><option value="maintenance">{{ __('application.maintenance_94de303b') }}</option>
                 </select>
                 <select wire:model.live="productFilter" class="rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
-                    <option value="">All products</option>
+                    <option value="">{{ __('application.all_products_3ffece7c') }}</option>
                     @foreach (Product::query()->where('company_id', CompanyFeatures::companyId())->manufactured()->orderBy('name')->get() as $product)<option value="{{ $product->id }}">{{ $product->name }}</option>@endforeach
                 </select>
             </div>
@@ -567,7 +567,7 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                 ]);
             @endphp
             <div class="hidden md:block">
-                <x-table :headers="['Machine', 'Mould', 'Product / Recipe', 'Date', 'Target', 'Status', 'Branch', 'Actions']">
+                <x-table :headers="[__('application.machine_65bb1b78'), __('application.mould_1fdffa4c'), __('terminology.product_recipe_da2e841c'), __('application.date_eb9a4bc1'), __('application.target_61ad50a9'), __('application.status_bae7d5be'), __('application.branch_1627510b'), __('application.actions_c3cd636a')]">
                     @forelse ($assignments as $assignment)
                         @php
                             $requiresReassignment = $this->requiresReassignment($assignment);
@@ -577,37 +577,37 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                             $currentMould = $assignment->production_method === ProductFamily::METHOD_MOULD_ONLY ? $assignment->mould : $assignment->machine?->currentMouldInstallation?->mould;
                         @endphp
                         <tr>
-                            <td class="px-4 py-3 font-black">{{ $assignment->machine?->name ?: '—' }}<p class="text-xs font-normal text-slate-500">{{ $assignment->production_method === ProductFamily::METHOD_MOULD_ONLY ? 'Mould Only' : 'Machine + Mould' }}</p></td>
-                            <td class="px-4 py-3"><p class="font-bold text-slate-900 dark:text-white">{{ $currentMould?->name ?: __('production.moulds.none_installed') }}</p>@if($requiresReassignment)<p class="mt-1 text-xs text-amber-700 dark:text-amber-300">{{ __('production.schedule.assigned_mould', ['mould' => $assignment->mould?->name ?: '—']) }}</p>@elseif($historicalOrder && $mouldHasChanged)<p class="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">Historical assignment — linked to completed Production Order {{ $historicalOrder->order_number }}. Create a new assignment.</p>@endif</td>
+                            <td class="px-4 py-3 font-black">{{ $assignment->machine?->name ?: '—' }}<p class="text-xs font-normal text-slate-500">{{ $assignment->production_method === ProductFamily::METHOD_MOULD_ONLY ? __('application.mould_only_59c6f80b') : __('application.machine_mould_ff498316') }}</p></td>
+                            <td class="px-4 py-3"><p class="font-bold text-slate-900 dark:text-white">{{ $currentMould?->name ?: __('production.moulds.none_installed') }}</p>@if($requiresReassignment)<p class="mt-1 text-xs text-amber-700 dark:text-amber-300">{{ __('production.schedule.assigned_mould', ['mould' => $assignment->mould?->name ?: '—']) }}</p>@elseif($historicalOrder && $mouldHasChanged)<p class="mt-1 text-xs font-bold text-amber-700 dark:text-amber-300">{{ __('application.historical_assignment_linked_to_completed_production_order_c77f716c') }} {{ $historicalOrder->order_number }}{{ __('application.create_a_new_assignment_872b34bc') }}</p>@endif</td>
                             <td class="px-4 py-3"><p>{{ $assignment->product?->name }}</p><p class="text-xs text-slate-500">{{ $assignment->recipe?->name ?: '—' }}</p></td>
-                            <td class="px-4 py-3">{{ $assignment->production_date->format('d M Y') }}</td>
+                            <td class="px-4 py-3">{{ $assignment->production_date->locale(app()->getLocale())->translatedFormat('d M Y') }}</td>
                             <td class="px-4 py-3">{{ $assignment->target_quantity !== null ? number_format((float) $assignment->target_quantity, 2) : '—' }}</td>
-                            <td class="px-4 py-3"><span class="{{ $assignment->status === 'confirmed' || $assignment->status === 'completed' ? 'badge-success' : ($assignment->status === 'cancelled' ? 'badge-danger' : 'badge-warning') }}">{{ ucfirst($assignment->status) }}</span>@if($requiresReassignment)<span class="mt-1 block rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-center text-[11px] font-black text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">{{ __('production.schedule.requires_reassignment') }}</span>@endif</td>
-                            <td class="px-4 py-3">{{ $assignment->branch?->name ?: 'Company-wide' }}</td>
+                            <td class="px-4 py-3"><span class="{{ $assignment->status === 'confirmed' || $assignment->status === 'completed' ? 'badge-success' : ($assignment->status === 'cancelled' ? 'badge-danger' : 'badge-warning') }}">{{ \App\Support\UiText::status($assignment->status) }}</span>@if($requiresReassignment)<span class="mt-1 block rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-center text-[11px] font-black text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">{{ __('production.schedule.requires_reassignment') }}</span>@endif</td>
+                            <td class="px-4 py-3">{{ $assignment->branch?->name ?: __('application.company_wide_24f7fca3') }}</td>
                             <td class="px-4 py-3"><div class="flex flex-wrap gap-1">
-                                <button wire:click="viewAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">View</button>
+                                <button wire:click="viewAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">{{ __('application.view_69bd4ef9') }}</button>
                                 @if($linkedOrder)
-                                    <a href="{{ route('production.orders.show', $linkedOrder) }}" wire:navigate class="rounded border px-2 py-1 text-xs font-bold">View Order</a>
+                                    <a href="{{ route('production.orders.show', $linkedOrder) }}" wire:navigate class="rounded border px-2 py-1 text-xs font-bold">{{ __('application.view_order_f40d719a') }}</a>
                                 @elseif(auth()->user()?->can('production.create_orders') && $orderEligibleAssignmentIds->contains($assignment->id))
-                                    <a href="{{ route('production.orders.create', ['assignment' => $assignment->id]) }}" wire:navigate class="rounded bg-build-orange px-2 py-1 text-xs font-bold text-white">Create Production Order</a>
+                                    <a href="{{ route('production.orders.create', ['assignment' => $assignment->id]) }}" wire:navigate class="rounded bg-build-orange px-2 py-1 text-xs font-bold text-white">{{ __('application.create_production_order_fbd07610') }}</a>
                                 @endif
                                 @if($this->canManage() && $historicalOrder)
-                                    <button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="rounded border border-cyan-500 px-2 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create New Assignment From This</button>
+                                    <button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="rounded border border-cyan-500 px-2 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">{{ __('application.create_new_assignment_from_this_0b552f8a') }}</button>
                                 @elseif($this->canManage() && ! $linkedOrder && $assignment->status !== 'completed')
                                     @if($assignment->status === 'cancelled')
-                                        <button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="rounded border border-cyan-500 px-2 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create Replacement</button>
-                                        <button wire:click="editAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">Reactivate</button>
+                                        <button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="rounded border border-cyan-500 px-2 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">{{ __('application.create_replacement_df4892ea') }}</button>
+                                        <button wire:click="editAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">{{ __('application.reactivate_cd28a172') }}</button>
                                     @else
-                                        <button wire:click="editAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">{{ $requiresReassignment ? __('production.schedule.reassign') : 'Edit' }}</button>
+                                        <button wire:click="editAssignment({{ $assignment->id }})" class="rounded border px-2 py-1 text-xs font-bold">{{ $requiresReassignment ? __('production.schedule.reassign') : __('application.edit_5301648d') }}</button>
                                     @endif
-                                    @if ($assignment->status !== 'cancelled')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'cancelled')" class="rounded bg-red-600 px-2 py-1 text-xs font-bold text-white">Cancel</button>@endif
-                                    @if ($assignment->status === 'planned')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'confirmed')" class="rounded bg-cyan-700 px-2 py-1 text-xs font-bold text-white">Confirm</button>@endif
-                                    @if ($assignment->status === 'confirmed')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'completed')" wire:confirm="Close this schedule only? This will not create stock." class="rounded bg-emerald-700 px-2 py-1 text-xs font-bold text-white">Complete Schedule</button>@endif
+                                    @if ($assignment->status !== 'cancelled')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'cancelled')" class="rounded bg-red-600 px-2 py-1 text-xs font-bold text-white">{{ __('application.cancel_77dfd213') }}</button>@endif
+                                    @if ($assignment->status === 'planned')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'confirmed')" class="rounded bg-cyan-700 px-2 py-1 text-xs font-bold text-white">{{ __('application.confirm_04a21221') }}</button>@endif
+                                    @if ($assignment->status === 'confirmed')<button wire:click="setAssignmentStatus({{ $assignment->id }}, 'completed')" wire:confirm="{{ __('application.close_this_schedule_only_this_will_not_create_stock_a6d20311') }}" class="rounded bg-emerald-700 px-2 py-1 text-xs font-bold text-white">{{ __('application.complete_schedule_50416f7a') }}</button>@endif
                                 @endif
                             </div></td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">No assignments for this date.</td></tr>
+                        <tr><td colspan="8" class="px-4 py-8 text-center text-slate-500">{{ __('application.no_assignments_for_this_date_d15d9ecc') }}</td></tr>
                     @endforelse
                 </x-table>
             </div>
@@ -621,26 +621,26 @@ $setAssignmentStatus = function (int $assignmentId, string $status): void {
                         $currentMould = $assignment->production_method === ProductFamily::METHOD_MOULD_ONLY ? $assignment->mould : $assignment->machine?->currentMouldInstallation?->mould;
                     @endphp
                     <article class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                        <div class="flex items-start justify-between gap-2"><div><h3 class="font-black">{{ $assignment->machine?->name }}</h3><p class="text-sm text-slate-500">{{ $currentMould?->name ?: __('production.moulds.none_installed') }} · {{ $assignment->product?->name }}</p><p class="text-xs text-slate-500">{{ $assignment->recipe?->name }}</p>@if($requiresReassignment)<p class="mt-1 text-xs font-black text-amber-700 dark:text-amber-300">{{ __('production.schedule.requires_reassignment') }} · {{ __('production.schedule.assigned_mould', ['mould' => $assignment->mould?->name ?: '—']) }}</p>@elseif($historicalOrder && $mouldHasChanged)<p class="mt-1 text-xs font-black text-amber-700 dark:text-amber-300">Historical assignment — linked to completed Production Order {{ $historicalOrder->order_number }}. Create a new assignment.</p>@endif</div><span class="badge-warning">{{ ucfirst($assignment->status) }}</span></div>
-                        <dl class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><dt class="text-slate-500">Target</dt><dd>{{ $assignment->target_quantity ?? '—' }}</dd></div><div><dt class="text-slate-500">Branch</dt><dd>{{ $assignment->branch?->name ?: 'Company-wide' }}</dd></div></dl>
-                        <button wire:click="viewAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">View details</button>
-                        @if($this->canManage() && $historicalOrder)<button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="mt-3 rounded border border-cyan-500 px-3 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create New Assignment From This</button>@elseif($this->canManage() && ! $linkedOrder && $assignment->status !== 'completed')@if($assignment->status === 'cancelled')<button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="mt-3 rounded border border-cyan-500 px-3 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">Create Replacement</button><button wire:click="editAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">Reactivate</button>@else<button wire:click="editAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">{{ $requiresReassignment ? __('production.schedule.reassign') : 'Edit' }}</button>@endif @endif
+                        <div class="flex items-start justify-between gap-2"><div><h3 class="font-black">{{ $assignment->machine?->name }}</h3><p class="text-sm text-slate-500">{{ $currentMould?->name ?: __('production.moulds.none_installed') }} · {{ $assignment->product?->name }}</p><p class="text-xs text-slate-500">{{ $assignment->recipe?->name }}</p>@if($requiresReassignment)<p class="mt-1 text-xs font-black text-amber-700 dark:text-amber-300">{{ __('production.schedule.requires_reassignment') }} · {{ __('production.schedule.assigned_mould', ['mould' => $assignment->mould?->name ?: '—']) }}</p>@elseif($historicalOrder && $mouldHasChanged)<p class="mt-1 text-xs font-black text-amber-700 dark:text-amber-300">{{ __('application.historical_assignment_linked_to_completed_production_order_c77f716c') }} {{ $historicalOrder->order_number }}{{ __('application.create_a_new_assignment_872b34bc') }}</p>@endif</div><span class="badge-warning">{{ \App\Support\UiText::status($assignment->status) }}</span></div>
+                        <dl class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><dt class="text-slate-500">{{ __('application.target_61ad50a9') }}</dt><dd>{{ $assignment->target_quantity ?? '—' }}</dd></div><div><dt class="text-slate-500">{{ __('application.branch_1627510b') }}</dt><dd>{{ $assignment->branch?->name ?: __('application.company_wide_24f7fca3') }}</dd></div></dl>
+                        <button wire:click="viewAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">{{ __('application.view_details_badd3851') }}</button>
+                        @if($this->canManage() && $historicalOrder)<button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="mt-3 rounded border border-cyan-500 px-3 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">{{ __('application.create_new_assignment_from_this_0b552f8a') }}</button>@elseif($this->canManage() && ! $linkedOrder && $assignment->status !== 'completed')@if($assignment->status === 'cancelled')<button wire:click="createNewAssignmentFrom({{ $assignment->id }})" class="mt-3 rounded border border-cyan-500 px-3 py-1 text-xs font-bold text-cyan-700 dark:text-cyan-300">{{ __('application.create_replacement_df4892ea') }}</button><button wire:click="editAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">{{ __('application.reactivate_cd28a172') }}</button>@else<button wire:click="editAssignment({{ $assignment->id }})" class="mt-3 rounded border px-3 py-1 text-xs font-bold">{{ $requiresReassignment ? __('production.schedule.reassign') : __('application.edit_5301648d') }}</button>@endif @endif
                     </article>
                 @empty
-                    <p class="py-8 text-center text-slate-500">No assignments for this date.</p>
+                    <p class="py-8 text-center text-slate-500">{{ __('application.no_assignments_for_this_date_d15d9ecc') }}</p>
                 @endforelse
             </div>
             <div class="mt-4">{{ $assignments->links() }}</div>
             @if ($viewingId && ($viewing = ProductionMachineAssignment::query()->forCurrentCompany()->with(['machine.currentMouldInstallation.mould', 'mould', 'product', 'recipe', 'branch', 'creator', 'updater'])->find($viewingId)))
                 <div class="mt-5 rounded-xl border p-4">
-                    <div class="flex justify-between"><h3 class="font-black">Assignment Details</h3><button wire:click="$set('viewingId', null)">✕</button></div>
+                    <div class="flex justify-between"><h3 class="font-black">{{ __('application.assignment_details_2da5b038') }}</h3><button wire:click="$set('viewingId', null)">✕</button></div>
                     <dl class="mt-3 grid gap-2 text-sm sm:grid-cols-2">
-                        <div><dt class="text-slate-500">Machine</dt><dd>{{ $viewing->machine?->name }}</dd></div><div><dt class="text-slate-500">{{ __('production.schedule.current_mould') }}</dt><dd>{{ $viewing->machine?->currentMouldInstallation?->mould?->name ?: __('production.moulds.none_installed') }}</dd></div>
+                        <div><dt class="text-slate-500">{{ __('application.machine_65bb1b78') }}</dt><dd>{{ $viewing->machine?->name }}</dd></div><div><dt class="text-slate-500">{{ __('production.schedule.current_mould') }}</dt><dd>{{ $viewing->machine?->currentMouldInstallation?->mould?->name ?: __('production.moulds.none_installed') }}</dd></div>
                         <div><dt class="text-slate-500">{{ __('production.schedule.assigned_mould_label') }}</dt><dd>{{ $viewing->mould?->name ?: '—' }}</dd></div>
-                        <div><dt class="text-slate-500">Product</dt><dd>{{ $viewing->product?->name }}</dd></div><div><dt class="text-slate-500">Recipe</dt><dd>{{ $viewing->recipe?->name }}</dd></div>
-                        <div><dt class="text-slate-500">Time</dt><dd>{{ $viewing->planned_start_time ?: '—' }} – {{ $viewing->planned_end_time ?: '—' }}</dd></div><div><dt class="text-slate-500">Notes</dt><dd>{{ $viewing->notes ?: '—' }}</dd></div>
+                        <div><dt class="text-slate-500">{{ __('application.product_dd3b86d1') }}</dt><dd>{{ $viewing->product?->name }}</dd></div><div><dt class="text-slate-500">{{ __('application.recipe_1dcda804') }}</dt><dd>{{ $viewing->recipe?->name }}</dd></div>
+                        <div><dt class="text-slate-500">{{ __('application.time_6c82e6dd') }}</dt><dd>{{ $viewing->planned_start_time ?: '—' }} – {{ $viewing->planned_end_time ?: '—' }}</dd></div><div><dt class="text-slate-500">{{ __('application.notes_70440046') }}</dt><dd>{{ $viewing->notes ?: '—' }}</dd></div>
                     </dl>
-                    <p class="mt-3 text-xs font-bold text-amber-700">Planning record only — no materials or finished-goods stock are moved.</p>
+                    <p class="mt-3 text-xs font-bold text-amber-700">{{ __('application.planning_record_only_no_materials_or_finished_goods_stock_are_moved_cbf92fc5') }}</p>
                 </div>
             @endif
         </x-card>

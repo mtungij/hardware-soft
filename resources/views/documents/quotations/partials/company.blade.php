@@ -1,4 +1,4 @@
-@if ($document['company']['logo'])<img class="logo" src="{{ $document['company']['logo'] }}" alt="Company logo"><br>@endif
+@if ($document['company']['logo'])<img class="logo" src="{{ $document['company']['logo'] }}" alt="{{ __('application.company_logo_dd0cb6c1') }}"><br>@endif
 <div class="company-name">{{ $document['company']['company_name'] }}</div>
 <div class="contact">
 @foreach (['address', 'phone', 'email'] as $field)

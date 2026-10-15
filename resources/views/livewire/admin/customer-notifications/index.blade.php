@@ -27,35 +27,35 @@ $notifications = computed(function () {
 ?>
 
 <div>
-    <x-page-header title="Customer Notifications" description="Messages generated for customer portal users." :breadcrumbs="['Dashboard' => route('dashboard'), 'Customer Notifications' => null]" />
+    <x-page-header title="{{ __('application.customer_notifications_a3010997') }}" description="{{ __('application.messages_generated_for_customer_portal_users_0f9a4f5d') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Customer Notifications' => null]" />
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-3">
-            <input wire:model.live.debounce.300ms="search" class="rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" placeholder="Search customer/message">
+            <input wire:model.live.debounce.300ms="search" class="rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" placeholder="{{ __('application.search_customer_message_594137b2') }}">
             <select wire:model.live="type" class="rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                <option value="all">All types</option>
-                <option value="receipt_approved">Receipt Approved</option>
-                <option value="receipt_rejected">Receipt Rejected</option>
-                <option value="deposit_approved">Deposit Approved</option>
-                <option value="deposit_rejected">Deposit Rejected</option>
-                <option value="new_debt">New Debt</option>
-                <option value="new_invoice">New Invoice</option>
-                <option value="announcement">Announcement</option>
-                <option value="customer_message">Customer Message</option>
+                <option value="all">{{ __('application.all_types_30c8a0fc') }}</option>
+                <option value="receipt_approved">{{ __('application.receipt_approved_55a3513b') }}</option>
+                <option value="receipt_rejected">{{ __('application.receipt_rejected_00eca2b8') }}</option>
+                <option value="deposit_approved">{{ __('application.deposit_approved_2cee0a52') }}</option>
+                <option value="deposit_rejected">{{ __('application.deposit_rejected_94ab033b') }}</option>
+                <option value="new_debt">{{ __('application.new_debt_acf70a9a') }}</option>
+                <option value="new_invoice">{{ __('application.new_invoice_878bae99') }}</option>
+                <option value="announcement">{{ __('application.announcement_cf84a98d') }}</option>
+                <option value="customer_message">{{ __('application.customer_message_7f99b063') }}</option>
             </select>
         </div>
-        <x-table :headers="['Date', 'Customer', 'Type', 'Title', 'Priority', 'Delivered', 'Read']">
+        <x-table :headers="[__('application.date_eb9a4bc1'), __('application.customer_0e85749a'), __('application.type_3deb7456'), __('application.title_768e0c1c'), __('application.priority_886cbff9'), __('application.delivered_eea956cd'), __('application.read_852b438f')]">
             @forelse ($this->notifications as $notification)
                 <tr>
-                    <td class="px-4 py-3">{{ $notification->created_at->format('M d, Y H:i') }}</td>
-                    <td class="px-4 py-3 font-bold">{{ $notification->customer?->name }}</td>
-                    <td class="px-4 py-3">{{ str($notification->type)->replace('_', ' ')->title() }}</td>
-                    <td class="px-4 py-3 font-bold">{{ $notification->title }}</td>
-                    <td class="px-4 py-3">{{ ucfirst($notification->priority ?? 'normal') }}</td>
-                    <td class="px-4 py-3">{{ $notification->delivered_at?->format('M d, Y H:i') ?: $notification->created_at->format('M d, Y H:i') }}</td>
-                    <td class="px-4 py-3">{{ $notification->read_at?->format('M d, Y H:i') ?: 'Unread' }}</td>
+                    <td class="px-4 py-3">{{ $notification->created_at->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }}</td>
+                    <td class="px-4 py-3 font-bold">{{ $notification->customer?->displayName() }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\UiText::label($notification->type) }}</td>
+                    <td class="px-4 py-3 font-bold">{{ $notification->displayTitle() }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\UiText::label($notification->priority ?? 'normal') }}</td>
+                    <td class="px-4 py-3">{{ $notification->delivered_at?->locale(app()->getLocale())->translatedFormat('M d, Y H:i') ?: $notification->created_at->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }}</td>
+                    <td class="px-4 py-3">{{ $notification->read_at?->locale(app()->getLocale())->translatedFormat('M d, Y H:i') ?: __('application.unread_07b032b5') }}</td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">No customer notifications found.</td></tr>
+                <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">{{ __('application.no_customer_notifications_found_2841ddf0') }}</td></tr>
             @endforelse
         </x-table>
         <div class="mt-4">{{ $this->notifications->links() }}</div>

@@ -27,20 +27,8 @@ $login = function () {
     } catch (\Throwable) {
         $phone = preg_replace('/\D+/', '', $this->phone) ?: 'invalid';
     }
-    $throttleKey = 'customer-login:'.hash('sha256', $phone.'|'.request()->ip());
-
-    if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
-        throw ValidationException::withMessages(['phone' => 'Too many login attempts. Please try again in '.RateLimiter::availableIn($throttleKey).' seconds.']);
-    }
-
-    if (! Auth::guard('customer')->attempt(['login_phone' => $phone, 'password' => $this->password], $remember)) {
-        RateLimiter::hit($throttleKey, 60);
-        throw ValidationException::withMessages(['phone' => 'Invalid phone number or password.']);
-    }
-
-    RateLimiter::clear($throttleKey);
-
-    $account = Auth::guard('customer')->user();
+    $account = app(\App\Services\CustomerPortalCredentialService::class)->authenticate($phone, $this->password);
+    Auth::guard('customer')->login($account, $remember);
 
     if ($account->isSuspended()) {
         Auth::guard('customer')->logout();
@@ -49,9 +37,17 @@ $login = function () {
     }
 
     Session::regenerate();
-    $account->forceFill(['last_login_at' => now()])->save();
 
-    $this->redirectRoute($account->must_change_password ? 'customer.change-password' : ($account->isPending() ? 'customer.pending' : 'customer.dashboard'), navigate: true);
+    $account->forceFill([
+        'last_login_at' => now(),
+    ])->save();
+
+    $this->redirectRoute(
+        $account->isPending()
+            ? 'customer.pending'
+            : 'customer.dashboard',
+        navigate: true
+    );
 };
 
 ?>
@@ -83,7 +79,7 @@ $login = function () {
                 @endforeach
             </div>
         </div>
-        <p class="text-sm text-slate-300">{{ __('messages.support.need_help') }} {{ $whatsappNumber ? 'WhatsApp '.$whatsappNumber : '' }}</p>
+        <p class="text-sm text-slate-300">{{ __('messages.support.need_help') }} {{ $whatsappNumber ? __('terminology.whatsapp_05f42d0f').$whatsappNumber : '' }}</p>
     </section>
 
     <section class="flex items-center justify-center p-6">
@@ -96,11 +92,11 @@ $login = function () {
                     <x-pwa-install-button />
                 </div>
                 <h1 class="text-2xl font-black text-navy-900 dark:text-white">{{ __('messages.auth.login') }}</h1>
-                <p class="mt-1 text-sm font-semibold text-slate-500">{{ app()->getLocale() === 'sw' ? 'Ingia kwa kutumia namba ya simu iliyosajiliwa.' : 'Sign in using your registered phone number.' }}</p>
+                <p class="mt-1 text-sm font-semibold text-slate-500">{{ app()->getLocale() === 'sw' ? __('terminology.sign_in_using_your_registered_phone_number_e43d16b4') : __('terminology.sign_in_using_your_registered_phone_number_e43d16b4') }}</p>
 
                 <form wire:submit="login" class="mt-6 space-y-4">
                     <x-form-input :label="__('messages.auth.phone')" name="phone" wire:model="phone" placeholder="0629 364 847" required autofocus />
-                    <x-form-input :label="__('messages.auth.password')" name="password" wire:model="password" type="password" required />
+                    <x-form-input :label="__('portal.password_or_pin')" name="password" wire:model="password" type="password" required />
                     <label class="flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
                         <input wire:model="remember" type="checkbox" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
                         {{ __('messages.auth.remember_me') }}

@@ -17,7 +17,7 @@ class AccountingService
     public function customerBalance(Customer $customer): float
     {
         return (float) $customer->opening_balance
-            + (float) $customer->sales()->where('status', 'completed')->sum('balance_amount');
+            + (float) $customer->sales()->where('company_id', $customer->company_id)->where('status', 'completed')->sum('balance_amount');
     }
 
     public function supplierBalance(Supplier $supplier): float
@@ -36,7 +36,7 @@ class AccountingService
 
         if ($amount > (float) $purchase->total_amount) {
             throw ValidationException::withMessages([
-                'paid_amount' => 'Paid amount cannot exceed the purchase total.',
+                'paid_amount' => __('application.paid_amount_cannot_exceed_the_purchase_total_e2d552dc'),
             ]);
         }
 
@@ -64,7 +64,7 @@ class AccountingService
             $balance = $this->customerBalance($customer);
 
             if ($amount > $balance) {
-                throw ValidationException::withMessages(['amount' => 'Customer payment cannot exceed outstanding balance.']);
+                throw ValidationException::withMessages(['amount' => __('application.customer_payment_cannot_exceed_outstanding_balance_3910d37e')]);
             }
 
             $payment = CustomerPayment::create([
@@ -138,7 +138,7 @@ class AccountingService
             $balance = $this->supplierBalance($supplier);
 
             if ($amount > $balance) {
-                throw ValidationException::withMessages(['amount' => 'Supplier payment cannot exceed outstanding balance.']);
+                throw ValidationException::withMessages(['amount' => __('application.supplier_payment_cannot_exceed_outstanding_balance_8b97bb14')]);
             }
 
             $payment = SupplierPayment::create([

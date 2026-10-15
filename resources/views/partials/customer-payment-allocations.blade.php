@@ -10,12 +10,12 @@
             <span class="font-bold">{{ ($money)($allocation->allocated_amount) }}</span>
         </div>
     @empty
-        <span class="text-slate-500">No sale allocation recorded.</span>
+        <span class="text-slate-500">{{ __('application.no_sale_allocation_recorded_f5e580b3') }}</span>
     @endforelse
 
     @if ($unallocated > 0)
         <div class="flex justify-between gap-3 text-amber-700 dark:text-amber-300">
-            <span>Unallocated</span>
+            <span>{{ __('application.unallocated_bf44ddb5') }}</span>
             <span class="font-bold">{{ ($money)($unallocated) }}</span>
         </div>
     @endif

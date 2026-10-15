@@ -15,7 +15,7 @@ state(['search' => '', 'status' => 'all']);
 
 $sales = computed(function () {
     return Sale::query()
-        ->where('customer_id', auth('customer')->user()->customer_id)
+        ->where('company_id', auth('customer')->user()->company_id)->where('customer_id', auth('customer')->user()->customer_id)
         ->where('status', 'completed')
         ->when($this->status !== 'all', fn ($query) => $query->where('payment_status', $this->status))
         ->when($this->search, fn ($query) => $query->where('sale_number', 'like', '%'.$this->search.'%'))
@@ -26,11 +26,12 @@ $paymentStatusLabel = fn (string $status) => [
     'paid' => __('messages.status.paid'),
     'partial' => __('messages.status.partial'),
     'unpaid' => __('messages.status.unpaid'),
-][$status] ?? str($status)->replace('_', ' ')->title();
+][$status] ?? \App\Support\UiText::label($status);
 
 ?>
 
 <div>
+<nav class="mb-5 grid grid-cols-2 gap-3"><a href="{{ route('customer.invoices.index') }}" wire:navigate class="flex min-h-14 items-center justify-center rounded-xl border border-slate-200 bg-white p-3 text-center text-sm font-black dark:border-slate-700 dark:bg-slate-900">{{ __('portal.invoices') }}</a><a href="{{ route('customer.receipts.create') }}" wire:navigate class="flex min-h-14 items-center justify-center rounded-xl border border-slate-200 bg-white p-3 text-center text-sm font-black dark:border-slate-700 dark:bg-slate-900">{{ __('messages.nav.upload_receipt') }}</a><a href="{{ route('customer.deposits.index') }}" wire:navigate class="flex min-h-14 items-center justify-center rounded-xl border border-slate-200 bg-white p-3 text-center text-sm font-black dark:border-slate-700 dark:bg-slate-900">{{ __('messages.nav.deposits') }}</a><a href="{{ route('customer.statement') }}" wire:navigate class="flex min-h-14 items-center justify-center rounded-xl border border-slate-200 bg-white p-3 text-center text-sm font-black dark:border-slate-700 dark:bg-slate-900">{{ __('messages.nav.statements') }}</a></nav>
     <x-page-header :title="__('messages.debts.title')" :description="__('messages.debts.description')" :breadcrumbs="[__('messages.customer_portal') => route('customer.dashboard'), __('messages.debts.title') => null]" />
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-3">
@@ -42,7 +43,7 @@ $paymentStatusLabel = fn (string $status) => [
         <x-table :headers="[__('messages.debts.purchase_date'), __('messages.debts.invoice_number'), __('messages.debts.total_amount'), __('messages.debts.paid_amount'), __('messages.debts.balance'), __('messages.debts.status'), '']">
             @forelse ($this->sales as $sale)
                 <tr>
-                    <td class="px-4 py-3">{{ $sale->sale_date?->format('M d, Y') }}</td>
+                    <td class="px-4 py-3">{{ $sale->sale_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
                     <td class="px-4 py-3 font-bold">{{ $sale->sale_number }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</td>

@@ -46,7 +46,7 @@ mount(function (Purchase $purchase) {
 
 $addItem = function () {
     if (blank($this->supplier_id)) {
-        $this->addError('supplier_id', 'Select supplier before adding products.');
+        $this->addError('supplier_id', __('application.select_supplier_before_adding_products_2025540d'));
 
         return;
     }
@@ -166,7 +166,7 @@ $savePurchase = function (string $status) {
     $total = $this->totalAmount();
 
     if ((float) $validated['paid_amount'] > $total) {
-        throw ValidationException::withMessages(['paid_amount' => 'Paid amount cannot exceed total amount.']);
+        throw ValidationException::withMessages(['paid_amount' => __('application.paid_amount_cannot_exceed_total_amount_c0f73abe')]);
     }
 
 
@@ -225,7 +225,7 @@ $savePurchase = function (string $status) {
             if (($transactionUnit?->measurementType?->code === \App\Models\MeasurementType::COUNT && ! $product->quantityIsWhole($quantity))
                 || ! $product->acceptsStockQuantity(round($quantity * $factor, 4))) {
                 throw ValidationException::withMessages([
-                    "items.{$index}.ordered_quantity" => 'Enter a quantity valid for the selected unit and the base stock unit.',
+                    "items.{$index}.ordered_quantity" => __('application.enter_a_quantity_valid_for_the_selected_unit_and_the_base_stock_unit_d46e25ad'),
                 ]);
             }
 
@@ -251,14 +251,14 @@ $savePurchase = function (string $status) {
         }
     });
 
-    session()->flash('success', 'Purchase updated successfully.');
+    session()->flash('success', __('application.purchase_updated_successfully_46d4435c'));
     $this->redirectRoute('purchases.index', navigate: true);
 };
 
 ?>
 
 <div>
-    <x-page-header title="Edit Purchase" description="Only purchases with no received stock can be edited." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Edit' => null]" />
+    <x-page-header title="{{ __('application.edit_purchase_d2a52291') }}" description="{{ __('application.only_purchases_with_no_received_stock_can_be_edited_04dbec3d') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Edit' => null]" />
 
 
 

@@ -17,8 +17,8 @@ class OpeningStockLine extends Model
 {
     protected static function booted(): void
     {
-        static::updating(fn (): never => throw new LogicException('Posted Opening Stock lines cannot be edited.'));
-        static::deleting(fn (): never => throw new LogicException('Posted Opening Stock lines cannot be deleted.'));
+        static::updating(fn (): never => throw new LogicException(__('application.posted_opening_stock_lines_cannot_be_edited_a7a41c23')));
+        static::deleting(fn (): never => throw new LogicException(__('application.posted_opening_stock_lines_cannot_be_deleted_bd2137c0')));
     }
 
     public function openingStock(): BelongsTo

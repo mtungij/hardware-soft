@@ -15,8 +15,8 @@ class ProductionQualityAttachment extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Quality evidence is immutable.'));
-        static::deleting(fn () => throw new LogicException('Quality evidence cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.quality_evidence_is_immutable_4524b571')));
+        static::deleting(fn () => throw new LogicException(__('application.quality_evidence_cannot_be_deleted_1915cc75')));
     }
 
     protected function casts(): array

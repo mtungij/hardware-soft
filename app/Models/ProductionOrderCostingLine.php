@@ -29,7 +29,7 @@ class ProductionOrderCostingLine extends Model
     {
         static::updating(function (ProductionOrderCostingLine $line): void {
             if ($line->costing?->status === ProductionOrderCosting::STATUS_FINALIZED) {
-                throw new LogicException('Finalized costing lines are immutable.');
+                throw new LogicException(__('application.finalized_costing_lines_are_immutable_cd1c418e'));
             }
         });
     }

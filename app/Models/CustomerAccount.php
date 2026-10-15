@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
+use App\Support\UiText;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,6 +27,9 @@ class CustomerAccount extends Authenticatable
         'login_phone',
         'email',
         'password',
+        'temporary_pin_expires_at',
+        'temporary_pin_used_at',
+        'temporary_pin_attempts',
         'must_change_password',
         'credential_version',
         'last_credential_operation_key',
@@ -41,6 +45,9 @@ class CustomerAccount extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'temporary_pin_attempts',
+        'temporary_pin_used_at',
+        'last_credential_operation_key',
     ];
 
     protected function casts(): array
@@ -52,12 +59,15 @@ class CustomerAccount extends Authenticatable
             'must_change_password' => 'boolean',
             'credential_version' => 'integer',
             'password' => 'hashed',
+            'temporary_pin_expires_at' => 'datetime',
+            'temporary_pin_used_at' => 'datetime',
+            'temporary_pin_attempts' => 'integer',
         ];
     }
 
     protected function statusLabel(): Attribute
     {
-        return Attribute::get(fn () => str($this->status)->replace('_', ' ')->title());
+        return Attribute::get(fn () => UiText::status($this->status));
     }
 
     public function customer(): BelongsTo

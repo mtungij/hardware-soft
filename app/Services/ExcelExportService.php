@@ -8,7 +8,9 @@ class ExcelExportService
 {
     public function generateExcel(string $filename, array $payload): StreamedResponse
     {
-        return new StreamedResponse(function () use ($payload): void {
+        $locale = app()->getLocale();
+
+        return new StreamedResponse(function () use ($payload, $locale): void {
             $handle = fopen('php://output', 'w');
             $header = $payload['header'];
 
@@ -16,7 +18,7 @@ class ExcelExportService
             fputcsv($handle, [trim(($header['phone'] ?: '-').' / '.($header['whatsapp'] ?: '-').' / '.($header['email'] ?: '-'))]);
             fputcsv($handle, [trim(($header['address'] ?: '-').' / '.($header['region'] ?: '-').' / '.($header['district'] ?: '-'))]);
             fputcsv($handle, [$payload['title']]);
-            fputcsv($handle, ['Date Range: '.$header['date_range'], 'Branch: '.$header['branch_name'], 'Exported By: '.$header['printed_by'], 'Exported At: '.$header['printed_date']]);
+            fputcsv($handle, [__('exports.date_range', [], $locale).': '.$header['date_range'], __('exports.branch', [], $locale).': '.$header['branch_name'], __('exports.exported_by', [], $locale).': '.$header['printed_by'], __('exports.exported_at', [], $locale).': '.$header['printed_date']]);
             fputcsv($handle, []);
             fputcsv($handle, $payload['headers']);
 

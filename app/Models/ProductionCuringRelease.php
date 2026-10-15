@@ -20,8 +20,8 @@ class ProductionCuringRelease extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Posted curing releases are immutable.'));
-        static::deleting(fn () => throw new LogicException('Posted curing releases cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.posted_curing_releases_are_immutable_614f2660')));
+        static::deleting(fn () => throw new LogicException(__('application.posted_curing_releases_cannot_be_deleted_ea67a63d')));
     }
 
     protected function casts(): array

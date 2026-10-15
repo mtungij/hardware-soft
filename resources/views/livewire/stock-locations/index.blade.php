@@ -200,7 +200,7 @@ $save = function () {
     ]);
 
     if ($validated['is_default'] && ! $validated['is_active']) {
-        throw ValidationException::withMessages(['is_default' => 'Inactive location cannot be default.']);
+        throw ValidationException::withMessages(['is_default' => __('application.inactive_location_cannot_be_default_7ce142d0')]);
     }
 
     $validated['is_dispensing_location'] = $validated['is_dispensing_location'] || $validated['type'] === 'dispensing';
@@ -214,7 +214,7 @@ $save = function () {
             ->exists();
 
         if ($exists) {
-            throw ValidationException::withMessages(['type' => 'Only one dispensing location is allowed per branch.']);
+            throw ValidationException::withMessages(['type' => __('application.only_one_dispensing_location_is_allowed_per_branch_84d7ce32')]);
         }
     }
 
@@ -230,34 +230,34 @@ $save = function () {
     );
 
     $this->dispatch('close-modal', 'stock-location-form');
-    session()->flash('success', 'Stock location saved.');
+    session()->flash('success', __('application.stock_location_saved_2acc0e12'));
 };
 
 $toggleActive = function (int $id) {
     $location = StockLocation::findOrFail($id);
 
     if ($location->is_default && $location->isActive()) {
-        session()->flash('error', 'Default location cannot be deactivated.');
+        session()->flash('error', __('application.default_location_cannot_be_deactivated_db05d643'));
 
         return;
     }
 
     $active = ! $location->isActive();
     $location->update(['is_active' => $active, 'status' => $active ? 'active' : 'inactive']);
-    session()->flash('success', 'Stock location status updated.');
+    session()->flash('success', __('application.stock_location_status_updated_3f8bf1cd'));
 };
 
 $makeDefault = function (int $id) {
     $location = StockLocation::findOrFail($id);
 
     if (! $location->isActive()) {
-        session()->flash('error', 'Inactive location cannot be default.');
+        session()->flash('error', __('application.inactive_location_cannot_be_default_7ce142d0'));
 
         return;
     }
 
     app(StockLocationDefaultService::class)->makeDefault($location);
-    session()->flash('success', 'Default stock location updated.');
+    session()->flash('success', __('application.default_stock_location_updated_dfe9c858'));
 };
 
 $metrics = function (StockLocation $location): array {
@@ -283,13 +283,13 @@ $metrics = function (StockLocation $location): array {
 ?>
 
 <div>
-    <x-page-header title="Stock Locations" description="Manage warehouses, stores, showrooms, and dispensing areas." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Locations' => null]">
-        <button type="button" wire:click="openCreate" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">Add Location</button>
+    <x-page-header title="{{ __('application.stock_locations_84a43507') }}" description="{{ __('application.manage_warehouses_stores_showrooms_and_dispensing_areas_22a7e9e7') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Locations' => null]">
+        <button type="button" wire:click="openCreate" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ __('application.add_location_fff38c0f') }}</button>
     </x-page-header>
 
     <x-card>
         <div class="mb-4">
-            <input wire:model.live.debounce.300ms="search" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 sm:max-w-sm" placeholder="Search locations...">
+            <input wire:model.live.debounce.300ms="search" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5 sm:max-w-sm" placeholder="{{ __('application.search_locations_2d80e75c') }}">
         </div>
 
         @php
@@ -302,12 +302,12 @@ $metrics = function (StockLocation $location): array {
                 ->paginate(10);
         @endphp
 
-        <x-table :headers="['Location', 'Branch', 'Capabilities', 'Qty', 'Stock Value', 'Today Sales', 'Users', 'Status', 'Actions']">
+        <x-table :headers="[__('application.location_d219c681'), __('application.branch_1627510b'), __('terminology.capabilities_ca09c54b'), __('application.qty_1e5ff9e5'), __('application.stock_value_c2267f33'), __('terminology.today_sales_f842ddff'), __('application.users_57f2b181'), __('application.status_bae7d5be'), __('application.actions_c3cd636a')]">
             @forelse ($locations as $location)
                 @php [$quantity, $value, $todaySales] = $this->metrics($location); @endphp
                 <tr class="align-top hover:bg-slate-50 dark:hover:bg-white/5">
                     <td class="px-4 py-3"><p class="font-black">{{ $location->name }}</p><p class="text-xs text-slate-500">{{ $location->code }} / {{ StockLocation::TYPES[$location->type] ?? $location->type }}</p></td>
-                    <td class="px-4 py-3">{{ $location->branch?->name ?? 'All branches' }}</td>
+                    <td class="px-4 py-3">{{ $location->branch?->name ?? __('application.all_branches_25c23746') }}</td>
                     <td class="px-4 py-3 text-xs">
                         <div class="flex flex-wrap gap-1">
                             @foreach ([['Sell', $location->can_sell], ['Receive', $location->can_receive_stock], ['Transfer', $location->can_transfer], ['To Disp.', $location->can_transfer_to_dispensing]] as [$label, $enabled])
@@ -319,17 +319,17 @@ $metrics = function (StockLocation $location): array {
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($value) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($todaySales) }}</td>
                     <td class="px-4 py-3">{{ $location->users_count }}</td>
-                    <td class="px-4 py-3"><span class="{{ $location->isActive() ? 'badge-success' : 'badge-warning' }}">{{ $location->isActive() ? 'Active' : 'Inactive' }}</span>@if ($location->is_default)<span class="ml-1 badge-success">Default</span>@endif</td>
+                    <td class="px-4 py-3"><span class="{{ $location->isActive() ? 'badge-success' : 'badge-warning' }}">{{ $location->isActive() ? __('application.active_a733b809') : __('application.inactive_09af574c') }}</span>@if ($location->is_default)<span class="ml-1 badge-success">{{ __('application.default_808d7dca') }}</span>@endif</td>
                     <td class="px-4 py-3">
                         <div class="flex flex-wrap gap-2">
-                            <button type="button" wire:click="openEdit({{ $location->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">Edit</button>
-                            <button type="button" wire:click="makeDefault({{ $location->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">Default</button>
-                            <button type="button" wire:click="toggleActive({{ $location->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ $location->isActive() ? 'Deactivate' : 'Activate' }}</button>
+                            <button type="button" wire:click="openEdit({{ $location->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ __('application.edit_5301648d') }}</button>
+                            <button type="button" wire:click="makeDefault({{ $location->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ __('application.default_808d7dca') }}</button>
+                            <button type="button" wire:click="toggleActive({{ $location->id }})" class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">{{ $location->isActive() ? __('application.deactivate_d65ded94') : __('application.activate_92ef0832') }}</button>
                         </div>
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">No stock locations found.</td></tr>
+                <tr><td colspan="9" class="px-4 py-8 text-center text-slate-500">{{ __('application.no_stock_locations_found_3a3ddfa5') }}</td></tr>
             @endforelse
         </x-table>
 
@@ -339,12 +339,12 @@ $metrics = function (StockLocation $location): array {
     <x-modal name="stock-location-form" maxWidth="4xl">
         <form wire:submit="save" class="flex max-h-[calc(100vh-3rem)] flex-col">
             <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-                <h2 class="text-lg font-black">{{ $editing_id ? 'Edit Stock Location' : 'Add Stock Location' }}</h2>
+                <h2 class="text-lg font-black">{{ $editing_id ? __('terminology.edit_stock_location_727cabf9') : __('terminology.add_stock_location_dabd034d') }}</h2>
             </div>
             <div class="grid gap-4 overflow-y-auto p-5 md:grid-cols-2">
-                <x-form-input label="Location Name" name="name" wire:model="name" required />
-                <x-form-input label="Code" name="code" wire:model="code" required />
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Type
+                <x-form-input label="{{ __('application.location_name_266d74e3') }}" name="name" wire:model="name" required />
+                <x-form-input label="{{ __('application.code_adac6937') }}" name="code" wire:model="code" required />
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.type_3deb7456') }}
                     <select wire:model.live="type" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                         @foreach (StockLocation::TYPES as $value => $label)
                             <option value="{{ $value }}">{{ $label }}</option>
@@ -352,16 +352,16 @@ $metrics = function (StockLocation $location): array {
                     </select>
                     @error('type') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Branch
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.branch_1627510b') }}
                     <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
-                        <option value="">All branches</option>
+                        <option value="">{{ __('application.all_branches_25c23746') }}</option>
                         @foreach (Branch::where('status', 'active')->orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach
                     </select>
                     @error('branch_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">Description
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">{{ __('application.description_55f8ebc8') }}
                     <textarea wire:model="description" class="mt-1 min-h-20 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
                 </label>
                 <div class="grid gap-3 md:col-span-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -386,8 +386,8 @@ $metrics = function (StockLocation $location): array {
                 @error('code') <span class="text-sm font-semibold text-red-600">{{ $message }}</span> @enderror
             </div>
             <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-700">
-                <button type="button" x-on:click="$dispatch('close-modal', 'stock-location-form')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</button>
-                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save Location</button>
+                <button type="button" x-on:click="$dispatch('close-modal', 'stock-location-form')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.cancel_77dfd213') }}</button>
+                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ __('application.save_location_7ef11632') }}</button>
             </div>
         </form>
     </x-modal>

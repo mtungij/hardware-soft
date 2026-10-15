@@ -43,7 +43,7 @@ class LoginForm extends Form
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'form.email' => 'This user account is inactive. Contact your administrator.',
+                'form.email' => __('application.this_user_account_is_inactive_contact_your_administrator_98cfa06d'),
             ]);
         }
 

@@ -116,7 +116,7 @@ $save = function (OpeningStockService $service): void {
 };
 ?>
 <div>
-    <x-page-header title="Ingiza Opening Stock" description="Bidhaa zilizokuwepo kabla ya kuanza kutumia HARDEX." :breadcrumbs="['Dashboard' => route('dashboard'), 'Opening Stock' => route('opening-stock.index'), 'Ingiza' => null]" />
+    <x-page-header title="{{ __('application.enter_opening_stock_bf52e9bb') }}" description="{{ __('application.stock_owned_before_you_started_using_hardex_e924617b') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Opening Stock' => route('opening-stock.index'), 'Ingiza' => null]" />
     @php
         $user = auth()->user();
         $companyScope = AuthorizationScope::scopeFor($user, 'stock_scope', AuthorizationScope::ASSIGNED_LOCATIONS) === AuthorizationScope::COMPANY;
@@ -141,28 +141,28 @@ $save = function (OpeningStockService $service): void {
         }
     @endphp
 
-    <div class="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">Opening Stock hutumika kuingiza bidhaa ambazo biashara tayari ilikuwa nazo kabla ya kuanza kutumia HARDEX. Hii haitengenezi Purchase, GRN wala deni la Supplier.</div>
+    <div class="mb-5 rounded-xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">{{ __('application.opening_stock_records_goods_the_business_already_owned_before_hardex_it_cre_e198d5c4') }}</div>
     <form wire:submit="save" class="space-y-5">
-        <x-card title="Taarifa za Opening Stock">
+        <x-card title="{{ __('application.opening_stock_details_1ba67dcd') }}">
             <div class="grid gap-4 md:grid-cols-2">
-                <label class="block text-sm font-bold">Tawi
-                    <select wire:model.live="branch_id" class="erp-input mt-1" @disabled(\App\Support\BranchAccess::restricted())><option value="">Chagua tawi</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+                <label class="block text-sm font-bold">{{ __('application.branch_1627510b') }}
+                    <select wire:model.live="branch_id" class="erp-input mt-1" @disabled(\App\Support\BranchAccess::restricted())><option value="">{{ __('application.select_branch_fcf716ea') }}</option>@foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
                     @error('branch_id') <span class="erp-error">{{ $message }}</span> @enderror
                 </label>
-                <label class="block text-sm font-bold">Eneo la Stoo
-                    <select wire:model="stock_location_id" class="erp-input mt-1"><option value="">Chagua eneo la kupokea bidhaa</option>@foreach ($locations as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select>
+                <label class="block text-sm font-bold">{{ __('application.store_location_16f35952') }}
+                    <select wire:model="stock_location_id" class="erp-input mt-1"><option value="">{{ __('application.select_receiving_location_fb249434') }}</option>@foreach ($locations as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach</select>
                     @error('stock_location_id') <span class="erp-error">{{ $message }}</span> @enderror
                 </label>
-                <x-form-input label="Tarehe ya Mwanzo" name="opening_date" type="date" wire:model.live="opening_date" required />
-                <label class="block text-sm font-bold">Namba ya Kumbukumbu
-                    <div class="erp-input mt-1 bg-slate-100">{{ filled($opening_date) ? app(OpeningStockService::class)->nextReference($user, $opening_date) : 'Itatolewa ukihifadhi' }}</div>
-                    <span class="text-xs text-slate-500">Namba ya mwisho itatolewa ukihifadhi.</span>
+                <x-form-input label="{{ __('application.start_date_9d7ab1a5') }}" name="opening_date" type="date" wire:model.live="opening_date" required />
+                <label class="block text-sm font-bold">{{ __('application.reference_number_74195db5') }}
+                    <div class="erp-input mt-1 bg-slate-100">{{ filled($opening_date) ? app(OpeningStockService::class)->nextReference($user, $opening_date) : __('terminology.assigned_when_saved_a77bb453') }}</div>
+                    <span class="text-xs text-slate-500">{{ __('application.the_final_number_is_assigned_when_you_save_c978f55c') }}</span>
                 </label>
             </div>
-            <label class="mt-4 block text-sm font-bold">Maelezo<textarea wire:model="notes" class="erp-input mt-1 min-h-20"></textarea></label>
+            <label class="mt-4 block text-sm font-bold">{{ __('application.notes_70440046') }}<textarea wire:model="notes" class="erp-input mt-1 min-h-20"></textarea></label>
         </x-card>
 
-        <x-card title="Bidhaa Ulizokuwa Nazo Tayari">
+        <x-card title="{{ __('application.stock_you_already_owned_eaa4e53a') }}">
             <div class="space-y-4">
                 @foreach ($lines as $index => $row)
                     @php
@@ -178,36 +178,36 @@ $save = function (OpeningStockService $service): void {
                         $rowTotal = round($rowQuantity * $rowFactor * round($rowCost / $rowFactor, 2), 2);
                     @endphp
                     <div wire:key="opening-line-{{ $row['key'] }}" class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                        <div class="mb-3 flex items-center justify-between"><strong>Bidhaa {{ $index + 1 }}</strong>@if (count($lines) > 1)<button type="button" wire:click="removeLine({{ $index }})" class="text-sm font-bold text-red-600">Ondoa</button>@endif</div>
+                        <div class="mb-3 flex items-center justify-between"><strong>{{ __('application.product_dd3b86d1') }} {{ $index + 1 }}</strong>@if (count($lines) > 1)<button type="button" wire:click="removeLine({{ $index }})" class="text-sm font-bold text-red-600">{{ __('application.remove_e963907d') }}</button>@endif</div>
                         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                            <label class="block text-sm font-bold">Bidhaa
-                                <select wire:model.live="lines.{{ $index }}.product_id" wire:change="selectProduct({{ $index }}, $event.target.value)" class="erp-input mt-1"><option value="">Chagua bidhaa</option>@foreach ($products as $product)<option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / {{ $product->sku }}</option>@endforeach</select>
+                            <label class="block text-sm font-bold">{{ __('application.product_dd3b86d1') }}
+                                <select wire:model.live="lines.{{ $index }}.product_id" wire:change="selectProduct({{ $index }}, $event.target.value)" class="erp-input mt-1"><option value="">{{ __('application.select_product_596d90e5') }}</option>@foreach ($products as $product)<option value="{{ $product->id }}">{{ $product->displayNameWithSize() }} / {{ $product->sku }}</option>@endforeach</select>
                                 @error("lines.{$index}.product_id") <span class="erp-error">{{ $message }}</span> @enderror
                             </label>
-                            <label class="block text-sm font-bold">Kipimo
-                                <select wire:model.live="lines.{{ $index }}.product_unit_conversion_id" wire:change="selectUnit({{ $index }}, $event.target.value)" class="erp-input mt-1" @disabled(! $selectedProduct)><option value="">{{ $selectedProduct?->unit?->name ?: 'Chagua bidhaa kwanza' }}</option>@foreach ($unitOptions as $option)<option value="{{ $option->id }}">{{ $option->unit?->name }} = {{ \App\Support\NumberFormatter::quantity($option->conversion_factor) }} {{ $selectedProduct?->unit?->short_name }}</option>@endforeach</select>
+                            <label class="block text-sm font-bold">{{ __('application.unit_f6b935ab') }}
+                                <select wire:model.live="lines.{{ $index }}.product_unit_conversion_id" wire:change="selectUnit({{ $index }}, $event.target.value)" class="erp-input mt-1" @disabled(! $selectedProduct)><option value="">{{ $selectedProduct?->unit?->name ?: __('application.select_a_product_first_04d808c1') }}</option>@foreach ($unitOptions as $option)<option value="{{ $option->id }}">{{ $option->unit?->name }} = {{ \App\Support\NumberFormatter::quantity($option->conversion_factor) }} {{ $selectedProduct?->unit?->short_name }}</option>@endforeach</select>
                                 @error("lines.{$index}.product_unit_conversion_id") <span class="erp-error">{{ $message }}</span> @enderror
                             </label>
-                            <div><x-form-input label="Idadi" name="lines.{{ $index }}.quantity" type="number" step="0.0001" wire:model.live="lines.{{ $index }}.quantity" required />@error("lines.{$index}.quantity") <span class="erp-error">{{ $message }}</span> @enderror</div>
-                            <div><x-form-input label="Bei ya Gharama kwa Kipimo (TZS)" name="lines.{{ $index }}.unit_cost" type="number" step="0.01" wire:model.live="lines.{{ $index }}.unit_cost" required />@error("lines.{$index}.unit_cost") <span class="erp-error">{{ $message }}</span> @enderror@if ($selectedProduct && $rowSuggestedCost > 0)<span class="text-xs text-slate-500">Bei ya sasa ya kununua ni TZS {{ \App\Support\NumberFormatter::money($rowSuggestedCost) }}. Hakiki gharama ya zamani ya bidhaa hii.</span>@endif</div>
+                            <div><x-form-input label="{{ __('application.quantity_44f6af69') }}" name="lines.{{ $index }}.quantity" type="number" step="0.0001" wire:model.live="lines.{{ $index }}.quantity" required />@error("lines.{$index}.quantity") <span class="erp-error">{{ $message }}</span> @enderror</div>
+                            <div><x-form-input label="{{ __('application.unit_cost_tzs_904a1784') }}" name="lines.{{ $index }}.unit_cost" type="number" step="0.01" wire:model.live="lines.{{ $index }}.unit_cost" required />@error("lines.{$index}.unit_cost") <span class="erp-error">{{ $message }}</span> @enderror@if ($selectedProduct && $rowSuggestedCost > 0)<span class="text-xs text-slate-500">{{ __('application.current_buying_price_is_tzs_fa3ce8a7') }} {{ \App\Support\NumberFormatter::money($rowSuggestedCost) }}{{ __('application.review_the_historical_cost_of_this_product_0232bc39') }}</span>@endif</div>
                             @if ($selectedProduct?->tracks_batch || $selectedProduct?->tracks_expiry)
-                                <div><x-form-input label="Namba ya Kundi" name="lines.{{ $index }}.batch_number" wire:model="lines.{{ $index }}.batch_number" :required="$selectedProduct->tracks_batch" />@error("lines.{$index}.batch_number") <span class="erp-error">{{ $message }}</span> @enderror</div>
+                                <div><x-form-input label="{{ __('application.batch_number_86b217fd') }}" name="lines.{{ $index }}.batch_number" wire:model="lines.{{ $index }}.batch_number" :required="$selectedProduct->tracks_batch" />@error("lines.{$index}.batch_number") <span class="erp-error">{{ $message }}</span> @enderror</div>
                             @endif
                             @if ($selectedProduct?->tracks_expiry)
-                                <div><x-form-input label="Tarehe ya Kuisha" name="lines.{{ $index }}.expiry_date" type="date" wire:model="lines.{{ $index }}.expiry_date" required />@error("lines.{$index}.expiry_date") <span class="erp-error">{{ $message }}</span> @enderror</div>
+                                <div><x-form-input label="{{ __('application.end_date_84b14781') }}" name="lines.{{ $index }}.expiry_date" type="date" wire:model="lines.{{ $index }}.expiry_date" required />@error("lines.{$index}.expiry_date") <span class="erp-error">{{ $message }}</span> @enderror</div>
                             @endif
-                            <div class="xl:col-span-2"><x-form-input label="Maelezo" name="lines.{{ $index }}.notes" wire:model="lines.{{ $index }}.notes" /></div>
+                            <div class="xl:col-span-2"><x-form-input label="{{ __('application.notes_70440046') }}" name="lines.{{ $index }}.notes" wire:model="lines.{{ $index }}.notes" /></div>
                         </div>
-                        <p class="mt-3 text-xs text-slate-500">Jumla ya Thamani: TZS {{ \App\Support\NumberFormatter::money($rowTotal) }} · Idadi ya Msingi: {{ \App\Support\NumberFormatter::quantity($rowQuantity * $rowFactor) }} {{ $selectedProduct?->unit?->short_name }}</p>
+                        <p class="mt-3 text-xs text-slate-500">{{ __('application.total_value_tzs_f8b8f60e') }} {{ \App\Support\NumberFormatter::money($rowTotal) }} {{ __('application.base_quantity_7ec8d7e3') }} {{ \App\Support\NumberFormatter::quantity($rowQuantity * $rowFactor) }} {{ $selectedProduct?->unit?->short_name }}</p>
                     </div>
                 @endforeach
             </div>
-            <button type="button" wire:click="addLine" class="mt-4 rounded-lg border border-cyan-300 px-4 py-2 text-sm font-bold text-cyan-700">Ongeza Bidhaa</button>
+            <button type="button" wire:click="addLine" class="mt-4 rounded-lg border border-cyan-300 px-4 py-2 text-sm font-bold text-cyan-700">{{ __('application.add_product_ee611e53') }}</button>
             @error('lines') <p class="erp-error">{{ $message }}</p> @enderror
         </x-card>
-        <x-card title="Muhtasari">
-            <div class="grid gap-4 sm:grid-cols-3"><div><p class="text-sm text-slate-500">Jumla ya Bidhaa</p><p class="text-xl font-black">{{ $productIds->count() }}</p></div><div><p class="text-sm text-slate-500">Jumla ya Idadi ya Msingi</p><p class="text-xl font-black">{{ \App\Support\NumberFormatter::quantity($totalBase) }}</p><p class="text-xs text-slate-500">Vipimo vya bidhaa vinaweza kutofautiana.</p></div><div><p class="text-sm text-slate-500">Jumla ya Thamani ya Opening Stock</p><p class="text-xl font-black">TZS {{ \App\Support\NumberFormatter::money($totalValue) }}</p></div></div>
+        <x-card title="{{ __('application.summary_12b71c3e') }}">
+            <div class="grid gap-4 sm:grid-cols-3"><div><p class="text-sm text-slate-500">{{ __('application.total_products_c48f2bf5') }}</p><p class="text-xl font-black">{{ $productIds->count() }}</p></div><div><p class="text-sm text-slate-500">{{ __('application.total_base_quantity_050406f0') }}</p><p class="text-xl font-black">{{ \App\Support\NumberFormatter::quantity($totalBase) }}</p><p class="text-xs text-slate-500">{{ __('application.product_units_may_differ_f03b58c7') }}</p></div><div><p class="text-sm text-slate-500">{{ __('application.total_opening_stock_value_c9957ec1') }}</p><p class="text-xl font-black">TZS {{ \App\Support\NumberFormatter::money($totalValue) }}</p></div></div>
         </x-card>
-        <button class="rounded-xl bg-cyan-600 px-6 py-3 font-black text-white" wire:loading.attr="disabled" wire:confirm="Uhifadhi Opening Stock hii? Ukihifadhi, hutaweza kuibadilisha.">Hifadhi Opening Stock</button>
+        <button class="rounded-xl bg-cyan-600 px-6 py-3 font-black text-white" wire:loading.attr="disabled" wire:confirm="{{ __('application.save_this_opening_stock_you_will_not_be_able_to_change_it_after_saving_152220e3') }}">{{ __('application.save_opening_stock_19b75aca') }}</button>
     </form>
 </div>

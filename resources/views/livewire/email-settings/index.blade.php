@@ -83,9 +83,9 @@ $save = function () {
     $settings->save();
     $this->mail_password = '';
     $this->statusType = 'success';
-    $this->statusMessage = 'Email settings saved successfully.';
+    $this->statusMessage = \App\Support\UiText::translate('Email settings saved successfully.');
 
-    session()->flash('success', 'Email settings saved successfully.');
+    session()->flash('success', __('application.email_settings_saved_successfully_f3b844cf'));
 };
 
 $sendTestEmail = function () {
@@ -94,16 +94,16 @@ $sendTestEmail = function () {
     $this->applyConfig();
 
     try {
-        Mail::mailer('buildmart_smtp')->raw('Hardex POS SMTP test email sent successfully.', function ($message) {
+        Mail::mailer('buildmart_smtp')->raw(__('feedback.smtp_body'), function ($message) {
             $message->to($this->test_email ?: $this->mail_from_email)
-                ->subject('Hardex SMTP Test');
+                ->subject(__('feedback.smtp_subject'));
         });
         $this->statusType = 'success';
-        $this->statusMessage = 'Test email sent successfully to '.($this->test_email ?: $this->mail_from_email).'.';
-        session()->flash('success', 'Test email sent successfully.');
+        $this->statusMessage = __('feedback.test_email_sent_to', ['email' => $this->test_email ?: $this->mail_from_email]);
+        session()->flash('success', __('application.test_email_sent_successfully_b2cf390b'));
     } catch (\Throwable $exception) {
         $this->statusType = 'error';
-        $this->statusMessage = 'Unable to send email: '.$exception->getMessage();
+        $this->statusMessage = \App\Support\UiText::translate('Unable to send email: ').\App\Support\UiText::feedback($exception->getMessage());
         session()->flash('error', $this->statusMessage);
     }
 };
@@ -111,7 +111,7 @@ $sendTestEmail = function () {
 ?>
 
 <div>
-    <x-page-header title="Email Settings" description="Configure SMTP settings for supplier purchase order emails." :breadcrumbs="['Dashboard' => route('dashboard'), 'Email Settings' => null]" />
+    <x-page-header title="{{ __('application.email_settings_9bdedc71') }}" description="{{ __('application.configure_smtp_settings_for_supplier_purchase_order_emails_41cc6d4e') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Email Settings' => null]" />
 
     <x-card class="max-w-4xl">
         @if ($statusMessage)
@@ -121,23 +121,23 @@ $sendTestEmail = function () {
         @endif
 
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
-            <x-form-input label="Mail Host" name="mail_host" wire:model="mail_host" required />
-            <x-form-input label="Mail Port" name="mail_port" wire:model="mail_port" type="number" required />
-            <x-form-input label="Username" name="mail_username" wire:model="mail_username" />
-            <x-form-input label="Password" name="mail_password" wire:model="mail_password" type="password" placeholder="Leave blank to keep current password" />
-            <x-form-select label="Encryption" name="mail_encryption" wire:model="mail_encryption">
-                <option value="">None</option>
+            <x-form-input label="{{ __('application.mail_host_03b6ac3b') }}" name="mail_host" wire:model="mail_host" required />
+            <x-form-input label="{{ __('application.mail_port_f017c1f9') }}" name="mail_port" wire:model="mail_port" type="number" required />
+            <x-form-input label="{{ __('application.username_84c29015') }}" name="mail_username" wire:model="mail_username" />
+            <x-form-input label="{{ __('application.password_8be3c943') }}" name="mail_password" wire:model="mail_password" type="password" placeholder="{{ __('application.leave_blank_to_keep_current_password_efaed3a1') }}" />
+            <x-form-select label="{{ __('application.encryption_0af149c2') }}" name="mail_encryption" wire:model="mail_encryption">
+                <option value="">{{ __('application.none_6eef6648') }}</option>
                 <option value="tls">TLS</option>
                 <option value="ssl">SSL</option>
             </x-form-select>
-            <x-form-input label="From Email" name="mail_from_email" wire:model="mail_from_email" type="email" required />
-            <x-form-input label="From Name" name="mail_from_name" wire:model="mail_from_name" required />
-            <x-form-input label="Test Recipient Email" name="test_email" wire:model="test_email" type="email" placeholder="Defaults to From Email" />
+            <x-form-input label="{{ __('application.from_email_19fe826c') }}" name="mail_from_email" wire:model="mail_from_email" type="email" required />
+            <x-form-input label="{{ __('application.from_name_1e9b48df') }}" name="mail_from_name" wire:model="mail_from_name" required />
+            <x-form-input label="{{ __('application.test_recipient_email_8a62bd4d') }}" name="test_email" wire:model="test_email" type="email" placeholder="{{ __('application.defaults_to_from_email_a7f431f2') }}" />
             <div class="flex flex-wrap gap-3 md:col-span-2">
-                <button class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white" wire:loading.attr="disabled">Save Settings</button>
+                <button class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white" wire:loading.attr="disabled">{{ __('application.save_settings_0022a3e1') }}</button>
                 <button type="button" wire:click="sendTestEmail" wire:loading.attr="disabled" class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">
-                    <span wire:loading.remove wire:target="sendTestEmail">Send Test Email</span>
-                    <span wire:loading wire:target="sendTestEmail">Sending...</span>
+                    <span wire:loading.remove wire:target="sendTestEmail">{{ __('application.send_test_email_f2c6c5be') }}</span>
+                    <span wire:loading wire:target="sendTestEmail">{{ __('application.sending_c338c191') }}</span>
                 </button>
             </div>
         </form>

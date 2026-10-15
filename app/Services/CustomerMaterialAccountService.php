@@ -24,7 +24,7 @@ class CustomerMaterialAccountService
     {
         return DB::transaction(function () use ($data, $lines, $actorId): CustomerMaterialAccount {
             if ($lines === []) {
-                throw ValidationException::withMessages(['lines' => 'Add at least one planned material.']);
+                throw ValidationException::withMessages(['lines' => __('application.add_at_least_one_planned_material_c8d3b3e1')]);
             }
 
             $companyId = (int) $data['company_id'];
@@ -61,7 +61,7 @@ class CustomerMaterialAccountService
         return DB::transaction(function () use ($account, $actorId): CustomerMaterialAccount {
             $account = CustomerMaterialAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
             if ($account->status !== 'draft' || ! $account->planLines()->exists()) {
-                throw ValidationException::withMessages(['account' => 'Only a draft account with a material plan can be activated.']);
+                throw ValidationException::withMessages(['account' => __('application.only_a_draft_account_with_a_material_plan_can_be_activated_f0ffb349')]);
             }
             $account->update(['status' => 'active', 'activated_at' => now(), 'updated_by' => $actorId]);
             $this->audit($account, 'account_activated', $account, ['status' => 'draft'], ['status' => 'active'], null, $actorId);
@@ -75,18 +75,18 @@ class CustomerMaterialAccountService
         return DB::transaction(function () use ($line, $plannedQuantity, $agreedUnitPrice, $reason, $actorId): CustomerMaterialPlanLine {
             $account = CustomerMaterialAccount::query()->whereKey($line->customer_material_account_id)->lockForUpdate()->firstOrFail();
             if (! in_array($account->status, ['draft', 'active'], true)) {
-                throw ValidationException::withMessages(['plan' => 'Only draft or active accounts can be amended.']);
+                throw ValidationException::withMessages(['plan' => __('application.only_draft_or_active_accounts_can_be_amended_bcc9bd73')]);
             }
             $line = CustomerMaterialPlanLine::query()->where('customer_material_account_id', $account->id)->whereKey($line->id)->lockForUpdate()->firstOrFail();
             $issuedQuantity = (float) $line->issueLines()->lockForUpdate()->sum('quantity');
             if ($plannedQuantity <= 0 || $plannedQuantity + 0.0000001 < $issuedQuantity) {
-                throw ValidationException::withMessages(['planned_quantity' => "Planned quantity cannot be below the already issued quantity of {$issuedQuantity}."]);
+                throw ValidationException::withMessages(['planned_quantity' => __('feedback.minimum_issued_quantity', ['quantity' => $issuedQuantity])]);
             }
             if ($agreedUnitPrice < 0) {
-                throw ValidationException::withMessages(['agreed_unit_price' => 'Agreed unit price cannot be negative.']);
+                throw ValidationException::withMessages(['agreed_unit_price' => __('application.agreed_unit_price_cannot_be_negative_86391c1f')]);
             }
             if ($account->transactions()->exists() && blank($reason)) {
-                throw ValidationException::withMessages(['amendment_reason' => 'A reason is required after a deposit or material issue exists.']);
+                throw ValidationException::withMessages(['amendment_reason' => __('application.a_reason_is_required_after_a_deposit_or_material_issue_exists_f76df80a')]);
             }
             $old = $line->only(['planned_quantity', 'planned_base_quantity', 'agreed_unit_price', 'planned_line_total', 'revision']);
             $line->update([
@@ -110,7 +110,7 @@ class CustomerMaterialAccountService
             $existing = CustomerMaterialCashTransaction::query()->where('company_id', $account->company_id)->where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
                 if ((int) $existing->customer_material_account_id !== (int) $account->id || $existing->transaction_type !== 'deposit') {
-                    throw ValidationException::withMessages(['idempotency_key' => 'This submission key was already used for another transaction.']);
+                    throw ValidationException::withMessages(['idempotency_key' => __('application.this_submission_key_was_already_used_for_another_transaction_7a96783a')]);
                 }
 
                 return $existing;
@@ -120,7 +120,7 @@ class CustomerMaterialAccountService
             $this->requireActive($account);
             $amount = round((float) ($data['amount'] ?? 0), 2);
             if ($amount <= 0) {
-                throw ValidationException::withMessages(['amount' => 'Deposit amount must be greater than zero.']);
+                throw ValidationException::withMessages(['amount' => __('application.deposit_amount_must_be_greater_than_zero_b9d5d6d8')]);
             }
             $branchId = (int) ($data['branch_id'] ?? $account->branch_id);
             $this->validateBranch($account, $branchId);
@@ -145,22 +145,22 @@ class CustomerMaterialAccountService
             $existing = CustomerMaterialCashTransaction::query()->where('company_id', $account->company_id)->where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
                 if ((int) $existing->customer_material_account_id !== (int) $account->id || $existing->transaction_type !== 'refund') {
-                    throw ValidationException::withMessages(['idempotency_key' => 'This submission key was already used for another transaction.']);
+                    throw ValidationException::withMessages(['idempotency_key' => __('application.this_submission_key_was_already_used_for_another_transaction_7a96783a')]);
                 }
 
                 return $existing;
             }
             $account = CustomerMaterialAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
             if (! in_array($account->status, ['active', 'cancelled'], true)) {
-                throw ValidationException::withMessages(['account' => 'Refunds are allowed only on active or cancelled accounts.']);
+                throw ValidationException::withMessages(['account' => __('application.refunds_are_allowed_only_on_active_or_cancelled_accounts_81cdccf5')]);
             }
             $amount = round((float) ($data['amount'] ?? 0), 2);
             $available = $this->lockedFundedBalance($account);
             if ($amount <= 0 || $amount > $available) {
-                throw ValidationException::withMessages(['amount' => 'Refund cannot exceed the unused funded balance of TZS '.number_format($available, 2).'.']);
+                throw ValidationException::withMessages(['amount' => __('feedback.refund_maximum', ['amount' => number_format($available, 2)])]);
             }
             if (blank($data['reason'] ?? null)) {
-                throw ValidationException::withMessages(['reason' => 'A refund reason is required.']);
+                throw ValidationException::withMessages(['reason' => __('application.a_refund_reason_is_required_5d3909f6')]);
             }
             $branchId = (int) ($data['branch_id'] ?? $account->branch_id);
             $this->validateBranch($account, $branchId);
@@ -186,7 +186,7 @@ class CustomerMaterialAccountService
             $existing = CustomerMaterialIssue::query()->where('company_id', $account->company_id)->where('idempotency_key', $idempotencyKey)->first();
             if ($existing) {
                 if ((int) $existing->customer_material_account_id !== (int) $account->id) {
-                    throw ValidationException::withMessages(['idempotency_key' => 'This submission key was already used for another transaction.']);
+                    throw ValidationException::withMessages(['idempotency_key' => __('application.this_submission_key_was_already_used_for_another_transaction_7a96783a')]);
                 }
 
                 return $existing->load('lines');
@@ -265,7 +265,7 @@ class CustomerMaterialAccountService
                     'stock_location_id' => $location->id, 'movement_type' => 'sale_out', 'quantity' => $item['baseQuantity'],
                     'quantity_in' => 0, 'quantity_out' => $item['baseQuantity'], 'unit_cost' => $item['baseCost'],
                     'unit_price' => $line->agreed_unit_price, 'reference_type' => CustomerMaterialIssue::class, 'reference_id' => $issue->id,
-                    'posting_reference' => $issue->posting_reference.':'.($offset + 1), 'notes' => "Material issue {$reference} / line {$issueLine->id}",
+                    'posting_reference' => $issue->posting_reference.':'.($offset + 1), 'notes' => __('feedback.material_issue_line', ['number' => $reference, 'line' => $issueLine->id]),
                     'created_by' => $actorId, 'movement_date' => $issue->issued_at->toDateString(),
                 ]);
             }
@@ -287,7 +287,7 @@ class CustomerMaterialAccountService
         return DB::transaction(function () use ($account, $reason, $actorId): CustomerMaterialAccount {
             $account = CustomerMaterialAccount::query()->whereKey($account->id)->lockForUpdate()->firstOrFail();
             if (! in_array($account->status, ['draft', 'active'], true) || blank($reason)) {
-                throw ValidationException::withMessages(['reason' => 'An active or draft account requires a cancellation reason.']);
+                throw ValidationException::withMessages(['reason' => __('application.an_active_or_draft_account_requires_a_cancellation_reason_f7f0c6c0')]);
             }
             $old = $account->status;
             $account->update(['status' => 'cancelled', 'closed_at' => now(), 'closed_by' => $actorId, 'updated_by' => $actorId]);
@@ -304,16 +304,16 @@ class CustomerMaterialAccountService
         $quantity = (float) ($data['planned_quantity'] ?? 0);
         $price = round((float) ($data['agreed_unit_price'] ?? 0), 2);
         if ($quantity <= 0) {
-            throw ValidationException::withMessages(["lines.{$index}.planned_quantity" => 'Planned quantity must be greater than zero.']);
+            throw ValidationException::withMessages(["lines.{$index}.planned_quantity" => __('application.planned_quantity_must_be_greater_than_zero_d34ecf62')]);
         }
         if ($price < 0) {
-            throw ValidationException::withMessages(["lines.{$index}.agreed_unit_price" => 'Agreed price cannot be negative.']);
+            throw ValidationException::withMessages(["lines.{$index}.agreed_unit_price" => __('application.agreed_price_cannot_be_negative_65d3fd1c')]);
         }
         $factor = $conversion ? (float) $conversion->conversion_factor : 1.0;
         $unit = $conversion?->unit ?: $product->unit;
         $baseQuantity = round($quantity * $factor, 12);
         if (! $product->acceptsStockQuantity($baseQuantity)) {
-            throw ValidationException::withMessages(["lines.{$index}.planned_quantity" => 'Planned quantity does not convert to a valid base-stock quantity.']);
+            throw ValidationException::withMessages(["lines.{$index}.planned_quantity" => __('application.planned_quantity_does_not_convert_to_a_valid_base_stock_quantity_dd170440')]);
         }
 
         return $account->planLines()->create([
@@ -338,14 +338,14 @@ class CustomerMaterialAccountService
     private function requireActive(CustomerMaterialAccount $account): void
     {
         if ($account->status !== 'active') {
-            throw ValidationException::withMessages(['account' => 'Deposits and material issues are allowed only on active accounts.']);
+            throw ValidationException::withMessages(['account' => __('application.deposits_and_material_issues_are_allowed_only_on_active_accounts_d40f3df7')]);
         }
     }
 
     private function validateBranch(CustomerMaterialAccount $account, int $branchId): void
     {
         if ($branchId !== (int) $account->branch_id) {
-            throw ValidationException::withMessages(['branch_id' => 'Transaction branch must match the material account branch.']);
+            throw ValidationException::withMessages(['branch_id' => __('application.transaction_branch_must_match_the_material_account_branch_5ea3eb7b')]);
         }
     }
 

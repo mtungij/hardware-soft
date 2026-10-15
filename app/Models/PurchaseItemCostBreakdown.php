@@ -33,7 +33,7 @@ class PurchaseItemCostBreakdown extends Model
     public function assertPurchaseEditable(): void
     {
         if (! $this->purchaseItem?->purchase?->canBeModified()) {
-            throw new LogicException('Received purchase cost breakdowns are immutable.');
+            throw new LogicException(__('application.received_purchase_cost_breakdowns_are_immutable_c0bb8ee0'));
         }
     }
 

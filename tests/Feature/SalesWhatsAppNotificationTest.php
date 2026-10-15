@@ -16,6 +16,7 @@ use App\Models\WhatsAppRecipient;
 use App\Observers\SaleWhatsAppObserver;
 use App\Services\Gowa;
 use App\Services\InventoryService;
+use App\Services\WhatsAppLocalization;
 use App\Services\WhatsAppMessageFactory;
 use App\Services\WhatsAppNotificationService;
 use Database\Seeders\DatabaseSeeder;
@@ -27,6 +28,7 @@ use Illuminate\Support\Facades\Queue;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
+    $this->withSession(['staff_locale' => 'en']);
     $this->company = Company::query()->firstOrFail();
     $this->branch = Branch::withoutGlobalScopes()->where('company_id', $this->company->id)->firstOrFail();
     $this->admin = User::withoutGlobalScopes()->where('company_id', $this->company->id)->whereHas('roles')->firstOrFail();
@@ -370,7 +372,7 @@ test('sales message contains invoice customer and actual amounts', function () {
     salesWaNotify($sale);
 
     $message = WhatsAppNotification::withoutGlobalScopes()->where('notification_type', 'sale_completed')->firstOrFail()->message;
-    expect($message)->toContain('INV-WA-001')->toContain($customer->name)
+    expect($message)->toContain('INV-WA-001')->toContain($customer->displayName(app(WhatsAppLocalization::class)->language($this->company)))
         ->toContain('Total: TZS 125,000')->toContain('Paid: TZS 125,000')->toContain('Balance: TZS 0')->toContain('Payment: Cash');
 });
 

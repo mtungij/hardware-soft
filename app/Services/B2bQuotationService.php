@@ -20,6 +20,7 @@ use App\Models\User;
 use App\Support\BranchAccess;
 use App\Support\NumberFormatter;
 use App\Support\QuotationTemplateRegistry;
+use App\Support\UiText;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -43,17 +44,17 @@ class B2bQuotationService
     {
         $this->authorizeStaff($staff, $request->company_id, $request->branch_id, 'customer_requests.create_quotation');
         if (! in_array($documentType, ['quotation', 'proforma'], true)) {
-            throw ValidationException::withMessages(['document_type' => 'Select quotation or proforma.']);
+            throw ValidationException::withMessages(['document_type' => __('application.select_quotation_or_proforma_4b00ec9e')]);
         }
 
         return DB::transaction(function () use ($request, $staff, $lines, $documentType, $validUntil, $notes, $terms, $additionalCharges, $quotationTemplateKey): Quotation {
             $request = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)->with('items')->lockForUpdate()->findOrFail($request->id);
             if (! in_array($request->status, ['pending', 'under_review'], true)) {
-                throw ValidationException::withMessages(['request' => 'Only pending or under-review requests can be quoted.']);
+                throw ValidationException::withMessages(['request' => __('application.only_pending_or_under_review_requests_can_be_quoted_c3c3878d')]);
             }
             $validUntil = CarbonImmutable::parse($validUntil)->startOfDay();
             if ($validUntil->isBefore(today())) {
-                throw ValidationException::withMessages(['valid_until' => 'Validity date cannot be in the past.']);
+                throw ValidationException::withMessages(['valid_until' => __('application.validity_date_cannot_be_in_the_past_6a780529')]);
             }
             $provided = collect($lines)->keyBy(fn ($line) => (int) ($line['request_item_id'] ?? 0));
             $prepared = [];
@@ -65,13 +66,13 @@ class B2bQuotationService
                 $discountPerUnit = (float) ($line['discount_per_unit'] ?? 0);
                 $taxPerUnit = (float) ($line['tax_amount'] ?? 0);
                 if ($quantity <= 0 || $unitPrice < 0 || $discountPerUnit < 0 || $discountPerUnit > $unitPrice || $taxPerUnit < 0) {
-                    throw ValidationException::withMessages(["lines.{$index}" => 'Quotation quantity, price, discount, or tax is invalid.']);
+                    throw ValidationException::withMessages(["lines.{$index}" => __('application.quotation_quantity_price_discount_or_tax_is_invalid_df04d8bf')]);
                 }
                 if (abs($unitPrice - (float) $requestItem->display_unit_price_snapshot) > 0.001 && ! $staff->can('products.edit_selling_price')) {
-                    throw new AuthorizationException('You are not allowed to override selling prices.');
+                    throw new AuthorizationException(__('application.you_are_not_allowed_to_override_selling_prices_09c6fd21'));
                 }
                 if ($discountPerUnit > 0 && ! $staff->can('sales.discount')) {
-                    throw new AuthorizationException('You are not allowed to apply discounts.');
+                    throw new AuthorizationException(__('application.you_are_not_allowed_to_apply_discounts_814c29ee'));
                 }
                 $product = Product::withoutGlobalScope(CompanyScope::class)->with('unit')->where('company_id', $request->company_id)->where('status', 'active')->findOrFail($requestItem->product_id);
                 $conversion = $this->conversions->resolveForSale($product, $requestItem->product_unit_conversion_id);
@@ -146,7 +147,7 @@ class B2bQuotationService
         $this->validateCustomerAndBranch($customer, $branchId);
         $this->validateDocumentType($documentType, $validUntil);
         if (! Str::isUuid($creationKey)) {
-            throw ValidationException::withMessages(['creation_key' => 'A valid document operation key is required.']);
+            throw ValidationException::withMessages(['creation_key' => __('application.a_valid_document_operation_key_is_required_e14901fd')]);
         }
 
         return DB::transaction(function () use ($customer, $staff, $branchId, $lines, $documentType, $validUntil, $creationKey, $notes, $terms, $additionalCharges, $quotationTemplateKey): Quotation {
@@ -207,9 +208,9 @@ class B2bQuotationService
     {
         $this->authorizeStaff($staff, $quotation->company_id, $quotation->branch_id, 'quotations.send');
         if (! in_array($quotation->status, ['draft', 'sent'], true)) {
-            throw ValidationException::withMessages(['quotation' => 'Only draft or sent quotations can be sent.']);
+            throw ValidationException::withMessages(['quotation' => __('application.only_draft_or_sent_quotations_can_be_sent_f7b0a748')]);
         }
-        $path = $quotation->pdf_path ?: $this->pdfs->quotation($quotation);
+        $path = UiText::withLocale(app(WhatsAppLocalization::class)->language($quotation->company), fn () => $this->pdfs->quotation($quotation));
         $quotation->update(['status' => 'sent', 'sent_at' => $quotation->sent_at ?: now(), 'pdf_path' => $path]);
         $this->audit->record($quotation, 'quotation', 'sent', $staff);
         $quotation->loadMissing(['company', 'customer']);
@@ -248,7 +249,7 @@ class B2bQuotationService
     {
         $this->authorizeStaff($staff, (int) $quotation->company_id, (int) $quotation->branch_id, 'quotations.convert');
         if (blank(trim($reason))) {
-            throw ValidationException::withMessages(['acceptance_reason' => 'Record how the customer accepted this document.']);
+            throw ValidationException::withMessages(['acceptance_reason' => __('application.record_how_the_customer_accepted_this_document_ee5c34b9')]);
         }
 
         return DB::transaction(function () use ($quotation, $staff, $reason): Quotation {
@@ -257,10 +258,10 @@ class B2bQuotationService
                 return $quotation;
             }
             if ($quotation->status !== 'sent') {
-                throw ValidationException::withMessages(['quotation' => 'Only a sent quotation can be marked accepted.']);
+                throw ValidationException::withMessages(['quotation' => __('application.only_a_sent_quotation_can_be_marked_accepted_47296f52')]);
             }
             if ($quotation->valid_until->isBefore(today())) {
-                throw ValidationException::withMessages(['quotation' => 'This quotation has expired and cannot be accepted.']);
+                throw ValidationException::withMessages(['quotation' => __('application.this_quotation_has_expired_and_cannot_be_accepted_393ea492')]);
             }
             $quotation->update(['status' => 'accepted', 'accepted_at' => now(), 'rejected_at' => null, 'rejection_reason' => null]);
             $quotation->purchaseRequest?->update(['status' => 'accepted', 'accepted_at' => now(), 'rejected_at' => null]);
@@ -282,13 +283,13 @@ class B2bQuotationService
                 return Sale::withoutGlobalScope(CompanyScope::class)->findOrFail($quotation->converted_sale_id);
             }
             if ($quotation->status !== 'accepted') {
-                throw ValidationException::withMessages(['quotation' => 'Only an accepted quotation can be converted to sale.']);
+                throw ValidationException::withMessages(['quotation' => __('application.only_an_accepted_quotation_can_be_converted_to_sale_1de08f89')]);
             }
             $location = StockLocation::withoutGlobalScope(CompanyScope::class)->where('company_id', $quotation->company_id)
                 ->where('branch_id', $quotation->branch_id)->findOrFail($stockLocationId);
             $shortages = collect($this->availability($quotation, $location->id))->where('shortage', '>', 0);
             if ($shortages->isNotEmpty()) {
-                throw ValidationException::withMessages(['stock' => $shortages->map(fn (array $row): string => $row['product'].': Required '.NumberFormatter::quantity($row['required']).', Available '.NumberFormatter::quantity($row['available']).', Shortage '.NumberFormatter::quantity($row['shortage']))->join("\n")]);
+                throw ValidationException::withMessages(['stock' => $shortages->map(fn (array $row): string => __('feedback.stock_availability', ['product' => $row['product'], 'required' => NumberFormatter::quantity($row['required']), 'available' => NumberFormatter::quantity($row['available']), 'shortage' => NumberFormatter::quantity($row['shortage'])]))->join("\n")]);
             }
             $cart = $quotation->items->map(fn ($item): array => [
                 'product_id' => $item->product_id, 'stock_location_id' => $location->id,
@@ -352,11 +353,11 @@ class B2bQuotationService
     ): Sale {
         $this->authorizeStaff($staff, (int) $customer->company_id, $branchId, 'sales.create', 'sales_scope');
         if (! $staff->can('invoices.send')) {
-            throw new AuthorizationException('You are not allowed to create and send final customer invoices.');
+            throw new AuthorizationException(__('application.you_are_not_allowed_to_create_and_send_final_customer_invoices_83ba3b11'));
         }
         $this->validateCustomerAndBranch($customer, $branchId);
         if (! Str::isUuid($idempotencyKey)) {
-            throw ValidationException::withMessages(['idempotency_key' => 'A valid sale operation key is required.']);
+            throw ValidationException::withMessages(['idempotency_key' => __('application.a_valid_sale_operation_key_is_required_9cf497e5')]);
         }
 
         $prepared = $this->prepareStaffLines((int) $customer->company_id, $staff, $lines);
@@ -429,17 +430,17 @@ class B2bQuotationService
         $quotation = DB::transaction(function () use ($quotation, $account, $accept, $reason): Quotation {
             $quotation = Quotation::withoutGlobalScope(CompanyScope::class)->with(['purchaseRequest', 'customer'])->lockForUpdate()->findOrFail($quotation->id);
             if ((int) $quotation->company_id !== (int) $account->company_id || (int) $quotation->customer_id !== (int) $account->customer_id) {
-                throw new AuthorizationException('This quotation does not belong to this customer account.');
+                throw new AuthorizationException(__('application.this_quotation_does_not_belong_to_this_customer_account_c8cb96cd'));
             }
             $target = $accept ? 'accepted' : 'rejected';
             if ($quotation->status === $target) {
                 return $quotation;
             }
             if ($quotation->status !== 'sent') {
-                throw ValidationException::withMessages(['quotation' => 'Only a sent quotation can be accepted or rejected.']);
+                throw ValidationException::withMessages(['quotation' => __('application.only_a_sent_quotation_can_be_accepted_or_rejected_904d98d3')]);
             }
             if ($accept && $quotation->valid_until->isBefore(today())) {
-                throw ValidationException::withMessages(['quotation' => 'This quotation has expired and cannot be accepted.']);
+                throw ValidationException::withMessages(['quotation' => __('application.this_quotation_has_expired_and_cannot_be_accepted_393ea492')]);
             }
             $quotation->update([
                 'status' => $target, 'accepted_at' => $accept ? now() : null,
@@ -477,7 +478,7 @@ class B2bQuotationService
         try {
             $invoice = SalesInvoice::withoutGlobalScope(CompanyScope::class)->with(['company', 'customer', 'sale'])->findOrFail($invoiceId);
             $newlyGenerated = blank($invoice->pdf_path);
-            $path = $invoice->pdf_path ?: $this->pdfs->invoice($invoice);
+            $path = UiText::withLocale(app(WhatsAppLocalization::class)->language($invoice->company), fn () => $this->pdfs->invoice($invoice));
             $invoice->update(['pdf_path' => $path, 'generated_at' => $invoice->generated_at ?: now()]);
             if ($newlyGenerated) {
                 $this->audit->record($invoice, 'sales_invoice', 'generated', metadata: ['sale_id' => $invoice->sale_id]);
@@ -515,31 +516,31 @@ class B2bQuotationService
     private function prepareStaffLines(int $companyId, User $staff, array $lines): array
     {
         if ($lines === []) {
-            throw ValidationException::withMessages(['lines' => 'Add at least one product.']);
+            throw ValidationException::withMessages(['lines' => __('application.add_at_least_one_product_e2ed1f2c')]);
         }
 
         return collect($lines)->values()->map(function (array $line, int $index) use ($companyId, $staff): array {
             $product = Product::withoutGlobalScope(CompanyScope::class)->with('unit')->where('company_id', $companyId)->where('status', 'active')->find($line['product_id'] ?? null);
             if (! $product) {
-                throw ValidationException::withMessages(["lines.{$index}.product_id" => 'Select an active product belonging to this company.']);
+                throw ValidationException::withMessages(["lines.{$index}.product_id" => __('application.select_an_active_product_belonging_to_this_company_60a8ed98')]);
             }
             $conversion = $this->conversions->resolveForSale($product, filled($line['product_unit_conversion_id'] ?? null) ? (int) $line['product_unit_conversion_id'] : null);
             $quantity = (float) ($line['quantity'] ?? 0);
             $authorizedPrice = $conversion ? $conversion->priceFor('retail') : (float) $product->selling_price;
             if ($authorizedPrice === null) {
-                throw ValidationException::withMessages(["lines.{$index}.product_unit_conversion_id" => 'The selected selling unit has no retail price configured.']);
+                throw ValidationException::withMessages(["lines.{$index}.product_unit_conversion_id" => __('application.the_selected_selling_unit_has_no_retail_price_configured_854ad4a8')]);
             }
             $unitPrice = filled($line['unit_price'] ?? null) ? (float) $line['unit_price'] : $authorizedPrice;
             $discountPerUnit = (float) ($line['discount_per_unit'] ?? 0);
             $taxPerUnit = (float) ($line['tax_amount'] ?? 0);
             if ($quantity <= 0 || $unitPrice < 0 || $discountPerUnit < 0 || $discountPerUnit >= $unitPrice || $taxPerUnit < 0) {
-                throw ValidationException::withMessages(["lines.{$index}" => 'Quantity, price, discount, or tax is invalid.']);
+                throw ValidationException::withMessages(["lines.{$index}" => __('application.quantity_price_discount_or_tax_is_invalid_d21a0101')]);
             }
             if (abs($unitPrice - $authorizedPrice) > 0.001 && ! $staff->can('products.edit_selling_price')) {
-                throw new AuthorizationException('You are not allowed to override selling prices.');
+                throw new AuthorizationException(__('application.you_are_not_allowed_to_override_selling_prices_09c6fd21'));
             }
             if ($discountPerUnit > 0 && ! $staff->can('sales.discount')) {
-                throw new AuthorizationException('You are not allowed to apply discounts.');
+                throw new AuthorizationException(__('application.you_are_not_allowed_to_apply_discounts_814c29ee'));
             }
             $factor = $conversion ? (float) $conversion->conversion_factor : 1.0;
             $baseQuantity = round($quantity * $factor, 4);
@@ -561,7 +562,7 @@ class B2bQuotationService
             return [];
         }
         if (! $staff->can('commercial_charges.apply')) {
-            throw new AuthorizationException('You are not allowed to apply additional commercial charges.');
+            throw new AuthorizationException(__('application.you_are_not_allowed_to_apply_additional_commercial_charges_38af9093'));
         }
 
         return $charges->map(function (array $charge, int $index) use ($companyId): array {
@@ -570,11 +571,11 @@ class B2bQuotationService
                 ->where('is_active', true)
                 ->find($charge['additional_charge_type_id'] ?? null);
             if (! $type) {
-                throw ValidationException::withMessages(["additional_charges.{$index}.additional_charge_type_id" => 'Select an active additional charge type belonging to this company.']);
+                throw ValidationException::withMessages(["additional_charges.{$index}.additional_charge_type_id" => __('application.select_an_active_additional_charge_type_belonging_to_this_company_f0788a60')]);
             }
             $amount = (float) ($charge['amount'] ?? 0);
             if ($amount <= 0) {
-                throw ValidationException::withMessages(["additional_charges.{$index}.amount" => 'Additional charge amount must be greater than zero.']);
+                throw ValidationException::withMessages(["additional_charges.{$index}.amount" => __('application.additional_charge_amount_must_be_greater_than_zero_f0701614')]);
             }
 
             return [
@@ -614,21 +615,21 @@ class B2bQuotationService
     private function validateCustomerAndBranch(Customer $customer, int $branchId): void
     {
         if ($customer->status !== 'active') {
-            throw ValidationException::withMessages(['customer_id' => 'Select an active customer.']);
+            throw ValidationException::withMessages(['customer_id' => __('application.select_an_active_customer_f3e25cb9')]);
         }
         $validBranch = Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $customer->company_id)->where('status', 'active')->whereKey($branchId)->exists();
         if (! $validBranch) {
-            throw ValidationException::withMessages(['branch_id' => 'Select an active branch belonging to this company.']);
+            throw ValidationException::withMessages(['branch_id' => __('application.select_an_active_branch_belonging_to_this_company_38fce5cf')]);
         }
     }
 
     private function validateDocumentType(string $documentType, mixed $validUntil): void
     {
         if (! in_array($documentType, ['quotation', 'proforma'], true)) {
-            throw ValidationException::withMessages(['document_type' => 'Select quotation or proforma.']);
+            throw ValidationException::withMessages(['document_type' => __('application.select_quotation_or_proforma_4b00ec9e')]);
         }
         if (CarbonImmutable::parse($validUntil)->startOfDay()->isBefore(today())) {
-            throw ValidationException::withMessages(['valid_until' => 'Validity date cannot be in the past.']);
+            throw ValidationException::withMessages(['valid_until' => __('application.validity_date_cannot_be_in_the_past_6a780529')]);
         }
     }
 

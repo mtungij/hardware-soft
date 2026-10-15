@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\WhatsAppPhone;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -67,6 +68,11 @@ class CustomerPortalCredentialService
                 return ['account' => $existing, 'password' => null, 'event' => null];
             }
 
+            if ($existing && ! $reset && ! $existing->must_change_password) {
+                $existing->update(['status' => 'active']);
+
+                return ['account' => $existing, 'password' => null, 'event' => null];
+            }
             $event = $reset && $existing ? 'portal_password_reset' : 'portal_access_enabled';
             [$account, $password] = $this->createOrRotateAccount($customer, $actor, $operationKey, $event, $existing);
 
@@ -121,19 +127,23 @@ class CustomerPortalCredentialService
 
     public function changePassword(CustomerAccount $account, string $currentPassword, string $newPassword): void
     {
-        if (! Hash::check($currentPassword, $account->password)) {
-            throw ValidationException::withMessages(['current_password' => 'The current password is incorrect.']);
-        }
-
-        DB::transaction(function () use ($account, $newPassword): void {
+        DB::transaction(function () use ($account, $currentPassword, $newPassword): void {
+            $account = CustomerAccount::withoutGlobalScopes()->lockForUpdate()->findOrFail($account->id);
+            if (! Hash::check($currentPassword, $account->password)) {
+                throw ValidationException::withMessages(['current_password' => __('application.the_current_password_is_incorrect_e82423e6')]);
+            }
             $account->forceFill([
                 'password' => $newPassword,
                 'must_change_password' => false,
+                'temporary_pin_expires_at' => null,
+                'temporary_pin_used_at' => null,
+                'temporary_pin_attempts' => 0,
                 'remember_token' => Str::random(60),
             ])->save();
             $account->tokens()->delete();
             $this->audit($account->customer, $account, 'customer_password_changed', $account);
         });
+        $account->refresh();
     }
 
     public function requestRecovery(string $phone, string $operationKey): void
@@ -144,6 +154,13 @@ class CustomerPortalCredentialService
             return;
         }
 
+        $recoveryKey = 'customer-pin-recovery:'.hash('sha256', $normalized.'|'.request()->ip());
+        $accountRecoveryKey = 'customer-pin-resend:'.hash('sha256', $normalized);
+        if (RateLimiter::tooManyAttempts($recoveryKey, 3) || RateLimiter::tooManyAttempts($accountRecoveryKey, 3)) {
+            return;
+        }
+        RateLimiter::hit($recoveryKey, 300);
+        RateLimiter::hit($accountRecoveryKey, 300);
         $account = CustomerAccount::withoutGlobalScope(CompanyScope::class)->where('login_phone', $normalized)->first();
         if (! $account || ! $account->isActive()) {
             return;
@@ -180,7 +197,9 @@ class CustomerPortalCredentialService
     ): array {
         $phone = $this->normalizePhone($customer->phone);
         $this->assertPhoneAvailable($phone, $account?->id);
-        $password = $this->temporaryPassword();
+        do {
+            $password = $this->temporaryPassword();
+        } while ($account && Hash::check($password, $account->password));
         $version = ($account?->credential_version ?? 0) + 1;
 
         if ($account) {
@@ -192,6 +211,9 @@ class CustomerPortalCredentialService
                 'password' => $password,
                 'status' => 'active',
                 'must_change_password' => true,
+                'temporary_pin_expires_at' => now()->addMinutes(15),
+                'temporary_pin_used_at' => null,
+                'temporary_pin_attempts' => 0,
                 'credential_version' => $version,
                 'last_credential_operation_key' => $operationKey,
                 'last_credentials_notification_id' => null,
@@ -213,6 +235,9 @@ class CustomerPortalCredentialService
                 'status' => 'active',
                 'preferred_locale' => 'sw',
                 'must_change_password' => true,
+                'temporary_pin_expires_at' => now()->addMinutes(15),
+                'temporary_pin_used_at' => null,
+                'temporary_pin_attempts' => 0,
                 'credential_version' => $version,
                 'last_credential_operation_key' => $operationKey,
                 'approved_at' => now(),
@@ -283,7 +308,7 @@ class CustomerPortalCredentialService
 
     private function credentialMessage(Company $company, Customer $customer, CustomerAccount $account, string $password): string
     {
-        $portalUrl = rtrim((string) config('app.customer_portal_url', config('app.url')), '/').'/customer/login';
+        $portalUrl = 'https://customer.buildcore.site/customer/login';
         $localization = app(WhatsAppLocalization::class);
         $features = collect($localization->get($company, 'portal.features'))->map(fn (string $feature): string => '• '.$feature)->implode("\n");
 
@@ -292,7 +317,7 @@ class CustomerPortalCredentialService
             .$localization->get($company, 'portal.registered', ['company' => $company->company_name])."\n\n"
             .$localization->get($company, 'portal.login_intro')."\n\n"
             .$localization->get($company, 'portal.phone').":\n{$account->login_phone}\n\n"
-            .$localization->get($company, 'portal.temporary_password').":\n{$password}\n\nPortal:\n{$portalUrl}\n\n"
+            .$localization->get($company, 'portal.temporary_password').":\n{$password}\n\n".$localization->get($company, 'portal.url_label').":\n{$portalUrl}\n\n"
             .$localization->get($company, 'portal.security')."\n\n"
             .$localization->get($company, 'portal.features_intro')."\n\n{$features}\n\n"
             .$localization->get($company, 'portal.thanks', ['company' => $company->company_name])."\n\nHARDEX POS";
@@ -309,7 +334,44 @@ class CustomerPortalCredentialService
 
     private function temporaryPassword(): string
     {
-        return 'Hdx@'.Str::random(12);
+        return str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+    }
+
+    public function authenticate(string $phone, string $password): CustomerAccount
+    {
+        $key = 'customer-auth:'.hash('sha256', $phone.'|'.request()->ip());
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            throw ValidationException::withMessages(['phone' => __('portal.throttled')]);
+        }
+        $account = DB::transaction(function () use ($phone, $password): ?CustomerAccount {
+            $account = CustomerAccount::withoutGlobalScopes()->where('login_phone', $phone)->lockForUpdate()->first();
+            if (! $account || $account->isSuspended()) {
+                return null;
+            }
+            $isPin = $account->temporary_pin_expires_at !== null;
+            if ($isPin && ($account->temporary_pin_expires_at->isPast() || $account->temporary_pin_used_at || $account->temporary_pin_attempts >= 5)) {
+                return null;
+            }
+            if (! Hash::check($password, $account->password)) {
+                if ($isPin) {
+                    $account->increment('temporary_pin_attempts');
+                }
+
+                return null;
+            }
+            if ($isPin) {
+                $account->forceFill(['temporary_pin_used_at' => now(), 'remember_token' => null])->save();
+            }
+
+            return $account;
+        });
+        if (! $account) {
+            RateLimiter::hit($key, 60);
+            throw ValidationException::withMessages(['phone' => __('application.invalid_phone_number_or_password_bd78e23a')]);
+        }
+        RateLimiter::clear($key);
+
+        return $account;
     }
 
     public function normalizePhone(?string $phone): string
@@ -343,7 +405,7 @@ class CustomerPortalCredentialService
         }
 
         if ($conflict) {
-            throw ValidationException::withMessages(['phone' => 'This phone number already has a customer portal account.']);
+            throw ValidationException::withMessages(['phone' => __('application.this_phone_number_already_has_a_customer_portal_account_89eb24a3')]);
         }
     }
 

@@ -24,7 +24,7 @@ class ProductionReportExportController extends Controller
             'mould_id' => ['nullable', 'integer'], 'status' => ['nullable', 'string', 'max:40'], 'group_by' => ['nullable', 'string', 'max:20'], 'search' => ['nullable', 'string', 'max:100'],
         ]);
         if (($validated['date_from'] ?? null) && ($validated['date_to'] ?? null)) {
-            abort_if(now()->parse($validated['date_from'])->diffInDays(now()->parse($validated['date_to'])) > 366, 422, 'Exports are limited to 366 days.');
+            abort_if(now()->parse($validated['date_from'])->diffInDays(now()->parse($validated['date_to'])) > 366, 422, __('application.exports_are_limited_to_366_days_930e1ff5'));
         }
 
         BranchAccess::resolve($request->user(), ! empty($validated['branch_id']) ? (int) $validated['branch_id'] : null);
@@ -43,7 +43,7 @@ class ProductionReportExportController extends Controller
                 'printed_date' => now($company?->timezone ?: config('app.timezone'))->format('Y-m-d H:i T'),
             ],
             'headers' => $data['headers'], 'rows' => $data['rows'],
-            'totals' => [...($data['totals'] ?? []), ...($data['truncated'] ? ['Notice' => 'Export limited to the first 5,000 matching rows.'] : [])],
+            'totals' => [...($data['totals'] ?? []), ...($data['truncated'] ? ['Notice' => __('application.export_limited_to_the_first_5_000_matching_rows_d264a284')] : [])],
         ];
 
         if ($format === 'pdf') {

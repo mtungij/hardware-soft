@@ -26,11 +26,11 @@ mount(function(){
             [__('setup.checklist.recipes'),false,route('production.recipes.create'),null],
             [__('setup.checklist.schedule'),false,route('production.schedule.index'),null],
         ] as [$label,$complete,$route,$caption])
-            <x-card><div class="flex items-start gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full {{ $complete?'bg-emerald-500':'bg-slate-200 dark:bg-slate-700' }} text-white">{{ $complete?'✓':'·' }}</span><div><h2 class="font-black">{{$label}}</h2>@if($caption)<p class="mt-1 text-xs text-slate-500">{{$caption}}</p>@endif @if($route)<a href="{{$route}}" wire:navigate class="mt-3 inline-flex rounded-lg border px-3 py-2 text-sm font-bold">Continue</a>@endif</div></div></x-card>
+            <x-card><div class="flex items-start gap-3"><span class="grid h-8 w-8 shrink-0 place-items-center rounded-full {{ $complete?'bg-emerald-500':'bg-slate-200 dark:bg-slate-700' }} text-white">{{ $complete?'✓':'·' }}</span><div><h2 class="font-black">{{$label}}</h2>@if($caption)<p class="mt-1 text-xs text-slate-500">{{$caption}}</p>@endif @if($route)<a href="{{$route}}" wire:navigate class="mt-3 inline-flex rounded-lg border px-3 py-2 text-sm font-bold">{{ __('application.continue_2e026239') }}</a>@endif</div></div></x-card>
         @endforeach
     </div>
     @if($suggestions)
-        <x-card class="mt-5"><h2 class="font-black">{{__('setup.curing_defaults')}}</h2><p class="mt-2 text-sm text-slate-500">{{$suggestions['default_sellable_after_days']??'—'}} / {{$suggestions['default_curing_days']??'—'}} {{__('setup.days')}} · {{__('setup.quality_control')}}: {{($suggestions['quality_control_preference']??false)?__('setup.yes'):__('setup.no')}}</p><p class="mt-2 text-xs text-slate-500">Product-level curing and quality settings remain authoritative.</p></x-card>
+        <x-card class="mt-5"><h2 class="font-black">{{__('setup.curing_defaults')}}</h2><p class="mt-2 text-sm text-slate-500">{{$suggestions['default_sellable_after_days']??'—'}} / {{$suggestions['default_curing_days']??'—'}} {{__('setup.days')}} · {{__('setup.quality_control')}}: {{($suggestions['quality_control_preference']??false)?__('setup.yes'):__('setup.no')}}</p><p class="mt-2 text-xs text-slate-500">{{ __('application.product_level_curing_and_quality_settings_remain_authoritative_a4a6e9e7') }}</p></x-card>
     @endif
-    <div class="mt-5"><a href="{{route('dashboard')}}" wire:navigate class="inline-flex rounded-xl bg-build-orange px-5 py-3 font-black text-white">Go to Dashboard</a></div>
+    <div class="mt-5"><a href="{{route('dashboard')}}" wire:navigate class="inline-flex rounded-xl bg-build-orange px-5 py-3 font-black text-white">{{ __('application.go_to_dashboard_f7b5bf8c') }}</a></div>
 </div>

@@ -1,0 +1,38 @@
+<?php
+
+return [
+    'hello' => 'Habari :name,',
+    'thanks' => 'Asante',
+    'regards' => 'Wako',
+    'portal' => [
+        'subject' => 'Karibu kwenye Tovuti ya Wateja ya :company',
+        'welcome' => 'Karibu :company',
+        'intro' => 'Karibu kwenye tovuti ya wateja ya :company. Angalia madeni, malipo, risiti, amana na taarifa za akaunti yako.',
+        'url' => 'Anwani ya Tovuti ya Wateja',
+        'email' => 'Barua pepe yako ya kuingia',
+        'password' => 'Nenosiri lako la muda',
+        'open' => 'Fungua Tovuti ya Wateja',
+        'start' => 'Namna ya kuanza:',
+        'step_open' => 'Fungua kiungo cha tovuti ya wateja hapo juu.',
+        'step_email' => 'Weka barua pepe hii:',
+        'step_password' => 'Weka nenosiri hili:',
+        'step_login' => 'Bofya Ingia.',
+        'step_account' => 'Baada ya kuingia, angalia madeni, malipo, risiti, amana na taarifa za akaunti yako.',
+        'security' => 'Hifadhi taarifa hizi kwa usalama. Wasiliana na huduma kwa wateja ikiwa huwezi kuingia.',
+    ],
+    'purchase' => [
+        'subject' => 'Agizo la Ununuzi :reference - :company',
+        'title' => 'Agizo la Ununuzi :reference',
+        'intro' => 'Tafadhali angalia agizo rasmi la ununuzi kutoka :company lililoambatanishwa.',
+        'reference' => 'Namba ya Kumbukumbu',
+        'supplier' => 'Msambazaji',
+        'total' => 'Jumla',
+        'product' => 'Bidhaa',
+        'sku' => 'Msimbo wa Bidhaa',
+        'quantity' => 'Kiasi',
+        'unit' => 'Kipimo',
+        'cost' => 'Gharama',
+        'thanks' => 'Asante kwa ushirikiano wako unaoendelea.',
+        'team' => 'Timu ya Ununuzi',
+    ],
+];

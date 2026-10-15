@@ -18,7 +18,7 @@ class B2bDocumentController extends Controller
     public function quotation(Request $request, Quotation $quotation, B2bDocumentPdfService $pdfs): StreamedResponse
     {
         $this->authorizeDocument($request, $quotation->company_id, $quotation->branch_id, $quotation->customer_id, 'quotations.view');
-        $path = $quotation->pdf_path ?: $pdfs->quotation($quotation);
+        $path = $pdfs->quotation($quotation);
         if ($quotation->document_type !== 'quotation' && $quotation->pdf_path !== $path) {
             $quotation->update(['pdf_path' => $path]);
         }
@@ -41,7 +41,7 @@ class B2bDocumentController extends Controller
     {
         $invoice->loadMissing('sale');
         $this->authorizeDocument($request, $invoice->company_id, $invoice->sale->branch_id, $invoice->customer_id, 'invoices.view');
-        $path = $invoice->pdf_path ?: $pdfs->invoice($invoice);
+        $path = $pdfs->invoice($invoice);
         if ($invoice->pdf_path !== $path) {
             $invoice->update(['pdf_path' => $path, 'generated_at' => now()]);
         }

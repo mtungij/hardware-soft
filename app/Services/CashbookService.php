@@ -52,7 +52,7 @@ class CashbookService
     {
         return DB::transaction(function () use ($branchId, $date, $openingCash, $openedBy, $notes) {
             if (CashbookSession::query()->where('branch_id', $branchId)->whereDate('session_date', $date)->where('status', 'open')->exists()) {
-                throw ValidationException::withMessages(['session_date' => 'This branch already has an open cashbook session for the selected date.']);
+                throw ValidationException::withMessages(['session_date' => __('application.this_branch_already_has_an_open_cashbook_session_for_the_selected_date_23f02238')]);
             }
 
             $totals = $this->totals($branchId, $date);
@@ -90,7 +90,7 @@ class CashbookService
             $session = CashbookSession::query()->whereKey($session->id)->lockForUpdate()->firstOrFail();
 
             if ($session->status === 'closed') {
-                throw ValidationException::withMessages(['cashbook' => 'Closed cashbook sessions cannot be edited.']);
+                throw ValidationException::withMessages(['cashbook' => __('application.closed_cashbook_sessions_cannot_be_edited_12f70eeb')]);
             }
 
             $session = $this->refreshSession($session);

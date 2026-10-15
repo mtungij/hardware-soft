@@ -150,7 +150,7 @@ class WhatsAppNotificationService
             }
 
             if (! WhatsAppCategories::allows($notification->company_id, $notification->category)) {
-                $notification->update(['status' => 'suppressed', 'failure_reason' => 'Company manufacturing module is disabled.']);
+                $notification->update(['status' => 'suppressed', 'failure_reason' => __('application.company_manufacturing_module_is_disabled_fe55bc53')]);
 
                 return false;
             }

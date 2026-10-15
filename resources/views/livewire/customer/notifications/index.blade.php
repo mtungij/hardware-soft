@@ -59,7 +59,7 @@ $markAllRead = function () {
     CustomerNotification::where('customer_id', $this->account->customer_id)->whereNull('read_at')->update(['read_at' => now()]);
     AnnouncementCustomer::where('customer_id', $this->account->customer_id)->where('is_read', false)->update(['is_read' => true, 'read_at' => now()]);
     CustomerMessage::where('customer_id', $this->account->customer_id)->whereNull('read_at')->update(['read_at' => now()]);
-    session()->flash('success', 'Notifications marked as read.');
+    session()->flash('success', __('application.notifications_marked_as_read_e49bc0ba'));
 };
 
 $priorityClass = fn (?string $priority) => match ($priority) {
@@ -88,7 +88,7 @@ $senderName = fn (?CustomerNotification $notification): string => $notification?
 ?>
 
 <div>
-    <x-page-header :title="__('messages.nav.notifications')" description="Notification Center" :breadcrumbs="[__('messages.customer_portal') => route('customer.dashboard'), __('messages.nav.notifications') => null]">
+    <x-page-header :title="__('messages.nav.notifications')" description="{{ __('application.notification_center_b72611ad') }}" :breadcrumbs="[__('messages.customer_portal') => route('customer.dashboard'), __('messages.nav.notifications') => null]">
         <button type="button" wire:click="markAllRead" class="erp-btn-secondary">{{ __('messages.notifications.mark_all_read') }}</button>
     </x-page-header>
 
@@ -107,11 +107,11 @@ $senderName = fn (?CustomerNotification $notification): string => $notification?
                             @if (! $notification->read_at)
                                 <span class="h-2.5 w-2.5 rounded-full bg-build-orange"></span>
                             @endif
-                            <p class="font-black text-navy-900 dark:text-white">{{ $notification->title }}</p>
-                            <span class="rounded-full px-2 py-1 text-xs font-bold {{ $this->priorityClass($notification->priority) }}">{{ ucfirst($notification->priority ?? 'normal') }}</span>
+                            <p class="font-black text-navy-900 dark:text-white">{{ $notification->displayTitle() }}</p>
+                            <span class="rounded-full px-2 py-1 text-xs font-bold {{ $this->priorityClass($notification->priority) }}">{{ \App\Support\UiText::label($notification->priority ?? 'normal') }}</span>
                         </div>
-                        <p class="mt-1 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{{ $notification->message }}</p>
-                        <p class="mt-2 text-xs font-semibold text-slate-400">{{ $notification->created_at?->format('M d, Y H:i') }}</p>
+                        <p class="mt-1 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{{ $notification->displayMessage() }}</p>
+                        <p class="mt-2 text-xs font-semibold text-slate-400">{{ $notification->created_at?->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }}</p>
                     </div>
                     <button type="button" wire:click="openNotification({{ $notification->id }})" class="erp-btn-primary whitespace-nowrap">{{ __('messages.notifications.read_more') }}</button>
                 </div>
@@ -130,19 +130,19 @@ $senderName = fn (?CustomerNotification $notification): string => $notification?
             <div class="p-5">
                 <div class="flex items-start justify-between gap-4">
                     <div>
-                        <h2 class="text-lg font-semibold">{{ $this->selectedNotification->title }}</h2>
-                        <p class="mt-1 text-xs font-semibold text-slate-500">{{ $this->senderName($this->selectedNotification) }} · {{ $this->selectedNotification->created_at?->format('M d, Y H:i') }}</p>
+                        <h2 class="text-lg font-semibold">{{ $this->selectedNotification->displayTitle() }}</h2>
+                        <p class="mt-1 text-xs font-semibold text-slate-500">{{ $this->senderName($this->selectedNotification) }} · {{ $this->selectedNotification->created_at?->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }}</p>
                     </div>
-                    <button type="button" x-on:click="$dispatch('close-modal', 'customer-notification-details')" class="erp-btn-secondary px-2 py-1">Close</button>
+                    <button type="button" x-on:click="$dispatch('close-modal', 'customer-notification-details')" class="erp-btn-secondary px-2 py-1">{{ __('application.close_bbfa773e') }}</button>
                 </div>
                 @if ($this->sourceImage($this->selectedNotification))
                     <img src="{{ asset('storage/'.$this->sourceImage($this->selectedNotification)) }}" class="mt-4 max-h-72 w-full rounded-xl object-cover" alt="">
                 @endif
-                <p class="mt-4 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $this->selectedNotification->notifiable?->message ?? $this->selectedNotification->message }}</p>
+                <p class="mt-4 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">{{ $this->selectedNotification->notifiable?->message ?? $this->selectedNotification->displayMessage() }}</p>
                 @if ($this->sourceAttachment($this->selectedNotification))
                     <a href="{{ asset('storage/'.$this->sourceAttachment($this->selectedNotification)) }}" target="_blank" class="mt-5 inline-flex rounded-lg bg-build-orange px-4 py-2 text-sm font-semibold text-white">{{ __('messages.notifications.download_attachment') }}</a>
                 @endif
-                <p class="mt-4 text-xs font-semibold text-slate-500">{{ __('messages.notifications.marked_read') }}: {{ $this->selectedNotification->read_at?->format('M d, Y H:i') }}</p>
+                <p class="mt-4 text-xs font-semibold text-slate-500">{{ __('messages.notifications.marked_read') }}: {{ $this->selectedNotification->read_at?->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }}</p>
             </div>
         @endif
     </x-modal>

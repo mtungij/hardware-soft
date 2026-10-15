@@ -27,7 +27,7 @@ beforeEach(function () {
     $this->admin = User::query()->where('email', 'admin@buildmart.test')->firstOrFail();
     $this->company = Company::query()->findOrFail($this->admin->company_id);
     $this->company->update(['manufacturing_enabled' => true, 'timezone' => 'Africa/Dar_es_Salaam']);
-    $this->actingAs($this->admin);
+    $this->actingAs($this->admin)->withSession(['staff_locale' => 'en']);
 });
 
 test('production report foundation registers and renders every report without mutating source data', function () {

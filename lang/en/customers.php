@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Customers', 'create' => 'Create Customer', 'edit' => 'Edit Customer', 'name' => 'Name', 'phone' => 'Phone', 'email' => 'Email', 'balance' => 'Balance', 'retail_purchases' => 'Retail Purchases', 'wholesale_purchases' => 'Wholesale Purchases'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/customers.php';

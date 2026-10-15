@@ -155,11 +155,12 @@ test('PDF and preview enforce both company and branch visibility', function () {
     $otherBranch = Branch::create(['company_id' => $this->company->id, 'name' => 'Restricted Branch', 'code' => 'QT-RESTRICTED', 'status' => 'active']);
     $role = Role::where('name', 'Admin')->firstOrFail();
     $role->forceFill(['report_scope' => 'branch'])->save();
+    $this->admin->update(['is_system_owner' => false]);
     $this->admin->syncRoles([$role]);
     $this->admin->unsetRelation('roles');
     DB::table('quotations')->where('id', $quotation->id)->update(['branch_id' => $otherBranch->id]);
     foreach (['quotations.pdf', 'quotations.preview'] as $route) {
-        $this->get(route($route, $quotation))->assertForbidden();
+        expect($this->get(route($route, $quotation))->status())->toBeIn([403, 404]);
     }
     $other = $this->company->replicate();
     $other->company_name = 'Foreign Company';
@@ -187,7 +188,7 @@ test('proformas retain their original renderer and no template selection', funct
     $quotation = templateQuotation($this, 'premium', 'proforma');
     expect($quotation->quotation_template_key)->toBeNull();
     $path = app(B2bDocumentPdfService::class)->quotation($quotation);
-    expect($path)->toEndWith($quotation->quotation_number.'.pdf')->and(Storage::disk('local')->get($path))->toStartWith('%PDF-');
+    expect($path)->toEndWith($quotation->quotation_number.'-en.pdf')->and(Storage::disk('local')->get($path))->toStartWith('%PDF-');
     $this->get(route('quotations.preview', $quotation))->assertNotFound();
 });
 

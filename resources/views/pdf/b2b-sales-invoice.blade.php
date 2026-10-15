@@ -11,27 +11,27 @@ body{font-family:sans-serif;color:#172033;font-size:9pt}.brand{color:#f97316;fon
 @php($sale=$invoice->sale)
 <div class="brand">{{ $invoice->company->company_name }}</div>
 <div class="muted">{{ $invoice->company->address }} · {{ $invoice->company->phone }} · {{ $invoice->company->email }}</div>
-<h1>SALES INVOICE</h1>
+<h1>{{ __('application.sales_invoice_ee15f244') }}</h1>
 <table class="grid">
 <tr>
 <td>
-<b>Invoice: {{ $invoice->invoice_number }}</b>
-<br>Sale: {{ $sale->sale_number }}<br>Date: {{ $sale->sale_date->format('d M Y') }}<br>Branch: {{ $sale->branch->name }}</td>
+<b>{{ __('application.invoice_2706e3ea') }} {{ $invoice->invoice_number }}</b>
+<br>{{ __('application.sale_32549b53') }} {{ $sale->sale_number }}<br>{{ __('application.date_81b7d2ea') }} {{ $sale->sale_date->locale(app()->getLocale())->translatedFormat('d M Y') }}<br>{{ __('sale_dates.recorded_at') }} {{ $sale->created_at?->clone()->timezone(app(\App\Support\PosSaleDate::class)->timezone($sale->company_id))->locale(app()->getLocale())->translatedFormat('d M Y H:i') }}<br>{{ __('application.branch_8b31d33d') }} {{ $sale->branch->name }}</td>
 <td>
-<b>Customer</b>
-<br>{{ $invoice->customer?->name ?: 'Walk-in Customer' }}<br>{{ $invoice->customer?->phone }}<br>{{ $invoice->customer?->address }}</td>
+<b>{{ __('application.customer_0e85749a') }}</b>
+<br>{{ $invoice->customer?->displayName() ?: __('application.walk_in_customer_90cd7712') }}<br>{{ $invoice->customer?->phone }}<br>{{ $invoice->customer?->address }}</td>
 </tr>
 </table>
 <table class="items">
 <thead>
 <tr>
 <th>#</th>
-<th>Product</th>
-<th>Unit</th>
-<th class="right">Quantity</th>
-<th class="right">Unit Price</th>
-<th class="right">Discount</th>
-<th class="right">Total</th>
+<th>{{ __('application.product_dd3b86d1') }}</th>
+<th>{{ __('application.unit_f6b935ab') }}</th>
+<th class="right">{{ __('application.quantity_44f6af69') }}</th>
+<th class="right">{{ __('application.unit_price_1eea68d0') }}</th>
+<th class="right">{{ __('application.discount_b524936d') }}</th>
+<th class="right">{{ __('application.total_b25928c6') }}</th>
 </tr>
 </thead>
 <tbody>
@@ -48,37 +48,37 @@ body{font-family:sans-serif;color:#172033;font-size:9pt}.brand{color:#f97316;fon
 </table>
 <table class="summary">
 <tr>
-<td>Subtotal</td>
+<td>{{ __('application.subtotal_97f7359e') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($sale->subtotal) }}</td>
 </tr>
 <tr>
-<td>Discount</td>
+<td>{{ __('application.discount_b524936d') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</td>
 </tr>
 <tr>
-<td>Tax</td>
+<td>{{ __('application.tax_9be70f66') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($sale->tax_amount) }}</td>
 </tr>@foreach($sale->additionalCharges as $charge)<tr>
 <td>{{ $charge->charge_name_snapshot }}@if($charge->description_snapshot)<br><span class="muted">{{ $charge->description_snapshot }}</span>@endif</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($charge->amount) }}</td>
 </tr>@endforeach<tr class="total">
-<td>Grand Total</td>
+<td>{{ __('application.grand_total_91faafb1') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</td>
 </tr>
 <tr>
-<td>Paid</td>
+<td>{{ __('application.paid_dc9d4584') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</td>
 </tr>
 <tr>
-<td>Balance</td>
+<td>{{ __('application.balance_90eef613') }}</td>
 <td class="right">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</td>
 </tr>
 </table>
-<div class="section">Payment Method(s)</div>
-<div>{{ $sale->payments->pluck('payment_method')->map(fn($method)=>str($method)->headline())->join(', ') ?: 'Credit / Outstanding' }}</div>@if($paymentMethods->isNotEmpty())<div class="section">Payment Instructions</div>
-<div class="muted">Use payment reference: <b>{{ $invoice->invoice_number }}</b>
+<div class="section">{{ __('application.payment_method_s_dc381eaa') }}</div>
+<div>{{ $sale->payments->pluck('payment_method')->map(fn($method)=>\App\Support\UiText::label($method))->join(', ') ?: __('application.credit_outstanding_c575826e') }}</div>@if($paymentMethods->isNotEmpty())<div class="section">{{ __('application.payment_instructions_f3fa021f') }}</div>
+<div class="muted">{{ __('application.use_payment_reference_e3549df1') }} <b>{{ $invoice->invoice_number }}</b>
 </div>@foreach($paymentMethods as $method)<div style="margin-top:2mm">
-<b>{{ $method->display_name }}</b>@if($method->provider) · {{ $method->provider }}@endif@if($method->bank_name) · {{ $method->bank_name }}@endif<br>@if($method->account_name)Account name: {{ $method->account_name }}<br>@endif @if($method->account_number)Account: {{ $method->account_number }}<br>@endif @if($method->phone_or_business_number)Number: {{ $method->phone_or_business_number }}<br>@endif @if($method->branch_name)Branch: {{ $method->branch_name }}<br>@endif @if($method->instructions){{ $method->instructions }}@endif</div>@endforeach @endif<div class="section">Prepared By</div>
+<b>{{ $method->display_name }}</b>@if($method->provider) · {{ $method->provider }}@endif@if($method->bank_name) · {{ $method->bank_name }}@endif<br>@if($method->account_name){{ __('application.account_name_3e29c383') }} {{ $method->account_name }}<br>@endif @if($method->account_number){{ __('application.account_ac06ef9e') }} {{ $method->account_number }}<br>@endif @if($method->phone_or_business_number){{ __('application.number_73089985') }} {{ $method->phone_or_business_number }}<br>@endif @if($method->branch_name){{ __('application.branch_8b31d33d') }} {{ $method->branch_name }}<br>@endif @if($method->instructions){{ $method->instructions }}@endif</div>@endforeach @endif<div class="section">{{ __('application.prepared_by_447abf81') }}</div>
 <div>{{ $sale->createdBy->name }}</div>
 </body>
 </html>

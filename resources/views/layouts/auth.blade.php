@@ -33,5 +33,6 @@
         {{ $slot }}
 
         @livewireScripts
+        <x-localization />
     </body>
 </html>

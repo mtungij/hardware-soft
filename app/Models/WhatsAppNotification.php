@@ -34,7 +34,7 @@ class WhatsAppNotification extends Model
         }
 
         if ($this->message === self::SENSITIVE_MESSAGE_PLACEHOLDER) {
-            throw new RuntimeException('Protected WhatsApp notification is missing its encrypted delivery payload.');
+            throw new RuntimeException(__('application.protected_whatsapp_notification_is_missing_its_encrypted_delivery_payload_bac5d616'));
         }
 
         return $this->message;

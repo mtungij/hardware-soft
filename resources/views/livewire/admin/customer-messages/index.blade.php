@@ -101,9 +101,9 @@ $saveMessage = function (string $saveStatus = 'draft') {
 
     if ($saveStatus === 'sent') {
         app(CustomerCommunicationService::class)->sendCustomerMessage($message);
-        session()->flash('success', 'Message sent to customer portal.');
+        session()->flash('success', __('application.message_sent_to_customer_portal_1edd3b3e'));
     } else {
-        session()->flash('success', 'Message saved as draft.');
+        session()->flash('success', __('application.message_saved_as_draft_3151bed5'));
     }
 
     $this->resetForm();
@@ -118,7 +118,7 @@ $confirmDelete = function (int $id) {
 $deleteMessage = function () {
     CustomerMessage::findOrFail($this->deletingId)->delete();
     $this->deletingId = null;
-    session()->flash('success', 'Message deleted.');
+    session()->flash('success', __('application.message_deleted_190dfdb8'));
     $this->dispatch('close-modal', 'delete-customer-message');
 };
 
@@ -135,37 +135,37 @@ $templates = computed(fn () => MessageTemplate::where('is_active', true)->orderB
 ?>
 
 <div>
-    <x-page-header title="Customer Messages" description="Send direct messages to customer portal users." :breadcrumbs="['Dashboard' => route('dashboard'), 'Customer Communications' => null, 'Customer Messages' => null]">
-        <button type="button" wire:click="openCreate" class="erp-btn-primary">Send Message</button>
+    <x-page-header title="{{ __('application.customer_messages_024c7815') }}" description="{{ __('application.send_direct_messages_to_customer_portal_users_779336d6') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Customer Communications' => null, 'Customer Messages' => null]">
+        <button type="button" wire:click="openCreate" class="erp-btn-primary">{{ __('application.send_message_6dcd1512') }}</button>
     </x-page-header>
 
     <x-card>
         <div class="mb-4">
-            <input wire:model.live.debounce.300ms="search" class="erp-input max-w-md" placeholder="Search customer or message">
+            <input wire:model.live.debounce.300ms="search" class="erp-input max-w-md" placeholder="{{ __('application.search_customer_or_message_f2bd9f42') }}">
         </div>
-        <x-table :headers="['Date', 'Customer', 'Subject', 'Priority', 'Status', 'Read', 'Actions']">
+        <x-table :headers="[__('application.date_eb9a4bc1'), __('application.customer_0e85749a'), __('application.subject_8d183dbd'), __('application.priority_886cbff9'), __('application.status_bae7d5be'), __('application.read_852b438f'), __('application.actions_c3cd636a')]">
             @forelse ($this->customerMessages as $row)
                 <tr>
-                    <td class="px-4 py-3">{{ $row->created_at?->format('M d, Y H:i') }}</td>
-                    <td class="px-4 py-3 font-semibold">{{ $row->customer?->name }}</td>
+                    <td class="px-4 py-3">{{ $row->created_at?->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }}</td>
+                    <td class="px-4 py-3 font-semibold">{{ $row->customer?->displayName() }}</td>
                     <td class="px-4 py-3">{{ $row->subject }}</td>
-                    <td class="px-4 py-3">{{ ucfirst($row->priority) }}</td>
-                    <td class="px-4 py-3">{{ ucfirst($row->status) }}</td>
-                    <td class="px-4 py-3">{{ $row->read_at?->format('M d, Y H:i') ?: 'Unread' }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\UiText::label($row->priority) }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\UiText::status($row->status) }}</td>
+                    <td class="px-4 py-3">{{ $row->read_at?->locale(app()->getLocale())->translatedFormat('M d, Y H:i') ?: __('application.unread_07b032b5') }}</td>
                     <td class="px-4 py-3">
                         <div class="hs-dropdown relative inline-flex [--placement:bottom-end] [--strategy:fixed]">
-                            <button type="button" class="hs-dropdown-toggle rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold dark:border-slate-700">Actions</button>
+                            <button type="button" class="hs-dropdown-toggle rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold dark:border-slate-700">{{ __('application.actions_c3cd636a') }}</button>
                             <div class="hs-dropdown-menu z-[90] mt-2 hidden min-w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                 @if ($row->status === 'draft')
-                                    <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="openEdit({{ $row->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5">Edit</button>
+                                    <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="openEdit({{ $row->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5">{{ __('application.edit_5301648d') }}</button>
                                 @endif
-                                <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="confirmDelete({{ $row->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">Delete</button>
+                                <button type="button" onclick="this.closest('.hs-dropdown')?.querySelector('.hs-dropdown-toggle')?.click()" wire:click="confirmDelete({{ $row->id }})" class="block w-full rounded-lg px-3 py-2 text-left text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10">{{ __('application.delete_f6fdbe48') }}</button>
                             </div>
                         </div>
                     </td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">No messages found.</td></tr>
+                <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500">{{ __('application.no_messages_found_14000dad') }}</td></tr>
             @endforelse
         </x-table>
         <div class="mt-4">{{ $this->customerMessages->links() }}</div>
@@ -174,47 +174,47 @@ $templates = computed(fn () => MessageTemplate::where('is_active', true)->orderB
     <x-modal name="customer-message-form" maxWidth="2xl" :closeOnBackdrop="false">
         <form class="flex min-h-full flex-col sm:max-h-[calc(100vh-3rem)]">
             <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-700">
-                <h2 class="text-lg font-semibold">{{ $messageId ? 'Edit Customer Message' : 'Send Customer Message' }}</h2>
+                <h2 class="text-lg font-semibold">{{ $messageId ? __('terminology.edit_customer_message_1a8dd21b') : __('terminology.send_customer_message_ebccecc8') }}</h2>
             </div>
             <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5">
                 <div class="grid gap-4 md:grid-cols-2">
-                    <x-form-select label="Template" name="template_id" wire:model="template_id" wire:change="applyTemplate">
-                        <option value="">No template</option>
+                    <x-form-select label="{{ __('application.template_3ec1ae06') }}" name="template_id" wire:model="template_id" wire:change="applyTemplate">
+                        <option value="">{{ __('application.no_template_aaeb1831') }}</option>
                         @foreach ($this->templates as $template)
                             <option value="{{ $template->id }}">{{ $template->name }}</option>
                         @endforeach
                     </x-form-select>
-                    <x-form-select label="Customer" name="customer_id" wire:model="customer_id" required>
-                        <option value="">Select customer</option>
+                    <x-form-select label="{{ __('application.customer_0e85749a') }}" name="customer_id" wire:model="customer_id" required>
+                        <option value="">{{ __('application.select_customer_6817176b') }}</option>
                         @foreach ($this->customers as $customer)
-                            <option value="{{ $customer->id }}">{{ $customer->name }} - {{ $customer->phone }}</option>
+                            <option value="{{ $customer->id }}">{{ $customer->displayName() }} - {{ $customer->phone }}</option>
                         @endforeach
                     </x-form-select>
-                    <x-form-input label="Subject" name="subject" wire:model="subject" required class="md:col-span-2" />
-                    <x-form-textarea label="Message" name="message" wire:model="message" rows="7" required class="md:col-span-2" />
-                    <x-form-input label="Attachment" name="attachment" type="file" wire:model="attachment" />
-                    <x-form-select label="Priority" name="priority" wire:model="priority" required>
+                    <x-form-input label="{{ __('application.subject_8d183dbd') }}" name="subject" wire:model="subject" required class="md:col-span-2" />
+                    <x-form-textarea label="{{ __('application.message_68f4145f') }}" name="message" wire:model="message" rows="7" required class="md:col-span-2" />
+                    <x-form-input label="{{ __('application.attachment_83a56249') }}" name="attachment" type="file" wire:model="attachment" />
+                    <x-form-select label="{{ __('application.priority_886cbff9') }}" name="priority" wire:model="priority" required>
                         @foreach (['low', 'normal', 'high', 'urgent'] as $option)
-                            <option value="{{ $option }}">{{ ucfirst($option) }}</option>
+                            <option value="{{ $option }}">{{ \App\Support\UiText::label($option) }}</option>
                         @endforeach
                     </x-form-select>
                 </div>
             </div>
             <div class="flex flex-col-reverse gap-2 border-t border-slate-200 px-5 py-4 dark:border-slate-700 sm:flex-row sm:justify-end">
-                <button type="button" x-on:click="$dispatch('close-modal', 'customer-message-form')" class="erp-btn-secondary">Cancel</button>
-                <button type="button" wire:click="saveMessage('draft')" class="erp-btn-secondary">Save Draft</button>
-                <button type="button" wire:click="saveMessage('sent')" class="erp-btn-primary">Send</button>
+                <button type="button" x-on:click="$dispatch('close-modal', 'customer-message-form')" class="erp-btn-secondary">{{ __('application.cancel_77dfd213') }}</button>
+                <button type="button" wire:click="saveMessage('draft')" class="erp-btn-secondary">{{ __('application.save_draft_cc1316dd') }}</button>
+                <button type="button" wire:click="saveMessage('sent')" class="erp-btn-primary">{{ __('application.send_9bc2575c') }}</button>
             </div>
         </form>
     </x-modal>
 
     <x-modal name="delete-customer-message" maxWidth="md" :closeOnBackdrop="false">
         <div class="p-5">
-            <h2 class="text-lg font-semibold">Confirm Delete</h2>
-            <p class="mt-2 text-sm text-slate-500">Are you sure you want to delete this message?</p>
+            <h2 class="text-lg font-semibold">{{ __('application.confirm_delete_59e5bdd4') }}</h2>
+            <p class="mt-2 text-sm text-slate-500">{{ __('application.are_you_sure_you_want_to_delete_this_message_59cd3c31') }}</p>
             <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button type="button" x-on:click="$dispatch('close-modal', 'delete-customer-message')" class="erp-btn-secondary">Cancel</button>
-                <button type="button" wire:click="deleteMessage" class="rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-white">Delete</button>
+                <button type="button" x-on:click="$dispatch('close-modal', 'delete-customer-message')" class="erp-btn-secondary">{{ __('application.cancel_77dfd213') }}</button>
+                <button type="button" wire:click="deleteMessage" class="rounded-lg bg-red-500 px-3 py-2 text-sm font-semibold text-white">{{ __('application.delete_f6fdbe48') }}</button>
             </div>
         </div>
     </x-modal>

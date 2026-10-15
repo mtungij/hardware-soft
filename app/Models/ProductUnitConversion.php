@@ -32,15 +32,15 @@ class ProductUnitConversion extends Model
             $unit = Unit::withoutGlobalScopes()->find($conversion->unit_id);
 
             if (! $product || ! $unit || (int) $product->company_id !== (int) $conversion->company_id || (int) $unit->company_id !== (int) $conversion->company_id) {
-                throw ValidationException::withMessages(['unit_id' => 'Product and unit must belong to the same company.']);
+                throw ValidationException::withMessages(['unit_id' => __('application.product_and_unit_must_belong_to_the_same_company_4c6c1a50')]);
             }
 
             if ((int) $product->unit_id === (int) $unit->id) {
-                throw ValidationException::withMessages(['unit_id' => 'The base stock unit cannot be configured as an alternative unit.']);
+                throw ValidationException::withMessages(['unit_id' => __('application.the_base_stock_unit_cannot_be_configured_as_an_alternative_unit_fd4704e5')]);
             }
 
             if ((float) $conversion->conversion_factor <= 0) {
-                throw ValidationException::withMessages(['conversion_factor' => 'Conversion factor must be greater than zero.']);
+                throw ValidationException::withMessages(['conversion_factor' => __('application.conversion_factor_must_be_greater_than_zero_2adf1cd3')]);
             }
 
         });

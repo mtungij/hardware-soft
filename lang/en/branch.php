@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Branch Information', 'branches' => 'Branches', 'name' => 'Branch Name', 'location' => 'Location', 'manager' => 'Manager'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/branch.php';

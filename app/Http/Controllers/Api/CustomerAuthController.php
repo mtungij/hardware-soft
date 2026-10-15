@@ -12,7 +12,6 @@ use App\Support\WhatsAppPhone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
@@ -32,23 +31,15 @@ class CustomerAuthController extends Controller
         } catch (\Throwable) {
             $phone = 'invalid';
         }
-        $account = CustomerAccount::withoutGlobalScopes()->where('login_phone', $phone)->first();
-
-        if (! $account || ! Hash::check($data['password'], $account->password)) {
-            throw ValidationException::withMessages(['login' => 'Invalid customer credentials.']);
-        }
-
-        if ($account->isSuspended()) {
-            return response()->json(['message' => 'Customer account is suspended.', 'status' => 'suspended'], 403);
-        }
+        $account = app(CustomerPortalCredentialService::class)->authenticate($phone, $data['password']);
 
         $account->forceFill(['last_login_at' => now()])->save();
 
         return response()->json([
-            'token' => $account->createToken($data['device_name'] ?? 'customer-portal')->plainTextToken,
+            'token' => $account->createToken($data['device_name'] ?? 'customer-portal', ['*'], now()->addHours(24))->plainTextToken,
             'token_type' => 'Bearer',
             'account' => $this->accountPayload($account),
-            'password_change_required' => (bool) $account->must_change_password,
+            'password_change_required' => false,
         ]);
     }
 
@@ -59,7 +50,7 @@ class CustomerAuthController extends Controller
             'phone' => ['required', 'string', 'max:30'],
             'business_name' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255', 'unique:customer_accounts,email'],
-            'password' => ['required', 'confirmed', Password::defaults()],
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
             'branch_name' => ['nullable', 'string', 'max:255'],
             'device_name' => ['nullable', 'string', 'max:100'],
         ]);
@@ -68,7 +59,7 @@ class CustomerAuthController extends Controller
         $customer = Customer::withoutGlobalScopes()->whereIn('phone', [$phone, '+'.$phone, '0'.substr($phone, 3)])->first();
 
         if ($customer?->portalAccounts()->exists()) {
-            throw ValidationException::withMessages(['phone' => 'A customer portal account already exists for this customer.']);
+            throw ValidationException::withMessages(['phone' => __('application.a_customer_portal_account_already_exists_for_this_customer_c1da8d27')]);
         }
 
         $account = DB::transaction(function () use ($data, $phone, $customer) {
@@ -113,20 +104,22 @@ class CustomerAuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
+        abort_unless($request->user() instanceof CustomerAccount, 403);
         $request->user()->currentAccessToken()?->delete();
 
-        return response()->json(['message' => 'Logged out successfully.']);
+        return response()->json(['message' => __('application.logged_out_successfully_8b0139c2')]);
     }
 
     public function changePassword(Request $request, CustomerPortalCredentialService $credentials): JsonResponse
     {
+        abort_unless($request->user() instanceof CustomerAccount, 403);
         $data = $request->validate([
             'current_password' => ['required', 'string'],
-            'password' => ['required', 'confirmed', Password::defaults()],
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
         ]);
         $credentials->changePassword($request->user(), $data['current_password'], $data['password']);
 
-        return response()->json(['message' => 'Password changed successfully.']);
+        return response()->json(['message' => __('application.password_changed_successfully_f7271564')]);
     }
 
     public function forgotPassword(Request $request, CustomerPortalCredentialService $credentials): JsonResponse
@@ -134,7 +127,7 @@ class CustomerAuthController extends Controller
         $data = $request->validate(['phone' => ['required', 'string', 'max:30']]);
         $credentials->requestRecovery($data['phone'], (string) Str::uuid());
 
-        return response()->json(['message' => 'If the phone is registered and eligible, recovery credentials have been queued.']);
+        return response()->json(['message' => __('application.if_the_phone_is_registered_and_eligible_recovery_credentials_have_been_queu_27b31e55')]);
     }
 
     private function accountPayload(CustomerAccount $account): array
@@ -147,7 +140,7 @@ class CustomerAuthController extends Controller
             'email' => $account->email,
             'status' => $account->status,
             'preferred_locale' => $account->preferred_locale ?: 'sw',
-            'must_change_password' => (bool) $account->must_change_password,
+            'must_change_password' => false,
             'otp_ready' => true,
             'google_login_ready' => true,
         ];

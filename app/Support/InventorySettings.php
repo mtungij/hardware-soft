@@ -101,7 +101,7 @@ class InventorySettings
      */
     public static function allowedSaleLocationsForUser(?User $user, int $branchId): array
     {
-        if ($user) {
+        if ($user && ! $user->hasRole('Super Admin', 'web')) {
             $locations = $user->permittedStockLocations('can_sell', $branchId)
                 ->filter(fn (StockLocation $location) => $location->can_sell && $location->is_sellable && $location->isActive())
                 ->values();
@@ -139,7 +139,11 @@ class InventorySettings
             return false;
         }
 
-        if ($user) {
+        if ($user && ((int) $location->company_id !== (int) $user->company_id || ! $user->canAccessBranch($location->branch_id))) {
+            return false;
+        }
+
+        if ($user && ! $user->hasRole('Super Admin', 'web')) {
             $hasPivotAccess = $user->stockLocations()
                 ->where('stock_locations.id', $location->id)
                 ->wherePivot('can_sell', true)

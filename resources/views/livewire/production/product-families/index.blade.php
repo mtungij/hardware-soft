@@ -194,10 +194,10 @@ $families = function () {
                         </label>
                     </div>
                     <label class="flex items-center gap-3 text-sm font-bold text-slate-800 dark:text-slate-200"><input type="checkbox" wire:model="active" class="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500">{{ __('production.product_families.active') }}</label>
-                    <label class="block text-sm font-bold text-slate-800 dark:text-slate-200">Production Method
+                    <label class="block text-sm font-bold text-slate-800 dark:text-slate-200">{{ __('application.production_method_92bcfef4') }}
                         <select data-testid="production-method" wire:model="production_method" class="mt-1 block min-h-11 w-full rounded-lg border-slate-300 bg-white dark:border-slate-700 dark:bg-slate-900">
-                            <option value="machine_mould">Machine + Mould</option>
-                            <option value="mould_only">Mould Only</option>
+                            <option value="machine_mould">{{ __('application.machine_mould_ff498316') }}</option>
+                            <option value="mould_only">{{ __('application.mould_only_59c6f80b') }}</option>
                         </select>
                     </label>
 

@@ -41,6 +41,7 @@ use Livewire\Volt\Volt;
 
 beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
+    $this->withSession(['staff_locale' => 'en']);
     config()->set('gowa.url', 'https://notify.buildcore.site');
     config()->set('gowa.username', 'gowa-user');
     config()->set('gowa.password', 'gowa-secret');

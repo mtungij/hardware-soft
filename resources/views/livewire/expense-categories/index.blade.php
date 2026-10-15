@@ -32,43 +32,43 @@ $save = function () {
     ExpenseCategory::query()->updateOrCreate(['id' => $this->editingId], $this->validate());
     $this->reset(['editingId', 'name', 'description']);
     $this->status = 'active';
-    session()->flash('success', 'Expense category saved.');
+    session()->flash('success', __('application.expense_category_saved_75745a2d'));
 };
 
 $delete = function (int $id) {
     $category = ExpenseCategory::withCount('expenses')->findOrFail($id);
     if ($category->expenses_count > 0) {
-        session()->flash('error', 'Cannot delete a category with expenses.');
+        session()->flash('error', __('application.cannot_delete_a_category_with_expenses_9244feca'));
         return;
     }
     $category->delete();
-    session()->flash('success', 'Expense category deleted.');
+    session()->flash('success', __('application.expense_category_deleted_e2534bbb'));
 };
 
 ?>
 
 <div>
-    <x-page-header title="Expense Categories" description="Manage operating cost groups." :breadcrumbs="['Dashboard' => route('dashboard'), 'Expenses' => route('expenses.index'), 'Categories' => null]" />
+    <x-page-header title="{{ __('application.expense_categories_444fa32c') }}" description="{{ __('application.manage_operating_cost_groups_9fb293b9') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Expenses' => route('expenses.index'), 'Categories' => null]" />
 
     <div class="grid gap-6 xl:grid-cols-[380px_1fr]">
-        <x-card :title="$editingId ? 'Edit Category' : 'Create Category'">
+        <x-card :title="$editingId ? __('application.edit_category_71b97a73') : __('application.create_category_9096c2ac')">
             <form wire:submit="save" class="space-y-4">
-                <x-form-input label="Name" name="name" wire:model="name" required />
-                <label class="block text-sm font-bold">Description
+                <x-form-input label="{{ __('application.name_709a2322') }}" name="name" wire:model="name" required />
+                <label class="block text-sm font-bold">{{ __('application.description_55f8ebc8') }}
                     <textarea wire:model="description" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
                 </label>
-                <label class="block text-sm font-bold">Status
+                <label class="block text-sm font-bold">{{ __('application.status_bae7d5be') }}
                     <select wire:model="status" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
+                        <option value="active">{{ __('application.active_a733b809') }}</option>
+                        <option value="inactive">{{ __('application.inactive_09af574c') }}</option>
                     </select>
                 </label>
-                <button class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Save Category</button>
+                <button class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ __('application.save_category_a1f54af4') }}</button>
             </form>
         </x-card>
 
-        <x-card title="Categories">
-            <input wire:model.live.debounce.300ms="search" class="mb-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search categories">
+        <x-card title="{{ __('application.categories_6ccb6007') }}">
+            <input wire:model.live.debounce.300ms="search" class="mb-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ __('application.search_categories_259c54d9') }}">
             @php
                 $categories = ExpenseCategory::query()
                     ->when($search, fn ($query) => $query->where('name', 'like', "%{$search}%"))
@@ -76,15 +76,15 @@ $delete = function (int $id) {
                     ->latest()
                     ->paginate(10);
             @endphp
-            <x-table :headers="['Name', 'Expenses', 'Status', 'Actions']">
+            <x-table :headers="[__('application.name_709a2322'), __('application.expenses_8d437dbf'), __('application.status_bae7d5be'), __('application.actions_c3cd636a')]">
                 @foreach ($categories as $category)
                     <tr>
                         <td class="px-4 py-3 font-bold">{{ $category->name }}</td>
                         <td class="px-4 py-3">{{ $category->expenses_count }}</td>
-                        <td class="px-4 py-3">{{ ucfirst($category->status) }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\UiText::status($category->status) }}</td>
                         <td class="px-4 py-3 text-right">
-                            <button wire:click="edit({{ $category->id }})" class="text-sm font-bold text-build-orange">Edit</button>
-                            <button wire:click="delete({{ $category->id }})" wire:confirm="Delete category?" class="ml-3 text-sm font-bold text-red-600">Delete</button>
+                            <button wire:click="edit({{ $category->id }})" class="text-sm font-bold text-build-orange">{{ __('application.edit_5301648d') }}</button>
+                            <button wire:click="delete({{ $category->id }})" wire:confirm="{{ __('application.delete_category_bb2879a4') }}" class="ml-3 text-sm font-bold text-red-600">{{ __('application.delete_f6fdbe48') }}</button>
                         </td>
                     </tr>
                 @endforeach

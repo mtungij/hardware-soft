@@ -1,5 +1,5 @@
 @props([
-    'searchPlaceholder' => 'Search records...',
+    'searchPlaceholder' => __('application.search_records_c6b63db5'),
 ])
 
 @php
@@ -12,8 +12,8 @@
         <input class="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none ring-build-orange/20 focus:border-build-orange focus:ring-4 dark:border-slate-700 dark:bg-slate-950 dark:text-white" placeholder="{{ $searchPlaceholder }}">
     </div>
     <div class="flex flex-wrap gap-2">
-        <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ \App\Support\UiText::translate('Filters') }}</button>
-        <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ \App\Support\UiText::translate('Export') }}</button>
+        <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ \App\Support\UiText::translate(__('application.filters_96e57821')) }}</button>
+        <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ \App\Support\UiText::translate(__('application.export_f3e4fadb')) }}</button>
         {{ $slot }}
     </div>
 </div>

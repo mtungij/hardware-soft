@@ -6,6 +6,7 @@ use App\Models\Company;
 use App\Models\GoodsReceivingNote;
 use App\Models\Purchase;
 use App\Models\WhatsAppRecipient;
+use App\Support\UiText;
 use Illuminate\Support\Facades\Storage;
 
 class WhatsAppPurchaseNotificationService
@@ -94,13 +95,13 @@ class WhatsAppPurchaseNotificationService
         $date = optional($purchase->purchase_date)->format('Y-m-d')
             ?: now()->format('Y-m-d');
 
-        $filename = 'PO-'.$supplierSlug.'-'.$date.'.pdf';
+        $filename = 'PO-'.$supplierSlug.'-'.$date.'-'.$this->localization->language($company).'.pdf';
 
         $path = 'whatsapp/'.$company->id.'/purchase-orders/'.$filename;
 
         Storage::disk('local')->put(
             $path,
-            $this->purchaseOrderPdf->pdfBinary($purchase)
+            UiText::withLocale($this->localization->language($company), fn () => $this->purchaseOrderPdf->pdfBinary($purchase))
         );
 
         return $path;

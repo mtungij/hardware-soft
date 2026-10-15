@@ -18,7 +18,7 @@ class ProductImageService
         $companyId = (int) $product->company_id;
 
         if ($companyId < 1) {
-            throw new RuntimeException('A company is required before storing a product image.');
+            throw new RuntimeException(__('application.a_company_is_required_before_storing_a_product_image_53d6a8ec'));
         }
 
         [$contents, $extension] = $this->optimizedImage($upload);
@@ -26,7 +26,7 @@ class ProductImageService
         $path = "products/{$companyId}/{$filename}";
 
         if (! Storage::disk('public')->put($path, $contents)) {
-            throw new RuntimeException('The product image could not be stored.');
+            throw new RuntimeException(__('application.the_product_image_could_not_be_stored_66795cd1'));
         }
 
         return $path;
@@ -60,14 +60,14 @@ class ProductImageService
     private function optimizedImage(UploadedFile $upload): array
     {
         if (! extension_loaded('gd')) {
-            throw new RuntimeException('The GD extension is required to process product images.');
+            throw new RuntimeException(__('application.the_gd_extension_is_required_to_process_product_images_b87086ef'));
         }
 
         $sourcePath = $upload->getRealPath();
         $details = @getimagesize($sourcePath);
 
         if ($details === false || ! isset($details[0], $details[1], $details['mime'])) {
-            throw new RuntimeException('The uploaded file is not a readable image.');
+            throw new RuntimeException(__('application.the_uploaded_file_is_not_a_readable_image_ce65636d'));
         }
 
         $source = match ($details['mime']) {
@@ -78,7 +78,7 @@ class ProductImageService
         };
 
         if ($source === false) {
-            throw new RuntimeException('The uploaded image format is not supported.');
+            throw new RuntimeException(__('application.the_uploaded_image_format_is_not_supported_6050139b'));
         }
 
         try {
@@ -94,7 +94,7 @@ class ProductImageService
             $target = imagecreatetruecolor($targetWidth, $targetHeight);
 
             if ($target === false) {
-                throw new RuntimeException('The product image could not be resized.');
+                throw new RuntimeException(__('application.the_product_image_could_not_be_resized_e3e4d48f'));
             }
 
             try {
@@ -103,7 +103,7 @@ class ProductImageService
                 imagealphablending($target, true);
 
                 if (! imagecopyresampled($target, $source, 0, 0, 0, 0, $targetWidth, $targetHeight, $width, $height)) {
-                    throw new RuntimeException('The product image could not be resized.');
+                    throw new RuntimeException(__('application.the_product_image_could_not_be_resized_e3e4d48f'));
                 }
 
                 ob_start();
@@ -114,7 +114,7 @@ class ProductImageService
                 $contents = ob_get_clean();
 
                 if (! $written || ! is_string($contents) || $contents === '') {
-                    throw new RuntimeException('The product image could not be encoded.');
+                    throw new RuntimeException(__('application.the_product_image_could_not_be_encoded_40d5abd9'));
                 }
 
                 return [$contents, $supportsWebp ? 'webp' : 'jpg'];

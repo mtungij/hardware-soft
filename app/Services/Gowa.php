@@ -69,7 +69,7 @@ class Gowa
     private function request(string $deviceId): PendingRequest
     {
         if (blank($deviceId)) {
-            throw new InvalidArgumentException('A company WhatsApp Device ID is required.');
+            throw new InvalidArgumentException(__('application.a_company_whatsapp_device_id_is_required_e4e98c92'));
         }
 
         $url = config('gowa.url');
@@ -77,7 +77,7 @@ class Gowa
         $password = config('gowa.password');
 
         if (blank($url) || blank($username) || blank($password)) {
-            throw new RuntimeException('GOWA server credentials are not configured.');
+            throw new RuntimeException(__('application.gowa_server_credentials_are_not_configured_0c36f21d'));
         }
 
         return Http::baseUrl($url)
@@ -91,7 +91,7 @@ class Gowa
     private function assertReadableFile(string $path): void
     {
         if (! is_file($path) || ! is_readable($path)) {
-            throw new InvalidArgumentException('WhatsApp attachment is missing or unreadable.');
+            throw new InvalidArgumentException(__('application.whatsapp_attachment_is_missing_or_unreadable_5c9a3fd9'));
         }
     }
 }

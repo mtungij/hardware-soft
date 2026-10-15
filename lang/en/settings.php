@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Settings', 'company' => 'Company Settings', 'inventory' => 'Inventory Settings', 'email' => 'Email Settings', 'language' => 'Language'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/settings.php';

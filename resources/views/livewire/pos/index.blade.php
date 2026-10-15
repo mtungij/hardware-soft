@@ -30,6 +30,8 @@ state([
     'cart' => [],
     'payments' => [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']],
     'notes' => '',
+    'sale_date' => '',
+    'backdate_confirmed' => false,
     'quick_customer_branch_id' => '',
     'quick_customer_name' => '',
     'quick_customer_phone' => '',
@@ -54,6 +56,7 @@ state([
 ]);
 
 mount(function (InventoryService $inventory) {
+    $this->sale_date = app(\App\Support\PosSaleDate::class)->today(auth()->user()->company_id);
     $this->branch_id = (string) (auth()->user()->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
     $allowedLocations = collect(InventorySettings::allowedSaleLocationsForUser(auth()->user(), (int) $this->branch_id));
     $setting = InventorySettings::current();
@@ -387,21 +390,21 @@ $changeLineUnit = function (int $index, string $selection): void {
 $addProduct = function (int $productId, $locationId = null) {
     $locations = $this->stockByLocationForProduct($productId);
     if ($locations->isEmpty()) {
-        $this->addError('cart', 'This product has no stock in an authorised selling location.');
+        $this->addError('cart', __('application.this_product_has_no_stock_in_an_authorised_selling_location_e9e0b0d4'));
 
         return;
     }
     if (filled($locationId)) {
         $selectedLocation = $locations->firstWhere('id', (int) $locationId);
         if (! $selectedLocation) {
-            $this->addError('cart', 'Select an authorised location with available stock.');
+            $this->addError('cart', __('application.select_an_authorised_location_with_available_stock_a9122fba'));
 
             return;
         }
     } elseif ($locations->count() === 1) {
         $selectedLocation = $locations->first();
     } else {
-        $this->addError('cart', 'Select the source location for this product.');
+        $this->addError('cart', __('application.select_the_source_location_for_this_product_3003b6d9'));
 
         return;
     }
@@ -578,6 +581,8 @@ $quickAddCustomerFromWarning = function () {
 };
 
 $resetCompletedSale = function () {
+    $this->sale_date = $this->companyToday();
+    $this->backdate_confirmed = false;
     $this->cart = [];
     $this->payments = [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']];
     $this->customer_id = '';
@@ -597,6 +602,11 @@ $resetCompletedSale = function () {
     $this->payment_amount_manually_edited = false;
     $this->submission_token = (string) str()->uuid();
 };
+
+$companyToday = fn (): string => app(\App\Support\PosSaleDate::class)->today(auth()->user()->company_id);
+$canBackdate = fn (): bool => app(\App\Support\PosSaleDate::class)->canBackdate(auth()->user());
+$resetSaleDate = function (): void { $this->sale_date = $this->companyToday(); $this->backdate_confirmed = false; };
+$updatedSaleDate = function (): void { $this->backdate_confirmed = false; };
 
 $completeSale = function (InventoryService $inventory) {
     if ($this->processing) {
@@ -622,6 +632,8 @@ $completeSale = function (InventoryService $inventory) {
             }
         }
         $this->validate([
+            'sale_date' => ['required', 'date_format:Y-m-d'],
+            'backdate_confirmed' => ['boolean'],
             'stock_location_id' => ['nullable', 'exists:stock_locations,id'],
             'customer_id' => ['nullable', 'exists:customers,id'],
             'cart' => ['required', 'array', 'min:1'],
@@ -648,21 +660,21 @@ $completeSale = function (InventoryService $inventory) {
         ]);
 
         if ($this->discount_mode !== 'none' && ! $this->canApplyDiscount()) {
-            throw ValidationException::withMessages(['discount_mode' => 'You are not authorized to apply discounts.']);
+            throw ValidationException::withMessages(['discount_mode' => __('application.you_are_not_authorized_to_apply_discounts_ba8e3486')]);
         }
         if ($this->discount_mode === 'order' && $this->order_discount_type === 'percentage' && (float) $this->order_discount_value > 100) {
-            throw ValidationException::withMessages(['order_discount_value' => 'Discount percentage cannot exceed 100.']);
+            throw ValidationException::withMessages(['order_discount_value' => __('application.discount_percentage_cannot_exceed_100_d65f6729')]);
         }
         if ($this->discount_mode === 'order' && (float) $this->order_discount_value > $this->subtotal() && $this->order_discount_type === 'fixed') {
-            throw ValidationException::withMessages(['order_discount_value' => 'Order discount cannot exceed the subtotal.']);
+            throw ValidationException::withMessages(['order_discount_value' => __('application.order_discount_cannot_exceed_the_subtotal_2c684d13')]);
         }
         foreach ($this->cart as $index => $item) {
             $gross = (float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0);
             if ($this->discount_mode === 'item' && ($item['discount_type'] ?? null) === 'percentage' && (float) ($item['discount_value'] ?? 0) > 100) {
-                throw ValidationException::withMessages(["cart.{$index}.discount_value" => 'Discount percentage cannot exceed 100.']);
+                throw ValidationException::withMessages(["cart.{$index}.discount_value" => __('application.discount_percentage_cannot_exceed_100_d65f6729')]);
             }
             if ($this->discount_mode === 'item' && ($item['discount_type'] ?? null) === 'fixed' && (float) ($item['discount_value'] ?? 0) > $gross) {
-                throw ValidationException::withMessages(["cart.{$index}.discount_value" => 'Discount cannot exceed the line subtotal.']);
+                throw ValidationException::withMessages(["cart.{$index}.discount_value" => __('application.discount_cannot_exceed_the_line_subtotal_7ddcdf36')]);
             }
         }
 
@@ -698,6 +710,7 @@ $completeSale = function (InventoryService $inventory) {
                 'credit_notes' => $this->credit_notes ?: null,
             ],
             $this->submission_token,
+            dateDetails: ['sale_date' => $this->sale_date, 'backdate_confirmed' => $this->backdate_confirmed],
             discountDetails: [
                 'mode' => $this->discount_mode,
                 'type' => $this->order_discount_type,
@@ -709,7 +722,7 @@ $completeSale = function (InventoryService $inventory) {
         $this->redirectRoute('sales.receipt', $sale, navigate: true);
     } catch (ValidationException $exception) {
         $message = $exception->validator->errors()->first()
-            ?: 'Mauzo hayajakamilika. Tafadhali rekebisha tatizo lililoonyeshwa.';
+            ?: __('feedback.sale_incomplete');
 
         // Re-declare the field errors ourselves (instead of letting the exception
         // propagate) so we can also guarantee a "sale" fallback error: Livewire's
@@ -727,7 +740,7 @@ $completeSale = function (InventoryService $inventory) {
         session()->flash('error', $message);
     } catch (Throwable $exception) {
         report($exception);
-        $message = 'Mauzo hayajakamilika. '.$exception->getMessage();
+        $message = __('feedback.sale_incomplete').' '.\App\Support\UiText::feedback($exception->getMessage());
         $this->addError('sale', $message);
         session()->flash('error', $message);
     } finally {
@@ -750,19 +763,19 @@ $completeSale = function (InventoryService $inventory) {
         $remainingCredit = max(0, $this->grandTotal() - $this->paidTotal());
     @endphp
 
-    <x-page-header title="POS Sales" description="Build one sale from any authorised selling location." :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
+    <x-page-header title="{{ __('application.pos_sales_450223da') }}" description="{{ __('application.build_one_sale_from_any_authorised_selling_location_7444c542') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
 
     <div class="grid gap-6 xl:grid-cols-[1fr_440px]">
         <div class="space-y-5">
             <x-card>
                 <div class="grid gap-3 md:grid-cols-3">
-                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Search products...') }}">
-                    <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t('Barcode input') }}" @disabled(! $locationReady)>
+                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t(__('application.search_products_b73f756b')) }}">
+                    <input wire:model="barcode" wire:keydown.enter="addBarcode" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-white/5" placeholder="{{ $t(__('application.barcode_input_1f27b2ce')) }}" @disabled(! $locationReady)>
                     @if ($allowedLocations->count() > 1)
                         <label class="block text-xs font-black uppercase tracking-wide text-slate-500 dark:text-slate-400" for="selling-location">
-                            Preferred Location
-                            <select id="selling-location" wire:change="requestStockLocationChange($event.target.value)" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white" aria-label="{{ $t('Selling From') }}">
-                                <option value="" @selected(blank($stock_location_id))>All authorised locations</option>
+                            {{ __('application.preferred_location_b9aee26e') }}
+                            <select id="selling-location" wire:change="requestStockLocationChange($event.target.value)" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white" aria-label="{{ $t(__('application.selling_from_6a9ed70b')) }}">
+                                <option value="" @selected(blank($stock_location_id))>{{ __('application.all_authorised_locations_f976dd0d') }}</option>
                                 @foreach ($allowedLocations as $location)
                                     <option value="{{ $location->id }}" @selected((string) $stock_location_id === (string) $location->id)>{{ InventorySettings::stockLocationLabel($location) }}</option>
                                 @endforeach
@@ -770,7 +783,7 @@ $completeSale = function (InventoryService $inventory) {
                         </label>
                     @else
                         <div class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-3 text-sm font-bold text-cyan-800 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">
-                            Preferred Location: {{ $selectedSaleLocation ? InventorySettings::stockLocationLabel($selectedSaleLocation) : ($allowedLocations->first() ? InventorySettings::stockLocationLabel($allowedLocations->first()) : 'No authorised selling locations') }}
+                            {{ __('application.preferred_location_f2280795') }} {{ $selectedSaleLocation ? InventorySettings::stockLocationLabel($selectedSaleLocation) : ($allowedLocations->first() ? InventorySettings::stockLocationLabel($allowedLocations->first()) : __('terminology.no_authorised_selling_locations_77e5c9a0')) }}
                         </div>
                     @endif
                 </div>
@@ -780,17 +793,17 @@ $completeSale = function (InventoryService $inventory) {
             <x-card data-pos-section="price-mode">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <p class="text-sm font-black text-slate-700 dark:text-slate-200">Aina ya Bei</p>
-                        <span class="mt-1 inline-flex rounded-full px-3 py-1 text-xs font-black {{ $saleTypeBadge }}">{{ str($sale_type)->title() }}</span>
+                        <p class="text-sm font-black text-slate-700 dark:text-slate-200">{{ __('application.price_type_5fbd28cf') }}</p>
+                        <span class="mt-1 inline-flex rounded-full px-3 py-1 text-xs font-black {{ $saleTypeBadge }}">{{ \App\Support\UiText::label($sale_type) }}</span>
                     </div>
                     <div class="inline-flex rounded-lg border border-slate-200 bg-white p-1 dark:border-slate-700 dark:bg-navy-950">
                         <label class="cursor-pointer rounded-md px-3 py-2 text-sm font-black {{ $sale_type === 'retail' ? 'bg-blue-500 text-white' : 'text-slate-600 dark:text-slate-300' }}">
                             <input type="radio" wire:model.live="sale_type" value="retail" class="sr-only">
-                            Retail
+                            {{ __('application.retail_925dd33f') }}
                         </label>
                         <label class="cursor-pointer rounded-md px-3 py-2 text-sm font-black {{ $sale_type === 'wholesale' ? 'bg-emerald-500 text-white' : 'text-slate-600 dark:text-slate-300' }}">
                             <input type="radio" wire:model.live="sale_type" value="wholesale" class="sr-only">
-                            Wholesale
+                            {{ __('application.wholesale_21c1aef4') }}
                         </label>
                     </div>
                 </div>
@@ -809,7 +822,7 @@ $completeSale = function (InventoryService $inventory) {
             @endphp
             @unless ($locationReady)
                 <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                    No authorised selling locations are assigned to your account.
+                    {{ __('application.no_authorised_selling_locations_are_assigned_to_your_account_6b20d34a') }}
                 </div>
             @endunless
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -840,11 +853,11 @@ $completeSale = function (InventoryService $inventory) {
                             <p class="line-clamp-2 text-[20px] font-bold leading-6 text-[#111827]">{{ $product->displayName() }}</p>
                             <p class="mt-1 text-[14px] text-[#6B7280]">{{ $sellingUnitLabel ?: '-' }} · {{ $product->measurementType?->name ?? str($product->measurementCode())->title() }}</p>
                             @php $alsoSoldBy = $product->unitConversions->filter(fn ($row) => $row->active && $row->can_sell)->pluck('unit.short_name')->filter()->join(', '); @endphp
-                            @if ($alsoSoldBy)<p class="mt-0.5 text-[12px] font-semibold text-cyan-700">Also sold by {{ $alsoSoldBy }}</p>@endif
+                            @if ($alsoSoldBy)<p class="mt-0.5 text-[12px] font-semibold text-cyan-700">{{ __('application.also_sold_by_5af202d2') }} {{ $alsoSoldBy }}</p>@endif
                             @if ($product->sizeLabel())
-                                <p class="mt-0.5 text-[13px] font-semibold text-[#6B7280]">{{ $t('Size') }}: {{ $product->sizeLabel() }}</p>
+                                <p class="mt-0.5 text-[13px] font-semibold text-[#6B7280]">{{ $t(__('application.size_b7152342')) }}: {{ $product->sizeLabel() }}</p>
                             @endif
-                            <p class="mt-1 truncate text-[13px] text-[#6B7280]">SKU: {{ $product->sku ?: '-' }}</p>
+                            <p class="mt-1 truncate text-[13px] text-[#6B7280]">{{ __('application.sku_92c95a18') }} {{ $product->sku ?: '-' }}</p>
                         </div>
 
                         @if ($selectedPriceLocation)
@@ -855,9 +868,9 @@ $completeSale = function (InventoryService $inventory) {
                                     </span>
                                 @else
                                     <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
-                                        <p class="text-sm font-black text-amber-700">Price not set</p>
+                                        <p class="text-sm font-black text-amber-700">{{ __('application.price_not_set_40a3da1e') }}</p>
                                         <p class="mt-0.5 text-xs font-semibold text-amber-600">
-                                            Set {{ ucfirst($sale_type) }} price for {{ $selectedPriceLocation->name }} in Location Pricing.
+                                            {{ __('application.set_448ab73b') }} {{ \App\Support\UiText::label($sale_type) }} {{ __('application.price_for_f03e8721') }} {{ $selectedPriceLocation->name }} {{ __('application.in_location_pricing_ff622050') }}
                                         </p>
                                     </div>
                                 @endif
@@ -894,14 +907,14 @@ $completeSale = function (InventoryService $inventory) {
                                             </span>
                                         @else
                                             <span class="block text-xs font-bold text-amber-600">
-                                                Price not set
+                                                {{ __('application.price_not_set_40a3da1e') }}
                                             </span>
                                         @endif
                                     </span>
                                     <span class="shrink-0 rounded-md px-2 py-1 font-bold {{ $stockStateClasses }}">{{ \App\Support\NumberFormatter::quantity($sellingStock) }} {{ $sellingUnitLabel }}</span>
                                 </button>
                             @empty
-                                <p class="rounded-[10px] bg-[#FEE2E2] px-3 py-2 text-[13px] font-bold text-[#DC2626]">No stock in an authorised selling location</p>
+                                <p class="rounded-[10px] bg-[#FEE2E2] px-3 py-2 text-[13px] font-bold text-[#DC2626]">{{ __('application.no_stock_in_an_authorised_selling_location_27ad9144') }}</p>
                             @endforelse
                         </div>
                         @if ($showsBaseStock)
@@ -910,40 +923,55 @@ $completeSale = function (InventoryService $inventory) {
                             </p>
                         @endif
                         @if ($supportsFractionalSales)
-                            <span class="mt-2 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-black text-cyan-700">{{ $t('Fractional Sale') }}</span>
+                            <span class="mt-2 inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-black text-cyan-700">{{ $t(__('terminology.fractional_sale_d1af78e2')) }}</span>
                         @endif
                     </article>
                 @endforeach
             </div>
         </div>
 
-        <x-card title="Cart & Payment" class="xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">
+        <x-card title="{{ __('application.cart_payment_66e3b030') }}" class="xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:overflow-y-auto">
             <div class="space-y-3">
                 <div class="flex gap-2">
                     <select wire:model="customer_id" class="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="">{{ $t('Walk-in Customer') }}</option>
+                        <option value="">{{ $t(__('application.walk_in_customer_90cd7712')) }}</option>
                         @foreach (Customer::where('status', 'active')->where(fn ($query) => $query->where('is_system_customer', false)->orWhereNull('is_system_customer'))->orderBy('name')->get() as $customer)
-                            <option value="{{ $customer->id }}">{{ $customer->name }} / {{ $customer->customer_type }}</option>
+                            <option value="{{ $customer->id }}">{{ $customer->displayName() }} / {{ \App\Support\UiText::label($customer->customer_type) }}</option>
                         @endforeach
                     </select>
-                    <button type="button" wire:click="openQuickCustomerModal" class="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-cyan-200 bg-cyan-50 text-xl font-black leading-none text-cyan-700 transition hover:border-cyan-400 hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-200" title="{{ $t('Create Customer') }}" aria-label="{{ $t('Create Customer') }}">
+                    <button type="button" wire:click="openQuickCustomerModal" class="grid h-10 w-10 shrink-0 place-items-center rounded-lg border border-cyan-200 bg-cyan-50 text-xl font-black leading-none text-cyan-700 transition hover:border-cyan-400 hover:bg-cyan-100 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-200" title="{{ $t(__('application.create_customer_2bd83aec')) }}" aria-label="{{ $t(__('application.create_customer_2bd83aec')) }}">
                         +
                     </button>
                 </div>
                 @error('customer_id') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+                <section data-pos-section="sale-date" class="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                    <label for="pos-sale-date" class="block text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">{{ __('sale_dates.label') }}</label>
+                    <div class="mt-2 flex gap-2">
+                        <input id="pos-sale-date" type="date" wire:model.live="sale_date" max="{{ $this->companyToday() }}" @disabled(! $this->canBackdate()) class="min-w-0 flex-1 rounded-lg border-slate-200 disabled:bg-slate-100 dark:border-slate-700 dark:bg-navy-950">
+                        <button type="button" wire:click="resetSaleDate" class="rounded-lg border px-3 py-2 text-sm font-bold">{{ __('sale_dates.today') }}</button>
+                    </div>
+                    @error('sale_date') <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+                    @if ($sale_date < $this->companyToday())
+                        <p class="mt-3 text-sm text-amber-700 dark:text-amber-300">{{ __('sale_dates.warning') }}</p>
+                        <p class="mt-2 text-xs text-slate-500">{{ __('sale_dates.posting_help') }}</p>
+                        <label class="mt-3 flex items-start gap-2 text-sm font-bold"><input type="checkbox" wire:model="backdate_confirmed" class="mt-1 rounded border-slate-300">{{ __('sale_dates.confirm') }}</label>
+                        @error('backdate_confirmed') <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+                    @endif
+                </section>
+
 
                 <section data-pos-section="cart-discount-mode">
                     <label class="block text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">
-                        Aina ya Punguzo
+                        {{ __('application.discount_type_ab547ca1') }}
                     @if ($this->canApplyDiscount())
                         <select data-discount-mode-selector wire:model.live="discount_mode" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
-                            <option value="none">Hakuna</option>
-                            <option value="item">Kwa Kila Bidhaa</option>
-                            <option value="order">Jumla ya Sale</option>
+                            <option value="none">{{ __('application.none_6eef6648') }}</option>
+                            <option value="item">{{ __('application.per_item_675fd46e') }}</option>
+                            <option value="order">{{ __('application.sale_total_869b9ea6') }}</option>
                         </select>
                     @else
                         <select disabled aria-disabled="true" class="mt-1 block w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm font-semibold normal-case tracking-normal text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                            <option>Hakuna</option>
+                            <option>{{ __('application.none_6eef6648') }}</option>
                         </select>
                     @endif
                     </label>
@@ -953,15 +981,15 @@ $completeSale = function (InventoryService $inventory) {
                 @if ($this->usesCreditPayment())
                     <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
                         @if ($selectedCustomer)
-                            <div class="flex justify-between gap-3"><span>{{ $t('Customer') }}</span><span class="font-black text-right">{{ $selectedCustomer->name }}</span></div>
-                            <div class="mt-1 flex justify-between gap-3"><span>{{ $t('Current Outstanding Balance') }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($selectedCustomer->balance_amount) }}</span></div>
+                            <div class="flex justify-between gap-3"><span>{{ $t(__('application.customer_0e85749a')) }}</span><span class="font-black text-right">{{ $selectedCustomer->name }}</span></div>
+                            <div class="mt-1 flex justify-between gap-3"><span>{{ $t(__('terminology.current_outstanding_balance_6ac2c36b')) }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($selectedCustomer->balance_amount) }}</span></div>
                         @else
-                            <span class="inline-flex rounded-full bg-amber-200 px-2.5 py-1 text-xs font-black text-amber-900 dark:bg-amber-400/20 dark:text-amber-100">{{ $t('Unassigned Credit Sale') }}</span>
+                            <span class="inline-flex rounded-full bg-amber-200 px-2.5 py-1 text-xs font-black text-amber-900 dark:bg-amber-400/20 dark:text-amber-100">{{ $t(__('terminology.unassigned_credit_sale_4751f151')) }}</span>
                         @endif
                         <div class="mt-2 grid gap-1">
-                            <div class="flex justify-between gap-3"><span>{{ $t('Sale Total') }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span></div>
-                            <div class="flex justify-between gap-3"><span>{{ $t('Amount Paid Now') }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($this->paidTotal()) }}</span></div>
-                            <div class="flex justify-between gap-3"><span>{{ $t('Remaining Credit') }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($remainingCredit) }}</span></div>
+                            <div class="flex justify-between gap-3"><span>{{ $t(__('application.sale_total_869b9ea6')) }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span></div>
+                            <div class="flex justify-between gap-3"><span>{{ $t(__('terminology.amount_paid_now_f0f8eccc')) }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($this->paidTotal()) }}</span></div>
+                            <div class="flex justify-between gap-3"><span>{{ $t(__('terminology.remaining_credit_a500029f')) }}</span><span class="font-black">TZS {{ \App\Support\NumberFormatter::money($remainingCredit) }}</span></div>
                         </div>
                     </div>
                 @endif
@@ -992,24 +1020,24 @@ $completeSale = function (InventoryService $inventory) {
                             <div>
                                 <p class="font-bold">{{ $item['name'] }}</p>
                                 @if (! empty($item['size']))
-                                    <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ $t('Size') }}: {{ $item['size'] }}</p>
+                                    <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ $t(__('application.size_b7152342')) }}: {{ $item['size'] }}</p>
                                 @endif
                                 <p class="text-xs text-slate-500">{{ $item['sku'] }} / {{ $sellingUnitLabel }}</p>
-                                <p class="text-[11px] font-bold text-slate-500">{{ $item['measurement_type'] ?? 'Count' }}</p>
+                                <p class="text-[11px] font-bold text-slate-500">{{ $item['measurement_type'] ?? __('terminology.count_66e12969') }}</p>
                                 <div class="mt-1 flex flex-wrap gap-1.5">
-                                    <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-black {{ ($item['sale_type'] ?? 'retail') === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ str($item['sale_type'] ?? 'retail')->title() }}</span>
+                                    <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-black {{ ($item['sale_type'] ?? 'retail') === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300' }}">{{ \App\Support\UiText::label($item['sale_type'] ?? 'retail') }}</span>
                                     @if ($isFractionalSale)
-                                        <span class="inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-black text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-200">{{ $t('Fractional') }}</span>
+                                        <span class="inline-flex rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-black text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-200">{{ $t(__('terminology.fractional_5de5f3ad')) }}</span>
                                     @endif
                                 </div>
                             </div>
-                            <button wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">{{ $t('Remove') }}</button>
+                            <button wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">{{ $t(__('application.remove_e963907d')) }}</button>
                         </div>
                         <label class="mt-3 block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            Selling Unit
+                            {{ __('application.selling_unit_293a9282') }}
                             <select wire:change="changeLineUnit({{ $index }}, $event.target.value)" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
-                                <option value="default" @selected(($item['unit_selection'] ?? 'default') === 'default')>{{ $lineProduct?->sellingUnit?->short_name ?: $lineProduct?->unit?->short_name }} (default)</option>
-                                @if ((int) $lineProduct?->selling_unit_id !== (int) $lineProduct?->unit_id)<option value="base" @selected(($item['unit_selection'] ?? '') === 'base')>{{ $lineProduct?->unit?->short_name }} (base)</option>@endif
+                                <option value="default" @selected(($item['unit_selection'] ?? 'default') === 'default')>{{ $lineProduct?->sellingUnit?->short_name ?: $lineProduct?->unit?->short_name }} {{ __('application.default_c8283858') }}</option>
+                                @if ((int) $lineProduct?->selling_unit_id !== (int) $lineProduct?->unit_id)<option value="base" @selected(($item['unit_selection'] ?? '') === 'base')>{{ $lineProduct?->unit?->short_name }} {{ __('application.base_5ee057cb') }}</option>@endif
                                 @foreach ($lineConversions as $lineConversion)
                                     <option value="{{ $lineConversion->id }}" @selected((string) ($item['unit_selection'] ?? '') === (string) $lineConversion->id)>{{ $lineConversion->unit?->short_name }} · 1 = {{ \App\Support\NumberFormatter::quantity($lineConversion->conversion_factor) }} {{ $lineProduct?->unit?->short_name }}</option>
                                 @endforeach
@@ -1018,35 +1046,35 @@ $completeSale = function (InventoryService $inventory) {
                             @error("cart.{$index}.product_unit_conversion_id")<span class="mt-1 block text-xs font-semibold normal-case text-red-600">{{ $message }}</span>@enderror
                         </label>
                         <label class="mt-3 block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                            Selling From
+                            {{ __('application.selling_from_6a9ed70b') }}
                             <select wire:change="changeLineLocation({{ $index }}, $event.target.value)" wire:loading.attr="disabled" wire:target="changeLineLocation" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case tracking-normal text-slate-900 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
                                 @foreach($lineLocationBalances as $locationBalance)
                                     <option value="{{ $locationBalance['id'] }}" @selected((int)($item['stock_location_id'] ?? 0)===(int)$locationBalance['id'])>{{ $locationBalance['name'] }} · {{ \App\Support\NumberFormatter::quantity($usesDirectConversion ? $locationBalance['stock'] / $conversionFactor : $locationBalance['stock'] * $conversionFactor) }} {{ $sellingUnitLabel }}</option>
                                 @endforeach
                             </select>
-                            <span class="mt-1 block text-[11px] font-bold normal-case tracking-normal text-emerald-700 dark:text-emerald-300">Stock at {{ $selectedLineLocation['name'] ?? ($item['stock_location_name'] ?? 'selected location') }}: {{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span>
+                            <span class="mt-1 block text-[11px] font-bold normal-case tracking-normal text-emerald-700 dark:text-emerald-300">{{ __('application.stock_at_cbfdc0dd') }} {{ $selectedLineLocation['name'] ?? ($item['stock_location_name'] ?? 'selected location') }}: {{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span>
                             @error("cart.{$index}.stock_location_id")<span class="mt-1 block text-xs font-semibold normal-case tracking-normal text-red-600">{{ $message }}</span>@enderror
                         </label>
                         <div class="mt-3 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                {{ $t('Qty') }} ({{ $sellingUnitLabel ?: '-' }})
+                                {{ $t(__('application.qty_1e5ff9e5')) }} ({{ $sellingUnitLabel ?: '-' }})
                                 <input wire:model.live.debounce.400ms="cart.{{ $index }}.quantity" type="number" inputmode="decimal" step="{{ $isFractionalSale ? '0.0001' : '1' }}" min="{{ $minimumQuantity }}" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal text-slate-900 dark:border-slate-700 dark:bg-navy-950 dark:text-white">
                             </label>
                             <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                {{ $t('Unit Price') }}
+                                {{ $t(__('application.unit_price_1eea68d0')) }}
                                 <input type="text" value="TZS {{ \App\Support\NumberFormatter::money($unitPrice) }}" readonly aria-readonly="true" class="mt-1 w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-sm font-bold normal-case tracking-normal text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                             </label>
                             @if ($discount_mode === 'item')
                                 <div data-item-discount-editor class="contents">
                                     <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                        Aina ya Punguzo
+                                        {{ __('application.discount_type_ab547ca1') }}
                                         <select wire:model.live="cart.{{ $index }}.discount_type" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-semibold normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
-                                            <option value="fixed">Kiasi</option>
-                                            <option value="percentage">Asilimia</option>
+                                            <option value="fixed">{{ __('application.amount_43dc8532') }}</option>
+                                            <option value="percentage">{{ __('application.percentage_c4519ac7') }}</option>
                                         </select>
                                     </label>
                                     <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                        {{ $t('Discount') }} {{ ($item['discount_type'] ?? 'fixed') === 'percentage' ? '(%)' : '(TZS)' }}
+                                        {{ $t(__('application.discount_b524936d')) }} {{ ($item['discount_type'] ?? 'fixed') === 'percentage' ? '(%)' : '(TZS)' }}
                                         <input wire:model.live.debounce.300ms="cart.{{ $index }}.discount_value" type="number" inputmode="decimal" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1 text-sm font-semibold normal-case tracking-normal dark:border-slate-700 dark:bg-navy-950">
                                     </label>
                                 </div>
@@ -1055,17 +1083,17 @@ $completeSale = function (InventoryService $inventory) {
 
                         <div class="mt-2 grid gap-1 text-xs text-slate-500 dark:text-slate-400">
                             @if ($discount_mode === 'item')
-                                <div class="flex justify-between"><span>Punguzo</span><span>TZS {{ \App\Support\NumberFormatter::money($lineDiscount) }}</span></div>
+                                <div class="flex justify-between"><span>{{ __('application.discount_b524936d') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($lineDiscount) }}</span></div>
                             @endif
-                            <div class="flex justify-between font-black text-slate-800 dark:text-slate-100"><span>Line Total</span><span>TZS {{ \App\Support\NumberFormatter::money(max(0, ($quantity * $unitPrice) - $lineDiscount + ($quantity * $taxPerUnit))) }}</span></div>
+                            <div class="flex justify-between font-black text-slate-800 dark:text-slate-100"><span>{{ __('application.line_total_2d1a09ef') }}</span><span>TZS {{ \App\Support\NumberFormatter::money(max(0, ($quantity * $unitPrice) - $lineDiscount + ($quantity * $taxPerUnit))) }}</span></div>
                             @if ($isFractionalSale || abs($conversionFactor - 1) > 0.0001)
-                                <div class="flex justify-between"><span>{{ $t('Available Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span></div>
+                                <div class="flex justify-between"><span>{{ $t(__('application.available_stock_f5ba03b5')) }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableSellingQuantity) }} {{ $sellingUnitLabel }}</span></div>
                                 @if ($baseUnitLabel && ($baseUnitLabel !== $sellingUnitLabel || abs($conversionFactor - 1) > 0.0001))
-                                    <div class="flex justify-between"><span>{{ $t('Available Base Stock') }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableBaseQuantity) }} {{ $baseUnitLabel }}</span></div>
-                                    <div class="flex justify-between"><span>{{ $t('Unit Conversion') }}</span><span>{{ $usesDirectConversion ? '1 '.$sellingUnitLabel.' = '.\App\Support\NumberFormatter::quantity($conversionFactor).' '.$baseUnitLabel : '1 '.$baseUnitLabel.' = '.\App\Support\NumberFormatter::quantity($conversionFactor).' '.$sellingUnitLabel }}</span></div>
+                                    <div class="flex justify-between"><span>{{ $t(__('terminology.available_base_stock_2a2c9072')) }}</span><span>{{ \App\Support\NumberFormatter::quantity($availableBaseQuantity) }} {{ $baseUnitLabel }}</span></div>
+                                    <div class="flex justify-between"><span>{{ $t(__('terminology.unit_conversion_76a96316')) }}</span><span>{{ $usesDirectConversion ? '1 '.$sellingUnitLabel.' = '.\App\Support\NumberFormatter::quantity($conversionFactor).' '.$baseUnitLabel : '1 '.$baseUnitLabel.' = '.\App\Support\NumberFormatter::quantity($conversionFactor).' '.$sellingUnitLabel }}</span></div>
                                 @endif
-                                <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t('Selling Quantity') }}</span><span>{{ \App\Support\NumberFormatter::quantity($quantity) }} {{ $sellingUnitLabel }}</span></div>
-                                <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t('Base Quantity Deducted') }}</span><span>{{ \App\Support\NumberFormatter::quantity($baseQuantity) }} {{ $baseUnitLabel }}</span></div>
+                                <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t(__('application.selling_quantity_a92a7f90')) }}</span><span>{{ \App\Support\NumberFormatter::quantity($quantity) }} {{ $sellingUnitLabel }}</span></div>
+                                <div class="flex justify-between font-black text-slate-700 dark:text-slate-200"><span>{{ $t(__('terminology.base_quantity_deducted_af425892')) }}</span><span>{{ \App\Support\NumberFormatter::quantity($baseQuantity) }} {{ $baseUnitLabel }}</span></div>
                             @endif
                         </div>
                         @error("cart.{$index}.quantity")<p class="mt-2 text-xs font-semibold text-red-600">{{ $message }}</p>@enderror
@@ -1077,15 +1105,15 @@ $completeSale = function (InventoryService $inventory) {
 
                 @if ($discount_mode === 'order')
                     <div data-order-discount-editor class="rounded-lg border border-orange-200 bg-orange-50 p-3 dark:border-orange-500/30 dark:bg-orange-500/10">
-                        <p class="text-xs font-black uppercase tracking-wide text-orange-700 dark:text-orange-200">Punguzo la Jumla</p>
+                        <p class="text-xs font-black uppercase tracking-wide text-orange-700 dark:text-orange-200">{{ __('application.total_discount_63987053') }}</p>
                         <div class="mt-2 grid gap-2 sm:grid-cols-2">
-                            <label class="text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">Aina
+                            <label class="text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">{{ __('application.type_3deb7456') }}
                                 <select wire:model.live="order_discount_type" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case dark:border-slate-700 dark:bg-navy-950">
-                                    <option value="fixed">Kiasi Maalum</option>
-                                    <option value="percentage">Asilimia</option>
+                                    <option value="fixed">{{ __('application.fixed_amount_e6dbba2c') }}</option>
+                                    <option value="percentage">{{ __('application.percentage_c4519ac7') }}</option>
                                 </select>
                             </label>
-                            <label class="text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">Thamani {{ $order_discount_type === 'percentage' ? '(%)' : '(TZS)' }}
+                            <label class="text-xs font-black uppercase tracking-wide text-slate-600 dark:text-slate-300">{{ __('application.value_8dce170d') }} {{ $order_discount_type === 'percentage' ? '(%)' : '(TZS)' }}
                                 <input wire:model.live.debounce.300ms="order_discount_value" type="number" inputmode="decimal" min="0" step="0.01" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm font-semibold normal-case dark:border-slate-700 dark:bg-navy-950">
                             </label>
                             @error('order_discount_value') <p class="text-xs font-semibold text-red-600 sm:col-span-2">{{ $message }}</p> @enderror
@@ -1094,13 +1122,13 @@ $completeSale = function (InventoryService $inventory) {
                 @endif
 
                 <div class="space-y-2 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
-                    <div class="flex justify-between"><span>{{ $t('Subtotal') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->subtotal()) }}</span></div>
-                    <div class="flex justify-between"><span>{{ $t('Discount') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->discountTotal()) }}</span></div>
-                    <div class="flex justify-between"><span>{{ $t('Tax/VAT') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->taxTotal()) }}</span></div>
-                    <div class="flex justify-between text-lg font-black"><span>{{ $t('Grand Total') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span></div>
-                    <div class="flex justify-between"><span>{{ $t('Paid') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->paidTotal()) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t(__('application.subtotal_97f7359e')) }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->subtotal()) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t(__('application.discount_b524936d')) }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->discountTotal()) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t(__('application.tax_vat_5b85846e')) }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->taxTotal()) }}</span></div>
+                    <div class="flex justify-between text-lg font-black"><span>{{ $t(__('application.grand_total_91faafb1')) }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span></div>
+                    <div class="flex justify-between"><span>{{ $t(__('application.paid_dc9d4584')) }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->paidTotal()) }}</span></div>
                     @if ($this->paidTotal() < $this->grandTotal())
-                        <div class="flex justify-between"><span>{{ $t('Balance') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal() - $this->paidTotal()) }}</span></div>
+                        <div class="flex justify-between"><span>{{ $t(__('application.balance_90eef613')) }}</span><span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal() - $this->paidTotal()) }}</span></div>
                     @endif
                 </div>
 
@@ -1108,11 +1136,11 @@ $completeSale = function (InventoryService $inventory) {
                     @foreach ($payments as $index => $payment)
                         <div class="grid grid-cols-[1fr_1fr_auto] gap-2">
                             <select wire:model.live="payments.{{ $index }}.payment_method" wire:change="syncDefaultPaymentAmount" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                                <option value="cash">{{ $t('Cash') }}</option>
-                                <option value="mobile_money">{{ $t('Mobile Money') }}</option>
-                                <option value="bank">{{ $t('Bank') }}</option>
+                                <option value="cash">{{ $t(__('application.cash_758ec54e')) }}</option>
+                                <option value="mobile_money">{{ $t(__('application.mobile_money_6a38d1e4')) }}</option>
+                                <option value="bank">{{ $t(__('application.bank_9e89988c')) }}</option>
                                 @if ($this->canCreditSale())
-                                    <option value="credit">{{ $t('Credit') }}</option>
+                                    <option value="credit">{{ $t(__('application.credit_8a45d339')) }}</option>
                                 @endif
                             </select>
                             <span data-money-field wire:ignore class="block min-w-0">
@@ -1124,7 +1152,7 @@ $completeSale = function (InventoryService $inventory) {
                     @endforeach
                     @error('payments') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
                     @error('payments.*.amount') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
-                    <button type="button" wire:click="addPayment" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ $t('Add Payment') }}</button>
+                    <button type="button" wire:click="addPayment" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ $t(__('application.add_payment_b5118402')) }}</button>
                 </div>
 
                 @error('sale') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
@@ -1136,8 +1164,8 @@ $completeSale = function (InventoryService $inventory) {
                     @disabled($processing)
                     class="w-full rounded-xl bg-build-orange px-4 py-3 font-black text-white shadow-lg shadow-orange-500/20 disabled:cursor-wait disabled:opacity-60"
                 >
-                    <span wire:loading.remove wire:target="completeSale,continueWithoutCustomer">{{ $t('Complete Sale') }}</span>
-                    <span wire:loading wire:target="completeSale,continueWithoutCustomer">Processing...</span>
+                    <span wire:loading.remove wire:target="completeSale,continueWithoutCustomer">{{ $t(__('application.complete_sale_ebdd2780')) }}</span>
+                    <span wire:loading wire:target="completeSale,continueWithoutCustomer">{{ __('application.processing_272bc02e') }}</span>
                 </button>
             </div>
         </x-card>
@@ -1152,34 +1180,34 @@ $completeSale = function (InventoryService $inventory) {
             @disabled($processing)
             class="flex w-full items-center justify-between rounded-xl bg-build-orange px-4 py-3 font-black text-white disabled:cursor-wait disabled:opacity-60"
         >
-            <span>{{ $t('Checkout') }}</span>
+            <span>{{ $t(__('application.checkout_3ac8e9e5')) }}</span>
             <span>TZS {{ \App\Support\NumberFormatter::money($this->grandTotal()) }}</span>
         </button>
     </div>
 
     <x-modal name="unassigned-credit-warning" maxWidth="2xl">
         <div class="border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-            <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t('Customer Not Selected') }}</h2>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('This sale will be recorded as unassigned credit. It may be assigned to the correct customer later.') }}</p>
+            <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t(__('terminology.customer_not_selected_76bdea35')) }}</h2>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t(__('terminology.this_sale_will_be_recorded_as_unassigned_credit_it_may_be_assigned_to_the_c_fa2e28d8')) }}</p>
         </div>
         <div class="px-5 py-5">
             <div class="grid gap-3 sm:grid-cols-2">
-                <x-form-input label="Customer Name" name="temporary_customer_name" wire:model="temporary_customer_name" />
-                <x-form-input label="Phone Number" name="temporary_customer_phone" wire:model="temporary_customer_phone" />
-                <x-form-input label="Site or Project Name" name="project_name" wire:model="project_name" />
-                <x-form-input label="Vehicle Number" name="vehicle_number" wire:model="vehicle_number" />
-                <x-form-input label="Expected Payment Date" name="expected_payment_date" type="date" wire:model="expected_payment_date" />
+                <x-form-input label="{{ __('application.customer_name_75636316') }}" name="temporary_customer_name" wire:model="temporary_customer_name" />
+                <x-form-input label="{{ __('application.phone_number_ab25d61b') }}" name="temporary_customer_phone" wire:model="temporary_customer_phone" />
+                <x-form-input label="{{ __('application.site_or_project_name_91621028') }}" name="project_name" wire:model="project_name" />
+                <x-form-input label="{{ __('application.vehicle_number_8dc10331') }}" name="vehicle_number" wire:model="vehicle_number" />
+                <x-form-input label="{{ __('application.expected_payment_date_ca24c671') }}" name="expected_payment_date" type="date" wire:model="expected_payment_date" />
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 sm:col-span-2">
-                    {{ $t('Notes') }}
+                    {{ $t(__('application.notes_70440046')) }}
                     <textarea wire:model="credit_notes" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
                     @error('credit_notes') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </label>
             </div>
             <div class="mt-5 flex flex-wrap justify-end gap-2">
-                <button type="button" wire:click="selectCustomerFromWarning" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Select Customer') }}</button>
-                <button type="button" wire:click="quickAddCustomerFromWarning" class="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-black text-cyan-700 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">{{ $t('Quick Add Customer') }}</button>
-                <button type="button" wire:click="continueWithoutCustomer" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t('Continue Without Customer') }}</button>
-                <button type="button" wire:click="cancelUnassignedCreditWarning" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Cancel') }}</button>
+                <button type="button" wire:click="selectCustomerFromWarning" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t(__('terminology.select_customer_80b02e00')) }}</button>
+                <button type="button" wire:click="quickAddCustomerFromWarning" class="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-black text-cyan-700 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">{{ $t(__('terminology.quick_add_customer_1c08ed8c')) }}</button>
+                <button type="button" wire:click="continueWithoutCustomer" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t(__('terminology.continue_without_customer_83c2ee0e')) }}</button>
+                <button type="button" wire:click="cancelUnassignedCreditWarning" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t(__('application.cancel_77dfd213')) }}</button>
             </div>
         </div>
     </x-modal>
@@ -1187,25 +1215,25 @@ $completeSale = function (InventoryService $inventory) {
     <x-modal name="quick-customer" maxWidth="3xl">
         <div class="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 dark:border-slate-800">
             <div>
-                <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t('Create Customer') }}</h2>
-                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t('Add a credit customer without leaving POS.') }}</p>
+                <h2 class="text-lg font-black text-slate-900 dark:text-white">{{ $t(__('application.create_customer_2bd83aec')) }}</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ $t(__('terminology.add_a_credit_customer_without_leaving_pos_55797940')) }}</p>
             </div>
             <button type="button" x-on:click="$dispatch('close-modal', 'quick-customer')" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-black dark:border-slate-700">X</button>
         </div>
 
         <form wire:submit="saveQuickCustomer" class="max-h-[calc(100vh-9rem)] overflow-y-auto px-5 py-5">
             <div class="grid gap-4 md:grid-cols-2">
-                <x-form-input label="Customer Name" name="quick_customer_name" wire:model="quick_customer_name" required />
-                <x-form-input label="Phone" name="quick_customer_phone" wire:model="quick_customer_phone" />
-                <x-form-input label="Email" name="quick_customer_email" type="email" wire:model="quick_customer_email" />
+                <x-form-input label="{{ __('application.customer_name_75636316') }}" name="quick_customer_name" wire:model="quick_customer_name" required />
+                <x-form-input label="{{ __('application.phone_77064d52') }}" name="quick_customer_phone" wire:model="quick_customer_phone" />
+                <x-form-input label="{{ __('application.email_84add5b2') }}" name="quick_customer_email" type="email" wire:model="quick_customer_email" />
 
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                    {{ $t('Customer Type') }}
+                    {{ $t(__('application.customer_type_9f8a0a78')) }}
                     <select wire:model="quick_customer_type" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="cash">{{ $t('Cash') }}</option>
-                        <option value="credit">{{ $t('Credit') }} / {{ $t('Mkopo') }}</option>
-                        <option value="contractor">{{ $t('Contractor') }}</option>
-                        <option value="wholesale">{{ $t('Wholesale') }}</option>
+                        <option value="cash">{{ $t(__('application.cash_758ec54e')) }}</option>
+                        <option value="credit">{{ $t(__('application.credit_8a45d339')) }} / {{ $t(__('terminology.credit_8a45d339')) }}</option>
+                        <option value="contractor">{{ $t(__('application.contractor_76bb2328')) }}</option>
+                        <option value="wholesale">{{ $t(__('application.wholesale_21c1aef4')) }}</option>
                     </select>
                     @error('quick_customer_type') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </label>
@@ -1219,12 +1247,12 @@ $completeSale = function (InventoryService $inventory) {
                     district-name="quick_customer_district"
                 />
 
-                <x-money-input label="Opening Balance" name="quick_customer_opening_balance" wire:model="quick_customer_opening_balance" required />
+                <x-money-input label="{{ __('application.opening_balance_1a1a6305') }}" name="quick_customer_opening_balance" wire:model="quick_customer_opening_balance" required />
 
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                    {{ $t('Branch') }}
+                    {{ $t(__('application.branch_1627510b')) }}
                     <select wire:model="quick_customer_branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
-                        <option value="">{{ $t('Global customer') }}</option>
+                        <option value="">{{ $t(__('application.global_customer_20d38e15')) }}</option>
                         @foreach (Branch::orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach
@@ -1233,24 +1261,24 @@ $completeSale = function (InventoryService $inventory) {
                 </label>
 
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                    {{ $t('Status') }}
+                    {{ $t(__('application.status_bae7d5be')) }}
                     <select wire:model="quick_customer_status" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="active">{{ $t('Active') }}</option>
-                        <option value="inactive">{{ $t('Inactive') }}</option>
+                        <option value="active">{{ $t(__('application.active_a733b809')) }}</option>
+                        <option value="inactive">{{ $t(__('application.inactive_09af574c')) }}</option>
                     </select>
                     @error('quick_customer_status') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </label>
 
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">
-                    {{ $t('Address') }}
+                    {{ $t(__('application.address_d70f93df')) }}
                     <textarea wire:model="quick_customer_address" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
                     @error('quick_customer_address') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </label>
             </div>
 
             <div class="sticky bottom-0 -mx-5 mt-5 flex justify-end gap-2 border-t border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
-                <button type="button" x-on:click="$dispatch('close-modal', 'quick-customer')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t('Cancel') }}</button>
-                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t('Save Customer') }}</button>
+                <button type="button" x-on:click="$dispatch('close-modal', 'quick-customer')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t(__('application.cancel_77dfd213')) }}</button>
+                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-orange-500/25">{{ $t(__('application.save_customer_ffe9f842')) }}</button>
             </div>
         </form>
     </x-modal>

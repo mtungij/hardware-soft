@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\StockTransfer;
 use App\Models\User;
 use App\Support\AuthorizationScope;
+use App\Support\UiText;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
@@ -34,7 +35,7 @@ class StockTransferNoteService
     public function data(StockTransfer $transfer): array
     {
         $this->authorize($transfer, auth()->user());
-        abort_unless($transfer->status === 'completed', 409, 'Only completed transfers have a Stock Transfer Note.');
+        abort_unless($transfer->status === 'completed', 409, __('application.only_completed_transfers_have_a_stock_transfer_note_26762278'));
         $totals = $transfer->items->groupBy(fn ($item) => $item->product?->unit_id ?? 'unknown-'.$item->id)
             ->map(fn ($items) => ['unit' => $items->first()->product?->unit?->short_name ?? 'Unit unavailable', 'quantity' => $items->sum('quantity')]);
         $logo = null;
@@ -69,8 +70,8 @@ class StockTransferNoteService
             'margin_bottom' => 18,
             'tempDir' => $tempDir,
         ]);
-        $pdf->SetTitle('Stock Transfer Note '.$data['transfer']->transfer_number);
-        $pdf->SetHTMLFooter('<div style="text-align:center;font-size:8pt;color:#64748b">Page {PAGENO} of {nbpg}</div>');
+        $pdf->SetTitle(UiText::translate('Stock Transfer Note').' '.$data['transfer']->transfer_number);
+        $pdf->SetHTMLFooter('<div style="text-align:center;font-size:8pt;color:#64748b">'.e(UiText::translate('Page {PAGENO} of {nbpg}')).'</div>');
         $pdf->WriteHTML(view('documents.stock-transfer-note', [...$data, 'isPdf' => true])->render());
 
         return $pdf->Output('', Destination::STRING_RETURN);

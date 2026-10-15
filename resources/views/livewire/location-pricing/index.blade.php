@@ -97,7 +97,7 @@ $savePrices = function (LocationPriceService $service): void {
     abort_unless(auth()->user()?->can('location_prices.manage'), 403);
     $location = $this->locations()->firstWhere('id', (int) $this->stock_location_id);
     if (! $location) {
-        throw ValidationException::withMessages(['stock_location_id' => 'Select an authorized location.']);
+        throw ValidationException::withMessages(['stock_location_id' => __('application.select_an_authorized_location_d399ef45')]);
     }
     $this->validate([
         'rows' => ['array'],
@@ -138,7 +138,7 @@ $savePrices = function (LocationPriceService $service): void {
 ?>
 
 <div>
-    <x-page-header title="Location Pricing" description="Set selling and internal sale prices for each stock location." :breadcrumbs="['Dashboard' => route('dashboard'), 'Location Pricing' => null]" />
+    <x-page-header title="{{ __('application.location_pricing_cb6b8fd1') }}" description="{{ __('application.set_selling_and_internal_sale_prices_for_each_stock_location_a8189843') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Location Pricing' => null]" />
 
     @if (session('success'))
         <div class="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
@@ -148,26 +148,26 @@ $savePrices = function (LocationPriceService $service): void {
 
     <x-card>
         <div class="grid gap-3 md:grid-cols-3">
-            <label class="text-sm font-bold">Branch
+            <label class="text-sm font-bold">{{ __('application.branch_1627510b') }}
                 <select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                     @foreach ($this->branches() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
                 </select>
             </label>
-            <label class="text-sm font-bold">Stock Location
+            <label class="text-sm font-bold">{{ __('application.stock_location_50e3c4fe') }}
                 <select wire:model.live="stock_location_id" class="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 dark:bg-navy-950">
                     @foreach ($this->locations() as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach
                 </select>
                 @error('stock_location_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
             </label>
-            <label class="text-sm font-bold">Search Product or SKU
+            <label class="text-sm font-bold">{{ __('application.search_product_or_sku_13d8f54a') }}
                 <input wire:model.live.debounce.300ms="search" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950">
             </label>
         </div>
-        <p class="mt-3 text-xs text-slate-500">Blank Internal Sale Price uses the Product or Unit default selling price. Set a value here only when this location should use a different internal selling price. Showing up to 40 products.</p>
+        <p class="mt-3 text-xs text-slate-500">{{ __('application.blank_internal_sale_price_uses_the_product_or_unit_default_selling_price_se_e5785214') }}</p>
         <div class="mt-4 overflow-x-auto">
             <table class="min-w-full text-sm">
                 <thead><tr class="border-b text-left text-xs uppercase text-slate-500">
-                    <th class="p-2">Product</th><th class="p-2">Unit</th><th class="p-2">Default Retail</th><th class="p-2">Location Retail</th><th class="p-2">Default Wholesale</th><th class="p-2">Location Wholesale</th><th class="p-2">Internal Sale Price</th><th class="p-2">Active</th>
+                    <th class="p-2">{{ __('application.product_dd3b86d1') }}</th><th class="p-2">{{ __('application.unit_f6b935ab') }}</th><th class="p-2">{{ __('application.default_retail_afa9be19') }}</th><th class="p-2">{{ __('application.location_retail_9390ae68') }}</th><th class="p-2">{{ __('application.default_wholesale_2e6a539a') }}</th><th class="p-2">{{ __('application.location_wholesale_3809e513') }}</th><th class="p-2">{{ __('application.internal_sale_price_a9ea2d6d') }}</th><th class="p-2">{{ __('application.active_a733b809') }}</th>
                 </tr></thead>
                 <tbody>
                     @forelse ($rows as $rowKey => $row)
@@ -182,13 +182,13 @@ $savePrices = function (LocationPriceService $service): void {
                             <td class="p-2"><input wire:model="rows.{{ $rowKey }}.is_active" type="checkbox" @disabled(! auth()->user()->can('location_prices.manage'))></td>
                         </tr>
                     @empty
-                        <tr><td colspan="8" class="p-5 text-center text-slate-500">No products or authorized location found.</td></tr>
+                        <tr><td colspan="8" class="p-5 text-center text-slate-500">{{ __('application.no_products_or_authorized_location_found_8a1ec9d8') }}</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
         @can('location_prices.manage')
-            <button type="button" wire:click="savePrices" class="mt-4 rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save Location Prices</button>
+            <button type="button" wire:click="savePrices" class="mt-4 rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ __('application.save_location_prices_f23f4828') }}</button>
         @endcan
     </x-card>
 </div>

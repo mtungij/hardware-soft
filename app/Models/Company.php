@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use App\Models\CustomerAccount;
-
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,6 +12,7 @@ use Illuminate\Support\Facades\Schema;
 #[Fillable([
     'company_name',
     'quotation_template_key',
+    'customer_portal_show_prices',
     'business_type',
     'tagline',
     'tin_number',
@@ -44,6 +43,7 @@ class Company extends Model
         return [
             'show_tax_identifiers_on_receipt' => 'boolean',
             'manufacturing_enabled' => 'boolean',
+            'customer_portal_show_prices' => 'boolean',
         ];
     }
 
@@ -52,6 +52,11 @@ class Company extends Model
         try {
             if (! Schema::hasTable('companies')) {
                 return null;
+            }
+
+            $portalAccount = Auth::guard('customer')->user();
+            if ($portalAccount instanceof CustomerAccount && (request()->is('customer', 'customer/*') || request()->routeIs('customer.*') || Auth::getDefaultDriver() === 'customer')) {
+                return self::query()->find($portalAccount->company_id);
             }
 
             $user = Auth::guard('web')->user();

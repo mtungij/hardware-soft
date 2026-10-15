@@ -33,7 +33,7 @@ class PurchaseCostBreakdownService
             return ['rows' => [], 'total_cents' => 0];
         }
         if (! is_array($rawRows)) {
-            throw ValidationException::withMessages([$field => 'Cost breakdown must be a list.']);
+            throw ValidationException::withMessages([$field => __('application.cost_breakdown_must_be_a_list_06d6bae2')]);
         }
         $this->ensureDefaultTypes($companyId);
         $types = PurchaseCostType::query()->where('company_id', $companyId)->where('is_active', true)->get()->keyBy('id');
@@ -41,24 +41,24 @@ class PurchaseCostBreakdownService
         $totalCents = 0;
         foreach ($rawRows as $index => $raw) {
             if (! is_array($raw)) {
-                throw ValidationException::withMessages(["{$field}.{$index}" => 'Invalid cost component.']);
+                throw ValidationException::withMessages(["{$field}.{$index}" => __('application.invalid_cost_component_1e089bbb')]);
             }
             if (blank($raw['type_id'] ?? null) && blank($raw['amount'] ?? null) && blank($raw['reference'] ?? null) && blank($raw['notes'] ?? null)) {
                 continue;
             }
             $type = $types->get((int) ($raw['type_id'] ?? 0));
             if (! $type) {
-                throw ValidationException::withMessages(["{$field}.{$index}.type_id" => 'Select an active cost type for this company.']);
+                throw ValidationException::withMessages(["{$field}.{$index}.type_id" => __('application.select_an_active_cost_type_for_this_company_62c4571d')]);
             }
             $amount = trim((string) ($raw['amount'] ?? ''));
             if (! preg_match('/^\d+(?:\.\d{1,2})?$/', $amount)) {
-                throw ValidationException::withMessages(["{$field}.{$index}.amount" => 'Enter an amount with at most two decimal places.']);
+                throw ValidationException::withMessages(["{$field}.{$index}.amount" => __('application.enter_an_amount_with_at_most_two_decimal_places_33b16eee')]);
             }
             $cents = (int) round((float) $amount * 100);
             $reference = trim((string) ($raw['reference'] ?? ''));
             $notes = trim((string) ($raw['notes'] ?? ''));
             if (mb_strlen($reference) > 255 || mb_strlen($notes) > 1000) {
-                throw ValidationException::withMessages(["{$field}.{$index}" => 'Reference or notes are too long.']);
+                throw ValidationException::withMessages(["{$field}.{$index}" => __('application.reference_or_notes_are_too_long_a3b498de')]);
             }
             $rows[] = ['type' => $type, 'amount_cents' => $cents, 'reference' => $reference ?: null, 'notes' => $notes ?: null];
             $totalCents += $cents;

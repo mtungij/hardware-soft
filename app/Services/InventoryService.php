@@ -21,6 +21,7 @@ use App\Models\User;
 use App\Support\AuthorizationScope;
 use App\Support\InventorySettings;
 use App\Support\NumberFormatter;
+use App\Support\PosSaleDate;
 use App\Support\UiText;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\QueryException;
@@ -297,7 +298,7 @@ class InventoryService
                     if ($existing->movement_type !== 'direct_stock_in'
                         || (int) $existing->product_id !== (int) $product->id
                         || (int) $existing->stock_location_id !== (int) $location->id) {
-                        throw ValidationException::withMessages(['idempotency_key' => 'This submission key has already been used for another stock entry.']);
+                        throw ValidationException::withMessages(['idempotency_key' => __('application.this_submission_key_has_already_been_used_for_another_stock_entry_ba5f7906')]);
                     }
 
                     return filled($existing->posting_reference)
@@ -312,18 +313,18 @@ class InventoryService
             }
 
             if ($location->status !== 'active') {
-                throw ValidationException::withMessages(['stock_location_id' => 'Stock location must be active.']);
+                throw ValidationException::withMessages(['stock_location_id' => __('application.stock_location_must_be_active_e702f4f5')]);
             }
 
             $lines = $data['stock_in_lines'] ?? [];
 
             if (! is_array($lines) || $lines === []) {
-                throw ValidationException::withMessages(['stock_in_lines' => 'Add at least one stock quantity row.']);
+                throw ValidationException::withMessages(['stock_in_lines' => __('application.add_at_least_one_stock_quantity_row_f5b9665d')]);
             }
 
             foreach ($lines as $index => $line) {
                 if (! is_array($line)) {
-                    throw ValidationException::withMessages(["stock_in_lines.{$index}" => 'The stock quantity row is invalid.']);
+                    throw ValidationException::withMessages(["stock_in_lines.{$index}" => __('application.the_stock_quantity_row_is_invalid_c460dccf')]);
                 }
             }
 
@@ -333,7 +334,7 @@ class InventoryService
             ));
 
             if ($lines === []) {
-                throw ValidationException::withMessages(['stock_in_lines' => 'Enter a quantity greater than zero for at least one stock unit.']);
+                throw ValidationException::withMessages(['stock_in_lines' => __('application.enter_a_quantity_greater_than_zero_for_at_least_one_stock_unit_f58c536b')]);
             }
 
             $prepared = [];
@@ -343,17 +344,17 @@ class InventoryService
                 $rawConversionId = $line['product_unit_conversion_id'] ?? null;
 
                 if ($index > 0 && ! filled($rawConversionId)) {
-                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => 'Select a configured purchase unit for this row.']);
+                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => __('application.select_a_configured_purchase_unit_for_this_row_369be7e4')]);
                 }
 
                 if (filled($rawConversionId) && filter_var($rawConversionId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
-                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => 'Select a valid stock-in unit.']);
+                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => __('application.select_a_valid_stock_in_unit_29792ecd')]);
                 }
 
                 $unitKey = filled($rawConversionId) ? 'conversion:'.(int) $rawConversionId : 'base';
 
                 if (isset($usedUnits[$unitKey])) {
-                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => 'Each stock-in unit may only be added once.']);
+                    throw ValidationException::withMessages(["stock_in_lines.{$index}.product_unit_conversion_id" => __('application.each_stock_in_unit_may_only_be_added_once_743482a8')]);
                 }
 
                 $usedUnits[$unitKey] = true;
@@ -386,13 +387,13 @@ class InventoryService
 
                 if (array_key_exists('selling_price', $line) && filled($line['selling_price'])) {
                     if (! is_numeric($line['selling_price']) || (float) $line['selling_price'] < 0) {
-                        throw ValidationException::withMessages(["stock_in_lines.{$index}.selling_price" => 'Selling Price must be zero or greater.']);
+                        throw ValidationException::withMessages(["stock_in_lines.{$index}.selling_price" => __('application.selling_price_must_be_zero_or_greater_bc804f08')]);
                     }
 
                     $transactionUnitPrice = (float) $line['selling_price'];
 
                     if ($conversion && ! $conversion->can_sell) {
-                        throw ValidationException::withMessages(["stock_in_lines.{$index}.selling_price" => 'The selected unit is not enabled for selling.']);
+                        throw ValidationException::withMessages(["stock_in_lines.{$index}.selling_price" => __('application.the_selected_unit_is_not_enabled_for_selling_09776e53')]);
                     }
 
                     $baseUnitPrice = $conversion
@@ -475,11 +476,11 @@ class InventoryService
      * @param  array<int, array<string, mixed>>  $cart
      * @param  array<int, array<string, mixed>>  $payments
      */
-    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = [], ?string $idempotencyKey = null, bool $useApprovedSnapshotPrices = false, array $additionalCharges = [], array $discountDetails = []): Sale
+    public function completeSale(array $cart, array $payments, ?int $customerId, int $stockLocationId, int $branchId, int $createdBy, ?string $notes = null, bool $overrideCreditLimit = false, array $creditDetails = [], ?string $idempotencyKey = null, bool $useApprovedSnapshotPrices = false, array $additionalCharges = [], array $discountDetails = [], array $dateDetails = []): Sale
     {
-        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails, $idempotencyKey, $useApprovedSnapshotPrices, $additionalCharges, $discountDetails) {
+        return DB::transaction(function () use ($cart, $payments, $customerId, $stockLocationId, $branchId, $createdBy, $notes, $creditDetails, $idempotencyKey, $useApprovedSnapshotPrices, $additionalCharges, $discountDetails, $dateDetails) {
             if ($cart === []) {
-                throw ValidationException::withMessages(['cart' => 'Cart is required.']);
+                throw ValidationException::withMessages(['cart' => __('application.cart_is_required_126fe8e3')]);
             }
 
             $preferredLocation = StockLocation::query()->whereKey($stockLocationId)->lockForUpdate()->firstOrFail();
@@ -487,19 +488,19 @@ class InventoryService
             $cashier = User::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->findOrFail($createdBy);
             $discountMode = $discountDetails === [] ? 'legacy' : (string) ($discountDetails['mode'] ?? 'none');
             if (! in_array($discountMode, ['legacy', 'none', 'item', 'order'], true)) {
-                throw ValidationException::withMessages(['discount_mode' => 'The selected discount mode is invalid.']);
+                throw ValidationException::withMessages(['discount_mode' => __('application.the_selected_discount_mode_is_invalid_f5a9fc18')]);
             }
             if ($discountMode !== 'legacy' && $discountMode !== 'none' && ! $cashier->can('sales.discount')) {
-                throw ValidationException::withMessages(['discount_mode' => 'You are not authorized to apply discounts.']);
+                throw ValidationException::withMessages(['discount_mode' => __('application.you_are_not_authorized_to_apply_discounts_ba8e3486')]);
             }
             $orderDiscountType = $discountMode === 'order' ? (string) ($discountDetails['type'] ?? '') : null;
             $orderDiscountRawValue = $discountDetails['value'] ?? null;
             $orderDiscountValue = $discountMode === 'order' && is_numeric($orderDiscountRawValue) ? (float) $orderDiscountRawValue : null;
             if ($discountMode === 'order' && ! in_array($orderDiscountType, ['fixed', 'percentage'], true)) {
-                throw ValidationException::withMessages(['order_discount_type' => 'The selected order discount type is invalid.']);
+                throw ValidationException::withMessages(['order_discount_type' => __('application.the_selected_order_discount_type_is_invalid_5ba5feb8')]);
             }
             if ($discountMode === 'order' && ($orderDiscountValue === null || $orderDiscountValue < 0 || ($orderDiscountType === 'percentage' && $orderDiscountValue > 100))) {
-                throw ValidationException::withMessages(['order_discount_value' => 'The order discount must be non-negative and percentages cannot exceed 100.']);
+                throw ValidationException::withMessages(['order_discount_value' => __('application.the_order_discount_must_be_non_negative_and_percentages_cannot_exceed_100_f6f205c0')]);
             }
 
             if (filled($idempotencyKey)) {
@@ -513,16 +514,19 @@ class InventoryService
                 }
             }
 
+            $saleDate = app(PosSaleDate::class)->validate($cashier, $branchId, $dateDetails['sale_date'] ?? null, ($dateDetails['backdate_confirmed'] ?? false) === true);
+            $recordingDate = app(PosSaleDate::class)->today($companyId);
+
             if (! $preferredLocation->isActive()) {
-                throw ValidationException::withMessages(['stock_source' => 'Cannot sell from an inactive stock location.']);
+                throw ValidationException::withMessages(['stock_source' => __('application.cannot_sell_from_an_inactive_stock_location_564802bb')]);
             }
 
             if (! $preferredLocation->can_sell || ! $preferredLocation->is_sellable) {
-                throw ValidationException::withMessages(['stock_source' => 'Selected stock location is not allowed for sales.']);
+                throw ValidationException::withMessages(['stock_source' => __('application.selected_stock_location_is_not_allowed_for_sales_7c4785d0')]);
             }
 
             if ((int) $preferredLocation->branch_id !== $branchId) {
-                throw ValidationException::withMessages(['stock_source' => 'Selected stock location does not belong to this branch.']);
+                throw ValidationException::withMessages(['stock_source' => __('application.selected_stock_location_does_not_belong_to_this_branch_ad715e0f')]);
             }
 
             $locationIds = collect($cart)
@@ -532,7 +536,7 @@ class InventoryService
             $locations = StockLocation::query()->where('company_id', $companyId)
                 ->whereIn('id', $locationIds)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
             if ($locations->count() !== $locationIds->count()) {
-                throw ValidationException::withMessages(['cart' => 'A selected selling location is outside the current company.']);
+                throw ValidationException::withMessages(['cart' => __('application.a_selected_selling_location_is_outside_the_current_company_b273d6cf')]);
             }
 
             $containsCredit = collect($payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
@@ -560,10 +564,10 @@ class InventoryService
                 $location = $locations->get($locationId);
                 if (! $location || ! $location->isActive() || ! $location->can_sell || ! $location->is_sellable
                     || (int) $location->branch_id !== $branchId) {
-                    throw ValidationException::withMessages(["cart.{$index}.stock_location_id" => 'Select an active, sell-enabled location for this line.']);
+                    throw ValidationException::withMessages(["cart.{$index}.stock_location_id" => __('application.select_an_active_sell_enabled_location_for_this_line_33a6a76d')]);
                 }
                 if (array_key_exists('stock_location_id', $row) && ! InventorySettings::canUserSellFromLocation($cashier, $location)) {
-                    throw ValidationException::withMessages(["cart.{$index}.stock_location_id" => 'You are not authorised to sell from this location.']);
+                    throw ValidationException::withMessages(["cart.{$index}.stock_location_id" => __('application.you_are_not_authorised_to_sell_from_this_location_255677d6')]);
                 }
                 $product = Product::query()
                     ->with(['category', 'measurementType', 'size', 'unit', 'sellingUnit'])
@@ -594,7 +598,7 @@ class InventoryService
 
                 if ($useApprovedSnapshotPrices) {
                     if (! is_numeric($row['approved_unit_price'] ?? null) || (float) $row['approved_unit_price'] < 0) {
-                        throw ValidationException::withMessages(["cart.{$index}.approved_unit_price" => 'The approved quotation price is invalid.']);
+                        throw ValidationException::withMessages(["cart.{$index}.approved_unit_price" => __('application.the_approved_quotation_price_is_invalid_46529096')]);
                     }
                     $unitPrice = (float) $row['approved_unit_price'];
                 }
@@ -608,17 +612,17 @@ class InventoryService
                     $itemDiscountRawValue = $row['discount_value'] ?? null;
                     $itemDiscountValue = is_numeric($itemDiscountRawValue) ? (float) $itemDiscountRawValue : null;
                     if (! in_array($itemDiscountType, ['fixed', 'percentage'], true)) {
-                        throw ValidationException::withMessages(["cart.{$index}.discount_type" => 'The selected item discount type is invalid.']);
+                        throw ValidationException::withMessages(["cart.{$index}.discount_type" => __('application.the_selected_item_discount_type_is_invalid_e7ef8335')]);
                     }
                     if ($itemDiscountValue === null || $itemDiscountValue < 0 || ($itemDiscountType === 'percentage' && $itemDiscountValue > 100)) {
-                        throw ValidationException::withMessages(["cart.{$index}.discount_value" => 'The item discount must be non-negative and percentages cannot exceed 100.']);
+                        throw ValidationException::withMessages(["cart.{$index}.discount_value" => __('application.the_item_discount_must_be_non_negative_and_percentages_cannot_exceed_100_d4c23879')]);
                     }
                 }
                 $taxPerUnit = ($discountMode === 'legacy' || $useApprovedSnapshotPrices)
                     ? (float) ($row['tax_amount'] ?? 0)
                     : $this->saleTaxPerUnit($product, $unitPrice);
                 if ($taxPerUnit < 0) {
-                    throw ValidationException::withMessages(["cart.{$index}.tax_amount" => 'Tax per unit cannot be negative.']);
+                    throw ValidationException::withMessages(["cart.{$index}.tax_amount" => __('application.tax_per_unit_cannot_be_negative_6eda27da')]);
                 }
                 $allowsDecimalQuantity = $product->allowsDecimalQuantities();
                 $conversionFactor = $selectedConversion
@@ -630,7 +634,7 @@ class InventoryService
                 if ($useApprovedSnapshotPrices) {
                     if (! is_numeric($row['approved_conversion_factor'] ?? null) || (float) $row['approved_conversion_factor'] <= 0
                         || ! is_numeric($row['approved_base_quantity'] ?? null) || (float) $row['approved_base_quantity'] <= 0) {
-                        throw ValidationException::withMessages(["cart.{$index}.approved_base_quantity" => 'The approved quotation quantity snapshot is invalid.']);
+                        throw ValidationException::withMessages(["cart.{$index}.approved_base_quantity" => __('application.the_approved_quotation_quantity_snapshot_is_invalid_41fceb9c')]);
                     }
                     $conversionFactor = (float) $row['approved_conversion_factor'];
                     $baseQuantity = (float) $row['approved_base_quantity'];
@@ -639,7 +643,7 @@ class InventoryService
                 $quantityStep = $allowsDecimalQuantity ? (float) ($product->quantity_step ?: 1) : 1.0;
 
                 if ($quantity <= 0) {
-                    throw ValidationException::withMessages(['cart' => 'Quantity must be greater than zero.']);
+                    throw ValidationException::withMessages(['cart' => __('application.quantity_must_be_greater_than_zero_a53d797f')]);
                 }
 
                 if (! $allowsDecimalQuantity && ! $product->quantityIsWhole($quantity)) {
@@ -680,7 +684,7 @@ class InventoryService
                 }
 
                 if ($discountMode === 'legacy' && $discountPerUnit < 0) {
-                    throw ValidationException::withMessages(['cart' => 'Discount per unit cannot be negative.']);
+                    throw ValidationException::withMessages(['cart' => __('application.discount_per_unit_cannot_be_negative_1a5cb89e')]);
                 }
 
                 if ($discountMode === 'legacy' && $discountPerUnit >= $unitPrice && $unitPrice > 0) {
@@ -694,7 +698,7 @@ class InventoryService
                         : ((int) round($itemDiscountValue * 100)) / 100)
                     : $quantity * $discountPerUnit;
                 if ($itemDiscount > $gross) {
-                    throw ValidationException::withMessages(["cart.{$index}.discount_value" => 'The item discount cannot exceed the line subtotal.']);
+                    throw ValidationException::withMessages(["cart.{$index}.discount_value" => __('application.the_item_discount_cannot_exceed_the_line_subtotal_2c71d1c5')]);
                 }
                 if ($discountMode === 'item') {
                     $discountPerUnit = $quantity > 0 ? round($itemDiscount / $quantity, 2) : 0;
@@ -760,7 +764,7 @@ class InventoryService
                     ? (int) round($subtotalCents * $orderDiscountValue / 100)
                     : (int) round($orderDiscountValue * 100);
                 if ($orderDiscountCents > $subtotalCents) {
-                    throw ValidationException::withMessages(['order_discount_value' => 'The order discount cannot exceed the sale subtotal.']);
+                    throw ValidationException::withMessages(['order_discount_value' => __('application.the_order_discount_cannot_exceed_the_sale_subtotal_fecde303')]);
                 }
 
                 $remainingCents = $orderDiscountCents;
@@ -792,7 +796,7 @@ class InventoryService
                 $name = trim((string) ($charge['charge_name_snapshot'] ?? ''));
                 $amount = (float) ($charge['amount'] ?? 0);
                 if ($name === '' || $amount <= 0) {
-                    throw ValidationException::withMessages(["additional_charges.{$index}" => 'Each additional charge requires a name and positive amount.']);
+                    throw ValidationException::withMessages(["additional_charges.{$index}" => __('application.each_additional_charge_requires_a_name_and_positive_amount_f50bef1b')]);
                 }
 
                 return [
@@ -816,7 +820,7 @@ class InventoryService
             $paymentTotal = $paid + $creditAmount;
 
             if ($paid < 0 || $creditAmount < 0) {
-                throw ValidationException::withMessages(['payments' => 'Paid amount cannot be negative.']);
+                throw ValidationException::withMessages(['payments' => __('application.paid_amount_cannot_be_negative_08caf466')]);
             }
 
             if ($containsCredit) {
@@ -853,7 +857,7 @@ class InventoryService
                 'credit_notes' => $creditCustomerUnassigned ? ($creditDetails['credit_notes'] ?? null) : null,
                 'sale_number' => $this->generateSaleNumber(),
                 'idempotency_key' => $idempotencyKey,
-                'sale_date' => now()->toDateString(),
+                'sale_date' => $saleDate,
                 'sale_type' => $saleType,
                 'discount_mode' => $discountMode === 'legacy' ? null : $discountMode,
                 'order_discount_type' => $orderDiscountType,
@@ -927,9 +931,9 @@ class InventoryService
                     'unit_price' => $item['unit_price'],
                     'reference_type' => Sale::class,
                     'reference_id' => $sale->id,
-                    'notes' => "Sale {$sale->sale_number} / item {$saleItem->id}",
+                    'notes' => __('feedback.sale_item', ['number' => $sale->sale_number, 'item' => $saleItem->id]),
                     'created_by' => $createdBy,
-                    'movement_date' => $sale->sale_date,
+                    'movement_date' => $recordingDate,
                 ]);
             }
 
@@ -946,7 +950,7 @@ class InventoryService
                     'amount' => $amount,
                     'reference_number' => $payment['reference_number'] ?? null,
                     'received_by' => $createdBy,
-                    'payment_date' => now()->toDateString(),
+                    'payment_date' => $recordingDate,
                 ]);
             }
 
@@ -964,7 +968,7 @@ class InventoryService
             $sale = Sale::query()->with(['items'])->whereKey($saleId)->lockForUpdate()->firstOrFail();
 
             if ($sale->status !== 'completed') {
-                throw ValidationException::withMessages(['sale' => 'Only completed sales can be cancelled.']);
+                throw ValidationException::withMessages(['sale' => __('application.only_completed_sales_can_be_cancelled_e7810744')]);
             }
 
             foreach ($sale->items as $item) {
@@ -985,7 +989,7 @@ class InventoryService
                     'unit_price' => $item->unit_price,
                     'reference_type' => Sale::class,
                     'reference_id' => $sale->id,
-                    'notes' => "Cancelled sale {$sale->sale_number}",
+                    'notes' => __('feedback.cancelled_sale', ['number' => $sale->sale_number]),
                     'created_by' => $cancelledBy,
                     'movement_date' => now()->toDateString(),
                 ]);
@@ -1045,7 +1049,7 @@ class InventoryService
                         ->firstOrFail();
 
                     if ($purchase->status === 'cancelled') {
-                        throw ValidationException::withMessages(['purchase' => 'Cancelled purchases cannot be received.']);
+                        throw ValidationException::withMessages(['purchase' => __('application.cancelled_purchases_cannot_be_received_1ae8cbcb')]);
                     }
 
                     $items = PurchaseItem::query()
@@ -1116,7 +1120,7 @@ class InventoryService
 
                         if ($quantity > $item->remainingQuantity()) {
                             throw ValidationException::withMessages([
-                                "lines.{$item->id}.quantity" => 'Receiving quantity cannot exceed remaining quantity.',
+                                "lines.{$item->id}.quantity" => __('application.receiving_quantity_cannot_exceed_remaining_quantity_19368991'),
                             ]);
                         }
 
@@ -1124,11 +1128,11 @@ class InventoryService
                         $location = StockLocation::query()->whereKey($locationId)->lockForUpdate()->firstOrFail();
 
                         if ((int) $location->branch_id !== (int) $purchase->branch_id) {
-                            throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => 'Receiving location does not belong to this purchase branch.']);
+                            throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => __('application.receiving_location_does_not_belong_to_this_purchase_branch_c5d40fb5')]);
                         }
 
                         if (! $this->canUserReceiveIntoLocation(auth()->user(), $location)) {
-                            throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => 'You are not allowed to receive stock into this location.']);
+                            throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => __('application.you_are_not_allowed_to_receive_stock_into_this_location_f891f063')]);
                         }
 
                         $unitCost = (float) $item->cost_price;
@@ -1147,13 +1151,13 @@ class InventoryService
                     }
 
                     if ($receivable === []) {
-                        throw ValidationException::withMessages(['lines' => 'Enter at least one quantity to receive.']);
+                        throw ValidationException::withMessages(['lines' => __('application.enter_at_least_one_quantity_to_receive_c00542ed')]);
                     }
 
                     // Allocate receipt-specific charges in cents so every cent is assigned once.
                     $rawCosts = $header['additional_costs'] ?? [];
                     if (! is_array($rawCosts)) {
-                        throw ValidationException::withMessages(['additional_costs' => 'Additional costs must be a list.']);
+                        throw ValidationException::withMessages(['additional_costs' => __('application.additional_costs_must_be_a_list_c282211b')]);
                     }
                     app(PurchaseCostBreakdownService::class)->ensureDefaultTypes((int) $purchase->company_id);
                     $types = PurchaseCostType::query()
@@ -1162,22 +1166,22 @@ class InventoryService
                     $additionalCents = 0;
                     foreach ($rawCosts as $index => $raw) {
                         if (! is_array($raw)) {
-                            throw ValidationException::withMessages(["additional_costs.{$index}" => 'Invalid cost row.']);
+                            throw ValidationException::withMessages(["additional_costs.{$index}" => __('application.invalid_cost_row_57c54652')]);
                         }
                         if (collect($raw)->every(fn ($value) => blank($value))) {
                             continue;
                         }
                         $type = $types->get((int) ($raw['type_id'] ?? 0));
                         if (! $type || $type->name === 'Product Cost') {
-                            throw ValidationException::withMessages(["additional_costs.{$index}.type_id" => 'Select an active additional cost type.']);
+                            throw ValidationException::withMessages(["additional_costs.{$index}.type_id" => __('application.select_an_active_additional_cost_type_3a629dac')]);
                         }
                         $amount = trim((string) ($raw['amount'] ?? ''));
                         if (! preg_match('/^\d+(?:\.\d{1,2})?$/', $amount) || (float) $amount <= 0) {
-                            throw ValidationException::withMessages(["additional_costs.{$index}.amount" => 'Enter a positive amount with at most two decimal places.']);
+                            throw ValidationException::withMessages(["additional_costs.{$index}.amount" => __('application.enter_a_positive_amount_with_at_most_two_decimal_places_309b73fa')]);
                         }
                         foreach (['payee' => 255, 'payment_method' => 100, 'payment_reference' => 255, 'notes' => 1000] as $field => $limit) {
                             if (mb_strlen((string) ($raw[$field] ?? '')) > $limit) {
-                                throw ValidationException::withMessages(["additional_costs.{$index}.{$field}" => 'Value is too long.']);
+                                throw ValidationException::withMessages(["additional_costs.{$index}.{$field}" => __('application.value_is_too_long_f9846854')]);
                             }
                         }
                         $cents = (int) round((float) $amount * 100);
@@ -1215,7 +1219,7 @@ class InventoryService
 
                     if (! $systemGeneratedGrn && $this->grnExists($companyId, $grnNumber)) {
                         throw ValidationException::withMessages([
-                            'grn_number' => 'Namba hii ya GRN tayari imetumika. Tafadhali tumia namba nyingine.',
+                            'grn_number' => __('application.this_goods_receipt_number_is_already_used_please_use_another_number_b1e7a9e3'),
                         ]);
                     }
 
@@ -1310,7 +1314,7 @@ class InventoryService
                                 'unit_price' => $item->selling_price,
                                 'reference_type' => GoodsReceivingNote::class,
                                 'reference_id' => $grn->id,
-                                'notes' => "Purchase {$purchase->reference_number} / {$grnItem->id}",
+                                'notes' => __('feedback.purchase_item', ['number' => $purchase->reference_number, 'item' => $grnItem->id]),
                                 'created_by' => $receivedBy,
                                 'movement_date' => $receivedDate,
                             ]);
@@ -1342,13 +1346,13 @@ class InventoryService
                 }
 
                 throw ValidationException::withMessages([
-                    'grn_number' => 'Namba hii ya GRN tayari imetumika. Tafadhali tumia namba nyingine.',
+                    'grn_number' => __('application.this_goods_receipt_number_is_already_used_please_use_another_number_b1e7a9e3'),
                 ]);
             }
         }
 
         throw ValidationException::withMessages([
-            'grn_number' => 'Imeshindikana kutengeneza namba ya GRN. Tafadhali jaribu tena.',
+            'grn_number' => __('application.could_not_generate_a_goods_receipt_number_please_try_again_363dc700'),
         ]);
     }
 
@@ -1357,20 +1361,20 @@ class InventoryService
         return DB::transaction(function () use ($receipt, $postedBy) {
             $receipt = GoodsReceivingNote::query()->whereKey($receipt->id)->lockForUpdate()->firstOrFail();
             if ($receipt->status !== 'draft') {
-                throw ValidationException::withMessages(['receipt' => 'Only draft receipts can be posted.']);
+                throw ValidationException::withMessages(['receipt' => __('application.only_draft_receipts_can_be_posted_7d38ff24')]);
             }
             $purchase = Purchase::query()->whereKey($receipt->purchase_id)->lockForUpdate()->firstOrFail();
             if ($purchase->status === 'cancelled') {
-                throw ValidationException::withMessages(['receipt' => 'Cancelled purchases cannot be received.']);
+                throw ValidationException::withMessages(['receipt' => __('application.cancelled_purchases_cannot_be_received_1ae8cbcb')]);
             }
             foreach ($receipt->items()->with('purchaseItem')->get() as $line) {
                 $item = PurchaseItem::query()->whereKey($line->purchase_item_id)->lockForUpdate()->firstOrFail();
                 if ((float) $line->received_quantity > $item->remainingQuantity()) {
-                    throw ValidationException::withMessages(['receipt' => 'Receipt quantity exceeds the remaining purchase quantity.']);
+                    throw ValidationException::withMessages(['receipt' => __('application.receipt_quantity_exceeds_the_remaining_purchase_quantity_2e2ddef7')]);
                 }
                 $location = StockLocation::query()->findOrFail($line->stock_location_id);
                 if (! $this->canUserReceiveIntoLocation(auth()->user(), $location)) {
-                    throw ValidationException::withMessages(['receipt' => 'You are not allowed to receive stock into this location.']);
+                    throw ValidationException::withMessages(['receipt' => __('application.you_are_not_allowed_to_receive_stock_into_this_location_f891f063')]);
                 }
                 StockMovement::create([
                     'branch_id' => $receipt->branch_id,
@@ -1385,7 +1389,7 @@ class InventoryService
                     'unit_price' => $item->selling_price,
                     'reference_type' => GoodsReceivingNote::class,
                     'reference_id' => $receipt->id,
-                    'notes' => "Purchase {$purchase->reference_number} / {$line->id}",
+                    'notes' => __('feedback.purchase_item', ['number' => $purchase->reference_number, 'item' => $line->id]),
                     'created_by' => $postedBy,
                     'movement_date' => $receipt->received_date,
                 ]);
@@ -1465,7 +1469,7 @@ class InventoryService
             $adjustment = StockAdjustment::query()->whereKey($adjustment->id)->lockForUpdate()->firstOrFail();
 
             if (! in_array($adjustment->status, ['pending', 'pending_approval'], true)) {
-                throw ValidationException::withMessages(['adjustment' => 'Only pending adjustments can be approved.']);
+                throw ValidationException::withMessages(['adjustment' => __('application.only_pending_adjustments_can_be_approved_7354a664')]);
             }
 
             if ($adjustment->lines()->exists()) {
@@ -1482,7 +1486,7 @@ class InventoryService
                 $available = $this->getProductStock($adjustment->product_id, $adjustment->stock_location_id, $adjustment->branch_id);
 
                 if ((float) $adjustment->quantity > $available) {
-                    throw ValidationException::withMessages(['quantity' => 'Adjustment would create negative stock.']);
+                    throw ValidationException::withMessages(['quantity' => __('application.adjustment_would_create_negative_stock_493a5778')]);
                 }
             }
 
@@ -1536,7 +1540,7 @@ class InventoryService
             $location = StockLocation::query()->whereKey($header['stock_location_id'])->lockForUpdate()->firstOrFail();
 
             if (! $this->canUserAdjustLocation(auth()->user(), $location)) {
-                throw ValidationException::withMessages(['stock_location_id' => 'You are not allowed to adjust stock in this location.']);
+                throw ValidationException::withMessages(['stock_location_id' => __('application.you_are_not_allowed_to_adjust_stock_in_this_location_a6216643')]);
             }
 
             $prepared = [];
@@ -1549,7 +1553,7 @@ class InventoryService
                 }
 
                 if (in_array($productId, $seenProducts, true)) {
-                    throw ValidationException::withMessages(['lines' => 'Duplicate product lines are not allowed.']);
+                    throw ValidationException::withMessages(['lines' => __('application.duplicate_product_lines_are_not_allowed_a5d32b98')]);
                 }
 
                 $seenProducts[] = $productId;
@@ -1563,7 +1567,7 @@ class InventoryService
                 $physicalQuantity = (float) ($line['physical_quantity'] ?? 0);
 
                 if ($physicalQuantity < 0) {
-                    throw ValidationException::withMessages(['lines' => 'Physical quantity cannot be negative.']);
+                    throw ValidationException::withMessages(['lines' => __('application.physical_quantity_cannot_be_negative_1b90cfb8')]);
                 }
 
                 $difference = round($physicalQuantity - $systemQuantity, 2);
@@ -1572,18 +1576,18 @@ class InventoryService
                 $notes = trim((string) ($line['notes'] ?? ''));
 
                 if ($reason === '') {
-                    throw ValidationException::withMessages(['lines' => 'Reason is required for every adjustment line.']);
+                    throw ValidationException::withMessages(['lines' => __('application.reason_is_required_for_every_adjustment_line_69bcb3bc')]);
                 }
 
                 if (strtolower($reason) === 'other' && $notes === '') {
-                    throw ValidationException::withMessages(['lines' => 'Written explanation is required when reason is Other.']);
+                    throw ValidationException::withMessages(['lines' => __('application.written_explanation_is_required_when_reason_is_other_fdf25a12')]);
                 }
 
                 $prepared[] = compact('product', 'systemQuantity', 'physicalQuantity', 'difference', 'adjustmentType', 'reason', 'notes');
             }
 
             if (collect($prepared)->every(fn (array $line) => (float) $line['difference'] === 0.0)) {
-                throw ValidationException::withMessages(['lines' => 'At least one line must have a non-zero difference.']);
+                throw ValidationException::withMessages(['lines' => __('application.at_least_one_line_must_have_a_non_zero_difference_cb83c06b')]);
             }
 
             $firstMovementLine = collect($prepared)->first(fn (array $line) => (float) $line['difference'] !== 0.0);
@@ -1630,7 +1634,7 @@ class InventoryService
             $adjustment = StockAdjustment::query()->with(['lines.product'])->whereKey($adjustment->id)->lockForUpdate()->firstOrFail();
 
             if (in_array($adjustment->status, ['posted', 'cancelled', 'rejected'], true)) {
-                throw ValidationException::withMessages(['adjustment' => 'Posted, cancelled, or rejected adjustments cannot be posted again.']);
+                throw ValidationException::withMessages(['adjustment' => __('application.posted_cancelled_or_rejected_adjustments_cannot_be_posted_again_f5634237')]);
             }
 
             $lines = $adjustment->lines;
@@ -1695,7 +1699,7 @@ class InventoryService
             app(StockTransferNoteService::class)->authorize($transfer, $user);
 
             if ($transfer->status !== 'completed' || $transfer->cancelled_at !== null) {
-                throw ValidationException::withMessages(['transfer' => __('Only completed, uncancelled transfers can be cancelled.')]);
+                throw ValidationException::withMessages(['transfer' => __('terminology.only_completed_uncancelled_transfers_can_be_cancelled_c69f57de')]);
             }
             $reason = trim($reason);
             Validator::make(['cancellation_reason' => $reason], [
@@ -1712,7 +1716,7 @@ class InventoryService
                 ->where('stock_transfer_id', $transfer->id)->orderBy('id')->lockForUpdate()->get();
             abort_if($items->contains(fn ($item) => (int) $item->company_id !== (int) $transfer->company_id), 404);
             if ($items->isEmpty()) {
-                throw ValidationException::withMessages(['transfer' => 'Transfer has no items to reverse.']);
+                throw ValidationException::withMessages(['transfer' => __('application.transfer_has_no_items_to_reverse_b153ef83')]);
             }
             $products = Product::withoutGlobalScopes()->where('company_id', $transfer->company_id)
                 ->whereIn('id', $items->pluck('product_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
@@ -1723,7 +1727,7 @@ class InventoryService
                 ->whereIn('product_id', $products->keys())->orderBy('id')->lockForUpdate()->get();
             $originals = $ledger->where('reference_type', StockTransfer::class)->where('reference_id', $transfer->id);
             if ($originals->contains(fn ($row) => in_array($row->movement_type, ['transfer_cancel_in', 'transfer_cancel_out'], true))) {
-                throw ValidationException::withMessages(['transfer' => 'Transfer reversal has already been posted.']);
+                throw ValidationException::withMessages(['transfer' => __('application.transfer_reversal_has_already_been_posted_4b4482e6')]);
             }
 
             // Aggregate duplicate product lines before checking available stock.
@@ -1735,10 +1739,10 @@ class InventoryService
                     ->sum(fn (StockMovement $movement) => $movement->signedQuantity());
                 $required = round((float) $lines->sum('quantity'), 4);
                 if ($required <= 0 || $lines->contains(fn ($item) => (float) $item->quantity <= 0)) {
-                    throw ValidationException::withMessages(['transfer' => 'Transfer quantities must be positive.']);
+                    throw ValidationException::withMessages(['transfer' => __('application.transfer_quantities_must_be_positive_22431281')]);
                 }
                 if ($required > round($available, 4)) {
-                    throw ValidationException::withMessages(['transfer' => __('Insufficient destination stock for :product. Available: :available; required: :required.', [
+                    throw ValidationException::withMessages(['transfer' => __('feedback.insufficient_destination', [
                         'product' => $products[$productId]->displayNameWithSize(),
                         'available' => NumberFormatter::quantity($available),
                         'required' => NumberFormatter::quantity($required),
@@ -1758,7 +1762,7 @@ class InventoryService
                         && ($row->stock_transfer_item_id === null || (int) $row->stock_transfer_item_id === (int) $item->id)
                         && $row->quantity === $item->quantity);
                     if (! $original) {
-                        throw ValidationException::withMessages(['transfer' => 'Original transfer movements could not be matched. Review the transfer audit history.']);
+                        throw ValidationException::withMessages(['transfer' => __('application.original_transfer_movements_could_not_be_matched_review_the_transfer_audit__4fc310d5')]);
                     }
                     $used[$original->id] = true;
                     StockMovement::create([
@@ -1786,7 +1790,7 @@ class InventoryService
                 }
             }
             if (count($used) !== $originals->count()) {
-                throw ValidationException::withMessages(['transfer' => 'Original transfer movements are inconsistent. Review the transfer audit history.']);
+                throw ValidationException::withMessages(['transfer' => __('application.original_transfer_movements_are_inconsistent_review_the_transfer_audit_hist_3ab9cf54')]);
             }
             $transfer->update([
                 'status' => 'cancelled', 'cancelled_at' => now(),
@@ -1807,42 +1811,42 @@ class InventoryService
                 ->firstOrFail();
 
             if (in_array($transfer->status, ['completed', 'received'], true)) {
-                throw ValidationException::withMessages(['transfer' => 'Transfer has already been completed.']);
+                throw ValidationException::withMessages(['transfer' => __('application.transfer_has_already_been_completed_c7d6593f')]);
             }
 
             if ($transfer->status === 'cancelled') {
-                throw ValidationException::withMessages(['transfer' => 'Cancelled transfers cannot be completed.']);
+                throw ValidationException::withMessages(['transfer' => __('application.cancelled_transfers_cannot_be_completed_df9e07af')]);
             }
 
             if ($transfer->from_location_id === $transfer->to_location_id) {
-                throw ValidationException::withMessages(['to_location_id' => 'From and To locations must be different.']);
+                throw ValidationException::withMessages(['to_location_id' => __('application.from_and_to_locations_must_be_different_e97965f6')]);
             }
 
             $fromLocation = StockLocation::query()->whereKey($transfer->from_location_id)->lockForUpdate()->firstOrFail();
             $toLocation = StockLocation::query()->whereKey($transfer->to_location_id)->lockForUpdate()->firstOrFail();
 
             if (! $fromLocation->isActive() || ! $toLocation->isActive()) {
-                throw ValidationException::withMessages(['location' => 'Transfers require active stock locations.']);
+                throw ValidationException::withMessages(['location' => __('application.transfers_require_active_stock_locations_4480387f')]);
             }
 
             if (! $fromLocation->can_transfer || ! $fromLocation->can_issue_stock) {
-                throw ValidationException::withMessages(['from_location_id' => 'Source location is not allowed to issue transfers.']);
+                throw ValidationException::withMessages(['from_location_id' => __('application.source_location_is_not_allowed_to_issue_transfers_abbc5397')]);
             }
 
             if (! $toLocation->can_receive_stock) {
-                throw ValidationException::withMessages(['to_location_id' => 'Destination location is not allowed to receive stock.']);
+                throw ValidationException::withMessages(['to_location_id' => __('application.destination_location_is_not_allowed_to_receive_stock_7912fd1f')]);
             }
 
             $user = User::query()->find($completedBy);
             if (! $user || ! AuthorizationScope::stockLocationsForBranch($user, 'can_transfer', (int) $transfer->branch_id)->contains('id', $fromLocation->id)) {
-                throw ValidationException::withMessages(['from_location_id' => 'You are not allowed to transfer stock from this location.']);
+                throw ValidationException::withMessages(['from_location_id' => __('application.you_are_not_allowed_to_transfer_stock_from_this_location_4def0176')]);
             }
             if (! AuthorizationScope::stockLocationsForBranch($user, 'can_receive', (int) $transfer->branch_id)->contains('id', $toLocation->id)) {
-                throw ValidationException::withMessages(['to_location_id' => 'You are not allowed to receive stock into this destination.']);
+                throw ValidationException::withMessages(['to_location_id' => __('application.you_are_not_allowed_to_receive_stock_into_this_destination_8ce911f1')]);
             }
 
             if (($toLocation->is_dispensing_location || $toLocation->type === 'dispensing') && ! $fromLocation->can_transfer_to_dispensing) {
-                throw ValidationException::withMessages(['from_location_id' => 'Source location is not allowed to transfer to Dispensing.']);
+                throw ValidationException::withMessages(['from_location_id' => __('application.source_location_is_not_allowed_to_transfer_to_dispensing_f6bc28b5')]);
             }
 
             $alreadyPosted = StockMovement::query()
@@ -1851,7 +1855,7 @@ class InventoryService
                 ->exists();
 
             if ($alreadyPosted) {
-                throw ValidationException::withMessages(['transfer' => 'Transfer movements have already been posted.']);
+                throw ValidationException::withMessages(['transfer' => __('application.transfer_movements_have_already_been_posted_149b03db')]);
             }
 
             $items = StockTransferItem::query()
@@ -1861,14 +1865,14 @@ class InventoryService
                 ->get();
 
             if ($items->isEmpty()) {
-                throw ValidationException::withMessages(['items' => 'Transfer requires at least one item.']);
+                throw ValidationException::withMessages(['items' => __('application.transfer_requires_at_least_one_item_dd32e95e')]);
             }
 
             $sourceCosts = [];
 
             foreach ($items as $item) {
                 if ($item->product?->status !== 'active') {
-                    throw ValidationException::withMessages(['product' => 'Inactive products cannot be transferred.']);
+                    throw ValidationException::withMessages(['product' => __('application.inactive_products_cannot_be_transferred_7f6e46db')]);
                 }
 
                 $available = $this->getProductStock($item->product_id, $fromLocation->id, $transfer->branch_id);
@@ -1917,7 +1921,7 @@ class InventoryService
                     'reference_id' => $transfer->id,
                     'stock_transfer_id' => $transfer->id,
                     'stock_transfer_item_id' => $item->id,
-                    'notes' => "Transfer {$transfer->transfer_number} out",
+                    'notes' => __('feedback.outgoing_transfer', ['number' => $transfer->transfer_number]),
                     'created_by' => $completedBy,
                     'movement_date' => $transfer->transfer_date,
                 ]);
@@ -1937,7 +1941,7 @@ class InventoryService
                     'reference_id' => $transfer->id,
                     'stock_transfer_id' => $transfer->id,
                     'stock_transfer_item_id' => $item->id,
-                    'notes' => "Transfer {$transfer->transfer_number} in",
+                    'notes' => __('feedback.incoming_transfer', ['number' => $transfer->transfer_number]),
                     'created_by' => $completedBy,
                     'movement_date' => $transfer->transfer_date,
                 ]);

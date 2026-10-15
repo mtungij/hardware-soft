@@ -16,8 +16,8 @@
             {{ \App\Support\NumberFormatter::quantity($summary['before']) }} → {{ \App\Support\NumberFormatter::quantity($summary['after']) }} {{ $unit }}
             <span class="ml-1 {{ $change < 0 ? 'text-orange-700 dark:text-orange-300' : 'text-emerald-700 dark:text-emerald-300' }}">({{ $change > 0 ? '+' : '' }}{{ \App\Support\NumberFormatter::quantity($change) }})</span>
         </p>
-        <p class="text-slate-500 dark:text-slate-400">{{ $summary['reference'] }} · {{ $summary['date']?->format('d M Y') }}</p>
+        <p class="text-slate-500 dark:text-slate-400">{{ $summary['reference'] }} · {{ $summary['date']?->locale(app()->getLocale())->translatedFormat('d M Y') }}</p>
     @else
-        <p class="text-slate-500 dark:text-slate-400">Before — · Change — · Reference — · Date —</p>
+        <p class="text-slate-500 dark:text-slate-400">{{ __('application.before_change_reference_date_6592ed4c') }}</p>
     @endif
 </div>

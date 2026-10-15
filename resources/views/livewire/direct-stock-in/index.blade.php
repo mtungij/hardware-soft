@@ -157,17 +157,17 @@ $save = function (InventoryService $inventory) {
     ));
 
     if ($data['stock_in_lines'] === []) {
-        session()->flash('error', 'Enter a quantity for at least one stock unit.');
+        session()->flash('error', __('application.enter_a_quantity_for_at_least_one_stock_unit_f4c86fcd'));
 
         throw ValidationException::withMessages([
-            'stock_in_lines' => 'Enter a quantity greater than zero for at least one stock unit.',
+            'stock_in_lines' => __('application.enter_a_quantity_greater_than_zero_for_at_least_one_stock_unit_f58c536b'),
         ]);
     }
 
     foreach ($data['stock_in_lines'] as $index => $line) {
         if (! filled($line['buying_price'] ?? null)) {
             throw ValidationException::withMessages([
-                "stock_in_lines.{$index}.buying_price" => 'Buying Price is required for each quantity entered.',
+                "stock_in_lines.{$index}.buying_price" => __('application.buying_price_is_required_for_each_quantity_entered_a5e7189f'),
             ]);
         }
     }
@@ -194,8 +194,8 @@ $save = function (InventoryService $inventory) {
     } catch (\Throwable $exception) {
         report($exception);
 
-        $this->addError('save', 'Direct stock in could not be saved: '.$exception->getMessage());
-        session()->flash('error', 'Direct stock in could not be saved: '.$exception->getMessage());
+        $this->addError('save', __('application.direct_stock_in_could_not_be_saved_bfcca7a1').\App\Support\UiText::feedback($exception->getMessage()));
+        session()->flash('error', __('application.direct_stock_in_could_not_be_saved_bfcca7a1').\App\Support\UiText::feedback($exception->getMessage()));
 
         return;
     }
@@ -207,13 +207,13 @@ $save = function (InventoryService $inventory) {
     $this->idempotency_key = (string) Str::uuid();
     $this->resetPage();
 
-    session()->flash('success', 'Direct stock in saved.');
+    session()->flash('success', __('application.direct_stock_in_saved_b09fcdeb'));
 };
 
 ?>
 
 <div>
-    <x-page-header title="Direct Stock In" description="Add stock directly without supplier or purchase order." :breadcrumbs="['Dashboard' => route('dashboard'), 'Direct Stock In' => null]" />
+    <x-page-header title="{{ __('application.direct_stock_in_a43c32e8') }}" description="{{ __('application.add_stock_directly_without_supplier_or_purchase_order_cfc41b09') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Direct Stock In' => null]" />
 
     @php
         $canUpdateSellingPrice = $this->canUpdateSellingPrice();
@@ -248,7 +248,7 @@ $save = function (InventoryService $inventory) {
     @endphp
 
     <div class="grid gap-6 xl:grid-cols-[420px_1fr]">
-        <x-card title="Stock Entry" description="This creates a positive stock movement. Product quantity is calculated from movements.">
+        <x-card title="{{ __('application.stock_entry_b9970718') }}" description="{{ __('application.this_creates_a_positive_stock_movement_product_quantity_is_calculated_from__8b2446a6') }}">
             <form wire:submit.prevent="save" class="space-y-4">
                 @if (session('success'))
                     <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">
@@ -264,7 +264,7 @@ $save = function (InventoryService $inventory) {
 
                 @if ($errors->any())
                     <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
-                        <p class="font-black">Please fix these errors:</p>
+                        <p class="font-black">{{ __('application.please_fix_these_errors_9e56fa2b') }}</p>
                         <ul class="mt-2 list-disc space-y-1 pl-5">
                             @foreach ($errors->all() as $error)
                                 <li>{{ $error }}</li>
@@ -273,14 +273,14 @@ $save = function (InventoryService $inventory) {
                     </div>
                 @endif
 
-                <label class="block text-sm font-bold">Product
+                <label class="block text-sm font-bold">{{ __('application.product_dd3b86d1') }}
                     <select
                         wire:model.live="product_id"
                         wire:key="direct-stock-in-product-select"
                         data-hs-select='@json($productSelectOptions)'
                         class="hidden"
                     >
-                        <option value="" @selected(blank($product_id))>Select product</option>
+                        <option value="" @selected(blank($product_id))>{{ __('application.select_product_596d90e5') }}</option>
                         @foreach (Product::with('size')->where('status', 'active')->orderBy('name')->get() as $product)
                             <option value="{{ $product->id }}" @selected((string) $product_id === (string) $product->id)>{{ $product->displayNameWithSize() }} / {{ $product->sku }}</option>
                         @endforeach
@@ -288,13 +288,13 @@ $save = function (InventoryService $inventory) {
                     @error('product_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </label>
 
-                <x-form-input label="Movement Date" name="movement_date" type="date" wire:model="movement_date" required />
+                <x-form-input label="{{ __('application.movement_date_52e0f70a') }}" name="movement_date" type="date" wire:model="movement_date" required />
 
                 @if ($selectedProduct)
                     <section class="space-y-3" wire:key="direct-stock-in-lines-{{ $product_id }}">
                         <div>
-                            <h3 class="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Stock Quantities</h3>
-                            <p class="mt-1 text-xs text-slate-500">Enter each package type received. Inventory will be stored in {{ $baseUnitLabel }}.</p>
+                            <h3 class="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">{{ __('application.stock_quantities_750e4475') }}</h3>
+                            <p class="mt-1 text-xs text-slate-500">{{ __('application.enter_each_package_type_received_inventory_will_be_stored_in_2232cba1') }} {{ $baseUnitLabel }}.</p>
                         </div>
 
                         @foreach ($stock_in_lines as $index => $line)
@@ -314,27 +314,27 @@ $save = function (InventoryService $inventory) {
                                     <div>
                                         @if ($index === 0)
                                             <p class="text-sm font-black">{{ $lineUnitName }}</p>
-                                            <p class="text-xs text-slate-500">Base Unit</p>
+                                            <p class="text-xs text-slate-500">{{ __('application.base_unit_f1e3347b') }}</p>
                                         @else
                                             <p class="text-sm font-black">{{ $lineUnitName }}</p>
                                             <p class="mt-1 text-xs text-slate-500">1 {{ $lineUnitName }} = {{ \App\Support\NumberFormatter::quantity($lineFactor) }} {{ $baseUnitLabel }}</p>
                                             @error("stock_in_lines.{$index}.product_unit_conversion_id") <span class="erp-error">{{ $message }}</span> @enderror
                                         @endif
                                     </div>
-                                    <label class="text-xs font-bold">Quantity{{ filled($lineUnitCode) ? ' / '.$lineUnitCode : '' }}
+                                    <label class="text-xs font-bold">{{ __('application.quantity_44f6af69') }}{{ filled($lineUnitCode) ? ' / '.$lineUnitCode : '' }}
                                         <input type="number" step="0.0001" wire:model.live.debounce.250ms="stock_in_lines.{{ $index }}.quantity" class="erp-input mt-1">
                                         @error("stock_in_lines.{$index}.quantity") <span class="erp-error">{{ $message }}</span> @enderror
                                     </label>
-                                    <label class="text-xs font-bold">Buying Price{{ filled($lineUnitCode) ? ' / '.$lineUnitCode : '' }}
+                                    <label class="text-xs font-bold">{{ __('application.buying_price_a46c40be') }}{{ filled($lineUnitCode) ? ' / '.$lineUnitCode : '' }}
                                         <input type="number" step="0.01" wire:model.live.debounce.250ms="stock_in_lines.{{ $index }}.buying_price" class="erp-input mt-1">
                                         @error("stock_in_lines.{$index}.buying_price") <span class="erp-error">{{ $message }}</span> @enderror
                                     </label>
-                                    <label class="text-xs font-bold">Selling Price{{ filled($lineUnitCode) ? ' / '.$lineUnitCode : '' }}
+                                    <label class="text-xs font-bold">{{ __('application.selling_price_897611ec') }}{{ filled($lineUnitCode) ? ' / '.$lineUnitCode : '' }}
                                         @if ($canUpdateSellingPrice && ($line['can_sell'] ?? false))
                                             <input type="number" step="0.01" wire:model="stock_in_lines.{{ $index }}.selling_price" class="erp-input mt-1">
                                         @else
                                             <div class="erp-input mt-1 bg-slate-100 dark:bg-slate-800">
-                                                {{ ($line['can_sell'] ?? false) && filled($authoritativeSellingPrice) ? 'TZS '.\App\Support\NumberFormatter::money($authoritativeSellingPrice) : 'Not enabled for sale' }}
+                                                {{ ($line['can_sell'] ?? false) && filled($authoritativeSellingPrice) ? 'TZS '.\App\Support\NumberFormatter::money($authoritativeSellingPrice) : __('terminology.not_enabled_for_sale_b0b4b7dd') }}
                                             </div>
                                         @endif
                                         @error("stock_in_lines.{$index}.selling_price") <span class="erp-error">{{ $message }}</span> @enderror
@@ -352,21 +352,21 @@ $save = function (InventoryService $inventory) {
                         @endforeach
 
                         @if ($stock_in_unit_options === [])
-                            <p class="text-xs font-semibold text-slate-500">No additional purchase units are configured for this product.</p>
+                            <p class="text-xs font-semibold text-slate-500">{{ __('application.no_additional_purchase_units_are_configured_for_this_product_01e0c59c') }}</p>
                         @endif
 
                         <div class="rounded-xl border border-cyan-200 bg-cyan-50 p-4 dark:border-cyan-500/30 dark:bg-cyan-500/10">
-                            <p class="text-xs font-bold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">Summary</p>
+                            <p class="text-xs font-bold uppercase tracking-wide text-cyan-700 dark:text-cyan-300">{{ __('application.summary_12b71c3e') }}</p>
                             <div class="mt-2 grid gap-2 sm:grid-cols-2">
-                                <div><span class="text-xs text-slate-500">Normalized Stock to Add</span><p class="font-black">{{ \App\Support\NumberFormatter::quantity($normalizedStockTotal) }} {{ $baseUnitLabel }}</p></div>
-                                <div><span class="text-xs text-slate-500">Total Purchase Value</span><p class="font-black">TZS {{ \App\Support\NumberFormatter::money($purchaseValueTotal) }}</p></div>
+                                <div><span class="text-xs text-slate-500">{{ __('application.normalized_stock_to_add_afed53b8') }}</span><p class="font-black">{{ \App\Support\NumberFormatter::quantity($normalizedStockTotal) }} {{ $baseUnitLabel }}</p></div>
+                                <div><span class="text-xs text-slate-500">{{ __('application.total_purchase_value_726dbfc8') }}</span><p class="font-black">TZS {{ \App\Support\NumberFormatter::money($purchaseValueTotal) }}</p></div>
                             </div>
                         </div>
                     </section>
                 @endif
 
                 @if (InventorySettings::warehouseEnabled())
-                    <label class="block text-sm font-bold">Stock Location
+                    <label class="block text-sm font-bold">{{ __('application.stock_location_50e3c4fe') }}
                         <select wire:model="stock_location_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                             @foreach (StockLocation::whereIn('id', AuthorizationScope::stockLocationIds(auth()->user(), 'can_receive'))->where('branch_id', $branch_id)->where('status', 'active')->orderBy('type')->get() as $location)
                                 <option value="{{ $location->id }}">{{ $location->name }}</option>
@@ -374,10 +374,10 @@ $save = function (InventoryService $inventory) {
                         </select>
                     </label>
                 @else
-                    <x-alert type="info">Warehouse is disabled. Stock will enter Dispensing Area automatically.</x-alert>
+                    <x-alert type="info">{{ __('application.warehouse_is_disabled_stock_will_enter_dispensing_area_automatically_9b383a48') }}</x-alert>
                 @endif
 
-                <label class="block text-sm font-bold">Reason
+                <label class="block text-sm font-bold">{{ __('application.reason_f219cc06') }}
                     <select wire:model="reason" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                         @foreach (['Opening Stock', 'Direct Purchase', 'Manual Entry', 'Stock Correction', 'Other'] as $reasonOption)
                             <option value="{{ $reasonOption }}">{{ $reasonOption }}</option>
@@ -385,16 +385,16 @@ $save = function (InventoryService $inventory) {
                     </select>
                 </label>
 
-                <x-form-textarea label="Notes" name="notes" wire:model="notes" />
+                <x-form-textarea label="{{ __('application.notes_70440046') }}" name="notes" wire:model="notes" />
 
                 <button type="submit" wire:loading.attr="disabled" wire:target="save" class="w-full rounded-xl bg-cyan-500 px-4 py-3 text-sm font-black text-white shadow-lg shadow-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60">
-                    <span wire:loading.remove wire:target="save">Save Direct Stock In</span>
-                    <span wire:loading wire:target="save">Saving...</span>
+                    <span wire:loading.remove wire:target="save">{{ __('application.save_direct_stock_in_1a76f588') }}</span>
+                    <span wire:loading wire:target="save">{{ __('application.saving_ae7e8875') }}</span>
                 </button>
             </form>
         </x-card>
 
-        <x-card title="Recent Direct Stock In">
+        <x-card title="{{ __('application.recent_direct_stock_in_879997b3') }}">
             @php
                 $recentEntries = StockMovement::query()
                     ->with(['product', 'stockLocation', 'creator'])
@@ -405,7 +405,7 @@ $save = function (InventoryService $inventory) {
                     ->groupBy(fn (StockMovement $movement) => $movement->posting_reference ?: 'legacy-'.$movement->id)
                     ->take(12);
             @endphp
-            <x-table :headers="['Reference', 'Date', 'Product', 'Location', 'Transaction Breakdown', 'Normalized Qty', 'Total Cost', 'Reason', 'Created By']">
+            <x-table :headers="[__('application.reference_db1c7845'), __('application.date_eb9a4bc1'), __('application.product_dd3b86d1'), __('application.location_d219c681'), __('terminology.transaction_breakdown_f0c5e9f8'), __('terminology.normalized_qty_a221cc4b'), __('application.total_cost_b5d8da40'), __('application.reason_f219cc06'), __('application.created_by_43de2bcd')]">
                 @forelse ($recentEntries as $reference => $entryMovements)
                     @php
                         $entryMovements = $entryMovements->sortBy('id')->values();
@@ -420,8 +420,8 @@ $save = function (InventoryService $inventory) {
                         $totalCost = $entryMovements->sum(fn (StockMovement $line) => (float) $line->quantity_in * (float) $line->unit_cost);
                     @endphp
                     <tr>
-                        <td class="px-4 py-3 font-mono text-xs">{{ str($reference)->startsWith('legacy-') ? 'Legacy #'.$movement->id : $reference }}</td>
-                        <td class="px-4 py-3">{{ $movement->movement_date?->format('d M Y') }}</td>
+                        <td class="px-4 py-3 font-mono text-xs">{{ str($reference)->startsWith('legacy-') ? __('terminology.legacy_e40067c5').$movement->id : $reference }}</td>
+                        <td class="px-4 py-3">{{ $movement->movement_date?->locale(app()->getLocale())->translatedFormat('d M Y') }}</td>
                         <td class="px-4 py-3 font-bold">{{ $movement->product?->displayNameWithSize() }}</td>
                         <td class="px-4 py-3">{{ $movement->stockLocation?->name }}</td>
                         <td class="px-4 py-3">{{ $breakdown }}</td>
@@ -431,7 +431,7 @@ $save = function (InventoryService $inventory) {
                         <td class="px-4 py-3">{{ $movement->creator?->name }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="px-4 py-8 text-center text-sm text-slate-500">No direct stock entries found.</td></tr>
+                    <tr><td colspan="9" class="px-4 py-8 text-center text-sm text-slate-500">{{ __('application.no_direct_stock_entries_found_7b3d1ff5') }}</td></tr>
                 @endforelse
             </x-table>
         </x-card>

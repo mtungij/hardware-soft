@@ -104,7 +104,7 @@ $removeLine = function (int $index) {
 
 $save = function (InventoryService $inventory) {
     if (! $this->locationReady()) {
-        throw ValidationException::withMessages(['stock_location_id' => 'Select Stock Location.']);
+        throw ValidationException::withMessages(['stock_location_id' => __('application.select_stock_location_c64b5f6b')]);
     }
 
     $validated = $this->validate([
@@ -122,7 +122,7 @@ $save = function (InventoryService $inventory) {
 
     foreach ($validated['lines'] as $line) {
         if (($line['reason'] ?? '') === 'Other' && blank($line['notes'] ?? '')) {
-            throw ValidationException::withMessages(['lines' => 'Written explanation is required when reason is Other.']);
+            throw ValidationException::withMessages(['lines' => __('application.written_explanation_is_required_when_reason_is_other_fdf25a12')]);
         }
     }
 
@@ -138,7 +138,7 @@ $save = function (InventoryService $inventory) {
         auth()->id()
     );
 
-    session()->flash('success', 'Stock adjustment submitted for approval.');
+    session()->flash('success', __('application.stock_adjustment_submitted_for_approval_dab835af'));
     $this->redirectRoute('stock-adjustments.index', navigate: true);
 };
 
@@ -159,12 +159,12 @@ $save = function (InventoryService $inventory) {
         });
     @endphp
 
-    <x-page-header title="Create Stock Adjustment" description="Adjust stock for one selected location using system quantity from stock movements." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Adjustments' => route('stock-adjustments.index'), 'Create' => null]" />
+    <x-page-header title="{{ __('application.create_stock_adjustment_38f87113') }}" description="{{ __('application.adjust_stock_for_one_selected_location_using_system_quantity_from_stock_mov_dd4bf2c7') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Adjustments' => route('stock-adjustments.index'), 'Create' => null]" />
 
     <x-card>
         <form wire:submit="save" class="space-y-5">
             <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Branch
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.branch_1627510b') }}
                     <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         @foreach (Branch::query()->when(auth()->user()?->company_id, fn ($query, $companyId) => $query->where('company_id', $companyId))->orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
@@ -174,12 +174,12 @@ $save = function (InventoryService $inventory) {
 
                 @if ($singleLocationMode)
                     <div class="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-bold text-cyan-800 dark:border-cyan-500/30 dark:bg-cyan-500/10 dark:text-cyan-100">
-                        Adjusting Stock At: {{ $selectedLocation?->name ?? 'Default Location' }}
+                        {{ __('application.adjusting_stock_at_24cb0ca1') }} {{ $selectedLocation?->name ?? __('terminology.default_location_45edfb30') }}
                     </div>
                 @else
-                    <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Stock Location
+                    <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.stock_location_50e3c4fe') }}
                         <select wire:model.live="stock_location_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            <option value="">Select Stock Location</option>
+                            <option value="">{{ __('application.select_stock_location_3d3b3ddf') }}</option>
                             @foreach ($locations as $location)
                                 <option value="{{ $location->id }}">{{ $location->name }}</option>
                             @endforeach
@@ -188,13 +188,13 @@ $save = function (InventoryService $inventory) {
                     </label>
                 @endif
 
-                <x-form-input label="Adjustment Date" name="adjustment_date" type="date" wire:model="adjustment_date" required />
-                <x-form-input label="Reference Number" name="reference_number" wire:model="reference_number" required />
+                <x-form-input label="{{ __('application.adjustment_date_95f49a90') }}" name="adjustment_date" type="date" wire:model="adjustment_date" required />
+                <x-form-input label="{{ __('application.reference_number_74195db5') }}" name="reference_number" wire:model="reference_number" required />
             </div>
 
             @if ($selectedLocation)
                 <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-                    You are adjusting stock for {{ $selectedLocation->name }} only. Stock in other locations will not be affected.
+                    {{ __('application.you_are_adjusting_stock_for_ba48ef9e') }} {{ $selectedLocation->name }} {{ __('application.only_stock_in_other_locations_will_not_be_affected_d473497a') }}
                 </div>
             @endif
 
@@ -209,9 +209,9 @@ $save = function (InventoryService $inventory) {
                     @endphp
                     <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
                         <div class="grid gap-3 lg:grid-cols-7">
-                            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 lg:col-span-2">Product
+                            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 lg:col-span-2">{{ __('application.product_dd3b86d1') }}
                                 <select wire:model.live="lines.{{ $index }}.product_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm disabled:opacity-60 dark:border-slate-700 dark:bg-navy-950" @disabled(! $this->locationReady())>
-                                    <option value="">{{ $this->locationReady() ? 'Select product' : 'Select Stock Location first' }}</option>
+                                    <option value="">{{ $this->locationReady() ? __('application.select_product_596d90e5') : __('terminology.select_stock_location_first_a5f75b72') }}</option>
                                     @foreach ($products as $option)
                                         <option value="{{ $option->id }}">{{ $option->name }} / {{ $option->sku }}</option>
                                     @endforeach
@@ -219,22 +219,22 @@ $save = function (InventoryService $inventory) {
                                 @error("lines.$index.product_id") <span class="text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                             </label>
 
-                            <div class="text-sm"><span class="block font-bold text-slate-500">SKU</span><span class="mt-2 block">{{ $product?->sku ?? '-' }}</span></div>
-                            <div class="text-sm"><span class="block font-bold text-slate-500">Unit</span><span class="mt-2 block">{{ $product?->unit?->short_name ?? '-' }}</span></div>
-                            <div class="text-sm"><span class="block font-bold text-slate-500">System Quantity</span><span class="mt-2 block font-black">{{ \App\Support\NumberFormatter::quantity($system) }}</span></div>
-                            <x-form-input label="Physical Quantity" name="lines.{{ $index }}.physical_quantity" type="number" step="0.01" wire:model.live="lines.{{ $index }}.physical_quantity" required />
-                            <div class="text-sm"><span class="block font-bold text-slate-500">Difference</span><span class="mt-2 block font-black {{ $difference < 0 ? 'text-red-600' : ($difference > 0 ? 'text-emerald-600' : 'text-slate-500') }}">{{ \App\Support\NumberFormatter::quantity($difference) }}</span><span class="text-xs">{{ $direction }}</span></div>
+                            <div class="text-sm"><span class="block font-bold text-slate-500">{{ __('application.sku_d59192b9') }}</span><span class="mt-2 block">{{ $product?->sku ?? '-' }}</span></div>
+                            <div class="text-sm"><span class="block font-bold text-slate-500">{{ __('application.unit_f6b935ab') }}</span><span class="mt-2 block">{{ $product?->unit?->short_name ?? '-' }}</span></div>
+                            <div class="text-sm"><span class="block font-bold text-slate-500">{{ __('application.system_quantity_132f3826') }}</span><span class="mt-2 block font-black">{{ \App\Support\NumberFormatter::quantity($system) }}</span></div>
+                            <x-form-input label="{{ __('application.physical_quantity_c9184d2a') }}" name="lines.{{ $index }}.physical_quantity" type="number" step="0.01" wire:model.live="lines.{{ $index }}.physical_quantity" required />
+                            <div class="text-sm"><span class="block font-bold text-slate-500">{{ __('application.difference_b16f1f66') }}</span><span class="mt-2 block font-black {{ $difference < 0 ? 'text-red-600' : ($difference > 0 ? 'text-emerald-600' : 'text-slate-500') }}">{{ \App\Support\NumberFormatter::quantity($difference) }}</span><span class="text-xs">{{ $direction }}</span></div>
                         </div>
                         <div class="mt-3 grid gap-3 md:grid-cols-[1fr_2fr_auto]">
-                            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Reason
+                            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.reason_f219cc06') }}
                                 <select wire:model="lines.{{ $index }}.reason" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                                     @foreach ($this->reasons() as $reason)
                                         <option value="{{ $reason }}">{{ $reason }}</option>
                                     @endforeach
                                 </select>
                             </label>
-                            <x-form-input label="Line Notes" name="lines.{{ $index }}.notes" wire:model="lines.{{ $index }}.notes" />
-                            <button type="button" wire:click="removeLine({{ $index }})" class="self-end rounded-xl border border-red-200 px-4 py-2.5 text-sm font-black text-red-600 dark:border-red-500/30">Remove</button>
+                            <x-form-input label="{{ __('application.line_notes_6e8da3c9') }}" name="lines.{{ $index }}.notes" wire:model="lines.{{ $index }}.notes" />
+                            <button type="button" wire:click="removeLine({{ $index }})" class="self-end rounded-xl border border-red-200 px-4 py-2.5 text-sm font-black text-red-600 dark:border-red-500/30">{{ __('application.remove_e963907d') }}</button>
                         </div>
                     </div>
                 @endforeach
@@ -242,22 +242,22 @@ $save = function (InventoryService $inventory) {
 
             @error('lines') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
 
-            <button type="button" wire:click="addLine" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Add Product</button>
+            <button type="button" wire:click="addLine" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.add_product_ee611e53') }}</button>
 
             <div class="grid gap-4 rounded-xl border border-slate-200 p-4 text-sm dark:border-slate-800 md:grid-cols-4">
-                <div><span class="text-slate-500">Total Products</span><p class="text-xl font-black">{{ count($lines) }}</p></div>
-                <div><span class="text-slate-500">Total Increase</span><p class="text-xl font-black text-emerald-600">{{ \App\Support\NumberFormatter::quantity($lineSummaries->filter(fn ($value) => $value > 0)->sum()) }}</p></div>
-                <div><span class="text-slate-500">Total Decrease</span><p class="text-xl font-black text-red-600">{{ \App\Support\NumberFormatter::quantity(abs($lineSummaries->filter(fn ($value) => $value < 0)->sum())) }}</p></div>
-                <div><span class="text-slate-500">Selected Location</span><p class="text-xl font-black">{{ $selectedLocation?->name ?? 'Not selected' }}</p></div>
+                <div><span class="text-slate-500">{{ __('application.total_products_c48f2bf5') }}</span><p class="text-xl font-black">{{ count($lines) }}</p></div>
+                <div><span class="text-slate-500">{{ __('application.total_increase_f8dae8ca') }}</span><p class="text-xl font-black text-emerald-600">{{ \App\Support\NumberFormatter::quantity($lineSummaries->filter(fn ($value) => $value > 0)->sum()) }}</p></div>
+                <div><span class="text-slate-500">{{ __('application.total_decrease_00c72d09') }}</span><p class="text-xl font-black text-red-600">{{ \App\Support\NumberFormatter::quantity(abs($lineSummaries->filter(fn ($value) => $value < 0)->sum())) }}</p></div>
+                <div><span class="text-slate-500">{{ __('application.selected_location_fe84c874') }}</span><p class="text-xl font-black">{{ $selectedLocation?->name ?? __('terminology.not_selected_183079f3') }}</p></div>
             </div>
 
-            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Header Notes
+            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.header_notes_70c0973f') }}
                 <textarea wire:model="notes" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
             </label>
 
             <div class="flex gap-2">
-                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white" onclick="return confirm('Post this stock adjustment request?')">Submit Adjustment</button>
-                <a href="{{ route('stock-adjustments.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
+                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white" onclick="return confirm('Post this stock adjustment request?')">{{ __('application.submit_adjustment_f78f495b') }}</button>
+                <a href="{{ route('stock-adjustments.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.cancel_77dfd213') }}</a>
             </div>
         </form>
     </x-card>

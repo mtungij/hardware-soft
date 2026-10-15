@@ -9,22 +9,47 @@ use App\Models\WhatsAppTemplate;
 class WhatsAppTemplateService
 {
     public const DEFAULTS = [
-        'sale_completed' => ['sales', 'New Sale', "*NEW SALE*\n\nInvoice: {{sale_number}}\nDate: {{date}}\nBranch: {{branch}}\nSold By: {{cashier}}\nCustomer: {{customer}}\n\nProducts:\n{{products}}\n\nTotal Quantity: {{total_quantity}}\nTotal: {{currency}} {{total}}\nPaid: {{currency}} {{paid}}\nBalance: {{currency}} {{balance}}\n\nPayment: {{payment}}\n\nHARDEX POS"],
-        'sale_cancelled' => ['security', 'Sale Cancelled', "HARDEX SECURITY ALERT\nSale {{sale_number}} was cancelled.\nBranch: {{branch}}\nAmount: TZS {{amount}}\nCancelled by: {{actor}}\nTime: {{time}}"],
-        'customer_payment_received' => ['customer_payments', 'Customer Payment Received', "HARDEX CUSTOMER PAYMENT\nPayment received from {{customer}}.\nAmount: TZS {{amount}}\nReference: {{reference}}\nBranch: {{branch}}\nReceived by: {{actor}}"],
-        'purchase_order_created' => ['purchase_order_created', 'Purchase Order Created', "*PURCHASE ORDER CREATED*\n\nPO No: {{po_number}}\nSupplier: {{supplier}}\nBranch: {{branch}}\nCreated By: {{created_by}}\nDate: {{date}}\n\n*PRODUCTS ORDERED*\n{{products}}\n\n*SUMMARY*\nProducts: {{products_count}}\n\n{{company_name}}"],
-        'goods_received_grn' => ['goods_received_grn', 'Goods Received / GRN', "*GOODS RECEIVED / GRN*\n\nGRN No: {{grn_number}}\nPO No: {{po_number}}\nSupplier: {{supplier}}\nReceived At: {{receiving_location}}\nReceived By: {{received_by}}\nDate: {{date}}\n\n*PRODUCTS RECEIVED*\n{{products}}\n\n{{additional_costs}}\n*SUMMARY*\nProducts: {{products_count}}\nTotal Received Qty: {{total_received_quantity}}\nGoods Value: TZS {{goods_value}}\nTotal Additional Costs: TZS {{additional_cost_total}}\nTotal Landed Value: TZS {{landed_value}}\n\n{{company_name}}"],
-        'production_completed' => ['production', 'Production Completed', "HARDEX PRODUCTION COMPLETED\nOrder: {{order_number}}\nProduct: {{product}}\nAccepted: {{accepted}}\nRejected: {{rejected}}\nBranch: {{branch}}"],
+        'sale_completed' => ['sales', 'application.new_sale_66d89d8f', 'templates.sale_completed'],
+        'sale_cancelled' => ['security', 'application.sale_cancelled_5115d4c9', 'templates.sale_cancelled'],
+        'customer_payment_received' => ['customer_payments', 'application.customer_payment_received_6abcff2f', 'templates.customer_payment_received'],
+        'purchase_order_created' => ['purchase_order_created', 'application.purchase_order_created_8baf36ac', 'templates.purchase_order_created'],
+        'goods_received_grn' => ['goods_received_grn', 'application.goods_received_grn_41e4ab9a', 'templates.goods_received_grn'],
+        'production_completed' => ['production', 'application.production_completed_3237a1ea', 'templates.production_completed'],
     ];
 
     public function __construct(private WhatsAppLocalization $localization) {}
+
+    public function bodyForLanguage(WhatsAppTemplate $template, string $language): string
+    {
+        $localized = json_decode($template->body, true);
+        if (is_array($localized) && isset($localized['translations'])) {
+            $body = $localized['translations'][$language] ?? null;
+        } else {
+            // Existing templates predate language selection and were English templates.
+            $body = $language === 'en' ? $template->body : null;
+        }
+
+        return is_string($body) && $body !== ''
+            ? $body
+            : $this->localization->getForLanguage($language, 'templates.'.$template->key);
+    }
+
+    public function saveBodyForLanguage(WhatsAppTemplate $template, string $language, string $body): void
+    {
+        $localized = json_decode($template->body, true);
+        $translations = is_array($localized) && isset($localized['translations'])
+            ? $localized['translations']
+            : ['en' => $template->body];
+        $translations[$language] = $body;
+        $template->update(['body' => json_encode(['translations' => $translations], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR)]);
+    }
 
     public function seedDefaults(Company $company): void
     {
         foreach (self::DEFAULTS as $key => [$category, $name, $body]) {
             WhatsAppTemplate::withoutGlobalScope(CompanyScope::class)->firstOrCreate(
                 ['company_id' => $company->id, 'key' => $key],
-                ['category' => $category, 'name' => $name, 'body' => $body, 'active' => true],
+                ['category' => $category, 'name' => __($name, [], 'en'), 'body' => $this->localization->getForLanguage('en', $body), 'active' => true],
             );
         }
     }
@@ -33,9 +58,8 @@ class WhatsAppTemplateService
     {
         $language = $this->localization->language($company);
         $default = $this->localization->get($company, 'templates.'.$key);
-        $stored = $language === 'en'
-            ? WhatsAppTemplate::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->where('key', $key)->where('active', true)->value('body')
-            : null;
+        $template = WhatsAppTemplate::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->where('key', $key)->where('active', true)->first();
+        $stored = $template ? $this->bodyForLanguage($template, $language) : null;
         $requiresProducts = in_array($key, ['sale_completed', 'purchase_order_created', 'goods_received_grn'], true);
         $body = $requiresProducts && $stored && ! str_contains($stored, '{{products}}')
             ? $default

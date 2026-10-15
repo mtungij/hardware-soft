@@ -17,12 +17,9 @@ class EnsureCustomerAccountIsActive
             return redirect()->route('customer.login');
         }
 
+
         if ($customer->status === 'pending') {
             return redirect()->route('customer.pending');
-        }
-
-        if ($customer->must_change_password && ! $request->routeIs('customer.change-password')) {
-            return redirect()->route('customer.change-password');
         }
 
         if ($customer->status === 'suspended') {
@@ -30,7 +27,7 @@ class EnsureCustomerAccountIsActive
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
-            return redirect()->route('customer.login')->with('error', 'Your customer portal account is suspended. Please contact Hardex support.');
+            return redirect()->route('customer.login')->with('error', __('application.your_customer_portal_account_is_suspended_please_contact_hardex_support_c2d25c80'));
         }
 
         return $next($request);

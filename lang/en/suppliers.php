@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Suppliers', 'create' => 'Create Supplier', 'edit' => 'Edit Supplier', 'name' => 'Name', 'phone' => 'Phone', 'email' => 'Email', 'balance' => 'Balance'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/suppliers.php';

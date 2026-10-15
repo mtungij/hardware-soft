@@ -22,13 +22,13 @@ class PurchaseOrderEmailService
         $purchase->loadMissing('supplier');
 
         if (! in_array($purchase->status, ['draft', 'ordered'], true)) {
-            throw ValidationException::withMessages(['purchase' => 'Only draft or ordered purchase orders can be emailed.']);
+            throw ValidationException::withMessages(['purchase' => __('application.only_draft_or_ordered_purchase_orders_can_be_emailed_05e61883')]);
         }
 
         $email = $purchase->supplier?->email;
 
         if (blank($email) || Validator::make(['email' => $email], ['email' => ['required', 'email:rfc']])->fails()) {
-            throw ValidationException::withMessages(['supplier' => 'Supplier email is empty or invalid.']);
+            throw ValidationException::withMessages(['supplier' => __('application.supplier_email_is_empty_or_invalid_7967e245')]);
         }
 
         return $email;
@@ -37,7 +37,7 @@ class PurchaseOrderEmailService
     public function queue(Purchase $purchase, int $sentBy): PurchaseEmailLog
     {
         $recipient = $this->validateCanSend($purchase);
-        $subject = "Purchase Order {$purchase->reference_number} - ".($this->settings()?->company_name ?? config('app.name'));
+        $subject = __('mail.purchase.subject', ['reference' => $purchase->reference_number, 'company' => $this->settings()?->company_name ?? config('app.name')]);
 
         $log = PurchaseEmailLog::create([
             'purchase_id' => $purchase->id,
@@ -62,7 +62,7 @@ class PurchaseOrderEmailService
     {
         $recipient = $this->validateCanSend($purchase);
         $settings = $this->settings();
-        $subject = "Purchase Order {$purchase->reference_number} - ".($settings?->company_name ?? config('app.name'));
+        $subject = __('mail.purchase.subject', ['reference' => $purchase->reference_number, 'company' => $settings?->company_name ?? config('app.name')]);
 
         $log = PurchaseEmailLog::create([
             'purchase_id' => $purchase->id,

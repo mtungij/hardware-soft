@@ -40,16 +40,10 @@
                 : collect();
             $navItems = [
                 ['label' => __('messages.nav.dashboard'), 'route' => 'customer.dashboard', 'tour' => 'customer-dashboard'],
-                ['label' => 'Purchase Requests', 'route' => 'customer.purchase-requests.index', 'tour' => 'customer-requests'],
-                ['label' => 'Quotations', 'route' => 'customer.quotations.index', 'tour' => 'customer-quotations'],
-                ['label' => 'Invoices', 'route' => 'customer.invoices.index', 'tour' => 'customer-invoices'],
-                ['label' => __('messages.nav.debts'), 'route' => 'customer.debts.index', 'tour' => 'customer-debts'],
-                ['label' => __('messages.nav.upload_receipt'), 'route' => 'customer.receipts.create', 'tour' => 'upload-receipt'],
-                ['label' => __('messages.nav.deposits'), 'route' => 'customer.deposits.index', 'tour' => 'customer-deposits'],
-                ['label' => __('messages.nav.statements'), 'route' => 'customer.statement', 'tour' => 'customer-statements'],
-                ['label' => __('messages.nav.notifications'), 'route' => 'customer.notifications.index', 'tour' => 'customer-notifications'],
-                ['label' => __('messages.nav.profile'), 'route' => 'customer.profile', 'tour' => 'customer-profile'],
-                ['label' => __('messages.nav.help'), 'route' => 'customer.help-center', 'tour' => 'customer-help'],
+                ['label' => __('portal.products'), 'route' => 'customer.products', 'tour' => 'customer-products'],
+                ['label' => __('portal.requests'), 'route' => 'customer.purchase-requests.index', 'tour' => 'customer-requests'],
+                ['label' => __('portal.finance'), 'route' => 'customer.debts.index', 'tour' => 'customer-debts'],
+                ['label' => __('portal.account'), 'route' => 'customer.profile', 'tour' => 'customer-profile'],
             ];
         @endphp
 
@@ -73,7 +67,7 @@
 
                 <nav class="flex-1 space-y-1 overflow-y-auto p-3">
                     @foreach ($navItems as $item)
-                        @php $isActive = request()->routeIs($item['route']) || request()->routeIs(str($item['route'])->beforeLast('.').'.*'); @endphp
+                        @php $isActive = request()->routeIs($item['route']) || (str_ends_with($item['route'], '.index') && request()->routeIs(str($item['route'])->beforeLast('.').'.*')); @endphp
                         <a href="{{ route($item['route']) }}" wire:navigate data-tour="{{ $item['tour'] }}" @click="sidebarOpen = false" class="flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-bold transition {{ $isActive ? 'bg-orange-50 text-build-orange dark:bg-orange-500/15 dark:text-orange-200' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5' }}">
                             <span class="grid h-9 w-9 place-items-center rounded-lg {{ $isActive ? 'bg-build-orange text-white' : 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-300' }}">{{ collect(explode(' ', $item['label']))->map(fn ($word) => $word[0])->take(2)->join('') }}</span>
                             {{ $item['label'] }}
@@ -127,9 +121,9 @@
                                                 @if (! $notification->read_at)
                                                     <span class="h-2 w-2 rounded-full bg-build-orange"></span>
                                                 @endif
-                                                <p class="line-clamp-1 font-bold">{{ $notification->title }}</p>
+                                                <p class="line-clamp-1 font-bold">{{ $notification->displayTitle() }}</p>
                                             </div>
-                                            <p class="mt-1 line-clamp-2 text-xs text-slate-500">{{ $notification->message }}</p>
+                                            <p class="mt-1 line-clamp-2 text-xs text-slate-500">{{ $notification->displayMessage() }}</p>
                                         </a>
                                     @empty
                                         <p class="py-6 text-center text-sm text-slate-500">{{ __('messages.notifications.empty') }}</p>
@@ -139,7 +133,7 @@
                         </div>
                         <div class="relative">
                             <button data-tour="customer-profile" class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen; notificationsOpen = false">
-                                <img class="h-8 w-8 rounded-lg" src="https://ui-avatars.com/api/?name={{ urlencode($customerAccount?->name ?? 'Customer') }}&background=0d2e50&color=fff" alt="">
+                                <img class="h-8 w-8 rounded-lg" src="https://ui-avatars.com/api/?name={{ urlencode($customerAccount?->name ?? __('application.customer_0e85749a')) }}&background=0d2e50&color=fff" alt="">
                                 <span class="hidden text-sm font-bold sm:block">{{ $customerAccount?->name }}</span>
                             </button>
                             <div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-3 w-56 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-navy-900">
@@ -172,5 +166,6 @@
         />
 
         @livewireScripts
+        <x-localization />
     </body>
 </html>

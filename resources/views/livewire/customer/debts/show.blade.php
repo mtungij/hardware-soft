@@ -11,14 +11,14 @@ layout('layouts.customer');
 state(['sale' => null]);
 
 mount(function (Sale $sale) {
-    abort_unless($sale->customer_id === auth('customer')->user()->customer_id, 403);
+    abort_unless((int) $sale->customer_id === (int) auth('customer')->user()->customer_id && (int) $sale->company_id === (int) auth('customer')->user()->company_id, 403);
     $this->sale = $sale->load(['items.product', 'payments']);
 });
 $paymentStatusLabel = fn (string $status) => [
     'paid' => __('messages.status.paid'),
     'partial' => __('messages.status.partial'),
     'unpaid' => __('messages.status.unpaid'),
-][$status] ?? str($status)->replace('_', ' ')->title();
+][$status] ?? \App\Support\UiText::label($status);
 
 ?>
 

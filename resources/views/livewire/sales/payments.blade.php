@@ -37,13 +37,13 @@ $receivePayment = function () {
         $sale = Sale::query()->whereKey($this->sale->id)->lockForUpdate()->firstOrFail();
 
         if ($sale->status !== 'completed') {
-            throw ValidationException::withMessages(['sale' => 'Cancelled sales cannot receive payments.']);
+            throw ValidationException::withMessages(['sale' => __('application.cancelled_sales_cannot_receive_payments_946394cb')]);
         }
 
         $amount = min((float) $this->amount, (float) $sale->balance_amount);
 
         if ($amount <= 0) {
-            throw ValidationException::withMessages(['amount' => 'This sale has no outstanding balance.']);
+            throw ValidationException::withMessages(['amount' => __('application.this_sale_has_no_outstanding_balance_edb01eed')]);
         }
 
         $sale->payments()->create([
@@ -73,34 +73,34 @@ $receivePayment = function () {
         $this->reference_number = '';
     });
 
-    session()->flash('success', 'Payment received successfully.');
+    session()->flash('success', __('application.payment_received_successfully_e4e05f98'));
 };
 
 ?>
 
 <div>
-    <x-page-header title="Receive Sale Payment" :description="$sale->sale_number" :breadcrumbs="['Dashboard' => route('dashboard'), 'Sales' => route('sales.index'), $sale->sale_number => route('sales.show', $sale), 'Payment' => null]" />
+    <x-page-header title="{{ __('application.receive_sale_payment_66e27a07') }}" :description="$sale->sale_number" :breadcrumbs="['Dashboard' => route('dashboard'), 'Sales' => route('sales.index'), $sale->sale_number => route('sales.show', $sale), 'Payment' => null]" />
 
     <div class="grid gap-6 lg:grid-cols-[1fr_420px]">
-        <x-card title="Payment History">
+        <x-card title="{{ __('application.payment_history_cfeba031') }}">
             <div class="mb-4 grid gap-4 sm:grid-cols-3">
-                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Total</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</p></div>
-                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">Paid</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</p></div>
-                <div class="rounded-lg bg-navy-900 p-4 text-white"><p class="text-xs text-slate-300">Balance</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</p></div>
+                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">{{ __('application.total_b25928c6') }}</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->total_amount) }}</p></div>
+                <div class="rounded-lg bg-slate-50 p-4 dark:bg-white/5"><p class="text-xs text-slate-500">{{ __('application.paid_dc9d4584') }}</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</p></div>
+                <div class="rounded-lg bg-navy-900 p-4 text-white"><p class="text-xs text-slate-300">{{ __('application.balance_90eef613') }}</p><p class="text-lg font-black">TZS {{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</p></div>
             </div>
             <x-table>
                 <x-slot:head>
                     <tr>
-                        <th class="px-4 py-3 text-left">Date</th>
-                        <th class="px-4 py-3 text-left">Method</th>
-                        <th class="px-4 py-3 text-left">Reference</th>
-                        <th class="px-4 py-3 text-right">Amount</th>
+                        <th class="px-4 py-3 text-left">{{ __('application.date_eb9a4bc1') }}</th>
+                        <th class="px-4 py-3 text-left">{{ __('application.method_88306943') }}</th>
+                        <th class="px-4 py-3 text-left">{{ __('application.reference_db1c7845') }}</th>
+                        <th class="px-4 py-3 text-right">{{ __('application.amount_43dc8532') }}</th>
                     </tr>
                 </x-slot:head>
                 @foreach ($sale->payments as $payment)
                     <tr class="border-t border-slate-100 dark:border-slate-800">
-                        <td class="px-4 py-3">{{ $payment->payment_date?->format('M d, Y') }}</td>
-                        <td class="px-4 py-3">{{ str($payment->payment_method)->replace('_', ' ')->title() }}</td>
+                        <td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
+                        <td class="px-4 py-3">{{ \App\Support\UiText::label($payment->payment_method) }}</td>
                         <td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td>
                         <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td>
                     </tr>
@@ -108,20 +108,20 @@ $receivePayment = function () {
             </x-table>
         </x-card>
 
-        <x-card title="Record Payment">
+        <x-card title="{{ __('application.record_payment_6577ced3') }}">
             @if ((float) $sale->balance_amount <= 0)
-                <div class="rounded-lg bg-emerald-50 p-4 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">This sale is fully paid.</div>
+                <div class="rounded-lg bg-emerald-50 p-4 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{{ __('application.this_sale_is_fully_paid_69db49bd') }}</div>
             @else
                 <form wire:submit="receivePayment" class="space-y-4">
-                    <label class="block text-sm font-bold">Payment Method</label>
+                    <label class="block text-sm font-bold">{{ __('application.payment_method_f383f6a2') }}</label>
                     <select wire:model="payment_method" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="cash">Cash</option>
-                        <option value="mobile_money">Mobile Money</option>
-                        <option value="bank">Bank</option>
+                        <option value="cash">{{ __('application.cash_758ec54e') }}</option>
+                        <option value="mobile_money">{{ __('application.mobile_money_6a38d1e4') }}</option>
+                        <option value="bank">{{ __('application.bank_9e89988c') }}</option>
                     </select>
-                    <x-money-input label="Amount" name="amount" wire:model="amount" required />
-                    <x-form-input label="Reference Number" wire:model="reference_number" />
-                    <button class="w-full rounded-lg bg-build-orange px-4 py-3 text-sm font-black text-white">Receive Payment</button>
+                    <x-money-input label="{{ __('application.amount_43dc8532') }}" name="amount" wire:model="amount" required />
+                    <x-form-input label="{{ __('application.reference_number_74195db5') }}" wire:model="reference_number" />
+                    <button class="w-full rounded-lg bg-build-orange px-4 py-3 text-sm font-black text-white">{{ __('application.receive_payment_09fd7056') }}</button>
                 </form>
             @endif
         </x-card>

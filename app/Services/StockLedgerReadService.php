@@ -15,8 +15,10 @@ use App\Models\StockTransfer;
 use App\Models\User;
 use App\Support\AuthorizationScope;
 use App\Support\BranchAccess;
+use App\Support\UiText;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Lang;
 
 class StockLedgerReadService
 {
@@ -111,28 +113,9 @@ class StockLedgerReadService
 
     public function actionLabel(string $type): string
     {
-        return match ($type) {
-            'purchase_in', 'purchase_receipt' => 'Purchase Receipt',
-            'internal_sale_in' => 'Internal Sale In',
-            'internal_sale_out' => 'Internal Sale Out',
-            'purchase_receipt_reversal' => 'Purchase Receipt Reversal',
-            'sale_out' => 'Sale Out',
-            'transfer_in' => 'Transfer In',
-            'transfer_out' => 'Transfer Out',
-            'transfer_cancel_out' => 'Cancellation Out',
-            'transfer_cancel_in' => 'Cancellation In',
-            'opening_stock' => 'Opening Stock',
-            'adjustment_in', 'adjustment_out' => 'Stock Adjustment',
-            'production_output' => 'Production In',
-            'production_consumption' => 'Production Consumption',
-            'curing_release_in' => 'Curing Release In',
-            'curing_release_out' => 'Curing Release Out',
-            'curing_damage' => 'Curing Damage',
-            'return_in' => 'Return In',
-            'direct_stock_in' => 'Direct Stock In',
-            'damage_out' => 'Damage Out',
-            default => str($type)->replace('_', ' ')->title()->toString(),
-        };
+        $key = 'stock_actions.'.$type;
+
+        return Lang::has($key, app()->getLocale(), false) ? __($key) : __('stock_actions.movement');
     }
 
     /** @param array<int, string> $references
@@ -141,7 +124,7 @@ class StockLedgerReadService
     private function summary(?StockMovement $movement, float $current, array $references): array
     {
         if (! $movement) {
-            return ['action' => 'No movement', 'before' => null, 'change' => null, 'after' => $current, 'reference' => '—', 'date' => null];
+            return ['action' => __('stock_actions.no_movement'), 'before' => null, 'change' => null, 'after' => $current, 'reference' => '—', 'date' => null];
         }
 
         $change = $movement->signedQuantity();
@@ -186,7 +169,7 @@ class StockLedgerReadService
                 : (filled($movement->posting_reference)
                     ? (string) $movement->posting_reference
                     : ($movement->reference_type && $movement->reference_id
-                        ? class_basename($movement->reference_type).' #'.$movement->reference_id
+                        ? UiText::translate($models[$movement->reference_type][1] ?? 'Reference').' #'.$movement->reference_id
                         : '—'));
         }
 

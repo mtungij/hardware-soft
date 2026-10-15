@@ -21,7 +21,7 @@ class ProductionQualityPlanCheck extends Model
     {
         $guard = function (self $check): void {
             if ($check->plan()->where('status', 'active')->exists()) {
-                throw new LogicException('Checks on an active quality plan are immutable.');
+                throw new LogicException(__('application.checks_on_an_active_quality_plan_are_immutable_bf14e2db'));
             }
         };
         static::creating($guard);

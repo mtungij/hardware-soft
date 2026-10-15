@@ -1,0 +1,212 @@
+<?php
+
+use App\Models\Branch;
+use App\Models\Product;
+use App\Services\CustomerPurchaseRequestService;
+
+use function Livewire\Volt\computed;
+use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
+use function Livewire\Volt\state;
+
+layout('layouts.customer');
+
+state(['search' => '', 'branch_id' => '', 'notes' => '', 'items' => [], 'submission_key' => '', 'request_type' => 'rfq', 'delivery_requested' => false, 'delivery_address' => '', 'delivery_instructions' => '']);
+
+mount(function (): void {
+    $account = auth('customer')->user();
+    $this->branch_id = (string) ($account->customer?->branch_id ?: Branch::withoutGlobalScopes()->where('company_id', $account->company_id)->where('status', 'active')->orderByDesc('is_default')->value('id'));
+    $this->submission_key = (string) str()->uuid();
+
+    $selectedIds = session()->pull('customer_portal_selected_products:' . auth('customer')->user()->company_id . ':' . auth('customer')->id(), []);
+
+    if (! is_array($selectedIds)) {
+        $selectedIds = [];
+    }
+
+    $productId = request()->integer('product_id');
+
+    if ($productId > 0) {
+        $selectedIds[] = $productId;
+    }
+
+    $selectedIds = array_values(array_unique(array_map('intval', $selectedIds)));
+
+    abort_if(count($selectedIds) > 50, 422);
+
+    foreach ($selectedIds as $id) {
+        $product = app(\App\Services\CustomerPortalCatalogue::class)
+            ->products($account, (int) $this->branch_id)
+            ->findOrFail($id);
+
+        $this->items[] = [
+            'product_id' => $product->id,
+            'product_name' => $product->displayNameWithSize(),
+            'product_unit_conversion_id' => '',
+            'quantity' => 1,
+            'notes' => '',
+        ];
+    }
+});
+
+$products = computed(fn () => app(\App\Services\CustomerPortalCatalogue::class)->products(auth('customer')->user(), $this->branch_id ? (int) $this->branch_id : null, $this->search)->limit(30)->get());
+
+$branches = computed(fn () => Branch::withoutGlobalScopes()->where('company_id', auth('customer')->user()->company_id)->where('status', 'active')->orderBy('name')->get());
+
+$addProduct = function (int $productId): void {
+    if (collect($this->items)->contains(fn ($item) => (int) $item['product_id'] === $productId)) return;
+    $product = app(\App\Services\CustomerPortalCatalogue::class)->products(auth('customer')->user(), (int) $this->branch_id)->findOrFail($productId);
+    $this->items[] = ['product_id' => $product->id, 'product_name' => $product->displayNameWithSize(), 'product_unit_conversion_id' => '', 'quantity' => 1, 'notes' => ''];
+};
+
+$removeItem = function (int $index): void { unset($this->items[$index]); $this->items = array_values($this->items); };
+
+$adjustQuantity = function (int $index, int $direction): void {
+    if (! isset($this->items[$index]) || ! in_array($direction, [-1, 1], true)) {
+        return;
+    }
+
+    $current = $this->items[$index]['quantity'] ?? 1;
+
+    if (! is_numeric($current)) {
+        $current = 1;
+    }
+
+    $quantity = round((float) $current + $direction, 4);
+
+    if ($quantity <= 0) {
+        return;
+    }
+
+    $this->items[$index]['quantity'] = $quantity;
+};
+
+$submit = function (CustomerPurchaseRequestService $service): void {
+    $this->validate([
+        'request_type' => ['required', 'in:rfq,order'], 'delivery_requested' => ['boolean'], 'delivery_address' => ['nullable', 'required_if:delivery_requested,true', 'string', 'max:2000'], 'delivery_instructions' => ['nullable', 'string', 'max:2000'], 'branch_id' => ['required', 'integer'], 'notes' => ['nullable', 'string', 'max:2000'],
+        'submission_key' => ['required', 'uuid'], 'items' => ['required', 'array', 'min:1'],
+        'items.*.product_id' => ['required', 'integer'], 'items.*.product_unit_conversion_id' => ['nullable', 'integer'],
+        'items.*.quantity' => ['required', 'numeric', 'gt:0'], 'items.*.notes' => ['nullable', 'string', 'max:500'],
+    ]);
+    $request = $service->submit(auth('customer')->user(), (int) $this->branch_id, $this->notes, $this->items, $this->submission_key, ['request_type' => $this->request_type, 'delivery_requested' => $this->delivery_requested, 'delivery_address' => $this->delivery_address, 'delivery_instructions' => $this->delivery_instructions]);
+    session()->flash('success', __('feedback.purchase_request_submitted', ['number' => $request->request_number]));
+    $this->redirectRoute('customer.purchase-requests.show', $request, navigate: true);
+};
+?>
+
+<div>
+    <x-page-header title="{{ app()->getLocale() === 'sw' ? 'Omba Bei au Agiza Bidhaa' : 'Request a Quote or Place an Order' }}" description="{{ app()->getLocale() === 'sw' ? 'Tafuta bidhaa, bonyeza Ongeza, weka idadi na utume ombi lako.' : 'Find products, add quantities and submit your request.' }}" :breadcrumbs="['My Purchase Requests'=>route('customer.purchase-requests.index'),'New Request'=>null]" />
+    <div class="mb-5 rounded-2xl bg-orange-50 p-4 text-sm font-semibold text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+    {{ app()->getLocale() === 'sw'
+        ? 'Hatua ya 1: Tafuta bidhaa na bonyeza Ongeza. Hatua ya 2: Weka idadi na chagua aina ya ombi. Hatua ya 3: Tuma ombi kwa Hardware.'
+        : 'Step 1: Find products and tap Add. Step 2: Set quantities and choose a request type. Step 3: Send your request to the hardware store.' }}
+</div>
+<div class="grid gap-6 lg:grid-cols-2">
+        <x-card title="{{ __('application.products_fe0a091f') }}">
+            <input wire:model.live.debounce.300ms="search" placeholder="{{ __('application.search_product_or_sku_6f8d57b2') }}" class="mb-4 w-full rounded-xl border-slate-200 dark:bg-navy-950">
+            <div class="max-h-[34rem] space-y-2 overflow-y-auto">@foreach($this->products as $product)<div class="flex items-center gap-3 rounded-xl border p-3 dark:border-slate-700">
+                <img src="{{ $product->image_url }}" class="h-12 w-12 rounded-lg object-cover" alt="">
+                <div class="min-w-0 flex-1"><p class="font-black">{{ $product->displayNameWithSize() }}</p><p class="text-xs text-slate-500">{{ $product->sku ?: __('terminology.no_sku_1bc1c217') }} {{ __('application.base_2c04a502') }} {{ $product->unit?->short_name }}</p></div>
+                @php($alreadyAdded = collect($items)->contains(fn ($row) => (int) $row['product_id'] === (int) $product->id))
+                <button type="button"
+                    wire:click="addProduct({{ $product->id }})"
+                    @disabled($alreadyAdded)
+                    class="min-h-11 shrink-0 rounded-xl px-4 py-2 text-sm font-black transition
+                        {{ $alreadyAdded ? 'bg-green-100 text-green-700 cursor-default dark:bg-green-900/30 dark:text-green-300' : 'bg-build-orange text-white hover:opacity-90' }}">
+                    {{ $alreadyAdded
+                        ? (app()->getLocale() === 'sw' ? '✓ Imeongezwa' : '✓ Added')
+                        : (app()->getLocale() === 'sw' ? '+ Ongeza' : '+ Add') }}
+                </button>
+            </div>@endforeach</div>
+        </x-card>
+        <form wire:submit="submit" class="space-y-4"><x-card title="{{ app()->getLocale() === 'sw' ? 'Bidhaa Ulizochagua na Maelezo ya Ombi' : 'Selected Products and Request Details' }}">
+            <fieldset class="mt-5 space-y-3">
+    <legend class="mb-3 text-base font-black">
+        {{ app()->getLocale() === 'sw' ? 'Unataka kufanya nini?' : 'What would you like to do?' }}
+    </legend>
+
+    <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+        <input type="radio" wire:model.live="request_type" value="rfq" class="mt-1">
+        <span>
+            <strong class="block">{{ app()->getLocale() === 'sw' ? 'Omba Bei (Quotation)' : 'Request a Quote' }}</strong>
+            <small class="mt-1 block text-slate-500">
+                {{ app()->getLocale() === 'sw' ? 'Nataka Hardware initumie bei kwanza kabla sijaamua kununua.' : 'I want to receive a quotation before deciding to buy.' }}
+            </small>
+        </span>
+    </label>
+
+    <label class="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4 dark:border-slate-700">
+        <input type="radio" wire:model.live="request_type" value="order" class="mt-1">
+        <span>
+            <strong class="block">{{ app()->getLocale() === 'sw' ? 'Agiza Bidhaa (Order)' : 'Place an Order' }}</strong>
+            <small class="mt-1 block text-slate-500">
+                {{ app()->getLocale() === 'sw' ? 'Nataka kuagiza bidhaa hizi. Hardware ithibitishe bei na upatikanaji.' : 'I want to order these products, subject to price and availability confirmation.' }}
+            </small>
+        </span>
+    </label>
+</fieldset>
+            <label class="mt-4 flex min-h-12 items-center gap-3 font-bold"><input type="checkbox" wire:model.live="delivery_requested">{{ __('portal.delivery') }}</label>
+            @if($delivery_requested)
+                <x-form-input :label="__('portal.delivery_address')" name="delivery_address" wire:model="delivery_address" required />
+                <x-form-input :label="__('portal.delivery_instructions')" name="delivery_instructions" wire:model="delivery_instructions" />
+            @endif
+            <div class="mt-5 mb-3 flex items-center justify-between rounded-xl bg-orange-50 px-4 py-3 dark:bg-slate-800">
+                <span class="text-sm font-black">{{ app()->getLocale() === 'sw' ? 'Bidhaa Ulizochagua' : 'Selected Products' }}</span>
+                <span class="rounded-full bg-build-orange px-3 py-1 text-sm font-black text-white">{{ count($items) }}</span>
+            </div>
+            <div class="mt-4 space-y-3">@forelse($items as $index=>$row)@php($product=$this->products->firstWhere('id',(int)$row['product_id']) ?: app(\App\Services\CustomerPortalCatalogue::class)->products(auth('customer')->user(), (int) $this->branch_id)->find($row['product_id']))<div class="rounded-xl border p-3 dark:border-slate-700" wire:key="request-item-{{ $index }}">
+                <div class="flex justify-between"><b>{{ $row['product_name'] }}</b><button type="button" wire:click="removeItem({{ $index }})" class="text-xs font-bold text-red-600">{{ __('application.remove_e963907d') }}</button></div>
+                <div class="mt-3 grid gap-3 sm:grid-cols-2"><label class="text-xs font-bold">{{ __('application.unit_f6b935ab') }}<select wire:model="items.{{ $index }}.product_unit_conversion_id" class="mt-1 w-full rounded-lg border-slate-200 dark:bg-navy-950"><option value="">{{ $product?->unit?->short_name }} {{ __('application.base_bc31501c') }}</option>@foreach($product?->unitConversions?->where('active',true)->where('can_sell',true) ?? [] as $conversion)<option value="{{ $conversion->id }}">{{ $conversion->unit?->short_name }} (×{{ \App\Support\NumberFormatter::quantity($conversion->conversion_factor) }})</option>@endforeach</select></label><div>
+    <label class="mb-2 block text-sm font-bold">
+        {{ app()->getLocale() === 'sw' ? 'Idadi Unayohitaji' : 'Required Quantity' }}
+    </label>
+
+    <div class="flex items-center gap-2">
+        <button type="button"
+            wire:click="adjustQuantity({{ $index }}, -1)"
+            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-xl font-black dark:border-slate-600"
+            aria-label="Decrease quantity">−</button>
+
+        <input type="number"
+            min="0.0001"
+            step="0.0001"
+            required
+            wire:model.live.debounce.300ms="items.{{ $index }}.quantity"
+            class="h-12 w-full min-w-0 rounded-xl border border-slate-300 bg-white text-center text-lg font-black dark:border-slate-600 dark:bg-slate-900">
+
+        <button type="button"
+            wire:click="adjustQuantity({{ $index }}, 1)"
+            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-build-orange text-xl font-black text-white"
+            aria-label="Increase quantity">+</button>
+    </div>
+
+    @error('items.'.$index.'.quantity')
+        <p class="mt-2 text-xs text-red-600">{{ $message }}</p>
+    @enderror
+</div></div>
+                <x-form-input label="{{ __('application.item_notes_3c2cf1cf') }}" name="items.{{ $index }}.notes" wire:model="items.{{ $index }}.notes" />
+            </div>@empty<p class="py-8 text-center text-sm text-slate-500">{{ __('application.add_products_from_the_list_b393ab94') }}</p>@endforelse</div>
+            <label class="mt-4 block text-sm font-bold">{{ __('application.request_notes_01dc4c20') }}<textarea wire:model="notes" class="mt-1 w-full rounded-xl border-slate-200 dark:bg-navy-950" rows="3"></textarea></label>
+            <div class="mt-5 rounded-2xl border border-orange-200 bg-orange-50 p-4 dark:border-orange-900 dark:bg-slate-800">
+                <h3 class="font-black">
+                    {{ app()->getLocale() === 'sw' ? 'Muhtasari wa Ombi Lako' : 'Your Request Summary' }}
+                </h3>
+                <div class="mt-3 flex justify-between text-sm">
+                    <span>{{ app()->getLocale() === 'sw' ? 'Aina za bidhaa' : 'Product types' }}</span>
+                    <strong>{{ count($items) }}</strong>
+                </div>
+                <div class="mt-2 flex justify-between text-sm">
+                    <span>{{ app()->getLocale() === 'sw' ? 'Jumla ya idadi' : 'Total quantity' }}</span>
+                    <strong>{{ \App\Support\NumberFormatter::quantity(collect($items)->sum(fn ($item) => (float) ($item['quantity'] ?? 0))) }}</strong>
+                </div>
+                <p class="mt-3 text-xs text-slate-500">
+                    {{ app()->getLocale() === 'sw'
+                        ? 'Hakikisha bidhaa, idadi na aina ya ombi ni sahihi kabla ya kutuma.'
+                        : 'Check your products, quantities and request type before submitting.' }}
+                </p>
+            </div>
+            @error('items')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+            <button class="mt-4 w-full rounded-xl bg-build-orange px-4 py-3 font-black text-white" @disabled(count($items) === 0) wire:loading.attr="disabled">{{ app()->getLocale() === 'sw' ? 'Tuma Ombi kwa Hardware' : 'Send Request to Hardware' }}</button>
+        </x-card></form>
+    </div>
+</div>

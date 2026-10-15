@@ -15,8 +15,8 @@ class ProductionOrderCostingEvent extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Costing events are immutable.'));
-        static::deleting(fn () => throw new LogicException('Costing events cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.costing_events_are_immutable_b23824aa')));
+        static::deleting(fn () => throw new LogicException(__('application.costing_events_cannot_be_deleted_d89ccad5')));
     }
 
     protected function casts(): array

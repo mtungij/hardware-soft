@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\SetCustomerPortalLocale;
 use App\Models\CustomerMaterialCashTransaction;
 use App\Models\CustomerMaterialIssue;
 use App\Models\CustomerPayment;
@@ -16,11 +17,14 @@ use App\Observers\OperationalWhatsAppObserver;
 use App\Observers\ProductionOrderWhatsAppObserver;
 use App\Observers\PurchaseGoodsWhatsAppObserver;
 use App\Observers\SaleWhatsAppObserver;
+use App\Support\LocalizedValidator;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -29,7 +33,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->useLangPath(resource_path('lang'));
     }
 
     /**
@@ -37,6 +41,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Validator::resolver(
+            fn ($translator, $data, $rules, $messages, $attributes) => new LocalizedValidator($translator, $data, $rules, $messages, $attributes)
+        );
+        Livewire::addPersistentMiddleware([
+            SetCustomerPortalLocale::class,
+        ]);
         Sale::observe(SaleWhatsAppObserver::class);
         CustomerPayment::observe(CustomerPaymentWhatsAppObserver::class);
         ProductionOrder::observe(ProductionOrderWhatsAppObserver::class);

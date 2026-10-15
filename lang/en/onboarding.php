@@ -1,3 +1,4 @@
 <?php
 
-return ['welcome' => 'Welcome', 'next' => 'Next', 'previous' => 'Previous', 'finish' => 'Finish', 'skip' => 'Skip', 'restart' => 'Restart tour'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/onboarding.php';

@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\CompanyWhatsAppSetting;
+use App\Models\CustomerAccount;
 use App\Models\WhatsAppNotification;
 use App\Services\Gowa;
 use App\Services\WhatsAppDebtPdfService;
@@ -70,6 +71,10 @@ class SendWhatsAppNotification implements ShouldQueue
             return;
         }
 
+        if (! $this->credentialsAreCurrent($notification)) {
+            return;
+        }
+
         if ($notification->notification_type === 'debug_after_commit') {
             $this->suppress($notification, 'Diagnostic notification is not eligible for delivery.');
 
@@ -91,7 +96,7 @@ class SendWhatsAppNotification implements ShouldQueue
         }
 
         if ($setting->last_device_state !== 'logged_in') {
-            $this->defer($notification, ['status' => 'pending', 'failure_reason' => 'WhatsApp device is not connected.']);
+            $this->defer($notification, ['status' => 'pending', 'failure_reason' => __('application.whatsapp_device_is_not_connected_6070387b')]);
 
             return;
         }
@@ -136,14 +141,33 @@ class SendWhatsAppNotification implements ShouldQueue
 
                 return;
             }
-            $message = $notification->resolvedDeliveryMessage();
-            $response = match ($notification->attachment_type) {
-                'file' => $gowa->sendFile($setting->device_id, $notification->phone, $this->attachmentPath($notification), $message),
-                'image' => $gowa->sendImage($setting->device_id, $notification->phone, $this->attachmentPath($notification), $message),
-                default => $gowa->sendText($setting->device_id, $notification->phone, $message),
+            $deliver = function () use ($notification, $setting, $gowa) {
+                if ($notification->encrypted_message) {
+                    // Rotation and PIN authentication take the same account lock.
+                    // Keep the credential current through the transport boundary.
+                    CustomerAccount::withoutGlobalScopes()->where('company_id', $notification->company_id)
+                        ->whereKey(data_get($notification->metadata, 'customer_account_id'))->lockForUpdate()->first();
+                    if (! $this->credentialsAreCurrent($notification)) {
+                        return null;
+                    }
+                }
+                $message = $notification->resolvedDeliveryMessage();
+
+                return match ($notification->attachment_type) {
+                    'file' => $gowa->sendFile($setting->device_id, $notification->phone, $this->attachmentPath($notification), $message),
+                    'image' => $gowa->sendImage($setting->device_id, $notification->phone, $this->attachmentPath($notification), $message),
+                    default => $gowa->sendText($setting->device_id, $notification->phone, $message),
+                };
             };
+            $response = $notification->encrypted_message ? DB::transaction($deliver) : $deliver();
+            if ($response === null) {
+                return;
+            }
 
         } catch (Throwable $exception) {
+            if ($notification->encrypted_message) {
+                $exception = new RuntimeException('Protected customer notification delivery failed.');
+            }
             $status = $exception instanceof RequestException ? $exception->response?->status() : null;
             $notification->update(['status' => 'queued', 'failure_reason' => $this->safeFailure($exception)]);
 
@@ -161,6 +185,7 @@ class SendWhatsAppNotification implements ShouldQueue
         $notification->update([
             'status' => 'sent',
             'sent_at' => now(),
+            'encrypted_message' => null,
             'message_id' => data_get($response, 'results.message_id'),
             'failed_at' => null,
         ]);
@@ -175,6 +200,28 @@ class SendWhatsAppNotification implements ShouldQueue
                 'failed_at' => now(),
                 'failure_reason' => $exception ? $this->safeFailure($exception) : 'WhatsApp delivery exhausted all retries.',
             ]);
+    }
+
+    private function credentialsAreCurrent(WhatsAppNotification $notification): bool
+    {
+        if (! $notification->encrypted_message) {
+            return true;
+        }
+        $account = CustomerAccount::withoutGlobalScopes()
+            ->where('company_id', $notification->company_id)
+            ->find(data_get($notification->metadata, 'customer_account_id'));
+        if (! $account || ! $account->isActive() || ! $account->must_change_password
+            || (int) $account->credential_version !== (int) data_get($notification->metadata, 'credential_version')
+            || ! $account->temporary_pin_expires_at || $account->temporary_pin_expires_at->isPast()
+            || $account->temporary_pin_used_at || $account->temporary_pin_attempts >= 5
+            || $account->login_phone !== $notification->phone) {
+            $this->suppress($notification, 'Customer login PIN is expired, used, or replaced.');
+            $notification->update(['encrypted_message' => null]);
+
+            return false;
+        }
+
+        return true;
     }
 
     private function quietHoursDelay(CompanyWhatsAppSetting $setting): ?int
@@ -234,7 +281,7 @@ class SendWhatsAppNotification implements ShouldQueue
         $path = $notification->attachment_path;
 
         if (blank($path)) {
-            throw new RuntimeException('WhatsApp attachment path is missing.');
+            throw new RuntimeException(__('application.whatsapp_attachment_path_is_missing_9cf3a4cb'));
         }
 
         return str_starts_with($path, DIRECTORY_SEPARATOR) ? $path : Storage::disk('local')->path($path);

@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Units', 'create' => 'Create Unit', 'edit' => 'Edit Unit', 'name' => 'Name', 'short_name' => 'Short Name', 'description' => 'Description'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/units.php';

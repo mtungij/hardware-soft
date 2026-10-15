@@ -1,0 +1,38 @@
+<?php
+
+return [
+    'hello' => 'Hello :name,',
+    'thanks' => 'Thank you',
+    'regards' => 'Regards',
+    'portal' => [
+        'subject' => 'Welcome to :company Customer Portal',
+        'welcome' => 'Welcome to :company',
+        'intro' => 'Welcome to the :company Customer Portal. View your debts, payments, receipts, deposits, and account statements.',
+        'url' => 'Customer Portal URL',
+        'email' => 'Your login email',
+        'password' => 'Your temporary password',
+        'open' => 'Open Customer Portal',
+        'start' => 'Getting started:',
+        'step_open' => 'Open the Customer Portal link above.',
+        'step_email' => 'Enter this email:',
+        'step_password' => 'Enter this password:',
+        'step_login' => 'Click Log In.',
+        'step_account' => 'After signing in, view your debts, payments, receipts, deposits, and account statements.',
+        'security' => 'Keep these credentials safe. Contact customer support if you cannot sign in.',
+    ],
+    'purchase' => [
+        'subject' => 'Purchase Order :reference - :company',
+        'title' => 'Purchase Order :reference',
+        'intro' => 'Please find attached the official purchase order from :company.',
+        'reference' => 'Reference Number',
+        'supplier' => 'Supplier',
+        'total' => 'Total',
+        'product' => 'Product',
+        'sku' => 'SKU',
+        'quantity' => 'Quantity',
+        'unit' => 'Unit',
+        'cost' => 'Cost',
+        'thanks' => 'Thank you for your continued partnership.',
+        'team' => 'Purchasing Team',
+    ],
+];

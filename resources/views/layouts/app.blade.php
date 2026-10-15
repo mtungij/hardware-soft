@@ -314,7 +314,7 @@
                 <div class="border-t border-slate-200 p-3 dark:border-slate-800">
                     <div class="rounded-xl bg-slate-950 p-3 text-white dark:bg-white/5" x-show="!collapsed" x-transition.opacity>
                         <p class="text-sm font-bold">{{ $user?->branch?->name ?? __('messages.staff.branch_fallback') }}</p>
-                        <p class="mt-1 text-xs text-slate-300">{{ $user?->roles->pluck('name')->join(', ') ?: __('messages.staff.no_role') }}</p>
+                        <p class="mt-1 text-xs text-slate-300">{{ $user?->roles->pluck('name')->map(\App\Support\UiText::translate(...))->join(', ') ?: __('messages.staff.no_role') }}</p>
                     </div>
                 </div>
             </aside>
@@ -335,7 +335,7 @@
                         <div class="hs-dropdown relative inline-flex shrink-0">
                             <button type="button" data-tour="language-switcher" class="hs-dropdown-toggle inline-flex h-10 items-center rounded-lg border border-slate-200 px-2 text-sm font-semibold text-slate-700 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200 sm:px-3">
                                 <span aria-hidden="true">{{ $currentStaffLocale === 'sw' ? '🇹🇿' : '🇬🇧' }}</span>
-                                <span class="sr-only sm:not-sr-only sm:ml-2">{{ $currentStaffLocale === 'sw' ? 'Kiswahili' : 'English' }}</span>
+                                <span class="sr-only sm:not-sr-only sm:ml-2">{{ $currentStaffLocale === 'sw' ? __('application.kiswahili_1fa52793') : __('application.english_649df08a') }}</span>
                             </button>
                             <div class="hs-dropdown-menu z-50 mt-2 hidden min-w-44 rounded-xl border border-slate-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900" role="menu">
                                 @foreach (['en' => '🇬🇧 '.__('messages.english'), 'sw' => '🇹🇿 '.__('messages.kiswahili')] as $locale => $label)
@@ -372,7 +372,7 @@
 
                         <div class="relative shrink-0">
                             <button data-tour="profile-menu" class="flex items-center gap-2 rounded-xl border border-slate-200 p-1.5 pr-3 dark:border-slate-700" @click="profileOpen = !profileOpen">
-                                <img class="h-8 w-8 rounded-lg object-cover" src="{{ $user?->profile_photo ? asset('storage/'.$user->profile_photo) : 'https://ui-avatars.com/api/?name='.urlencode($user?->name ?? 'Admin').'&background=0d2e50&color=fff' }}" alt="{{ $user?->name ?? __('common.user') }}">
+                                <img class="h-8 w-8 rounded-lg object-cover" src="{{ $user?->profile_photo ? asset('storage/'.$user->profile_photo) : 'https://ui-avatars.com/api/?name='.urlencode($user?->name ?? __('application.admin_4e7afebc')).'&background=0d2e50&color=fff' }}" alt="{{ $user?->name ?? __('common.user') }}">
                                 <span class="hidden text-sm font-bold sm:block">{{ $user?->name ?? __('common.user') }}</span>
                             </button>
                             <div x-cloak x-show="profileOpen" x-transition @click.outside="profileOpen = false" class="absolute right-0 mt-3 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-soft dark:border-slate-700 dark:bg-navy-900">
@@ -405,7 +405,7 @@
 
         <x-onboarding
             context="staff"
-            :role="$user?->roles->pluck('name')->first() ?: 'Mtumiaji'"
+            :role="$user?->roles->pluck('name')->first() ?: __('application.user_9f8a2389')"
             :user-key="$user?->id ?: 'guest'"
         />
 
@@ -446,5 +446,6 @@
                 });
             });
         </script>
+        <x-localization />
     </body>
 </html>

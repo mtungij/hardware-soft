@@ -21,18 +21,18 @@
 </head>
 <body>
 <h1>{{ $account->company?->company_name ?: 'HARDEX POS' }}</h1>
-<h2>MATERIAL ISSUE RECEIPT / RISITI YA UTOAJI BIDHAA</h2>
+<h2>{{ __('application.material_issue_receipt_4eff12e0') }}</h2>
 <div class="rule"></div>
 <table class="meta">
-    <tr><td class="label">Reference:</td><td>{{ $issue->reference_number }}</td></tr>
-    <tr><td class="label">Date:</td><td>{{ $issue->issued_at->format('d M Y H:i') }}</td></tr>
-    <tr><td class="label">Customer:</td><td>{{ $account->customer->name }}</td></tr>
-    <tr><td class="label">Project / Account:</td><td>{{ $account->reference_number }}</td></tr>
-    <tr><td class="label">Branch:</td><td>{{ $issue->branch->name }}</td></tr>
-    <tr><td class="label">Stock Location:</td><td>{{ $issue->stockLocation->name }}</td></tr>
+    <tr><td class="label">{{ __('application.reference_45c3dc1c') }}</td><td>{{ $issue->reference_number }}</td></tr>
+    <tr><td class="label">{{ __('application.date_81b7d2ea') }}</td><td>{{ $issue->issued_at->locale(app()->getLocale())->translatedFormat('d M Y H:i') }}</td></tr>
+    <tr><td class="label">{{ __('application.customer_5e0d7363') }}</td><td>{{ $account->customer->displayName() }}</td></tr>
+    <tr><td class="label">{{ __('application.project_account_ad9249ae') }}</td><td>{{ $account->reference_number }}</td></tr>
+    <tr><td class="label">{{ __('application.branch_8b31d33d') }}</td><td>{{ $issue->branch->name }}</td></tr>
+    <tr><td class="label">{{ __('application.stock_location_980f6a5e') }}</td><td>{{ $issue->stockLocation->name }}</td></tr>
 </table>
 <div class="rule"></div>
-<div><strong>Materials / Bidhaa:</strong></div>
+<div><strong>{{ __('application.materials_279488a2') }}</strong></div>
 @foreach($issue->lines as $line)
     <div class="item">
         <div class="item-name">{{ $line->product_name_snapshot }}</div>
@@ -41,16 +41,16 @@
 @endforeach
 <div class="rule"></div>
 <table class="totals">
-    <tr><td>Total Material Value:</td><td class="amount">TZS {{ \App\Support\NumberFormatter::money($issue->total_value) }}</td></tr>
-    <tr><td>Previous Funded Balance:</td><td class="amount">TZS {{ \App\Support\NumberFormatter::money($previousBalance) }}</td></tr>
-    <tr><td>Amount Used:</td><td class="amount">TZS {{ \App\Support\NumberFormatter::money($issue->total_value) }}</td></tr>
-    <tr><td>Remaining Funded Balance:</td><td class="amount">TZS {{ \App\Support\NumberFormatter::money($remainingBalance) }}</td></tr>
+    <tr><td>{{ __('application.total_material_value_e0a78eea') }}</td><td class="amount">TZS {{ \App\Support\NumberFormatter::money($issue->total_value) }}</td></tr>
+    <tr><td>{{ __('application.previous_funded_balance_6c046b86') }}</td><td class="amount">TZS {{ \App\Support\NumberFormatter::money($previousBalance) }}</td></tr>
+    <tr><td>{{ __('application.amount_used_f4d35832') }}</td><td class="amount">TZS {{ \App\Support\NumberFormatter::money($issue->total_value) }}</td></tr>
+    <tr><td>{{ __('application.remaining_funded_balance_c7a8c6dd') }}</td><td class="amount">TZS {{ \App\Support\NumberFormatter::money($remainingBalance) }}</td></tr>
 </table>
 <div class="rule"></div>
 <table class="meta">
-    <tr><td class="label">Collected By:</td><td>{{ $issue->collected_by ?: '-' }}</td></tr>
-    <tr><td class="label">Issued By:</td><td>{{ $issue->issuedBy?->name ?: '-' }}</td></tr>
-    @if($issue->notes)<tr><td class="label">Notes:</td><td>{{ $issue->notes }}</td></tr>@endif
+    <tr><td class="label">{{ __('application.collected_by_4e9af775') }}</td><td>{{ $issue->collected_by ?: '-' }}</td></tr>
+    <tr><td class="label">{{ __('application.issued_by_aba2d603') }}</td><td>{{ $issue->issuedBy?->name ?: '-' }}</td></tr>
+    @if($issue->notes)<tr><td class="label">{{ __('application.notes_9c3befe7') }}</td><td>{{ $issue->notes }}</td></tr>@endif
 </table>
 <div class="footer">{{ $account->company?->company_name ?: 'HARDEX POS' }}</div>
 </body>

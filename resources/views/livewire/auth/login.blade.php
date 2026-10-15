@@ -71,10 +71,10 @@ $login = function () {
             <div class="relative">
                 <div class="flex items-center gap-4">
                     <div class="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl bg-white p-2 shadow-soft">
-                        <img src="{{ asset('images/hardex.png') }}" alt="Hardex logo" class="h-full w-full object-contain">
+                        <img src="{{ asset('images/hardex.png') }}" alt="{{ __('application.hardex_logo_a8832735') }}" class="h-full w-full object-contain">
                     </div>
                     <div>
-                        <h1 class="text-2xl font-black tracking-tight">Hardex Hardware ERP</h1>
+                        <h1 class="text-2xl font-black tracking-tight">{{ __('application.hardex_hardware_erp_d16ca1ba') }}</h1>
                         <p class="text-sm font-semibold text-slate-300">{{ __('messages.staff.login.tagline') }}</p>
                     </div>
                 </div>
@@ -108,7 +108,7 @@ $login = function () {
                 <div class="mb-6 flex items-center justify-between">
                     <div class="flex items-center gap-3 lg:hidden">
                         <div class="grid h-12 w-12 place-items-center overflow-hidden rounded-xl bg-white p-1.5 shadow-soft dark:bg-slate-900">
-                            <img src="{{ asset('images/hardex.png') }}" alt="Hardex logo" class="h-full w-full object-contain">
+                            <img src="{{ asset('images/hardex.png') }}" alt="{{ __('application.hardex_logo_a8832735') }}" class="h-full w-full object-contain">
                         </div>
                         <div>
                             <p class="font-black text-navy-900 dark:text-white">Hardex</p>
@@ -197,7 +197,7 @@ $login = function () {
                 </div>
 
                 <footer class="mt-6 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    © {{ now()->year }} Hardex Hardware ERP · {{ __('messages.staff.login.footer') }} · {{ __('messages.staff.login.version') }}
+                    © {{ now()->year }} {{ __('application.hardex_hardware_erp_dc9066a5') }} {{ __('messages.staff.login.footer') }} · {{ __('messages.staff.login.version') }}
                 </footer>
             </div>
         </section>

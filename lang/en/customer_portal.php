@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Customer Portal', 'dashboard' => 'Dashboard', 'debts' => 'Debts', 'receipts' => 'Receipts', 'deposits' => 'Deposits', 'statements' => 'Statements', 'profile' => 'Profile'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/customer_portal.php';

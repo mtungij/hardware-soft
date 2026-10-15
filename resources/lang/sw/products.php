@@ -1,7 +1,17 @@
 <?php
 
 return [
-    'title' => 'Bidhaa', 'create' => 'Ongeza Bidhaa', 'edit' => 'Hariri Bidhaa', 'name' => 'Jina', 'sku' => 'SKU', 'category' => 'Kundi', 'unit' => 'Kipimo', 'buying_price' => 'Bei ya Kununua', 'selling_price' => 'Bei ya Rejareja', 'wholesale_price' => 'Bei ya Jumla', 'stock' => 'Stock',
+    'title' => 'Bidhaa',
+    'create' => 'Ongeza Bidhaa',
+    'edit' => 'Hariri Bidhaa',
+    'name' => 'Jina',
+    'sku' => 'MSIMBO WA BIDHAA',
+    'category' => 'Kundi',
+    'unit' => 'Kipimo',
+    'buying_price' => 'Bei ya Kununua',
+    'selling_price' => 'Bei ya Rejareja',
+    'wholesale_price' => 'Bei ya Jumla',
+    'stock' => 'Hisa',
     'image' => [
         'label' => 'Picha ya Bidhaa',
         'choose' => 'Chagua Picha',
@@ -16,7 +26,7 @@ return [
         'help' => 'JPG, PNG au WebP, hadi MB 2.',
     ],
     'inventory_source' => [
-        'label' => 'Chanzo cha Stock',
+        'label' => 'Chanzo cha Hisa',
         'purchased' => 'Inayonunuliwa',
         'manufactured' => 'Inayotengenezwa',
     ],

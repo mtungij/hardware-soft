@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
+use App\Support\UiText;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -48,5 +49,20 @@ class CustomerNotification extends Model
     public function notifiable(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    public function displayTitle(): string
+    {
+        return $this->isSystemNotice() ? __('portal_notifications.'.$this->type.'_title') : (string) $this->title;
+    }
+
+    public function displayMessage(): string
+    {
+        return $this->isSystemNotice() ? UiText::feedback($this->message) : (string) $this->message;
+    }
+
+    private function isSystemNotice(): bool
+    {
+        return in_array($this->type, ['deposit_approved', 'deposit_rejected', 'receipt_approved', 'receipt_rejected'], true);
     }
 }

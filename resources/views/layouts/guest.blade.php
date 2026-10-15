@@ -44,13 +44,13 @@
                         <div class="grid h-12 w-12 place-items-center rounded-xl bg-build-orange text-lg font-black">HP</div>
                         <div>
                             <p class="font-black uppercase tracking-wide">Hardex</p>
-                            <p class="text-sm text-slate-300">POS</p>
+                            <p class="text-sm text-slate-300">{{ __('application.pos_4abd3985') }}</p>
                         </div>
                     </div>
                     <div>
-                        <p class="text-sm font-semibold uppercase tracking-wide text-orange-300">Enterprise POS</p>
-                        <h1 class="mt-3 max-w-xl text-4xl font-black leading-tight">Run sales, stock, accounting, and branches from one workspace.</h1>
-                        <p class="mt-4 max-w-lg text-slate-300">Hardex POS gives construction material businesses a clean, secure operating system for daily work.</p>
+                        <p class="text-sm font-semibold uppercase tracking-wide text-orange-300">{{ __('application.enterprise_pos_3506fa1f') }}</p>
+                        <h1 class="mt-3 max-w-xl text-4xl font-black leading-tight">{{ __('application.run_sales_stock_accounting_and_branches_from_one_workspace_bf9701e2') }}</h1>
+                        <p class="mt-4 max-w-lg text-slate-300">{{ __('application.hardex_pos_gives_construction_material_businesses_a_clean_secure_operating__750c707e') }}</p>
                     </div>
                     <p class="text-sm text-slate-400">Laravel + Livewire + Volt + Tailwind CSS</p>
                 </section>
@@ -59,11 +59,11 @@
                     <div class="w-full max-w-md">
                         <div class="mb-4 flex justify-end">
                             <x-pwa-install-button class="mr-2 hidden h-10 w-10 items-center justify-center rounded-lg bg-build-orange text-white shadow-lg shadow-orange-500/25" />
-                            <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="toggleTheme()" x-text="darkMode ? 'Light' : 'Dark'"></button>
+                            <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700" @click="toggleTheme()" x-text="darkMode ? @js(__('application.light_a36ef8ab')) : @js(__('application.dark_ae1ef014'))"></button>
                         </div>
                         <div class="mb-6 text-center lg:hidden">
                             <div class="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-build-orange text-lg font-black text-white">HP</div>
-                            <h1 class="mt-3 text-xl font-black text-navy-900 dark:text-white">Hardex POS</h1>
+                            <h1 class="mt-3 text-xl font-black text-navy-900 dark:text-white">{{ __('application.hardex_pos_da25962f') }}</h1>
                         </div>
                         <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-soft dark:border-slate-800 dark:bg-slate-900">
                             {{ $slot }}
@@ -74,5 +74,6 @@
         </div>
 
         @livewireScripts
+        <x-localization />
     </body>
 </html>

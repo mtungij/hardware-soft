@@ -51,7 +51,7 @@ mount(function () {
         $exportParams = compact('date_from', 'date_to', 'customer_id', 'branch_id', 'payment_method', 'received_by');
     @endphp
 
-    <x-page-header title="Customer Payment Report" description="Daily customer payments by method, customer, branch, and cashier." :breadcrumbs="['Dashboard' => route('dashboard'), 'Reports' => null, 'Customer Payments' => null]">
+    <x-page-header title="{{ __('application.customer_payment_report_1fa3b1d2') }}" description="{{ __('application.daily_customer_payments_by_method_customer_branch_and_cashier_4bd16efa') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Reports' => null, 'Customer Payments' => null]">
         <x-export-actions export="reports.customer-payments" :params="$exportParams" />
     </x-page-header>
 
@@ -59,10 +59,10 @@ mount(function () {
         <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
             <input wire:model.live="date_from" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
             <input wire:model.live="date_to" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-            <select wire:model.live="customer_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Customers</option>@foreach (Customer::where(fn ($q) => $q->where('is_system_customer', false)->orWhereNull('is_system_customer'))->orderBy('name')->get() as $customer)<option value="{{ $customer->id }}">{{ $customer->name }}</option>@endforeach</select>
-            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All Branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
-            <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Methods</option>@foreach ($methods as $method)<option value="{{ $method }}">{{ $methodLabel($method) }}</option>@endforeach</select>
-            <select wire:model.live="received_by" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All Received By</option>@foreach (User::orderBy('name')->get() as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select>
+            <select wire:model.live="customer_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_customers_872f2c2f') }}</option>@foreach (Customer::where(fn ($q) => $q->where('is_system_customer', false)->orWhereNull('is_system_customer'))->orderBy('name')->get() as $customer)<option value="{{ $customer->id }}">{{ $customer->displayName() }}</option>@endforeach</select>
+            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">{{ __('application.all_branches_0bf51d9a') }}</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+            <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_methods_06a3fcd1') }}</option>@foreach ($methods as $method)<option value="{{ $method }}">{{ $methodLabel($method) }}</option>@endforeach</select>
+            <select wire:model.live="received_by" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_received_by_9b674ea0') }}</option>@foreach (User::orderBy('name')->get() as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select>
         </div>
     </x-card>
 
@@ -70,33 +70,33 @@ mount(function () {
         @foreach ($methods as $method)
             <x-card><p class="text-sm text-slate-500">{{ $methodLabel($method) }}</p><p class="mt-2 text-xl font-black">{{ $money($totalsByMethod[$method] ?? 0) }}</p></x-card>
         @endforeach
-        <x-card><p class="text-sm text-slate-500">Total Payments</p><p class="mt-2 text-xl font-black text-emerald-600">{{ $money($grandTotal) }}</p></x-card>
+        <x-card><p class="text-sm text-slate-500">{{ __('application.total_payments_53b493df') }}</p><p class="mt-2 text-xl font-black text-emerald-600">{{ $money($grandTotal) }}</p></x-card>
     </div>
 
-    <x-card class="mt-4" title="Daily Summary">
+    <x-card class="mt-4" title="{{ __('application.daily_summary_d9fab1c7') }}">
         <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             @forelse ($dailyGroups as $date => $rows)
                 <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5">
-                    <p class="font-black">{{ \Illuminate\Support\Carbon::parse($date)->format('d F Y') }}</p>
+                    <p class="font-black">{{ \Illuminate\Support\Carbon::parse($date)->locale(app()->getLocale())->translatedFormat('d F Y') }}</p>
                     @foreach ($methods as $method)
                         <div class="mt-1 flex justify-between text-sm"><span>{{ $methodLabel($method) }}</span><span class="font-bold">{{ $money($rows->where('payment_method', $method)->sum('amount')) }}</span></div>
                     @endforeach
-                    <div class="mt-2 flex justify-between border-t border-slate-200 pt-2 text-sm font-black dark:border-slate-700"><span>Total</span><span>{{ $money($rows->sum('amount')) }}</span></div>
+                    <div class="mt-2 flex justify-between border-t border-slate-200 pt-2 text-sm font-black dark:border-slate-700"><span>{{ __('application.total_b25928c6') }}</span><span>{{ $money($rows->sum('amount')) }}</span></div>
                 </div>
             @empty
-                <p class="text-sm text-slate-500">No payments found.</p>
+                <p class="text-sm text-slate-500">{{ __('application.no_payments_found_69d803dd') }}</p>
             @endforelse
         </div>
     </x-card>
 
-    <x-card class="mt-4" title="Payment Details">
-        <x-table :headers="['Date', 'Time', 'Receipt Number', 'Customer Name', 'Phone', 'Amount Paid', 'Payment Method', 'Reference', 'Branch', 'Received By', 'Notes']">
+    <x-card class="mt-4" title="{{ __('application.payment_details_b8579d99') }}">
+        <x-table :headers="[__('application.date_eb9a4bc1'), __('application.time_6c82e6dd'), __('application.receipt_number_37553f8e'), __('application.customer_name_75636316'), __('application.phone_77064d52'), __('application.amount_paid_a2dc17b5'), __('application.payment_method_f383f6a2'), __('application.reference_db1c7845'), __('application.branch_1627510b'), __('application.received_by_f84f73c6'), __('application.notes_70440046')]">
             @forelse ($payments as $payment)
                 <tr>
-                    <td class="px-4 py-3">{{ $payment->payment_date?->format('M d, Y') }}</td>
+                    <td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
                     <td class="px-4 py-3">{{ $payment->created_at?->format('H:i') }}</td>
                     <td class="px-4 py-3 font-mono text-xs">{{ $payment->receipt_number ?: 'PAY-'.$payment->id }}</td>
-                    <td class="px-4 py-3 font-bold">{{ $payment->customer?->name }}</td>
+                    <td class="px-4 py-3 font-bold">{{ $payment->customer?->displayName() }}</td>
                     <td class="px-4 py-3">{{ $payment->customer?->phone ?: '-' }}</td>
                     <td class="px-4 py-3 text-right font-black">{{ $money($payment->amount) }}</td>
                     <td class="px-4 py-3">{{ $methodLabel($payment->payment_method) }}</td>
@@ -106,7 +106,7 @@ mount(function () {
                     <td class="px-4 py-3">{{ $payment->notes ?: '-' }}</td>
                 </tr>
             @empty
-                <tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">No payments found.</td></tr>
+                <tr><td colspan="11" class="px-4 py-8 text-center text-slate-500">{{ __('application.no_payments_found_69d803dd') }}</td></tr>
             @endforelse
         </x-table>
         <div class="mt-4">{{ $payments->links() }}</div>

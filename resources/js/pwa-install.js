@@ -1,9 +1,10 @@
+import { translate } from './localization';
 (() => {
     let deferredInstallPrompt = null;
 
     const dismissKey = 'hardex_pwa_install_dismissed_at';
-    const successMessage = () => `${document.querySelector('[data-pwa-install-root]')?.dataset.pwaBrandName || 'Hardex'} App imewekwa kwenye kifaa chako kikamilifu.`;
-    const unavailableMessage = 'Install haijapatikana sasa. Tumia menu ya browser kisha chagua Install app au Add to Home Screen.';
+    const successMessage = () => translate('install_success', { brand: document.querySelector('[data-pwa-install-root]')?.dataset.pwaBrandName || 'Hardex' });
+    const unavailableMessage = () => translate('install_unavailable');
 
     const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     const isIos = () => /iphone|ipad|ipod/i.test(window.navigator.userAgent);
@@ -119,7 +120,7 @@
 
                 if (!deferredInstallPrompt) {
                     showHelpModal(button);
-                    showToast(unavailableMessage);
+                    showToast(unavailableMessage());
                     return;
                 }
 
@@ -140,7 +141,7 @@
                     }
                 } catch (error) {
                     console.warn('Hardex install prompt failed.', error);
-                    showToast(unavailableMessage);
+                    showToast(unavailableMessage());
                 } finally {
                     button.dataset.loading = 'false';
                     button.setAttribute('aria-busy', 'false');

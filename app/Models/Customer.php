@@ -29,6 +29,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class Customer extends Model
 {
+    public function displayName(?string $locale = null): string
+    {
+        return $this->is_unassigned_credit_customer
+            ? __('customers.unassigned_credit_customer', [], $locale)
+            : (string) $this->name;
+    }
+
     use HasCompany, HasFactory;
 
     public function branch(): BelongsTo

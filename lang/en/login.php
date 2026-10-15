@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Login', 'email' => 'Email', 'password' => 'Password', 'remember' => 'Remember me', 'submit' => 'Sign in'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/login.php';

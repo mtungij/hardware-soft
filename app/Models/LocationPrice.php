@@ -27,7 +27,7 @@ class LocationPrice extends Model
                 || ($price->product_unit_conversion_id && (! $conversion
                     || (int) $conversion->company_id !== (int) $price->company_id
                     || (int) $conversion->product_id !== (int) $product->id))) {
-                throw ValidationException::withMessages(['location_price' => 'Product, unit and location must belong to the same company.']);
+                throw ValidationException::withMessages(['location_price' => __('application.product_unit_and_location_must_belong_to_the_same_company_01710a53')]);
             }
 
             $price->unit_key = $conversion?->id ?? 0;

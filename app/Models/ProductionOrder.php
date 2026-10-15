@@ -50,7 +50,7 @@ class ProductionOrder extends Model
             if ($order->getOriginal('status') === self::STATUS_COMPLETED) {
                 $unsafe = array_diff(array_keys($order->getDirty()), ['notes', 'updated_by', 'updated_at']);
                 if ($unsafe !== []) {
-                    throw new LogicException('Completed production orders are immutable.');
+                    throw new LogicException(__('application.completed_production_orders_are_immutable_867a6500'));
                 }
             }
         });
@@ -84,7 +84,7 @@ class ProductionOrder extends Model
 
     public function productionMethodLabel(): string
     {
-        return $this->production_method === ProductFamily::METHOD_MOULD_ONLY ? 'Mould Only' : 'Machine + Mould';
+        return $this->production_method === ProductFamily::METHOD_MOULD_ONLY ? __('application.mould_only_59c6f80b') : __('application.machine_mould_ff498316');
     }
 
     public function product(): BelongsTo

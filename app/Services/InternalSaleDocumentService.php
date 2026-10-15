@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\InternalSale;
 use App\Models\User;
 use App\Support\AuthorizationScope;
+use App\Support\UiText;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
@@ -21,7 +22,7 @@ class InternalSaleDocumentService
         ), 403);
         abort_unless(AuthorizationScope::canAccessStockLocation($user, (int) $sale->from_location_id)
             || AuthorizationScope::canAccessStockLocation($user, (int) $sale->to_location_id), 403);
-        abort_unless($sale->status === 'completed', 409, 'Only completed Internal Sales have delivery documents.');
+        abort_unless($sale->status === 'completed', 409, __('application.only_completed_internal_sales_have_delivery_documents_e1e40182'));
 
         $sale->load([
             'company', 'branch', 'fromLocation', 'toLocation', 'creator', 'completedBy',
@@ -68,7 +69,7 @@ class InternalSaleDocumentService
         ]);
         $label = $data['valueMode'] ? 'Internal Sale Value Note' : 'Internal Delivery Note';
         $pdf->SetTitle($label.' '.$data['sale']->internal_sale_number);
-        $pdf->SetHTMLFooter('<div style="text-align:center;font-size:8pt;color:#64748b">Page {PAGENO} of {nbpg}</div>');
+        $pdf->SetHTMLFooter('<div style="text-align:center;font-size:8pt;color:#64748b">'.e(UiText::translate('Page {PAGENO} of {nbpg}')).'</div>');
         $pdf->WriteHTML(view('documents.internal-sale-note', [...$data, 'isPdf' => true])->render());
 
         return $pdf->Output('', Destination::STRING_RETURN);

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['company_id', 'branch_id', 'customer_id', 'customer_account_id', 'reviewed_by', 'sale_id', 'request_number', 'status', 'submission_key', 'customer_notes', 'staff_notes', 'submitted_at', 'reviewed_at', 'quoted_at', 'accepted_at', 'rejected_at', 'converted_at'])]
+#[Fillable(['request_type', 'delivery_requested', 'delivery_address', 'delivery_instructions', 'company_id', 'branch_id', 'customer_id', 'customer_account_id', 'reviewed_by', 'sale_id', 'request_number', 'status', 'submission_key', 'customer_notes', 'staff_notes', 'submitted_at', 'reviewed_at', 'quoted_at', 'accepted_at', 'rejected_at', 'converted_at'])]
 class CustomerPurchaseRequest extends Model
 {
     use HasCompany;
@@ -53,7 +53,7 @@ class CustomerPurchaseRequest extends Model
     protected function casts(): array
     {
         return [
-            'submitted_at' => 'datetime', 'reviewed_at' => 'datetime', 'quoted_at' => 'datetime',
+            'delivery_requested' => 'boolean', 'submitted_at' => 'datetime', 'reviewed_at' => 'datetime', 'quoted_at' => 'datetime',
             'accepted_at' => 'datetime', 'rejected_at' => 'datetime', 'converted_at' => 'datetime',
         ];
     }

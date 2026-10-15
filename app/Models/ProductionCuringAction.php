@@ -28,8 +28,8 @@ class ProductionCuringAction extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Curing audit actions are immutable.'));
-        static::deleting(fn () => throw new LogicException('Curing audit actions cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.curing_audit_actions_are_immutable_13ae80c9')));
+        static::deleting(fn () => throw new LogicException(__('application.curing_audit_actions_cannot_be_deleted_752dfd1b')));
     }
 
     protected function casts(): array

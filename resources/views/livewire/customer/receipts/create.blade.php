@@ -19,10 +19,10 @@ uses([WithFileUploads::class]);
 state(['sale_id' => '', 'amount' => '', 'payment_method' => 'mobile_money', 'reference_number' => '', 'receipt_file' => null, 'notes' => '']);
 
 rules(fn () => [
-    'sale_id' => ['nullable', Rule::exists('sales', 'id')->where('customer_id', auth('customer')->user()->customer_id)],
+    'sale_id' => ['nullable', Rule::exists('sales', 'id')->where('company_id', auth('customer')->user()->company_id)->where('customer_id', auth('customer')->user()->customer_id)],
     'amount' => ['required', 'numeric', 'gt:0'],
     'payment_method' => ['required', 'in:mobile_money,bank,cash_deposit'],
-    'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_receipts', 'reference_number')->where('customer_id', auth('customer')->user()->customer_id)],
+    'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_receipts', 'reference_number')->where('company_id', auth('customer')->user()->company_id)->where('customer_id', auth('customer')->user()->customer_id)],
     'receipt_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
     'notes' => ['nullable', 'string', 'max:1000'],
 ]);

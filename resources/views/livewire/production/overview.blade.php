@@ -24,7 +24,7 @@ mount(fn () => abort_unless(
 <div>
     <x-page-header
         :title="__('production.title')"
-        description="Machine availability and today's real production schedule."
+        description="{{ __('application.machine_availability_and_today_s_real_production_schedule_8cc11a70') }}"
         :breadcrumbs="['Dashboard' => route('dashboard'), __('production.title') => null]"
     >
         @canany(['production.view_product_families', 'production.manage_product_families'])
@@ -70,7 +70,7 @@ mount(fn () => abort_unless(
             $quarantined = $curingQuery()->where('status','quarantined')->count();
         @endphp
         <div class="mb-6">
-            <div class="mb-3 flex items-center justify-between"><h2 class="text-lg font-black">Curing Overview</h2><a href="{{ route('production.curing.index') }}" wire:navigate class="text-sm font-black text-build-orange">Open Curing Yard</a></div>
+            <div class="mb-3 flex items-center justify-between"><h2 class="text-lg font-black">{{ __('application.curing_overview_124dd48c') }}</h2><a href="{{ route('production.curing.index') }}" wire:navigate class="text-sm font-black text-build-orange">{{ __('application.open_curing_yard_155906f5') }}</a></div>
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 @foreach ([['Batches Still Curing',$stillCuring],['Eligible for Release Today',$eligibleToday],['Quantity Awaiting Release',number_format((float)$awaitingQuantity,4)],['Fully Cured Batches',$fullyCured],['Quarantined Batches',$quarantined]] as [$label,$value])
                     <x-card><p class="text-xs font-bold text-slate-500">{{ $label }}</p><p class="mt-2 text-2xl font-black">{{ $value }}</p></x-card>
@@ -90,7 +90,7 @@ mount(fn () => abort_unless(
             $awaitingInspection = $qualityBatch()->where('remaining_quantity','>',0)->whereHas('product',fn($q)=>$q->where('requires_pre_release_inspection',true))->whereDoesntHave('qualityInspections',fn($q)=>$q->where('inspection_stage','pre_release')->where('result','passed')->where('approval_status','approved'))->count();
             $readyForRelease = $qualityBatch()->where('remaining_quantity','>',0)->whereDoesntHave('qualityHolds',fn($q)=>$q->active())->whereHas('qualityInspections',fn($q)=>$q->where('inspection_stage','pre_release')->where('result','passed')->where('approval_status','approved'))->count();
         @endphp
-        <div class="mb-6"><div class="mb-3 flex items-center justify-between"><h2 class="text-lg font-black">Quality Control</h2><a href="{{route('production.quality.inspections.index')}}" wire:navigate class="text-sm font-black text-build-orange">Open Quality Control</a></div><div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">@foreach([['Inspections Pending Approval',$pendingApproval],['Failed Inspections',$failedInspections],['Active Quality Holds',$activeHolds],['Batches Awaiting Pre-Release Inspection',$awaitingInspection],['Approved Batches Ready for Release',$readyForRelease]] as [$label,$value])<x-card><p class="text-xs font-bold text-slate-500">{{$label}}</p><p class="mt-2 text-2xl font-black">{{$value}}</p></x-card>@endforeach</div></div>
+        <div class="mb-6"><div class="mb-3 flex items-center justify-between"><h2 class="text-lg font-black">{{ __('application.quality_control_8f6e9ad9') }}</h2><a href="{{route('production.quality.inspections.index')}}" wire:navigate class="text-sm font-black text-build-orange">{{ __('application.open_quality_control_27b29145') }}</a></div><div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">@foreach([['Inspections Pending Approval',$pendingApproval],['Failed Inspections',$failedInspections],['Active Quality Holds',$activeHolds],['Batches Awaiting Pre-Release Inspection',$awaitingInspection],['Approved Batches Ready for Release',$readyForRelease]] as [$label,$value])<x-card><p class="text-xs font-bold text-slate-500">{{$label}}</p><p class="mt-2 text-2xl font-black">{{$value}}</p></x-card>@endforeach</div></div>
     @endcan
 
     @can('production.view_costing')
@@ -106,7 +106,7 @@ mount(fn () => abort_unless(
             $averageAcceptedCost = $costScope()->whereNotNull('cost_per_accepted_unit')->avg('cost_per_accepted_unit');
         @endphp
         <div class="mb-6">
-            <div class="mb-3 flex items-center justify-between"><h2 class="text-lg font-black">Production Costing</h2><a href="{{ route('production.costing.index') }}" wire:navigate class="text-sm font-black text-build-orange">Open Costing</a></div>
+            <div class="mb-3 flex items-center justify-between"><h2 class="text-lg font-black">{{ __('application.production_costing_f79faf77') }}</h2><a href="{{ route('production.costing.index') }}" wire:navigate class="text-sm font-black text-build-orange">{{ __('application.open_costing_61c047fe') }}</a></div>
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 @foreach([['Uncosted Completed Orders',$uncosted],['Provisional Costings',$provisional],['Finalized Costings',$finalizedCostings],['Production Loss This Month',number_format((float)$monthlyLoss,2)],['Average Accepted Unit Cost',$averageAcceptedCost!==null?number_format((float)$averageAcceptedCost,4):'—']] as [$label,$value])
                     <x-card><p class="text-xs font-bold text-slate-500">{{ $label }}</p><p class="mt-2 text-2xl font-black">{{ $value }}</p></x-card>
@@ -115,19 +115,19 @@ mount(fn () => abort_unless(
         </div>
     @endcan
 
-    <x-card title="Today's Schedule" description="Planning records only; no stock movement is created.">
-        <x-table :headers="['Machine', 'Product', 'Target', 'Time', 'Branch', 'Status']">
+    <x-card title="{{ __('application.today_s_schedule_7ed2732a') }}" description="{{ __('application.planning_records_only_no_stock_movement_is_created_8f8bc07b') }}">
+        <x-table :headers="[__('application.machine_65bb1b78'), __('application.product_dd3b86d1'), __('application.target_61ad50a9'), __('application.time_6c82e6dd'), __('application.branch_1627510b'), __('application.status_bae7d5be')]">
             @forelse ($todayAssignments as $assignment)
                 <tr>
                     <td class="px-4 py-3 font-black">{{ $assignment->machine?->name }}</td>
                     <td class="px-4 py-3">{{ $assignment->product?->name }}</td>
                     <td class="px-4 py-3">{{ $assignment->target_quantity !== null ? number_format((float) $assignment->target_quantity, 2) : '—' }}</td>
                     <td class="px-4 py-3">{{ $assignment->planned_start_time ?: '—' }} – {{ $assignment->planned_end_time ?: '—' }}</td>
-                    <td class="px-4 py-3">{{ $assignment->branch?->name ?: 'Company-wide' }}</td>
-                    <td class="px-4 py-3">{{ ucfirst($assignment->status) }}</td>
+                    <td class="px-4 py-3">{{ $assignment->branch?->name ?: __('application.company_wide_24f7fca3') }}</td>
+                    <td class="px-4 py-3">{{ \App\Support\UiText::status($assignment->status) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No assignments planned for today.</td></tr>
+                <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">{{ __('application.no_assignments_planned_for_today_b3a12f0f') }}</td></tr>
             @endforelse
         </x-table>
     </x-card>

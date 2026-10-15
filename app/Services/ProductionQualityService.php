@@ -16,6 +16,7 @@ use App\Models\ProductionQualityPlanCheck;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Support\CompanyFeatures;
+use App\Support\UiText;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -32,7 +33,7 @@ class ProductionQualityService
             $plan = ProductionQualityPlan::query()->forCurrentCompany()->whereKey($plan->id)->with(['product', 'checks'])->lockForUpdate()->firstOrFail();
             $this->sameCompany($plan->company_id, $user);
             if ($plan->status !== 'draft' || ! $plan->product?->isManufactured() || $plan->checks->isEmpty()) {
-                throw ValidationException::withMessages(['plan' => 'Only a draft plan with checks for a manufactured product can be activated.']);
+                throw ValidationException::withMessages(['plan' => __('application.only_a_draft_plan_with_checks_for_a_manufactured_product_can_be_activated_c4719768')]);
             }
             ProductionQualityPlan::query()->where('company_id', $plan->company_id)->where('product_id', $plan->product_id)
                 ->where('inspection_stage', $plan->inspection_stage)->where('status', 'active')->lockForUpdate()->get()
@@ -48,7 +49,7 @@ class ProductionQualityService
         $this->authorize($user, 'production.manage_quality_plans');
         $this->sameCompany($plan->company_id, $user);
         if ($plan->status !== 'active') {
-            throw ValidationException::withMessages(['plan' => 'Only an active plan can be deactivated.']);
+            throw ValidationException::withMessages(['plan' => __('application.only_an_active_plan_can_be_deactivated_40396279')]);
         }
         $plan->update(['status' => 'inactive', 'updated_by' => $user->id]);
 
@@ -99,7 +100,7 @@ class ProductionQualityService
                 'approval_status' => 'pending',
                 'inspected_at' => now(),
                 'inspected_by' => $user->id,
-                'notes' => 'Automatically queued when production completed.',
+                'notes' => __('application.automatically_queued_when_production_completed_2d035ae8'),
             ]);
             if ($plan) {
                 $this->snapshotChecks($inspection, $plan);
@@ -121,17 +122,17 @@ class ProductionQualityService
             $inspection = ProductionQualityInspection::query()->forCurrentCompany()->accessibleTo($user)
                 ->whereKey($inspection->id)->with(['plan.checks.unit', 'results', 'attachments'])->lockForUpdate()->firstOrFail();
             if ($inspection->result !== 'pending' || ! $inspection->production_curing_batch_id) {
-                throw ValidationException::withMessages(['inspection' => 'Only a queued curing inspection may be recorded.']);
+                throw ValidationException::withMessages(['inspection' => __('application.only_a_queued_curing_inspection_may_be_recorded_fd841482')]);
             }
 
             $result = (string) ($data['result'] ?? '');
             if (! in_array($result, ['passed', 'conditional', 'failed', 'hold'], true)) {
-                throw ValidationException::withMessages(['result' => 'Select Pass, Conditional Pass, Fail, or Hold.']);
+                throw ValidationException::withMessages(['result' => __('application.select_pass_conditional_pass_fail_or_hold_0a87e633')]);
             }
             $batch = ProductionCuringBatch::query()->where('company_id', $inspection->company_id)
                 ->whereKey($inspection->production_curing_batch_id)->lockForUpdate()->firstOrFail();
             if (! $inspection->production_quality_plan_id || ! $inspection->plan) {
-                throw ValidationException::withMessages(['plan' => 'No active QC plan is assigned to this product or product family.']);
+                throw ValidationException::withMessages(['plan' => __('application.no_active_qc_plan_is_assigned_to_this_product_or_product_family_ccbe7890')]);
             }
             if ($inspection->results->isEmpty()) {
                 $this->snapshotChecks($inspection, $inspection->plan);
@@ -146,7 +147,7 @@ class ProductionQualityService
             $accepted = $quantities['passed_quantity'] ?? '0';
             $rejected = $quantities['failed_quantity'] ?? '0';
             if (bccomp(bcadd($accepted, $rejected, 12), $available, 12) !== 0) {
-                throw ValidationException::withMessages(['accepted_quantity' => 'QC accepted plus QC rejected quantity must equal the curing quantity currently available for inspection.']);
+                throw ValidationException::withMessages(['accepted_quantity' => __('application.qc_accepted_plus_qc_rejected_quantity_must_equal_the_curing_quantity_curren_bdb40341')]);
             }
             $reason = trim((string) ($data['reason_justification'] ?? ''));
             $correctiveAction = trim((string) ($data['corrective_action'] ?? ''));
@@ -155,20 +156,20 @@ class ProductionQualityService
             $retestDate = filled($data['retest_date'] ?? null) ? (string) $data['retest_date'] : null;
             if (in_array($result, ['conditional', 'failed', 'hold'], true)) {
                 if ($reason === '') {
-                    throw ValidationException::withMessages(['reason_justification' => 'Reason / Justification is required for this QC decision.']);
+                    throw ValidationException::withMessages(['reason_justification' => __('application.reason_justification_is_required_for_this_qc_decision_48dd54f9')]);
                 }
                 if ($correctiveAction === '') {
-                    throw ValidationException::withMessages(['corrective_action' => 'Corrective Action is required for this QC decision.']);
+                    throw ValidationException::withMessages(['corrective_action' => __('application.corrective_action_is_required_for_this_qc_decision_d7ff31b8')]);
                 }
                 if (! in_array($disposition, ProductionQualityInspection::DISPOSITIONS, true)) {
-                    throw ValidationException::withMessages(['disposition' => 'Select a valid disposition.']);
+                    throw ValidationException::withMessages(['disposition' => __('application.select_a_valid_disposition_a69da5b8')]);
                 }
             }
             if (bccomp($rejected, '0', 12) > 0 && ! in_array($disposition, ProductionQualityInspection::DISPOSITIONS, true)) {
-                throw ValidationException::withMessages(['disposition' => 'A disposition is required when QC rejects quantity.']);
+                throw ValidationException::withMessages(['disposition' => __('application.a_disposition_is_required_when_qc_rejects_quantity_80ab9eaf')]);
             }
             if ($retestRequired && ! $retestDate) {
-                throw ValidationException::withMessages(['retest_date' => 'Retest Date is required when a retest is requested.']);
+                throw ValidationException::withMessages(['retest_date' => __('application.retest_date_is_required_when_a_retest_is_requested_48cbe5fa')]);
             }
 
             $inspector = User::query()->where('company_id', $inspection->company_id)
@@ -179,10 +180,10 @@ class ProductionQualityService
             $this->recordChecklistAnswers($inspection, (array) ($data['check_answers'] ?? []));
             $criticalFailed = $inspection->results()->where('is_critical', true)->where('result', 'failed')->exists();
             if ($result === 'passed' && $criticalFailed) {
-                throw ValidationException::withMessages(['result' => 'A failed critical check prevents a final Pass decision.']);
+                throw ValidationException::withMessages(['result' => __('application.a_failed_critical_check_prevents_a_final_pass_decision_98f7ec2c')]);
             }
             if (in_array($result, ['failed', 'hold'], true) && $inspection->plan->requires_failure_evidence && $inspection->attachments->isEmpty()) {
-                throw ValidationException::withMessages(['evidence' => 'This QC plan requires evidence for a Fail or Hold decision.']);
+                throw ValidationException::withMessages(['evidence' => __('application.this_qc_plan_requires_evidence_for_a_fail_or_hold_decision_3c1025be')]);
             }
 
             $previous = $inspection->only(['result', 'approval_status', 'passed_quantity', 'failed_quantity']);
@@ -256,23 +257,23 @@ class ProductionQualityService
             $batch = filled($data['production_curing_batch_id'] ?? null)
                 ? ProductionCuringBatch::query()->forCurrentCompany()->accessibleTo($user)->whereKey($data['production_curing_batch_id'])->lockForUpdate()->firstOrFail() : null;
             if (($order === null) === ($batch === null)) {
-                throw ValidationException::withMessages(['context' => 'Select exactly one production order or curing batch.']);
+                throw ValidationException::withMessages(['context' => __('application.select_exactly_one_production_order_or_curing_batch_1d2fc93e')]);
             }
             $context = $batch ?: $order;
             $this->assertBranchAccess($context->branch_id, $user);
             $stage = (string) ($data['inspection_stage'] ?? '');
             $allowed = $batch ? ['curing', 'pre_release'] : ['raw_material', 'during_production', 'production_completion'];
             if (! in_array($stage, $allowed, true)) {
-                throw ValidationException::withMessages(['inspection_stage' => 'The inspection stage does not match the selected context.']);
+                throw ValidationException::withMessages(['inspection_stage' => __('application.the_inspection_stage_does_not_match_the_selected_context_2eb51417')]);
             }
             $product = Product::query()->where('company_id', $context->company_id)->whereKey($context->product_id)->firstOrFail();
             if (! $product->isManufactured()) {
-                throw ValidationException::withMessages(['product_id' => 'Quality inspections are available only for manufactured products.']);
+                throw ValidationException::withMessages(['product_id' => __('application.quality_inspections_are_available_only_for_manufactured_products_33148eed')]);
             }
             $plan = ProductionQualityPlan::query()->where('company_id', $context->company_id)->where('product_id', $product->id)
                 ->where('inspection_stage', $stage)->where('status', 'active')->with('checks')->lockForUpdate()->first();
             if (! $plan) {
-                throw ValidationException::withMessages(['plan' => 'No active quality plan exists for this product and stage.']);
+                throw ValidationException::withMessages(['plan' => __('application.no_active_quality_plan_exists_for_this_product_and_stage_dfc00d20')]);
             }
             $supersedesId = $data['supersedes_inspection_id'] ?? null;
             if ($supersedesId) {
@@ -282,7 +283,7 @@ class ProductionQualityService
                     || (int) ($previous->production_order_id ?? 0) !== (int) ($order?->id ?? 0)
                     || (int) ($previous->production_curing_batch_id ?? 0) !== (int) ($batch?->id ?? 0)
                     || $previous->inspection_stage !== $stage) {
-                    throw ValidationException::withMessages(['supersedes_inspection_id' => 'A retest must reference a failed or conditional inspection for the same context and stage.']);
+                    throw ValidationException::withMessages(['supersedes_inspection_id' => __('application.a_retest_must_reference_a_failed_or_conditional_inspection_for_the_same_con_cfe9d41b')]);
                 }
             }
             $applicable = (string) ($batch?->accepted_quantity ?? $order?->planned_quantity);
@@ -318,7 +319,7 @@ class ProductionQualityService
             $result = $this->overallResult($inspection->results()->get());
             $updates = ['result' => $result];
             if (! $plan->requires_approval && $result === 'passed') {
-                $updates += ['approval_status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'approval_reason' => 'Plan does not require separate approval.'];
+                $updates += ['approval_status' => 'approved', 'approved_at' => now(), 'approved_by' => $user->id, 'approval_reason' => __('application.plan_does_not_require_separate_approval_37aa07bb')];
             }
             $inspection->update($updates);
             if ($result === 'failed' && $inspection->results()->where('is_critical', true)->where('result', 'failed')->exists()) {
@@ -344,23 +345,23 @@ class ProductionQualityService
                 return $inspection;
             }
             if ($inspection->approval_status !== 'pending' || ! in_array($inspection->result, ['passed', 'conditional'], true)) {
-                throw ValidationException::withMessages(['approval' => 'Only a completed Pass or Conditional Pass inspection may be approved. Fail and Hold require disposition or retest.']);
+                throw ValidationException::withMessages(['approval' => __('application.only_a_completed_pass_or_conditional_pass_inspection_may_be_approved_fail_a_50872ad8')]);
             }
             if ($inspection->result === 'conditional' && trim((string) $reason) === '') {
-                throw ValidationException::withMessages(['approval_reason' => 'A justification is required to approve a conditional result.']);
+                throw ValidationException::withMessages(['approval_reason' => __('application.a_justification_is_required_to_approve_a_conditional_result_6fb5d973')]);
             }
             if ($inspection->results->where('is_critical', true)->where('result', 'pending')->isNotEmpty()) {
-                throw ValidationException::withMessages(['approval' => 'Pending critical checks must be completed before approval.']);
+                throw ValidationException::withMessages(['approval' => __('application.pending_critical_checks_must_be_completed_before_approval_56d6f898')]);
             }
             if ($inspection->results->where('is_critical', true)->where('result', 'failed')->isNotEmpty()) {
-                throw ValidationException::withMessages(['approval' => 'A failed critical check cannot be approved for release.']);
+                throw ValidationException::withMessages(['approval' => __('application.a_failed_critical_check_cannot_be_approved_for_release_cc53a780')]);
             }
             if ($inspection->plan?->enforce_approval_separation && (int) $inspection->inspected_by === (int) $user->id) {
                 if (! $user->can('production.override_qc_separation')) {
-                    throw ValidationException::withMessages(['approval' => 'The inspector cannot approve their own inspection while segregation of duties is enabled.']);
+                    throw ValidationException::withMessages(['approval' => __('application.the_inspector_cannot_approve_their_own_inspection_while_segregation_of_duti_9137ad65')]);
                 }
                 if (trim((string) $reason) === '') {
-                    throw ValidationException::withMessages(['approval_reason' => 'An audit reason is required to override inspector/approver separation.']);
+                    throw ValidationException::withMessages(['approval_reason' => __('application.an_audit_reason_is_required_to_override_inspector_approver_separation_33641cca')]);
                 }
             }
 
@@ -384,7 +385,7 @@ class ProductionQualityService
                         ->where('status', 'active')->where('reason', 'like', 'Automatic hold:%')
                         ->lockForUpdate()->get()->each(fn (ProductionQualityHold $hold) => $hold->update([
                             'status' => 'released', 'released_at' => now(), 'released_by' => $user->id,
-                            'release_reason' => 'Released by approved retest '.$inspection->inspection_number.'.',
+                            'release_reason' => __('feedback.approved_retest', ['number' => $inspection->inspection_number]),
                         ]));
                 }
             }
@@ -407,7 +408,7 @@ class ProductionQualityService
     {
         $this->authorizeAny($user, ['production.approve_qc', 'production.approve_quality']);
         if (trim($reason) === '') {
-            throw ValidationException::withMessages(['rejection_reason' => 'A rejection reason is required.']);
+            throw ValidationException::withMessages(['rejection_reason' => __('application.a_rejection_reason_is_required_462ed53e')]);
         }
 
         return DB::transaction(function () use ($inspection, $user, $reason): ProductionQualityInspection {
@@ -416,7 +417,7 @@ class ProductionQualityService
                 return $inspection;
             }
             if ($inspection->approval_status !== 'pending') {
-                throw ValidationException::withMessages(['approval' => 'This inspection has already been decided.']);
+                throw ValidationException::withMessages(['approval' => __('application.this_inspection_has_already_been_decided_4f4f969c')]);
             }
             $inspection->update(['approval_status' => 'rejected', 'approved_at' => now(), 'approved_by' => $user->id, 'rejection_reason' => trim($reason)]);
             $this->audit($inspection, 'rejected', $user, ['approval_status' => 'pending'], ['approval_status' => 'rejected'], trim($reason));
@@ -436,13 +437,13 @@ class ProductionQualityService
     {
         $this->authorize($user, 'production.manage_quality_holds');
         if (trim($reason) === '') {
-            throw ValidationException::withMessages(['release_reason' => 'A release reason is required.']);
+            throw ValidationException::withMessages(['release_reason' => __('application.a_release_reason_is_required_fe1c6d1a')]);
         }
 
         return DB::transaction(function () use ($hold, $user, $reason): ProductionQualityHold {
             $hold = ProductionQualityHold::query()->forCurrentCompany()->accessibleTo($user)->whereKey($hold->id)->lockForUpdate()->firstOrFail();
             if ($hold->status !== 'active') {
-                throw ValidationException::withMessages(['hold' => 'Only an active hold can be released.']);
+                throw ValidationException::withMessages(['hold' => __('application.only_an_active_hold_can_be_released_138014c3')]);
             }
             $hold->update(['status' => 'released', 'released_at' => now(), 'released_by' => $user->id, 'release_reason' => trim($reason)]);
 
@@ -464,7 +465,7 @@ class ProductionQualityService
             throw ValidationException::withMessages(['release_quantity' => __('production.quality.pre_release_required')]);
         }
         if ($quantity !== null && bccomp($quantity, (string) $batch->release_eligible_quantity, 12) > 0) {
-            throw ValidationException::withMessages(['release_quantity' => 'Release quantity exceeds the quantity approved by quality inspection.']);
+            throw ValidationException::withMessages(['release_quantity' => __('application.release_quantity_exceeds_the_quantity_approved_by_quality_inspection_9d7cbb38')]);
         }
     }
 
@@ -479,11 +480,11 @@ class ProductionQualityService
     {
         $this->authorizeAny($user, ['production.record_qc_result', 'production.perform_quality_inspections']);
         if (! in_array($category, ['product_photo', 'damage_photo', 'test_result', 'laboratory_certificate', 'other'], true)) {
-            throw ValidationException::withMessages(['evidence_category' => 'Select a valid evidence category.']);
+            throw ValidationException::withMessages(['evidence_category' => __('application.select_a_valid_evidence_category_26bff16d')]);
         }
         $allowed = ['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
         if (! in_array((string) $file->getMimeType(), $allowed, true) || $file->getSize() > 10 * 1024 * 1024) {
-            throw ValidationException::withMessages(['evidence' => 'Evidence must be a JPG, PNG, PDF, Word, or Excel file no larger than 10 MB.']);
+            throw ValidationException::withMessages(['evidence' => __('application.evidence_must_be_a_jpg_png_pdf_word_or_excel_file_no_larger_than_10_mb_97a77803')]);
         }
 
         return DB::transaction(function () use ($inspection, $file, $category, $user): ProductionQualityAttachment {
@@ -579,11 +580,11 @@ class ProductionQualityService
     private function requirementSnapshot(ProductionQualityPlanCheck $check): string
     {
         return collect([
-            str($check->acceptance_rule)->headline()->toString(),
-            $check->minimum_value !== null ? 'Min '.$check->minimum_value : null,
-            $check->maximum_value !== null ? 'Max '.$check->maximum_value : null,
-            $check->target_value !== null ? 'Target '.$check->target_value : null,
-            filled($check->allowed_options) ? 'Options: '.implode(', ', (array) $check->allowed_options) : null,
+            UiText::label($check->acceptance_rule),
+            $check->minimum_value !== null ? __('feedback.minimum_value', ['value' => $check->minimum_value]) : null,
+            $check->maximum_value !== null ? __('feedback.maximum_value', ['value' => $check->maximum_value]) : null,
+            $check->target_value !== null ? __('feedback.target_value', ['value' => $check->target_value]) : null,
+            filled($check->allowed_options) ? __('feedback.options_value', ['value' => implode(', ', (array) $check->allowed_options)]) : null,
         ])->filter()->implode(' · ');
     }
 
@@ -598,7 +599,7 @@ class ProductionQualityService
             return;
         }
         if (bccomp($rejected, (string) $batch->remaining_quantity, 12) > 0) {
-            throw ValidationException::withMessages(['approval' => 'QC rejected quantity exceeds the batch quantity still available.']);
+            throw ValidationException::withMessages(['approval' => __('application.qc_rejected_quantity_exceeds_the_batch_quantity_still_available_99a3339d')]);
         }
 
         StockMovement::query()->where('product_id', $batch->product_id)
@@ -609,7 +610,7 @@ class ProductionQualityService
             'production_curing_batch_id' => $batch->id,
             'action_type' => ProductionCuringAction::QC_REJECTION,
             'quantity' => $rejected,
-            'reason' => collect([$inspection->disposition ? str($inspection->disposition)->headline() : null, $inspection->reason_justification])->filter()->implode(' · '),
+            'reason' => collect([$inspection->disposition ? UiText::label($inspection->disposition) : null, $inspection->reason_justification])->filter()->implode(' · '),
             'posting_reference' => $postingReference,
             'idempotency_key' => $idempotencyKey,
             'created_by' => $user->id,
@@ -628,7 +629,7 @@ class ProductionQualityService
             'reference_id' => $batch->production_order_id,
             'production_curing_batch_id' => $batch->id,
             'posting_reference' => $postingReference,
-            'notes' => 'QC rejection '.$inspection->inspection_number.' · '.str($inspection->disposition)->headline(),
+            'notes' => __('feedback.quality_rejection', ['number' => $inspection->inspection_number, 'disposition' => UiText::label($inspection->disposition)]),
             'created_by' => $user->id,
             'movement_date' => now()->toDateString(),
         ]);
@@ -708,7 +709,7 @@ class ProductionQualityService
                 fn ($q) => $q->where('production_order_id', $inspection->production_order_id)->whereNull('production_curing_batch_id'))
             ->exists();
         if (! $exists) {
-            $this->createHold(['production_order_id' => $inspection->production_order_id, 'production_curing_batch_id' => $inspection->production_curing_batch_id, 'production_quality_inspection_id' => $inspection->id, 'product_id' => $inspection->product_id, 'branch_id' => $inspection->branch_id, 'held_quantity' => $inspection->failed_quantity ?: $inspection->inspected_quantity, 'reason' => 'Automatic hold: critical quality check failed on '.$inspection->inspection_number.'.'], $user);
+            $this->createHold(['production_order_id' => $inspection->production_order_id, 'production_curing_batch_id' => $inspection->production_curing_batch_id, 'production_quality_inspection_id' => $inspection->id, 'product_id' => $inspection->product_id, 'branch_id' => $inspection->branch_id, 'held_quantity' => $inspection->failed_quantity ?: $inspection->inspected_quantity, 'reason' => __('feedback.critical_hold', ['number' => $inspection->inspection_number])], $user);
         }
     }
 
@@ -717,12 +718,12 @@ class ProductionQualityService
         $order = filled($data['production_order_id'] ?? null) ? ProductionOrder::query()->forCurrentCompany()->whereKey($data['production_order_id'])->firstOrFail() : null;
         $batch = filled($data['production_curing_batch_id'] ?? null) ? ProductionCuringBatch::query()->forCurrentCompany()->accessibleTo($user)->whereKey($data['production_curing_batch_id'])->firstOrFail() : null;
         if (! $order && ! $batch) {
-            throw ValidationException::withMessages(['context' => 'A production order or curing batch is required.']);
+            throw ValidationException::withMessages(['context' => __('application.a_production_order_or_curing_batch_is_required_b0983767')]);
         }
         $context = $batch ?: $order;
         $this->assertBranchAccess($context->branch_id, $user);
         if (trim((string) ($data['reason'] ?? '')) === '') {
-            throw ValidationException::withMessages(['reason' => 'A hold reason is required.']);
+            throw ValidationException::withMessages(['reason' => __('application.a_hold_reason_is_required_bb258d50')]);
         }
         $inspectionId = $data['production_quality_inspection_id'] ?? null;
         if ($inspectionId) {
@@ -730,7 +731,7 @@ class ProductionQualityService
             if ((int) $inspection->product_id !== (int) $context->product_id
                 || (int) ($inspection->production_order_id ?? 0) !== (int) ($order?->id ?? 0)
                 || (int) ($inspection->production_curing_batch_id ?? 0) !== (int) ($batch?->id ?? 0)) {
-                throw ValidationException::withMessages(['production_quality_inspection_id' => 'The inspection does not match the hold context.']);
+                throw ValidationException::withMessages(['production_quality_inspection_id' => __('application.the_inspection_does_not_match_the_hold_context_0514f95a')]);
             }
         }
         $heldQuantity = $data['held_quantity'] ?? null;
@@ -738,11 +739,11 @@ class ProductionQualityService
             try {
                 $heldQuantity = bcadd($this->calculator->decimal($heldQuantity), '0', 12);
             } catch (\InvalidArgumentException) {
-                throw ValidationException::withMessages(['held_quantity' => 'Enter a valid held quantity.']);
+                throw ValidationException::withMessages(['held_quantity' => __('application.enter_a_valid_held_quantity_f86de228')]);
             }
             $maximum = (string) ($batch?->remaining_quantity ?? $order?->accepted_quantity ?? $order?->planned_quantity);
             if (bccomp($heldQuantity, '0', 12) < 0 || bccomp($heldQuantity, $maximum, 12) > 0) {
-                throw ValidationException::withMessages(['held_quantity' => 'Held quantity must be between zero and the applicable quantity.']);
+                throw ValidationException::withMessages(['held_quantity' => __('application.held_quantity_must_be_between_zero_and_the_applicable_quantity_fe9f73b2')]);
             }
         }
 
@@ -768,22 +769,22 @@ class ProductionQualityService
             try {
                 $value = bcadd($this->calculator->decimal($raw), '0', 12);
             } catch (\InvalidArgumentException) {
-                throw ValidationException::withMessages([$field => 'Enter a valid quantity.']);
+                throw ValidationException::withMessages([$field => __('application.enter_a_valid_quantity_ef29ff31')]);
             }
             if (bccomp($value, '0', 12) < 0) {
-                throw ValidationException::withMessages([$field => 'Quantities cannot be negative.']);
+                throw ValidationException::withMessages([$field => __('application.quantities_cannot_be_negative_9654edd6')]);
             }
             $values[$field] = $value;
         }
         if ($values['sample_quantity'] !== null && bccomp($values['sample_quantity'], $applicable, 12) > 0) {
-            throw ValidationException::withMessages(['sample_quantity' => 'Sample quantity cannot exceed the applicable quantity.']);
+            throw ValidationException::withMessages(['sample_quantity' => __('application.sample_quantity_cannot_exceed_the_applicable_quantity_f0ad99b8')]);
         }
         if ($values['inspected_quantity'] !== null && bccomp($values['inspected_quantity'], $applicable, 12) > 0) {
-            throw ValidationException::withMessages(['inspected_quantity' => 'Inspected quantity cannot exceed the applicable quantity.']);
+            throw ValidationException::withMessages(['inspected_quantity' => __('application.inspected_quantity_cannot_exceed_the_applicable_quantity_75f5b2af')]);
         }
         $sum = bcadd($values['passed_quantity'] ?? '0', $values['failed_quantity'] ?? '0', 12);
         if ($values['inspected_quantity'] !== null && bccomp($sum, $values['inspected_quantity'], 12) > 0) {
-            throw ValidationException::withMessages(['passed_quantity' => 'Passed plus failed quantity cannot exceed inspected quantity.']);
+            throw ValidationException::withMessages(['passed_quantity' => __('application.passed_plus_failed_quantity_cannot_exceed_inspected_quantity_f48a5171')]);
         }
 
         return $values;

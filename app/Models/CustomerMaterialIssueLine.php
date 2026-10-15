@@ -15,8 +15,8 @@ class CustomerMaterialIssueLine extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Posted material issue lines are immutable.'));
-        static::deleting(fn () => throw new LogicException('Posted material issue lines cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.posted_material_issue_lines_are_immutable_dd9bbe99')));
+        static::deleting(fn () => throw new LogicException(__('application.posted_material_issue_lines_cannot_be_deleted_06060efc')));
     }
 
     public function issue(): BelongsTo

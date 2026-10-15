@@ -45,6 +45,6 @@ final class WhatsAppCategories
 
     public static function available(?int $companyId): array
     {
-        return array_intersect_key(self::LABELS, array_flip(self::filter($companyId, array_keys(self::LABELS))));
+        return array_map(UiText::translate(...), array_intersect_key(self::LABELS, array_flip(self::filter($companyId, array_keys(self::LABELS)))));
     }
 }

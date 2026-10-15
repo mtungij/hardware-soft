@@ -1,36 +1,33 @@
-@php
-    $companyName = $company?->company_name ?: ($settings?->company_name ?: config('app.name'));
-@endphp
-
+@php($companyName = $company?->company_name ?: ($settings?->company_name ?: config('app.name')))
 <x-mail::message>
-# Karibu {{ $companyName }}
+# {{ __('mail.portal.welcome', ['company' => $companyName]) }}
 
-Habari {{ $account->name }},
+{{ __('mail.hello', ['name' => $account->name]) }}
 
-Karibu kwenye huduma ya {{ $companyName }} Customer Portal. Kupitia portal hii unaweza kuona taarifa zako za madeni, malipo, risiti, amana, na statement ya akaunti yako.
+{{ __('mail.portal.intro', ['company' => $companyName]) }}
 
 <x-mail::panel>
-**Link ya Customer Portal:** {{ $portalUrl }}
+**{{ __('mail.portal.url') }}:** {{ $portalUrl }}
 
-**Email utakayotumia:** {{ $account->email }}
+**{{ __('mail.portal.email') }}:** {{ $account->email }}
 
-**Password ya kuingia:** {{ $temporaryPassword }}
+**{{ __('mail.portal.password') }}:** {{ $temporaryPassword }}
 </x-mail::panel>
 
 <x-mail::button :url="$portalUrl">
-Fungua Customer Portal
+{{ __('mail.portal.open') }}
 </x-mail::button>
 
-Namna ya kuanza:
+{{ __('mail.portal.start') }}
 
-1. Fungua link ya Customer Portal hapo juu.
-2. Weka email hii: **{{ $account->email }}**.
-3. Weka password hii: **{{ $temporaryPassword }}**.
-4. Bonyeza **Login / Ingia**.
-5. Baada ya kuingia, unaweza kuona madeni, malipo, risiti, amana, na statement yako.
+1. {{ __('mail.portal.step_open') }}
+2. {{ __('mail.portal.step_email') }} **{{ $account->email }}**.
+3. {{ __('mail.portal.step_password') }} **{{ $temporaryPassword }}**.
+4. {{ __('mail.portal.step_login') }}
+5. {{ __('mail.portal.step_account') }}
 
-Tafadhali hifadhi taarifa hizi kwa usalama. Kama umeshindwa kuingia, wasiliana na huduma kwa wateja.
+{{ __('mail.portal.security') }}
 
-Asante,<br>
+{{ __('mail.thanks') }},<br>
 {{ $companyName }}
 </x-mail::message>

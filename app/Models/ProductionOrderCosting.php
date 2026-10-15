@@ -37,12 +37,12 @@ class ProductionOrderCosting extends Model
     {
         static::updating(function (ProductionOrderCosting $costing): void {
             if ($costing->getOriginal('status') === self::STATUS_FINALIZED) {
-                throw new LogicException('Finalized production costing is immutable.');
+                throw new LogicException(__('application.finalized_production_costing_is_immutable_c2ef80a7'));
             }
         });
         static::deleting(function (ProductionOrderCosting $costing): void {
             if ($costing->status === self::STATUS_FINALIZED) {
-                throw new LogicException('Finalized production costing cannot be deleted.');
+                throw new LogicException(__('application.finalized_production_costing_cannot_be_deleted_2c1ec94c'));
             }
         });
     }

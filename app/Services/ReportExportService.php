@@ -25,6 +25,8 @@ use App\Support\AuthorizationScope;
 use App\Support\BranchAccess;
 use App\Support\InventorySettings;
 use App\Support\NumberFormatter;
+use App\Support\PosSaleDate;
+use App\Support\UiText;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -48,9 +50,9 @@ class ReportExportService
             'address' => $settings?->company_address,
             'region' => $settings?->region,
             'district' => $settings?->district,
-            'date_range' => trim(($request->string('date_from')->toString() ?: 'Beginning').' to '.($request->string('date_to')->toString() ?: today()->toDateString())),
-            'branch_name' => $branch?->name ?? 'All Branches',
-            'stock_location' => $location?->name ?? 'All Locations',
+            'date_range' => trim(($request->string('date_from')->toString() ?: __('application.beginning_4373e9d7')).' '.UiText::translate('to').' '.($request->string('date_to')->toString() ?: today()->toDateString())),
+            'branch_name' => $branch?->name ?? __('application.all_branches_0bf51d9a'),
+            'stock_location' => $location?->name ?? __('application.all_locations_3094bd38'),
             'printed_by' => $request->user()?->name ?? '-',
             'printed_date' => now()->format('Y-m-d H:i'),
         ];
@@ -59,7 +61,7 @@ class ReportExportService
     public function generatePdf(string $reportTitle, array $data, array $filters = []): string
     {
         if (($data['export_key'] ?? null) === 'tables.products') {
-            $data['headers'] = ['S/N', ...$data['headers']];
+            $data['headers'] = [__('application.s_n_497c2c9c'), ...$data['headers']];
             $data['rows'] = collect($data['rows'])
                 ->values()
                 ->map(fn (array $row, int $index) => [
@@ -99,6 +101,10 @@ class ReportExportService
         $this->authorizeExport($key, $request);
         $header = $this->getCompanyHeader($request);
         [$title, $headers, $rows, $totals] = $this->rows($key, $request);
+
+        $title = UiText::translate($title);
+        $headers = array_map(UiText::translate(...), $headers);
+        $totals = collect($totals)->mapWithKeys(fn ($value, $label) => [UiText::translate($label) => $value])->all();
 
         return compact('title', 'header', 'headers', 'rows', 'totals') + [
             'filters' => $request->query(),
@@ -158,14 +164,14 @@ class ReportExportService
             $lines = $report->rows($user, 'outgoing', $filters);
             $canCost = $user->can('internal_sales.view_cost');
             $canMargin = $user->can('internal_sales.view_margin');
-            $headers = ['Date', 'Internal Sale #', 'Destination', 'Product', 'SKU', 'Unit', 'Quantity', 'Internal Price', 'Internal Sales Value'];
+            $headers = [__('application.date_eb9a4bc1'), __('application.internal_sale_9d355b80'), __('application.destination_d4271349'), __('application.product_dd3b86d1'), __('application.sku_d59192b9'), __('application.unit_f6b935ab'), __('application.quantity_44f6af69'), __('application.internal_price_6952f6e5'), __('application.internal_sales_value_1f1e708b')];
             if ($canCost) {
-                $headers[] = 'Internal Cost';
+                $headers[] = __('application.internal_cost_632d656a');
             }
             if ($canMargin) {
-                $headers[] = 'Internal Profit';
+                $headers[] = __('application.internal_profit_9b602e26');
             }
-            $headers[] = 'Status';
+            $headers[] = __('application.status_bae7d5be');
             $rows = $lines->map(function (array $line) use ($canCost, $canMargin): array {
                 $row = [$line['date']?->format('Y-m-d'), $line['number'], $line['destination'], $line['product'],
                     $line['sku'], $line['transaction_unit'], $line['transaction_quantity'],
@@ -176,35 +182,35 @@ class ReportExportService
                 if ($canMargin) {
                     $row[] = $line['posted'] ? $line['internal_margin'] : null;
                 }
-                $row[] = ucfirst($line['status']);
+                $row[] = UiText::status($line['status']);
 
                 return $row;
             })->all();
             $summary = $report->totals($lines);
-            $totals = ['Internal Sales' => $summary['internal_value'], 'Completed Internal Sales' => $summary['sales']];
+            $totals = [__('application.internal_sales_a7596208') => $summary['internal_value'], __('application.completed_internal_sales_ad1ee940') => $summary['sales']];
             if ($canCost) {
-                $totals['Internal Cost'] = $summary['source_cost'];
+                $totals[__('application.internal_cost_632d656a')] = $summary['source_cost'];
             }
             if ($canMargin) {
-                $totals['Internal Profit'] = $summary['internal_margin'];
+                $totals[__('application.internal_profit_9b602e26')] = $summary['internal_margin'];
             }
 
-            return ['Outgoing Internal Sales', $headers, $rows, $totals];
+            return [__('application.outgoing_internal_sales_80587025'), $headers, $rows, $totals];
         }
 
         if ($tab === 'incoming') {
             $lines = $report->rows($user, 'incoming', $filters);
-            $headers = ['Date', 'Internal Sale #', 'Source', 'Product', 'SKU', 'Unit', 'Quantity', 'Acquisition Price', 'Acquisition Value', 'Status'];
+            $headers = [__('application.date_eb9a4bc1'), __('application.internal_sale_9d355b80'), __('application.source_6da13add'), __('application.product_dd3b86d1'), __('application.sku_d59192b9'), __('application.unit_f6b935ab'), __('application.quantity_44f6af69'), __('application.acquisition_price_9f0f605b'), __('application.acquisition_value_177290e3'), __('application.status_bae7d5be')];
             $rows = $lines->map(fn (array $line): array => [
                 $line['date']?->format('Y-m-d'), $line['number'], $line['source'], $line['product'], $line['sku'],
                 $line['transaction_unit'], $line['transaction_quantity'], $line['posted'] ? $line['internal_unit_price'] : null,
-                $line['posted'] ? $line['acquisition_value'] : null, ucfirst($line['status']),
+                $line['posted'] ? $line['acquisition_value'] : null, UiText::status($line['status']),
             ])->all();
             $summary = $report->totals($lines);
 
-            return ['Internal Purchases and Acquisitions', $headers, $rows, [
-                'Acquisition Value' => $summary['acquisition_value'], 'Received Base Quantity' => $summary['base_quantity'],
-                'Internal Receipts' => $summary['sales'],
+            return [__('application.internal_purchases_and_acquisitions_90df0d7f'), $headers, $rows, [
+                __('application.acquisition_value_177290e3') => $summary['acquisition_value'], __('application.received_base_quantity_909148cf') => $summary['base_quantity'],
+                __('application.internal_receipts_08846fd6') => $summary['sales'],
             ]];
         }
 
@@ -219,8 +225,8 @@ class ReportExportService
         $locations = $financial->valuationLocations($effectiveBranch)
             ->filter(fn (StockLocation $location) => (! $filters['from_location_id'] && ! $filters['to_location_id'])
                 || $location->id === $filters['from_location_id'] || $location->id === $filters['to_location_id']);
-        $headers = ['Location', 'Internal Sales', 'Internal Cost', 'Internal Profit', 'Stock Bought Internally',
-            'Customer Sales', 'Cost of Sold Stock', 'Outlet Profit'];
+        $headers = [__('application.location_d219c681'), __('application.internal_sales_a7596208'), __('application.internal_cost_632d656a'), __('application.internal_profit_9b602e26'), __('application.stock_bought_internally_04bdead4'),
+            __('application.customer_sales_a93a5751'), __('application.cost_of_sold_stock_e0981624'), __('application.outlet_profit_f6a0f4dd')];
         $rows = $locations->map(function (StockLocation $location) use ($report, $outgoing, $incoming, $customer): array {
             $source = $report->totals($outgoing->where('source_id', $location->id));
             $receipts = $report->totals($incoming->where('destination_id', $location->id));
@@ -232,7 +238,7 @@ class ReportExportService
                 $receipts['acquisition_value'], $sales, $cost, $sales - $cost];
         })->values()->all();
 
-        return ['Location Profitability', $headers, $rows, []];
+        return [__('application.location_profitability_043595c7'), $headers, $rows, []];
     }
 
     private function sales(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
@@ -251,6 +257,7 @@ class ReportExportService
             ->latest()
             ->get();
 
+        $recordingTimezone = $request->user()->company_id ? app(PosSaleDate::class)->timezone($request->user()->company_id) : config('app.timezone');
         $exportRows = $rows->map(function (Sale $sale) use ($canViewCost): array {
             $transactionQuantities = $sale->items->map(fn (SaleItem $item) => $item->product?->displayName().' '.$this->formatQuantity($item->quantity).' '.($item->selling_unit_code_snapshot ?: $item->sellingUnit?->short_name))->join("\n");
             $baseQuantities = $sale->items->map(fn (SaleItem $item) => $item->product?->displayName().' '.$this->formatQuantity($item->base_quantity ?: $item->quantity).' '.($item->base_unit_code_snapshot ?: $item->baseUnit?->short_name))->join("\n");
@@ -264,16 +271,16 @@ class ReportExportService
                 array_push($row, $this->formatCurrency($cogs), $this->formatCurrency((float) $sale->total_amount - $cogs));
             }
 
-            return [...$row, $this->formatDate($sale->sale_date), $sale->customer?->name ?? 'Walk-in', $this->formatCurrency($sale->paid_amount), $this->formatCurrency($sale->balance_amount)];
+            return [...$row, $this->formatDate($sale->sale_date), $sale->customer?->displayName() ?? __('application.walk_in_801d866b'), $this->formatCurrency($sale->paid_amount), $this->formatCurrency($sale->balance_amount), $sale->created_at?->clone()->timezone(app(PosSaleDate::class)->timezone($sale->company_id))->format('Y-m-d H:i:s')];
         })->all();
 
-        $headers = ['Sale Number', 'Transaction Quantities', 'Base Quantities', 'User', 'Stock Location', 'Sale Type', 'Amount'];
+        $headers = [__('application.sale_number_1b4a02ea'), __('application.transaction_quantities_75c6aa8a'), __('application.base_quantities_e5055f98'), __('application.user_9f8a2389'), __('application.stock_location_50e3c4fe'), __('application.sale_type_76caf1bd'), __('application.amount_43dc8532')];
 
         if ($canViewCost) {
-            array_push($headers, 'COGS', 'Gross Profit');
+            array_push($headers, __('application.cogs_7e86884c'), __('application.gross_profit_11f53e51'));
         }
 
-        return ['Sales Report', [...$headers, 'Date', 'Customer', 'Paid', 'Balance'], $exportRows, ['Total Amount' => $this->formatCurrency($rows->sum('total_amount'))]];
+        return [__('application.sales_report_0f89ab2f'), [...$headers, __('application.date_eb9a4bc1'), __('application.customer_0e85749a'), __('application.paid_dc9d4584'), __('application.balance_90eef613'), __('sale_dates.recorded_at')], $exportRows, [__('application.total_amount_490aaabf') => $this->formatCurrency($rows->sum('total_amount'))]];
     }
 
     private function salesItems(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
@@ -329,7 +336,7 @@ class ReportExportService
                 return [
                     'sale' => $sale,
                     'items' => $items->values(),
-                    'customer' => $sale?->customer?->name ?: $tr('walk_in_customer'),
+                    'customer' => $sale?->customer?->displayName() ?: $tr('walk_in_customer'),
                     'total_quantity' => $items->sum('quantity'),
                     'cost' => $cost,
                     'sales' => $sales,
@@ -372,7 +379,7 @@ class ReportExportService
             $row = [
                 $sale?->sale_number,
                 $sale?->created_at?->format('H:i'),
-                $sale?->customer?->name ?: $tr('walk_in_customer'),
+                $sale?->customer?->displayName() ?: $tr('walk_in_customer'),
                 $item->productDisplayNameWithSize(),
                 $item->product?->sku,
                 $this->formatQuantity($item->quantity),
@@ -451,10 +458,10 @@ class ReportExportService
             $received = $purchase->items->map(fn ($item) => $this->formatQuantity($item->received_quantity).' '.($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name).' / '.$this->formatQuantity($item->base_received_quantity ?? $item->stockQuantity((float) $item->received_quantity)).' '.($item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name))->join("\n");
             $remaining = $purchase->items->map(fn ($item) => $this->formatQuantity($item->remainingQuantity()).' '.($item->purchase_unit_code_snapshot ?: $item->purchaseUnit?->short_name))->join("\n");
 
-            return [$this->formatDate($purchase->purchase_date), $purchase->reference_number, $purchase->supplier?->name, $ordered, $conversions, $baseOrdered, $received, $remaining, ucfirst($purchase->status), $this->formatCurrency($purchase->total_amount), $this->formatCurrency($purchase->paid_amount), $this->formatCurrency($purchase->balance_amount)];
+            return [$this->formatDate($purchase->purchase_date), $purchase->reference_number, $purchase->supplier?->name, $ordered, $conversions, $baseOrdered, $received, $remaining, UiText::status($purchase->status), $this->formatCurrency($purchase->total_amount), $this->formatCurrency($purchase->paid_amount), $this->formatCurrency($purchase->balance_amount)];
         })->all();
 
-        return ['Purchase Report', ['Date', 'Reference', 'Supplier', 'Ordered Qty', 'Conversion', 'Base Qty Ordered', 'Received / Base Received', 'Remaining Qty', 'Status', 'Total', 'Paid', 'Balance'], $exportRows, ['Total Purchases' => $this->formatCurrency($rows->sum('total_amount'))]];
+        return [__('application.purchase_report_4edd5c16'), [__('application.date_eb9a4bc1'), __('application.reference_db1c7845'), __('application.supplier_55edd462'), __('application.ordered_qty_b903ee79'), __('application.conversion_9151f843'), __('application.base_qty_ordered_1539aff2'), __('application.received_base_received_c7cc46af'), __('application.remaining_qty_b5a73f44'), __('application.status_bae7d5be'), __('application.total_b25928c6'), __('application.paid_dc9d4584'), __('application.balance_90eef613')], $exportRows, [__('application.total_purchases_6231e5c8') => $this->formatCurrency($rows->sum('total_amount'))]];
     }
 
     private function expenses(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
@@ -470,7 +477,7 @@ class ReportExportService
             ->latest()
             ->get();
 
-        return ['Expense Report', ['Date', 'Category', 'Branch', 'Method', 'Paid By', 'Amount'], $rows->map(fn ($expense) => [$this->formatDate($expense->expense_date), $expense->category?->name, $expense->branch?->name, str($expense->payment_method)->replace('_', ' ')->title(), $expense->paidBy?->name, $this->formatCurrency($expense->amount)])->all(), ['Total Expenses' => $this->formatCurrency($rows->sum('amount'))]];
+        return [__('application.expense_report_285d669e'), [__('application.date_eb9a4bc1'), __('application.category_a3c686e7'), __('application.branch_1627510b'), __('application.method_88306943'), __('application.paid_by_2e06e8e0'), __('application.amount_43dc8532')], $rows->map(fn ($expense) => [$this->formatDate($expense->expense_date), $expense->category?->name, $expense->branch?->name, UiText::label($expense->payment_method), $expense->paidBy?->name, $this->formatCurrency($expense->amount)])->all(), [__('application.total_expenses_750134b6') => $this->formatCurrency($rows->sum('amount'))]];
     }
 
     private function customerPayments(Request $request, ?int $branchId, ?string $from, ?string $to): array
@@ -490,26 +497,26 @@ class ReportExportService
             ->get();
 
         return [
-            'Customer Payment Report',
-            ['Date', 'Time', 'Receipt Number', 'Customer', 'Phone', 'Amount', 'Method', 'Reference', 'Branch', 'Received By', 'Notes'],
+            __('application.customer_payment_report_1fa3b1d2'),
+            [__('application.date_eb9a4bc1'), __('application.time_6c82e6dd'), __('application.receipt_number_37553f8e'), __('application.customer_0e85749a'), __('application.phone_77064d52'), __('application.amount_43dc8532'), __('application.method_88306943'), __('application.reference_db1c7845'), __('application.branch_1627510b'), __('application.received_by_f84f73c6'), __('application.notes_70440046')],
             $rows->map(fn ($payment) => [
                 $this->formatDate($payment->payment_date),
                 $payment->created_at?->format('H:i'),
                 $payment->receipt_number ?: 'PAY-'.$payment->id,
-                $payment->customer?->name,
+                $payment->customer?->displayName(),
                 $payment->customer?->phone,
                 $this->formatCurrency($payment->amount),
-                str($payment->payment_method)->replace('_', ' ')->title(),
+                UiText::label($payment->payment_method),
                 $payment->reference_number,
                 $payment->branch?->name,
                 $payment->receivedBy?->name,
                 $payment->notes,
             ])->all(),
             [
-                'Cash Payments' => $this->formatCurrency($rows->where('payment_method', 'cash')->sum('amount')),
-                'Mobile Money Payments' => $this->formatCurrency($rows->where('payment_method', 'mobile_money')->sum('amount')),
-                'Bank Payments' => $this->formatCurrency($rows->where('payment_method', 'bank')->sum('amount')),
-                'Total Payments' => $this->formatCurrency($rows->sum('amount')),
+                __('application.cash_payments_49416736') => $this->formatCurrency($rows->where('payment_method', 'cash')->sum('amount')),
+                __('application.mobile_money_payments_e2dfddd5') => $this->formatCurrency($rows->where('payment_method', 'mobile_money')->sum('amount')),
+                __('application.bank_payments_b8d4227f') => $this->formatCurrency($rows->where('payment_method', 'bank')->sum('amount')),
+                __('application.total_payments_53b493df') => $this->formatCurrency($rows->sum('amount')),
             ],
         ];
     }
@@ -519,7 +526,7 @@ class ReportExportService
         $accounting = app(AccountingService::class);
         $rows = Customer::with('branch')->where(fn ($query) => $query->where('is_system_customer', false)->orWhereNull('is_system_customer'))->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($request->string('typeFilter')->toString(), fn ($q, $type) => $q->where('customer_type', $type))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))->latest()->get();
 
-        return ['Customer Balance Report', ['Customer', 'Phone', 'Type', 'Branch', 'Outstanding'], $rows->map(fn ($customer) => [$customer->name, $customer->phone, $customer->customer_type, $customer->branch?->name, $this->formatCurrency($accounting->customerBalance($customer))])->all(), []];
+        return [__('application.customer_balance_report_2f0b407b'), [__('application.customer_0e85749a'), __('application.phone_77064d52'), __('application.type_3deb7456'), __('application.branch_1627510b'), __('application.outstanding_f8ee57ec')], $rows->map(fn ($customer) => [$customer->name, $customer->phone, $customer->customer_type, $customer->branch?->name, $this->formatCurrency($accounting->customerBalance($customer))])->all(), []];
     }
 
     private function suppliers(Request $request, ?int $branchId, string $search): array
@@ -527,7 +534,7 @@ class ReportExportService
         $accounting = app(AccountingService::class);
         $rows = Supplier::with('branch')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($request->string('statusFilter')->toString(), fn ($q, $status) => $q->where('status', $status))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('phone', 'like', "%{$search}%"))->latest()->get();
 
-        return ['Supplier Balance Report', ['Supplier', 'Phone', 'Branch', 'Opening', 'Outstanding'], $rows->map(fn ($supplier) => [$supplier->name, $supplier->phone, $supplier->branch?->name, $this->formatCurrency($supplier->opening_balance), $this->formatCurrency($accounting->supplierBalance($supplier))])->all(), []];
+        return [__('application.supplier_balance_report_8964c2d2'), [__('application.supplier_55edd462'), __('application.phone_77064d52'), __('application.branch_1627510b'), __('application.opening_56e44065'), __('application.outstanding_f8ee57ec')], $rows->map(fn ($supplier) => [$supplier->name, $supplier->phone, $supplier->branch?->name, $this->formatCurrency($supplier->opening_balance), $this->formatCurrency($accounting->supplierBalance($supplier))])->all(), []];
     }
 
     private function products(Request $request, ?int $branchId, string $search): array
@@ -555,20 +562,20 @@ class ReportExportService
         });
 
         $hasSizes = $rows->contains(fn (Product $product) => filled($product->sizeLabel()));
-        $headers = ['Product', 'Measurement Type'];
+        $headers = [__('application.product_dd3b86d1'), __('application.measurement_type_bbc2cb53')];
 
         if ($hasSizes) {
-            $headers[] = 'Size';
+            $headers[] = __('application.size_b7152342');
         }
 
-        array_push($headers, 'SKU', 'Category', 'Unit');
+        array_push($headers, __('application.sku_d59192b9'), __('application.category_a3c686e7'), __('application.unit_f6b935ab'));
         if ($canViewBuyingPrice) {
-            $headers[] = 'Buying Price';
+            $headers[] = __('application.buying_price_a46c40be');
         }
         if ($canViewSellingPrice) {
-            array_push($headers, 'Retail Price', 'Wholesale Price');
+            array_push($headers, __('application.retail_price_d3e361ae'), __('application.wholesale_price_7ecac3d9'));
         }
-        $headers[] = 'Status';
+        $headers[] = __('application.status_bae7d5be');
 
         $exportRows = $rows->map(function (Product $product) use ($hasSizes, $canViewBuyingPrice, $canViewSellingPrice): array {
             $row = [
@@ -587,7 +594,7 @@ class ReportExportService
             if ($canViewSellingPrice) {
                 array_push($row, $this->formatCurrency($product->selling_price), $this->formatCurrency($product->wholesale_price));
             }
-            $row[] = ucfirst($product->status);
+            $row[] = UiText::status($product->status);
 
             return $row;
         })->all();
@@ -609,25 +616,25 @@ class ReportExportService
         );
 
         $summary = [
-            'Total Products' => number_format($totalProducts),
-            'Total Stock Quantity' => $this->formatQuantity($totalStockQuantity),
+            __('application.total_products_c48f2bf5') => number_format($totalProducts),
+            __('application.total_stock_quantity_9be3b41b') => $this->formatQuantity($totalStockQuantity),
         ];
 
         if ($canViewBuyingPrice) {
-            $summary['Total Buying Value'] = $this->formatCurrency($totalBuyingValue);
+            $summary[__('application.total_buying_value_8b2702d9')] = $this->formatCurrency($totalBuyingValue);
         }
 
         if ($canViewSellingPrice) {
-            $summary['Total Selling Value'] = $this->formatCurrency($totalSellingValue);
+            $summary[__('application.total_selling_value_2408e559')] = $this->formatCurrency($totalSellingValue);
         }
 
         if ($canViewBuyingPrice && $canViewSellingPrice) {
-            $summary['Expected Profit'] = $this->formatCurrency(
+            $summary[__('application.expected_profit_fe6f484b')] = $this->formatCurrency(
                 $totalSellingValue - $totalBuyingValue
             );
         }
 
-        return ['Products', $headers, $exportRows, $summary];
+        return [__('application.products_fe0a091f'), $headers, $exportRows, $summary];
     }
 
     private function storeStock(Request $request, ?int $branchId, string $search): array
@@ -727,15 +734,15 @@ class ReportExportService
         $latestByPair = $ledger->latestForRows($rows, $user);
         $isPdf = $request->route('format') === 'pdf';
         $headers = $isPdf
-            ? ['Product', 'SKU', 'Unit', 'Location', 'Current Qty', 'Latest Action', 'Before', 'Change', 'Reference', 'Action Date']
-            : ['Product', 'SKU', 'Category', 'Unit', 'Stock Location', 'Location Type', 'Current Qty', 'Latest Action', 'Before', 'Change', 'Reference', 'Action Date'];
+            ? [__('application.product_dd3b86d1'), __('application.sku_d59192b9'), __('application.unit_f6b935ab'), __('application.location_d219c681'), __('application.current_qty_af8b5c5f'), __('application.latest_action_4edbbdbb'), __('application.before_74f39697'), __('application.change_64fbd995'), __('application.reference_db1c7845'), __('application.action_date_4f24494b')]
+            : [__('application.product_dd3b86d1'), __('application.sku_d59192b9'), __('application.category_a3c686e7'), __('application.unit_f6b935ab'), __('application.stock_location_50e3c4fe'), __('application.location_type_58cd45f1'), __('application.current_qty_af8b5c5f'), __('application.latest_action_4edbbdbb'), __('application.before_74f39697'), __('application.change_64fbd995'), __('application.reference_db1c7845'), __('application.action_date_4f24494b')];
         if ($canViewValue) {
-            array_push($headers, 'Average Cost', 'Stock Value');
+            array_push($headers, __('application.average_cost_128a1828'), __('application.stock_value_c2267f33'));
         }
         if (! $isPdf) {
-            $headers[] = 'Reorder Level';
+            $headers[] = __('application.reorder_level_59ef31e3');
         }
-        $headers[] = 'Status';
+        $headers[] = __('application.status_bae7d5be');
 
         $exportRows = $rows->map(function ($row) use ($canViewValue, $isPdf, $latestByPair, $ledger): array {
             $latest = $latestByPair[$ledger->key($row->product_id, $row->stock_location_id)];
@@ -749,27 +756,27 @@ class ReportExportService
             ];
             $data = $isPdf
                 ? [$row->product_name, $row->sku, $row->unit_name, $row->location_name, ...$details]
-                : [$row->product_name, $row->sku, $row->category_name, $row->unit_name, $row->location_name, str($row->location_type)->replace('_', ' ')->title()->toString(), ...$details];
+                : [$row->product_name, $row->sku, $row->category_name, $row->unit_name, $row->location_name, UiText::label($row->location_type), ...$details];
             if ($canViewValue) {
                 array_push($data, $this->formatCurrency($row->average_cost), $this->formatCurrency($row->stock_value));
             }
             if (! $isPdf) {
                 $data[] = $this->formatQuantity($row->reorder_level);
             }
-            $data[] = str($row->stock_status)->replace('_', ' ')->title()->toString();
+            $data[] = UiText::label($row->stock_status);
 
             return $data;
         })->all();
 
         return [
-            $request->boolean('grouped') ? 'Stock by Location (grouped by product)' : 'Stock by Location',
+            $request->boolean('grouped') ? __('application.stock_by_location_grouped_by_product_72e12d84') : __('application.stock_by_location_9a177d3f'),
             $headers,
             $exportRows,
             array_filter([
-                'Total Quantity' => $this->formatQuantity($rows->sum('quantity')),
-                'Total Stock Value' => $canViewValue ? $this->formatCurrency($rows->sum('stock_value')) : null,
-                'Active Locations' => count($allowedLocationIds),
-                'Latest actions' => 'Shown separately for each product and location',
+                __('application.total_quantity_c06411e1') => $this->formatQuantity($rows->sum('quantity')),
+                __('application.total_stock_value_bcb64e83') => $canViewValue ? $this->formatCurrency($rows->sum('stock_value')) : null,
+                __('application.active_locations_6cd2ac25') => count($allowedLocationIds),
+                __('application.latest_actions_614766d0') => __('application.shown_separately_for_each_product_and_location_d9398c87'),
             ], fn ($value) => $value !== null),
         ];
     }
@@ -778,7 +785,7 @@ class ReportExportService
     {
         $rows = Category::with('branch')->withCount('products')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($search, fn ($q) => $q->where('name', 'like', "%{$search}%")->orWhere('code', 'like', "%{$search}%"))->latest()->get();
 
-        return ['Categories', ['Name', 'Code', 'Branch', 'Products', 'Status'], $rows->map(fn ($c) => [$c->name, $c->code, $c->branch?->name, $c->products_count, ucfirst($c->status)])->all(), []];
+        return [__('application.categories_6ccb6007'), [__('application.name_709a2322'), __('application.code_adac6937'), __('application.branch_1627510b'), __('application.products_fe0a091f'), __('application.status_bae7d5be')], $rows->map(fn ($c) => [$c->name, $c->code, $c->branch?->name, $c->products_count, UiText::status($c->status)])->all(), []];
     }
 
     private function units(Request $request, ?int $branchId, string $search): array
@@ -791,14 +798,14 @@ class ReportExportService
             ->latest()
             ->get();
 
-        return ['Units', ['Name', 'Short Name', 'Measurement Type', 'Description', 'Products', 'Status'], $rows->map(fn ($unit) => [$unit->name, $unit->short_name, $unit->measurementType?->name, $unit->description, $unit->products_count, ucfirst($unit->status)])->all(), []];
+        return [__('application.units_12748281'), [__('application.name_709a2322'), __('application.short_name_da4db97e'), __('application.measurement_type_bbc2cb53'), __('application.description_55f8ebc8'), __('application.products_fe0a091f'), __('application.status_bae7d5be')], $rows->map(fn ($unit) => [$unit->name, $unit->short_name, $unit->measurementType?->name, $unit->description, $unit->products_count, UiText::status($unit->status)])->all(), []];
     }
 
     private function users(Request $request, string $search): array
     {
         $rows = User::with(['branch', 'company', 'roles'])->when(BranchAccess::restricted(), fn ($query) => $query->where('branch_id', $request->user()->branch_id))->when($search, fn ($q) => $q->where(fn ($query) => $query->where('name', 'like', "%{$search}%")->orWhere('email', 'like', "%{$search}%")))->latest()->get();
 
-        return ['Users', ['Name', 'Email', 'Phone', 'Roles', 'Sales Location', 'Company', 'Branch', 'Status'], $rows->map(fn ($u) => [$u->name, $u->email, $u->phone, $u->roles->pluck('name')->join(', '), $u->sales_location_access, $u->company?->company_name, $u->branch?->name, ucfirst($u->status)])->all(), []];
+        return [__('application.users_57f2b181'), [__('application.name_709a2322'), __('application.email_84add5b2'), __('application.phone_77064d52'), __('application.roles_47dcc27d'), __('application.sales_location_c04a064d'), __('application.company_7a199499'), __('application.branch_1627510b'), __('application.status_bae7d5be')], $rows->map(fn ($u) => [$u->name, $u->email, $u->phone, $u->roles->pluck('name')->join(', '), $u->sales_location_access, $u->company?->company_name, $u->branch?->name, UiText::status($u->status)])->all(), []];
     }
 
     private function branches(string $search): array
@@ -808,7 +815,7 @@ class ReportExportService
             ->latest()
             ->get();
 
-        return ['Branches', ['Branch', 'Code', 'Phone', 'Email', 'Region', 'District', 'Users', 'Status'], $rows->map(fn ($branch) => [$branch->name, $branch->code, $branch->phone, $branch->email, $branch->region, $branch->district, $branch->users_count, ucfirst($branch->status)])->all(), []];
+        return [__('application.branches_f5782279'), [__('application.branch_1627510b'), __('application.code_adac6937'), __('application.phone_77064d52'), __('application.email_84add5b2'), __('application.region_0f217179'), __('application.district_c0cb139c'), __('application.users_57f2b181'), __('application.status_bae7d5be')], $rows->map(fn ($branch) => [$branch->name, $branch->code, $branch->phone, $branch->email, $branch->region, $branch->district, $branch->users_count, UiText::status($branch->status)])->all(), []];
     }
 
     private function stockMovements(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
@@ -816,10 +823,10 @@ class ReportExportService
         $canViewCost = $request->user()?->can('stock.view_value') ?? false;
         $rows = app(FinancialReportService::class)->stockMovementsForLocations($branchId)->with(['product.size', 'stockLocation', 'creator'])->when($request->boolean('receipts_today'), fn ($q) => $q->whereIn('movement_type', ['purchase_in', 'purchase_receipt'])->whereDate('movement_date', today()))->when($request->string('movement_type')->toString(), fn ($q, $type) => $q->where('movement_type', $type))->when($request->integer('stock_location_id'), fn ($q, $id) => $q->where('stock_location_id', $id))->when($from, fn ($q) => $q->whereDate('movement_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('movement_date', '<=', $to))->when($search, fn ($q) => $q->whereHas('product', fn ($p) => $p->where('name', 'like', "%{$search}%")->orWhereHas('size', fn ($size) => $size->where('name', 'like', "%{$search}%")->orWhere('symbol', 'like', "%{$search}%"))))->latest()->get();
 
-        $headers = $canViewCost ? ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Cost', 'Created By'] : ['Date', 'Product', 'Location', 'Type', 'Quantity', 'Created By'];
+        $headers = $canViewCost ? [__('application.date_eb9a4bc1'), __('application.product_dd3b86d1'), __('application.location_d219c681'), __('application.type_3deb7456'), __('application.quantity_44f6af69'), __('application.cost_64ae43e8'), __('application.created_by_43de2bcd')] : [__('application.date_eb9a4bc1'), __('application.product_dd3b86d1'), __('application.location_d219c681'), __('application.type_3deb7456'), __('application.quantity_44f6af69'), __('application.created_by_43de2bcd')];
 
-        return ['Stock Movement Report', $headers, $rows->map(function ($movement) use ($canViewCost): array {
-            $row = [$this->formatDate($movement->movement_date), $movement->product?->displayNameWithSize(), $movement->stockLocation?->name, ($movement->movement_type === 'opening_stock' ? 'Opening Stock' : $movement->movement_type), $movement->quantity];
+        return [__('application.stock_movement_report_83f4569f'), $headers, $rows->map(function ($movement) use ($canViewCost): array {
+            $row = [$this->formatDate($movement->movement_date), $movement->product?->displayNameWithSize(), $movement->stockLocation?->name, ($movement->movement_type === 'opening_stock' ? __('application.opening_stock_79ec9b63') : $movement->movement_type), $movement->quantity];
             if ($canViewCost) {
                 $row[] = $this->formatCurrency($movement->unit_cost);
             }
@@ -833,34 +840,34 @@ class ReportExportService
     {
         $rows = StockTransfer::with(['fromLocation', 'toLocation', 'createdBy'])->withCount('items')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('transfer_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('transfer_date', '<=', $to))->when($search, fn ($q) => $q->where('transfer_number', 'like', "%{$search}%"))->latest()->get();
 
-        return ['Stock Transfer Report', ['Transfer #', 'Date', 'From', 'To', 'Items', 'Status', 'Created By'], $rows->map(fn ($t) => [$t->transfer_number, $this->formatDate($t->transfer_date), $t->fromLocation?->name, $t->toLocation?->name, $t->items_count, ucfirst($t->status), $t->createdBy?->name])->all(), []];
+        return [__('application.stock_transfer_report_96a7daae'), [__('application.transfer_87c43f1d'), __('application.date_eb9a4bc1'), __('application.from_3f66052a'), __('application.to_ae79ea1e'), __('application.items_44d25b5d'), __('application.status_bae7d5be'), __('application.created_by_43de2bcd')], $rows->map(fn ($t) => [$t->transfer_number, $this->formatDate($t->transfer_date), $t->fromLocation?->name, $t->toLocation?->name, $t->items_count, UiText::status($t->status), $t->createdBy?->name])->all(), []];
     }
 
     private function purchaseEmailLogs(Request $request, ?string $from, ?string $to, string $search): array
     {
         $rows = PurchaseEmailLog::with(['purchase.supplier', 'sentBy'])->when($from, fn ($q) => $q->whereDate('created_at', '>=', $from))->when($to, fn ($q) => $q->whereDate('created_at', '<=', $to))->when($search, fn ($q) => $q->where('recipient_email', 'like', "%{$search}%")->orWhere('subject', 'like', "%{$search}%"))->latest()->get();
 
-        return ['Purchase Email Report', ['Purchase Number', 'Supplier', 'Recipient', 'Status', 'Sent By', 'Sent Date', 'Error'], $rows->map(fn ($log) => [$log->purchase?->reference_number, $log->purchase?->supplier?->name, $log->recipient_email, ucfirst($log->status), $log->sentBy?->name, $log->sent_at?->format('Y-m-d H:i'), $log->error_message])->all(), []];
+        return [__('application.purchase_email_report_a39de8db'), [__('application.purchase_number_bef19154'), __('application.supplier_55edd462'), __('application.recipient_90343260'), __('application.status_bae7d5be'), __('application.sent_by_a027e031'), __('application.sent_date_5feb6f43'), __('application.error_7f2f6a15')], $rows->map(fn ($log) => [$log->purchase?->reference_number, $log->purchase?->supplier?->name, $log->recipient_email, UiText::status($log->status), $log->sentBy?->name, $log->sent_at?->format('Y-m-d H:i'), $log->error_message])->all(), []];
     }
 
     private function stockValuation(?int $branchId, ?int $stockLocationId = null, string $search = ''): array
     {
         $rows = collect(app(FinancialReportService::class)->stockValuation($branchId, $stockLocationId, $search));
 
-        return ['Stock Valuation Report', ['Branch', 'Location', 'Product', 'Measurement Type', 'Size', 'Category', 'Unit', 'Stock', 'Average Cost', 'Value'], $rows->map(fn ($row) => [$row['branch'], $row['location'], $row['product'], $row['measurement_type'], $row['size'] ?: '—', $row['category'], $row['unit'], $row['quantity'], $this->formatCurrency($row['average_cost']), $this->formatCurrency($row['value'])])->all(), ['Total Value' => $this->formatCurrency($rows->sum('value'))]];
+        return [__('application.stock_valuation_report_dd06256f'), [__('application.branch_1627510b'), __('application.location_d219c681'), __('application.product_dd3b86d1'), __('application.measurement_type_bbc2cb53'), __('application.size_b7152342'), __('application.category_a3c686e7'), __('application.unit_f6b935ab'), __('application.stock_bcecf456'), __('application.average_cost_128a1828'), __('application.value_8dce170d')], $rows->map(fn ($row) => [$row['branch'], $row['location'], $row['product'], $row['measurement_type'], $row['size'] ?: '—', $row['category'], $row['unit'], $row['quantity'], $this->formatCurrency($row['average_cost']), $this->formatCurrency($row['value'])])->all(), [__('application.total_value_4949c4c8') => $this->formatCurrency($rows->sum('value'))]];
     }
 
     private function profitLoss(?int $branchId, ?string $from, ?string $to): array
     {
         $report = app(FinancialReportService::class)->profitLoss($branchId, $from ?: now()->startOfMonth()->toDateString(), $to ?: today()->toDateString());
 
-        return ['Profit & Loss', ['Metric', 'Amount'], collect($report)->map(fn ($value, $key) => [str($key)->replace('_', ' ')->title()->toString(), $this->formatCurrency($value)])->values()->all(), []];
+        return [__('application.profit_loss_4a12196f'), [__('application.metric_b2bb7604'), __('application.amount_43dc8532')], collect($report)->map(fn ($value, $key) => [UiText::label($key), $this->formatCurrency($value)])->values()->all(), []];
     }
 
     private function cashbook(?int $branchId, ?string $from, ?string $to): array
     {
         $rows = CashbookSession::with('branch')->when($branchId, fn ($q) => $q->where('branch_id', $branchId))->when($from, fn ($q) => $q->whereDate('session_date', '>=', $from))->when($to, fn ($q) => $q->whereDate('session_date', '<=', $to))->latest()->get();
 
-        return ['Cashbook Report', ['Date', 'Branch', 'Opening', 'Cash In', 'Cash Out', 'Expected', 'Actual', 'Difference'], $rows->map(fn ($s) => [$this->formatDate($s->session_date), $s->branch?->name, $this->formatCurrency($s->opening_cash), $this->formatCurrency($s->cash_in), $this->formatCurrency($s->cash_out), $this->formatCurrency($s->expected_cash), $this->formatCurrency($s->actual_cash), $this->formatCurrency($s->difference)])->all(), []];
+        return [__('application.cashbook_report_e9f0cb72'), [__('application.date_eb9a4bc1'), __('application.branch_1627510b'), __('application.opening_56e44065'), __('application.cash_in_cf5d476c'), __('application.cash_out_e6b54fb5'), __('application.expected_6ac87f34'), __('application.actual_7bb2ee60'), __('application.difference_b16f1f66')], $rows->map(fn ($s) => [$this->formatDate($s->session_date), $s->branch?->name, $this->formatCurrency($s->opening_cash), $this->formatCurrency($s->cash_in), $this->formatCurrency($s->cash_out), $this->formatCurrency($s->expected_cash), $this->formatCurrency($s->actual_cash), $this->formatCurrency($s->difference)])->all(), []];
     }
 }

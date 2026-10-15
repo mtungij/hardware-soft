@@ -94,6 +94,19 @@ class User extends Authenticatable
 
     public function permittedStockLocations(string $ability = 'can_view', ?int $branchId = null): Collection
     {
+        if ($this->hasRole('Super Admin', 'web')) {
+            if ($branchId !== null && ! $this->canAccessBranch($branchId)) {
+                return collect();
+            }
+            $flag = ['can_sell' => 'can_sell', 'can_receive' => 'can_receive_stock', 'can_transfer' => 'can_transfer'][$ability] ?? null;
+
+            return StockLocation::query()->where('company_id', $this->company_id)
+                ->where('status', 'active')->where('is_active', true)
+                ->when($flag, fn ($q) => $q->where($flag, true))
+                ->when($branchId !== null, fn ($q) => $q->where(fn ($q) => $q->where('branch_id', $branchId)->orWhereNull('branch_id')))
+                ->orderByDesc('is_default')->orderBy('name')->get();
+        }
+
         if (BranchAccess::restricted($this)) {
             if ($branchId !== null && ! $this->canAccessBranch($branchId)) {
                 return collect();

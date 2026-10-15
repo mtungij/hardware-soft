@@ -39,7 +39,7 @@ class ProductionCuringService
                 return $existing;
             }
             if (bccomp((string) $batch->remaining_quantity, '0', 12) <= 0 || $batch->status === ProductionCuringBatch::STATUS_RELEASED) {
-                throw ValidationException::withMessages(['release_quantity' => 'This curing batch has already been fully released.']);
+                throw ValidationException::withMessages(['release_quantity' => __('application.this_curing_batch_has_already_been_fully_released_5ef3c5d2')]);
             }
             if (! $batch->isEligibleForRelease()) {
                 throw ValidationException::withMessages(['release_quantity' => $batch->status === ProductionCuringBatch::STATUS_QUARANTINED
@@ -48,19 +48,19 @@ class ProductionCuringService
             }
             $this->quality->assertReleaseEligible($batch, $quantity);
             if (bccomp($quantity, (string) $batch->remaining_quantity, 12) > 0) {
-                throw ValidationException::withMessages(['release_quantity' => 'Release quantity cannot exceed the remaining curing quantity.']);
+                throw ValidationException::withMessages(['release_quantity' => __('application.release_quantity_cannot_exceed_the_remaining_curing_quantity_535ccd57')]);
             }
 
             $source = $this->lockedLocation($batch->source_stock_location_id, $batch, $user, false);
             $destination = $this->lockedLocation($destinationLocationId, $batch, $user, true);
             if ($source->id === $destination->id) {
-                throw ValidationException::withMessages(['destination_stock_location_id' => 'Release destination must differ from the curing location.']);
+                throw ValidationException::withMessages(['destination_stock_location_id' => __('application.release_destination_must_differ_from_the_curing_location_a7942364')]);
             }
 
             StockMovement::query()->where('product_id', $batch->product_id)->where('stock_location_id', $source->id)->lockForUpdate()->get();
             $ledgerQuantity = $this->ledgerQuantity($quantity);
             if (bccomp($this->availableStock($batch->product_id, $source->id), $ledgerQuantity, 4) < 0) {
-                throw ValidationException::withMessages(['release_quantity' => 'The curing location does not have enough stock for this release.']);
+                throw ValidationException::withMessages(['release_quantity' => __('application.the_curing_location_does_not_have_enough_stock_for_this_release_83e309a0')]);
             }
 
             $releaseNumber = $this->nextNumber($batch->company_id, DocumentSequence::CURING_RELEASE, 'CRL');
@@ -134,13 +134,13 @@ class ProductionCuringService
             }
             if (in_array($batch->status, [ProductionCuringBatch::STATUS_RELEASED, ProductionCuringBatch::STATUS_CLOSED], true)
                 || bccomp($quantity, (string) $batch->remaining_quantity, 12) > 0) {
-                throw ValidationException::withMessages(['damage_quantity' => 'Damage quantity cannot exceed the remaining curing quantity.']);
+                throw ValidationException::withMessages(['damage_quantity' => __('application.damage_quantity_cannot_exceed_the_remaining_curing_quantity_a1ed186d')]);
             }
             $source = $this->lockedLocation($batch->source_stock_location_id, $batch, $user, false);
             StockMovement::query()->where('product_id', $batch->product_id)->where('stock_location_id', $source->id)->lockForUpdate()->get();
             $ledgerQuantity = $this->ledgerQuantity($quantity);
             if (bccomp($this->availableStock($batch->product_id, $source->id), $ledgerQuantity, 4) < 0) {
-                throw ValidationException::withMessages(['damage_quantity' => 'The curing location does not have enough stock.']);
+                throw ValidationException::withMessages(['damage_quantity' => __('application.the_curing_location_does_not_have_enough_stock_840caf9b')]);
             }
             $postingReference = 'CUR-DMG-'.$batch->id.'-'.substr($idempotencyKey, 0, 12);
             ProductionCuringAction::query()->create([
@@ -188,7 +188,7 @@ class ProductionCuringService
                 return $batch;
             }
             if (in_array($batch->status, [ProductionCuringBatch::STATUS_RELEASED, ProductionCuringBatch::STATUS_CLOSED], true)) {
-                throw ValidationException::withMessages(['status' => 'A released or closed batch cannot be quarantined.']);
+                throw ValidationException::withMessages(['status' => __('application.a_released_or_closed_batch_cannot_be_quarantined_72d7d23a')]);
             }
             if ($quarantine === ($batch->status === ProductionCuringBatch::STATUS_QUARANTINED)) {
                 throw ValidationException::withMessages(['status' => $quarantine ? 'Batch is already quarantined.' : 'Batch is not quarantined.']);
@@ -233,12 +233,12 @@ class ProductionCuringService
             || (bool) $location->is_sellable !== $sellable
             || ($sellable && (! $location->can_receive_stock || ! $location->can_sell))
             || (! $sellable && (! $location->can_issue_stock || ! in_array($location->type, ['curing', 'quarantine'], true)))) {
-            throw ValidationException::withMessages(['destination_stock_location_id' => 'Select a valid branch-compatible stock location.']);
+            throw ValidationException::withMessages(['destination_stock_location_id' => __('application.select_a_valid_branch_compatible_stock_location_a296e6f6')]);
         }
         if ($user->stockLocations()->exists()) {
             $ability = $sellable ? 'can_receive' : 'can_transfer';
             if (! $user->stockLocations()->where('stock_locations.id', $location->id)->wherePivot($ability, true)->exists()) {
-                throw ValidationException::withMessages(['location' => 'You are not authorised for this stock location.']);
+                throw ValidationException::withMessages(['location' => __('application.you_are_not_authorised_for_this_stock_location_9aef2cb1')]);
             }
         }
 
@@ -274,10 +274,10 @@ class ProductionCuringService
         try {
             $number = $this->calculator->decimal($value);
         } catch (\InvalidArgumentException) {
-            throw ValidationException::withMessages([$field => 'Enter a valid quantity.']);
+            throw ValidationException::withMessages([$field => __('application.enter_a_valid_quantity_ef29ff31')]);
         }
         if (bccomp($number, '0', 12) <= 0) {
-            throw ValidationException::withMessages([$field => 'Quantity must be greater than zero.']);
+            throw ValidationException::withMessages([$field => __('application.quantity_must_be_greater_than_zero_a53d797f')]);
         }
 
         return bcadd($number, '0', 12);
@@ -291,7 +291,7 @@ class ProductionCuringService
     private function reason(string $reason): string
     {
         if (trim($reason) === '') {
-            throw ValidationException::withMessages(['reason' => 'A reason is required.']);
+            throw ValidationException::withMessages(['reason' => __('application.a_reason_is_required_6b13e944')]);
         }
 
         return trim($reason);

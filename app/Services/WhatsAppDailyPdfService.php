@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Company;
 use App\Models\WhatsAppRecipient;
+use App\Support\UiText;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
@@ -13,13 +14,19 @@ class WhatsAppDailyPdfService
 {
     public function generate(Company $company, WhatsAppRecipient $recipient, CarbonInterface $date, array $data): string
     {
+        return UiText::withLocale(app(WhatsAppLocalization::class)->language($company),
+            fn () => $this->generateLocalized($company, $recipient, $date, $data));
+    }
+
+    private function generateLocalized(Company $company, WhatsAppRecipient $recipient, CarbonInterface $date, array $data): string
+    {
         $directory = 'whatsapp-reports/'.$company->id.'/'.$date->toDateString();
         Storage::disk('local')->makeDirectory($directory);
         Storage::disk('local')->makeDirectory('mpdf-temp');
         $relativePath = $directory.'/daily-summary-recipient-'.$recipient->id.'.pdf';
         $path = Storage::disk('local')->path($relativePath);
         $pdf = new Mpdf(['tempDir' => Storage::disk('local')->path('mpdf-temp')]);
-        $pdf->SetTitle('HARDEX Daily Summary '.$date->toDateString());
+        $pdf->SetTitle(app(WhatsAppLocalization::class)->get($company, 'daily_summary.title').' '.$date->toDateString());
         $pdf->SetAuthor('HARDEX');
         $pdf->WriteHTML(view('pdf.whatsapp-daily-summary', ['data' => $data])->render());
         $pdf->Output($path, Destination::FILE);

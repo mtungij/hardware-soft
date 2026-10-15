@@ -61,28 +61,28 @@ $save = function () {
 
     $this->supplier->update($validated);
 
-    session()->flash('success', 'Supplier updated successfully.');
+    session()->flash('success', __('application.supplier_updated_successfully_6b72b3e3'));
     $this->redirectRoute('suppliers.index', navigate: true);
 };
 
 ?>
 
 <div>
-    <x-page-header title="Edit Supplier" description="Update supplier contact and balance baseline." :breadcrumbs="['Dashboard' => route('dashboard'), 'Suppliers' => route('suppliers.index'), 'Edit' => null]" />
+    <x-page-header title="{{ __('application.edit_supplier_a45a3ad3') }}" description="{{ __('application.update_supplier_contact_and_balance_baseline_23464d64') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Suppliers' => route('suppliers.index'), 'Edit' => null]" />
 
     <x-card>
         <form wire:submit="save" class="grid gap-4 md:grid-cols-2">
-            <x-form-input label="Supplier Name" name="name" wire:model="name" required />
-            <x-form-input label="Contact Person" name="contact_person" wire:model="contact_person" />
-            <x-form-input label="Phone" name="phone" wire:model="phone" required />
-            <x-form-input label="Email" name="email" type="email" wire:model="email" />
+            <x-form-input label="{{ __('application.supplier_name_e2268c4a') }}" name="name" wire:model="name" required />
+            <x-form-input label="{{ __('application.contact_person_649a4633') }}" name="contact_person" wire:model="contact_person" />
+            <x-form-input label="{{ __('application.phone_77064d52') }}" name="phone" wire:model="phone" required />
+            <x-form-input label="{{ __('application.email_84add5b2') }}" name="email" type="email" wire:model="email" />
             <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
-            <x-money-input label="Opening Balance" name="opening_balance" wire:model="opening_balance" required />
+            <x-money-input label="{{ __('application.opening_balance_1a1a6305') }}" name="opening_balance" wire:model="opening_balance" required />
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Branch
+                {{ __('application.branch_1627510b') }}
                 <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
-                    <option value="">Global supplier</option>
+                    <option value="">{{ __('application.global_supplier_b087a219') }}</option>
                     @foreach (Branch::orderBy('name')->get() as $branch)
                         <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                     @endforeach
@@ -90,21 +90,21 @@ $save = function () {
             </label>
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                Status
+                {{ __('application.status_bae7d5be') }}
                 <select wire:model="status" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
+                    <option value="active">{{ __('application.active_a733b809') }}</option>
+                    <option value="inactive">{{ __('application.inactive_09af574c') }}</option>
                 </select>
             </label>
 
             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 md:col-span-2">
-                Address
+                {{ __('application.address_d70f93df') }}
                 <textarea wire:model="address" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
             </label>
 
             <div class="flex gap-2 md:col-span-2">
-                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Update Supplier</button>
-                <a href="{{ route('suppliers.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
+                <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ __('application.update_supplier_048b8210') }}</button>
+                <a href="{{ route('suppliers.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.cancel_77dfd213') }}</a>
             </div>
         </form>
     </x-card>

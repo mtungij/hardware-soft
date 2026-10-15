@@ -382,7 +382,7 @@ $save = function () {
         'notes' => $this->notes,
     ], $items, auth()->user(), $this->recipe);
 
-    session()->flash('success', 'Recipe saved successfully.');
+    session()->flash('success', __('application.recipe_saved_successfully_7c319bca'));
 
     return $this->redirectRoute('production.recipes.show', $recipe, navigate: true);
 };
@@ -391,8 +391,8 @@ $save = function () {
 
 <div>
     <x-page-header
-        :title="$recipe ? 'Edit Recipe' : 'Create Recipe'"
-        description="Define normalized material requirements and direct non-inventory inputs without moving stock."
+        :title="$recipe ? __('terminology.edit_recipe_838f93ac') : __('application.create_recipe_6f82911d')"
+        description="{{ __('application.define_normalized_material_requirements_and_direct_non_inventory_inputs_wit_be9c56e0') }}"
         :breadcrumbs="['Dashboard' => route('dashboard'), __('production.title') => route('production.index'), __('production.recipes.title') => route('production.recipes.index'), $recipe ? 'Edit' : 'Create' => null]"
     />
 
@@ -421,22 +421,22 @@ $save = function () {
     @endphp
 
     <form wire:submit="save" class="space-y-6">
-        <x-card title="Recipe Header">
+        <x-card title="{{ __('application.recipe_header_98919a0d') }}">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <x-form-input label="Recipe Name" name="name" wire:model.blur="name" required />
-                <x-form-input label="Recipe Code" name="code" wire:model.blur="code" />
-                <x-form-input label="Version" name="version" wire:model.blur="version" />
-                <label class="block text-sm font-bold">Manufactured Product
+                <x-form-input label="{{ __('application.recipe_name_6388a3a5') }}" name="name" wire:model.blur="name" required />
+                <x-form-input label="{{ __('application.recipe_code_97acdc13') }}" name="code" wire:model.blur="code" />
+                <x-form-input label="{{ __('application.version_2da600bf') }}" name="version" wire:model.blur="version" />
+                <label class="block text-sm font-bold">{{ __('application.manufactured_product_37b24a6e') }}
                     <select wire:model.live="product_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
-                        <option value="">Select product</option>
+                        <option value="">{{ __('application.select_product_596d90e5') }}</option>
                         @foreach ($manufacturedProducts as $product)
                             <option value="{{ $product->id }}">{{ $product->name }}</option>
                         @endforeach
                     </select>
                     @error('product_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </label>
-                <x-form-input label="Output Quantity" name="output_quantity" type="number" min="0.00000001" step="0.00000001" wire:model.live.debounce.300ms="output_quantity" required />
-                <label class="block text-sm font-bold">Output Unit
+                <x-form-input label="{{ __('application.output_quantity_09a6f7b5') }}" name="output_quantity" type="number" min="0.00000001" step="0.00000001" wire:model.live.debounce.300ms="output_quantity" required />
+                <label class="block text-sm font-bold">{{ __('application.output_unit_1705ea63') }}
                     <select wire:model.live="output_unit_id" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
                         <option value="">{{ __('production.recipes.form.select_unit') }}</option>
                         @foreach ($recipeUnits as $unit)
@@ -445,15 +445,15 @@ $save = function () {
                     </select>
                     @error('output_unit_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </label>
-                <label class="block text-sm font-bold">Status
+                <label class="block text-sm font-bold">{{ __('application.status_bae7d5be') }}
                     <select wire:model="status" class="mt-1 block w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950">
-                        <option value="draft">Draft</option><option value="active">Active</option><option value="inactive">Inactive</option>
+                        <option value="draft">{{ __('application.draft_23d33e22') }}</option><option value="active">{{ __('application.active_a733b809') }}</option><option value="inactive">{{ __('application.inactive_09af574c') }}</option>
                     </select>
                 </label>
                 <div></div>
-                <x-form-input label="Effective From" name="effective_from" type="date" wire:model="effective_from" />
-                <x-form-input label="Effective To" name="effective_to" type="date" wire:model="effective_to" />
-                <label class="block text-sm font-bold md:col-span-2">Notes
+                <x-form-input label="{{ __('application.effective_from_3b43abd5') }}" name="effective_from" type="date" wire:model="effective_from" />
+                <x-form-input label="{{ __('application.effective_to_36f150c2') }}" name="effective_to" type="date" wire:model="effective_to" />
+                <label class="block text-sm font-bold md:col-span-2">{{ __('application.notes_70440046') }}
                     <textarea wire:model.blur="notes" class="mt-1 block min-h-20 w-full rounded-lg border-slate-200 dark:border-slate-700 dark:bg-navy-950"></textarea>
                 </label>
             </div>
@@ -535,7 +535,7 @@ $save = function () {
                                     @error("items.{$index}.material_product_id") <span id="material-product-error-{{ $rowUuid }}" class="text-xs text-red-600">{{ $message }}</span> @enderror
                                 </label>
                             @else
-                                <x-form-input label="Cost Name" name="items.{{ $index }}.cost_name" wire:model.blur="items.{{ $index }}.cost_name" placeholder="Water, Electricity, Labour" />
+                                <x-form-input label="{{ __('application.cost_name_436632d4') }}" name="items.{{ $index }}.cost_name" wire:model.blur="items.{{ $index }}.cost_name" placeholder="{{ __('application.water_electricity_labour_441cd118') }}" />
                             @endif
 
                             <fieldset class="md:col-span-2 xl:col-span-2">
@@ -661,8 +661,8 @@ $save = function () {
         @endforeach
 
         <div class="sticky bottom-3 flex justify-end gap-3 rounded-xl border bg-white/95 p-4 shadow-lg backdrop-blur dark:bg-slate-900/95">
-            <a href="{{ route('production.recipes.index') }}" wire:navigate class="rounded-xl border px-4 py-2.5 text-sm font-black">Cancel</a>
-            <button class="rounded-xl bg-build-orange px-5 py-2.5 text-sm font-black text-white">Save Recipe</button>
+            <a href="{{ route('production.recipes.index') }}" wire:navigate class="rounded-xl border px-4 py-2.5 text-sm font-black">{{ __('application.cancel_77dfd213') }}</a>
+            <button class="rounded-xl bg-build-orange px-5 py-2.5 text-sm font-black text-white">{{ __('application.save_recipe_831d9b83') }}</button>
         </div>
     </form>
 </div>

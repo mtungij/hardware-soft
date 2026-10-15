@@ -162,7 +162,7 @@ mount(function () {
             <select wire:model.live="customer_id" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">{{ $t('all_customers') }}</option>
                 @foreach (Customer::orderBy('name')->get() as $customer)
-                    <option value="{{ $customer->id }}">{{ $customer->name }}</option>
+                    <option value="{{ $customer->id }}">{{ $customer->displayName() }}</option>
                 @endforeach
             </select>
             <select wire:model.live="product_id" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
@@ -259,7 +259,7 @@ mount(function () {
                     <table class="{{ $canViewProfit ? 'min-w-[1400px]' : 'min-w-[980px]' }} w-full divide-y divide-slate-200 text-sm dark:divide-slate-700" data-item-report-table>
                         <thead class="bg-slate-100 text-left text-xs font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                         <tr>
-                            <th class="w-[13%] whitespace-nowrap px-3 py-3 text-left" data-item-heading="sale">Sale / Invoice</th>
+                            <th class="w-[13%] whitespace-nowrap px-3 py-3 text-left" data-item-heading="sale">{{ __('application.sale_invoice_ff274e07') }}</th>
                             <th class="w-[12%] px-3 py-3 text-left" data-item-heading="customer">{{ $t('customer') }}</th>
                             <th class="w-[18%] px-3 py-3 text-left" data-item-heading="product">{{ $t('product_name') }}</th>
                             <th class="w-[8%] whitespace-nowrap px-3 py-3 text-right" data-item-heading="quantity">{{ $t('quantity_sold') }}</th>
@@ -284,7 +284,7 @@ mount(function () {
                             $unit = $item->selling_unit_code_snapshot ?: ($item->selling_unit_name_snapshot ?: $item->sellingUnit?->short_name);
                         @endphp
                         <tr class="align-top text-xs" data-sale-item-row="{{ $item->id }}">
-                            <td class="w-[13%] whitespace-nowrap px-3 py-3"><p class="font-black">{{ $sale?->sale_number }}</p><p class="mt-1 text-slate-500">{{ $sale?->created_at?->format('H:i') }}</p></td>
+                            <td class="w-[13%] whitespace-nowrap px-3 py-3"><p class="font-black">{{ $sale?->sale_number }}</p><p class="mt-1 text-slate-500">{{ __('sale_dates.recorded_at') }} {{ $sale?->created_at?->clone()->timezone(app(\App\Support\PosSaleDate::class)->timezone($sale->company_id))->format('d M Y H:i') }}</p></td>
                             <td class="w-[12%] px-3 py-3 font-semibold">{{ $customerLabel($sale?->customer) }}</td>
                             <td class="w-[18%] px-3 py-3"><p class="font-black">{{ $item->productDisplayNameWithSize() }}</p><p class="mt-1 font-mono text-slate-500">{{ $item->product?->sku }}</p></td>
                             <td class="w-[8%] px-3 py-3 text-right font-bold">{{ $quantity($item->quantity) }}</td>
@@ -346,7 +346,7 @@ mount(function () {
                             <tr class="align-top text-xs">
                                 <td class="px-3 py-3">
                                     <p class="font-black">{{ $sale?->sale_number }}</p>
-                                    <p class="mt-1 text-slate-500">{{ $sale?->created_at?->format('H:i') }}</p>
+                                    <p class="mt-1 text-slate-500">{{ __('sale_dates.recorded_at') }} {{ $sale?->created_at?->clone()->timezone(app(\App\Support\PosSaleDate::class)->timezone($sale->company_id))->format('d M Y H:i') }}</p>
                                 </td>
                                 <td class="px-3 py-3 font-semibold">{{ $row['customer'] }}</td>
                                 <td class="px-3 py-3">
@@ -567,7 +567,7 @@ mount(function () {
                 </x-slot:head>
                 @forelse ($sales as $sale)
                     <tr class="border-t border-slate-100 dark:border-slate-800">
-                        <td class="px-4 py-3"><p class="font-bold">{{ $sale->sale_number }}</p><p class="text-xs text-slate-500">{{ $sale->sale_date?->format('M d, Y') }}</p></td>
+                        <td class="px-4 py-3"><p class="font-bold">{{ $sale->sale_number }}</p><p class="text-xs text-slate-500">{{ $sale->sale_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</p></td>
                         <td class="px-4 py-3">{{ $customerLabel($sale->customer) }}</td>
                         <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $sale->saleType() === 'wholesale' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300' }}">{{ $saleTypeLabel($sale->saleType()) }}</span></td>
                         <td class="px-4 py-3">{{ $sale->stockLocationLabel() }}</td>
@@ -575,7 +575,7 @@ mount(function () {
                         <td class="px-4 py-3 text-right font-bold">{{ $money($sale->total_amount) }}</td>
                         <td class="px-4 py-3 text-right">{{ $money($sale->paid_amount) }}</td>
                         <td class="px-4 py-3 text-right">{{ $money($sale->balance_amount) }}</td>
-                        <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $sale->status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300' }}">{{ ucfirst($sale->status) }}</span><span class="ml-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 dark:bg-white/10 dark:text-slate-300">{{ ucfirst($sale->payment_status) }}</span></td>
+                        <td class="px-4 py-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold {{ $sale->status === 'completed' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300' }}">{{ \App\Support\UiText::status($sale->status) }}</span><span class="ml-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600 dark:bg-white/10 dark:text-slate-300">{{ \App\Support\UiText::status($sale->payment_status) }}</span></td>
                         <td class="px-4 py-3 text-right">
                             <div class="flex flex-wrap justify-end gap-2">
                                 <a href="{{ route('sales.show', $sale) }}" wire:navigate class="text-sm font-bold text-navy-700 dark:text-white">{{ $t('view_action') }}</a>

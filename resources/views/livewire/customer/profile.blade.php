@@ -71,6 +71,7 @@ $save = function (CustomerPortalCredentialService $credentials) {
 ?>
 
 <div>
+<nav class="mb-5 grid grid-cols-2 gap-3"><a href="{{ route('customer.notifications.index') }}" wire:navigate class="flex min-h-14 items-center justify-center rounded-xl border border-slate-200 bg-white p-3 text-center text-sm font-black dark:border-slate-700 dark:bg-slate-900">{{ __('messages.nav.notifications') }}</a><a href="{{ route('customer.help-center') }}" wire:navigate class="flex min-h-14 items-center justify-center rounded-xl border border-slate-200 bg-white p-3 text-center text-sm font-black dark:border-slate-700 dark:bg-slate-900">{{ __('messages.nav.help') }}</a></nav>
     <x-page-header :title="__('messages.profile.title')" :description="__('messages.profile.description')" :breadcrumbs="[__('messages.customer_portal') => route('customer.dashboard'), __('messages.profile.title') => null]">
         <x-pwa-install-button />
     </x-page-header>
@@ -91,7 +92,7 @@ $save = function (CustomerPortalCredentialService $credentials) {
                 @error('preferred_locale') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
             <div class="grid gap-4 sm:grid-cols-2">
-                <x-form-input label="Current Password" name="current_password" wire:model="current_password" type="password" />
+                <x-form-input label="{{ __('application.current_password_4d596789') }}" name="current_password" wire:model="current_password" type="password" />
                 <x-form-input :label="__('messages.profile.new_password')" name="password" wire:model="password" type="password" />
                 <x-form-input :label="__('messages.auth.confirm_password')" name="password_confirmation" wire:model="password_confirmation" type="password" />
             </div>

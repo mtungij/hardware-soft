@@ -48,7 +48,7 @@ class WhatsAppDebtReminderService
         $overdue = $debts->filter(fn (Sale $sale): bool => $sale->expected_payment_date?->lt($date->copy()->startOfDay()));
         $top = $debts->groupBy(fn (Sale $sale): string => (string) ($sale->customer_id ?: 'sale-'.$sale->id))
             ->map(fn (Collection $rows): array => [
-                'name' => $rows->first()->customer?->name ?: $rows->first()->temporary_customer_name ?: $this->localization->get($company, 'common.customer'),
+                'name' => $rows->first()->customer?->displayName($this->localization->language($company)) ?: $rows->first()->temporary_customer_name ?: $this->localization->get($company, 'common.customer'),
                 'amount' => (float) $rows->sum('balance_amount'),
             ])->sortByDesc('amount')->take(5)->values();
 
@@ -73,7 +73,7 @@ class WhatsAppDebtReminderService
     public function customerMessage(Company $company, Sale $sale, string $kind, CarbonInterface $now): string
     {
         $customer = $sale->customer;
-        $name = $customer?->name ?: $sale->temporary_customer_name ?: $this->localization->get($company, 'common.customer');
+        $name = $customer?->displayName($this->localization->language($company)) ?: $sale->temporary_customer_name ?: $this->localization->get($company, 'common.customer');
         $due = $this->localization->date($company, $sale->expected_payment_date);
         $reference = $sale->sale_number;
         $amount = $this->money($sale->balance_amount);

@@ -94,28 +94,28 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
 
     $productIds = collect($validated['items'])->pluck('product_id');
     if ($productIds->duplicates()->isNotEmpty()) {
-        throw ValidationException::withMessages(['items' => 'Duplicate product rows are not allowed.']);
+        throw ValidationException::withMessages(['items' => __('application.duplicate_product_rows_are_not_allowed_432e383d')]);
     }
 
     $from = StockLocation::findOrFail($validated['from_location_id']);
     $to = StockLocation::findOrFail($validated['to_location_id']);
     if (! $from->isActive() || ! $to->isActive()) {
-        throw ValidationException::withMessages(['location' => 'Transfers require active locations.']);
+        throw ValidationException::withMessages(['location' => __('application.transfers_require_active_locations_a1972fdf')]);
     }
     if (! $from->can_transfer || ! $from->can_issue_stock) {
-        throw ValidationException::withMessages(['from_location_id' => 'Source location is not allowed to transfer stock.']);
+        throw ValidationException::withMessages(['from_location_id' => __('application.source_location_is_not_allowed_to_transfer_stock_84226d24')]);
     }
     if (! $to->can_receive_stock) {
-        throw ValidationException::withMessages(['to_location_id' => 'Destination location is not allowed to receive stock.']);
+        throw ValidationException::withMessages(['to_location_id' => __('application.destination_location_is_not_allowed_to_receive_stock_7912fd1f')]);
     }
     if (($to->is_dispensing_location || $to->type === 'dispensing') && ! $from->can_transfer_to_dispensing) {
-        throw ValidationException::withMessages(['from_location_id' => 'Source location cannot transfer to Dispensing.']);
+        throw ValidationException::withMessages(['from_location_id' => __('terminology.source_location_cannot_transfer_to_dispensing_3a9f5e91')]);
     }
 
     foreach ($validated['items'] as $item) {
         $available = $inventory->getProductStock((int) $item['product_id'], (int) $validated['from_location_id'], (int) $this->branch_id);
         if ((float) $item['quantity'] > $available) {
-            throw ValidationException::withMessages(['items' => 'Transfer quantity cannot exceed available stock.']);
+            throw ValidationException::withMessages(['items' => __('application.transfer_quantity_cannot_exceed_available_stock_d275529b')]);
         }
     }
 
@@ -137,14 +137,14 @@ $saveTransfer = function (string $status, InventoryService $inventory) {
         $inventory->completeStockTransfer($this->stockTransfer->id, auth()->id());
     }
 
-    session()->flash('success', $status === 'completed' ? 'Transfer completed.' : 'Transfer updated.');
+    session()->flash('success', $status === 'completed' ? __('terminology.transfer_completed_8bf4316b') : __('terminology.transfer_updated_cf6835eb'));
     $this->redirectRoute('stock-transfers.index', navigate: true);
 };
 
 ?>
 
 <div>
-    <x-page-header title="Edit Stock Transfer" description="Only draft transfers can be edited." :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Transfers' => route('stock-transfers.index'), 'Edit' => null]" />
+    <x-page-header title="{{ __('application.edit_stock_transfer_e2e87d3f') }}" description="{{ __('application.only_draft_transfers_can_be_edited_d91ce782') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Stock Transfers' => route('stock-transfers.index'), 'Edit' => null]" />
 
     @include('livewire.stock-transfers.transfer-form')
 </div>

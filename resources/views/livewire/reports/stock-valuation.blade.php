@@ -22,7 +22,7 @@ mount(function () {
 ?>
 
 <div>
-    <x-page-header title="Stock Valuation Report" description="Ledger-based quantity and valuation by branch, location, product, and category." :breadcrumbs="['Dashboard' => route('dashboard'), 'Reports' => null, 'Stock Valuation' => null]"><x-export-actions export="reports.stock-valuation" :params="compact('branch_id', 'stock_location_id', 'search')" /></x-page-header>
+    <x-page-header title="{{ __('application.stock_valuation_report_dd06256f') }}" description="{{ __('application.ledger_based_quantity_and_valuation_by_branch_location_product_and_category_0b80a448') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Reports' => null, 'Stock Valuation' => null]"><x-export-actions export="reports.stock-valuation" :params="compact('branch_id', 'stock_location_id', 'search')" /></x-page-header>
     @php
         $valuation = app(FinancialReportService::class);
         $locations = $valuation->valuationLocations($branch_id ? (int) $branch_id : null);
@@ -37,24 +37,24 @@ mount(function () {
     @endphp
     <x-card>
         <div class="grid gap-3 md:grid-cols-3">
-            <label class="text-sm font-bold">Branch
+            <label class="text-sm font-bold">{{ __('application.branch_1627510b') }}
                 <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border px-3 py-2 text-sm dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
-                    <option value="">All authorized branches</option>
+                    <option value="">{{ __('application.all_authorized_branches_6c5afd0a') }}</option>
                     @foreach ($branches as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach
                 </select>
             </label>
-            <label class="text-sm font-bold">Stock Location
+            <label class="text-sm font-bold">{{ __('application.stock_location_50e3c4fe') }}
                 <select wire:model.live="stock_location_id" class="mt-1 block w-full rounded-lg border px-3 py-2 text-sm dark:bg-navy-950">
-                    <option value="">All authorized locations</option>
+                    <option value="">{{ __('application.all_authorized_locations_4b08ce23') }}</option>
                     @foreach ($locations as $location)<option value="{{ $location->id }}">{{ $location->name }}</option>@endforeach
                 </select>
             </label>
-            <label class="text-sm font-bold">Search
-                <input wire:model.live.debounce.300ms="search" class="mt-1 block w-full rounded-lg border px-3 py-2 text-sm dark:bg-navy-950" placeholder="Search product/category">
+            <label class="text-sm font-bold">{{ __('application.search_bce06414') }}
+                <input wire:model.live.debounce.300ms="search" class="mt-1 block w-full rounded-lg border px-3 py-2 text-sm dark:bg-navy-950" placeholder="{{ __('application.search_product_category_dc40fba9') }}">
             </label>
         </div>
     </x-card>
-    <div class="mt-4 grid gap-4 sm:grid-cols-3"><x-card><p class="text-sm text-slate-500">Items</p><p class="text-2xl font-black">{{ $rows->count() }}</p></x-card><x-card><p class="text-sm text-slate-500">Quantity</p><p class="text-2xl font-black">{{ \App\Support\NumberFormatter::quantity($rows->sum('quantity')) }}</p></x-card><x-card><p class="text-sm text-slate-500">Stock Value</p><p class="text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($rows->sum('value')) }}</p></x-card></div>
+    <div class="mt-4 grid gap-4 sm:grid-cols-3"><x-card><p class="text-sm text-slate-500">{{ __('application.items_44d25b5d') }}</p><p class="text-2xl font-black">{{ $rows->count() }}</p></x-card><x-card><p class="text-sm text-slate-500">{{ __('application.quantity_44f6af69') }}</p><p class="text-2xl font-black">{{ \App\Support\NumberFormatter::quantity($rows->sum('quantity')) }}</p></x-card><x-card><p class="text-sm text-slate-500">{{ __('application.stock_value_c2267f33') }}</p><p class="text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($rows->sum('value')) }}</p></x-card></div>
     <x-card class="mt-4">
         <x-table :headers="$headers">
             @foreach ($rows as $row)

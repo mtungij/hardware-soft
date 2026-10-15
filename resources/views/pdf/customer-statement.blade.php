@@ -15,7 +15,7 @@
 </head>
 <body>
     <h1>Hardex {{ __('messages.statements.title') }}</h1>
-    <p class="muted">{{ __('messages.generated_on') }} {{ now()->format('M d, Y H:i') }}</p>
+    <p class="muted">{{ __('messages.generated_on') }} {{ now()->locale(app()->getLocale())->translatedFormat('M d, Y H:i') }}</p>
 
     <div class="summary">
         <strong>{{ $customer['name'] }}</strong><br>

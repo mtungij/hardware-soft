@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-15",
+  "branch_access": {
+    "company_super_admin": "The existing Super Admin role on the web guard grants company-wide branch access even when branch_id contains a default branch. CompanyScope remains unchanged: only is_system_owner bypasses tenant filtering.",
+    "ordinary_staff": "Existing branch restrictions and write checks remain active for other assigned staff. No NULL-branch records are backfilled or reassigned.",
+    "selling_locations": "Company Super Admin can select authorized selling locations across their company. Active, sellable, company/branch and allowed location type checks remain enforced.",
+    "user_forms": "The selected branch remains stored as the default branch. Forms explain that it does not narrow a company Super Admin’s company-wide access. No ordinary administrator is promoted to System Owner.",
+    "settings": "The company catalogue-price selector now also restricts company Super Admin to their own company; cross-company management is reserved for System Owner."
+  },
+  "sale_date": {
+    "storage": "Existing sales.sale_date is reused. No business records or historical timestamps are rewritten.",
+    "timezone": "Default date and future-date checks use the company timezone, falling back to app.timezone.",
+    "permission": "sales.backdate; Super Admin/System Owner may backdate, authorized Admin roles receive the new grant, Cashier receives no automatic grant.",
+    "limit": "config/pos.php: max_backdate_days, environment override POS_MAX_BACKDATE_DAYS; default 30 days, zero disables backdating for everyone.",
+    "confirmation": "A past date requires explicit confirmation in the POS and in the transaction service.",
+    "financial_controls": "Closed cashbook sessions block both selected historical business dates and the actual recording date. Session rows are locked during the sale transaction.",
+    "inventory": "Sufficient current stock is checked under the existing inventory locks. Stock movements and payment dates use the actual recording date in company time. created_at/updated_at remain normal recording timestamps.",
+    "reports": "Sales reporting continues filtering by sale_date. Sales exports now add a Recorded at column. Receipts/invoices show the business date and separate entry time.",
+    "whatsapp": "Sale notifications use the business sale date. Historical notifications append separate recorded-at and notification-prepared timestamps in the configured company notification language.",
+    "retry_safety": "Existing sale idempotency keys and inventory transaction protections are retained."
+  },
+  "limitations": [
+    "Historical inventory balances are not reconstructed; inventory effects are posted at actual recording time.",
+    "The application has no general accounting-period locking system. This change enforces existing closed cashbook controls and the configurable backdate limit.",
+    "Existing Vite bundle-size warning remains."
+  ],
+  "migration": {
+    "file": "database/migrations/2026_10_15_000002_add_sales_backdate_permission.php",
+    "type": "Additive permission grant only; no sale schema or record backfill",
+    "status": "Applied to the verified local environment; no production records modified",
+    "rollback": "Preserves explicit administrator permission grants rather than deleting shared grants."
+  },
+  "verification": {
+    "status": "Passed across suite runs and focused retests",
+    "focused": {
+      "tool": "pest",
+      "result": "passed",
+      "tests": 13,
+      "passed": 13,
+      "assertions": 68,
+      "duration_ms": 123744
+    },
+    "localization_audit": {
+      "source_files_checked": 513,
+      "catalog_keys_per_language": {
+        "en": 7436,
+        "sw": 7436
+      },
+      "problems": []
+    },
+    "syntax_and_blade": {
+      "files": 365,
+      "errors": []
+    },
+    "build": "Passed",
+    "localization_and_notification_regression": {
+      "passed": 49,
+      "note": "48 passed in the suite; the remaining untranslated words in existing Swahili portal copy were translated and the catalogue test passed on rerun.",
+      "retest": {
+        "tool": "pest",
+        "result": "passed",
+        "tests": 1,
+        "passed": 1,
+        "assertions": 7435,
+        "duration_ms": 2573
+      }
+    },
+    "distinct_test_cases_verified": 102,
+    "pos_branch_and_reporting_regressions": {
+      "passed": 40,
+      "suite_passed_before_retests": 38,
+      "note": "Two existing UI cases were updated to explicitly select English or Swahili instead of expecting mixed-language labels.",
+      "retests": {
+        "tool": "pest",
+        "result": "passed",
+        "tests": 2,
+        "passed": 2,
+        "assertions": 10,
+        "duration_ms": 20434
+      }
+    },
+    "final_compiled_blade": {
+      "files": 348,
+      "errors": []
+    }
+  },
+  "production": "No production data changes, deployment or real customer notification sends.",
+  "files": [
+    "app/Support/BranchAccess.php",
+    "app/Support/AuthorizationScope.php",
+    "app/Support/InventorySettings.php",
+    "app/Support/PosSaleDate.php",
+    "app/Models/User.php",
+    "app/Services/InventoryService.php",
+    "app/Services/ReportExportService.php",
+    "app/Services/WhatsAppMessageFactory.php",
+    "config/pos.php",
+    "database/migrations/2026_10_15_000002_add_sales_backdate_permission.php",
+    "database/seeders/RolePermissionSeeder.php",
+    "resources/views/livewire/pos/index.blade.php",
+    "resources/views/livewire/sales/index.blade.php",
+    "resources/views/livewire/sales/receipt.blade.php",
+    "resources/views/pdf/b2b-sales-invoice.blade.php",
+    "resources/views/livewire/users/create.blade.php",
+    "resources/views/livewire/users/edit.blade.php",
+    "resources/views/livewire/settings/customer-portal.blade.php",
+    "resources/views/livewire/settings/quotation-templates.blade.php",
+    "resources/lang/en/sale_dates.php",
+    "resources/lang/sw/sale_dates.php",
+    "resources/lang/en/whatsapp.php",
+    "resources/lang/sw/whatsapp.php",
+    "resources/lang/en/permissions.php",
+    "resources/lang/sw/permissions.php",
+    "tests/Feature/CompanySuperAdminAndSaleDateTest.php",
+    "tests/Feature/BranchIsolationTest.php",
+    "tests/Feature/PosSalesPhaseTest.php"
+  ]
+}

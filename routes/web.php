@@ -125,7 +125,14 @@ Route::get('/', function () {
         : redirect()->route('login');
 });
 
-Route::view('offline', 'offline')->name('offline');
+Route::get('offline', function (Request $request) {
+    $locale = $request->query('locale');
+    if (in_array($locale, ['en', 'sw'], true)) {
+        app()->setLocale($locale);
+    }
+
+    return response()->view('offline')->header('Cache-Control', 'public, max-age=0');
+})->name('offline');
 Volt::route('setup', 'setup.index')->name('setup');
 
 Route::post('customer/language/{locale}', function (Request $request, string $locale) {
@@ -162,6 +169,7 @@ Route::middleware('customer.locale')->group(function () {
         Volt::route('customer/change-password', 'customer.auth.change-password')->name('customer.change-password');
 
         Route::middleware('customer.active')->group(function () {
+            Volt::route('customer/products', 'customer.catalogue')->name('customer.products');
             Volt::route('customer/dashboard', 'customer.dashboard')->name('customer.dashboard');
             Volt::route('customer/debts', 'customer.debts.index')->name('customer.debts.index');
             Volt::route('customer/debts/{sale}', 'customer.debts.show')->name('customer.debts.show');
@@ -343,6 +351,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('stock-transfers/{stockTransfer}/edit', 'stock-transfers.edit')->middleware('warehouse.enabled')->name('stock-transfers.edit');
     });
 
+    Volt::route('settings/customer-portal', 'settings.customer-portal')->name('settings.customer-portal');
     Volt::route('settings/company', 'settings.company')
         ->middleware('company-settings.update')
         ->name('settings.company');

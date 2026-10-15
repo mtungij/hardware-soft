@@ -19,10 +19,10 @@ class ProductionQualityHold extends Model
     {
         static::updating(function (self $hold): void {
             if ($hold->getOriginal('status') !== 'active' || array_diff(array_keys($hold->getDirty()), ['status', 'released_at', 'released_by', 'release_reason', 'updated_at']) !== []) {
-                throw new LogicException('Quality hold history is immutable.');
+                throw new LogicException(__('application.quality_hold_history_is_immutable_78f35c28'));
             }
         });
-        static::deleting(fn () => throw new LogicException('Quality holds cannot be deleted.'));
+        static::deleting(fn () => throw new LogicException(__('application.quality_holds_cannot_be_deleted_ebced5a1')));
     }
 
     protected function casts(): array

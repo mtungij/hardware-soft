@@ -70,6 +70,7 @@ function freshPosUnitProduct(): Product
 }
 
 test('phase five pages render for super admin', function () {
+    $this->withSession(['staff_locale' => 'en']);
     $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
     $sale = posPhaseSale($this);
 
@@ -184,11 +185,11 @@ test('cashier can see wholesale sale type option on pos', function () {
     ]);
     $cashier->assignRole('Cashier');
 
-    $this->actingAs($cashier)
+    $this->actingAs($cashier)->withSession(['staff_locale' => 'sw'])
         ->get('/pos')
         ->assertOk()
         ->assertSee('Aina ya Bei')
-        ->assertSee('Wholesale');
+        ->assertSee(__('application.wholesale_21c1aef4', [], 'sw'));
 });
 
 test('sale cannot exceed available stock', function () {

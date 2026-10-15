@@ -15,8 +15,8 @@ class CustomerMaterialCashTransaction extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Posted material-account cash transactions are immutable.'));
-        static::deleting(fn () => throw new LogicException('Posted material-account cash transactions cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.posted_material_account_cash_transactions_are_immutable_f9b1cef6')));
+        static::deleting(fn () => throw new LogicException(__('application.posted_material_account_cash_transactions_cannot_be_deleted_4a33bef9')));
     }
 
     public function account(): BelongsTo

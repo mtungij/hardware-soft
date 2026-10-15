@@ -66,7 +66,7 @@ final class BranchAccess
     {
         $user ??= self::staff();
 
-        return $user && ! $user->is_system_owner && $user->branch_id !== null;
+        return $user && ! $user->is_system_owner && ! $user->hasRole('Super Admin', 'web') && $user->branch_id !== null;
     }
 
     public static function branches(User $user): Builder
@@ -87,7 +87,7 @@ final class BranchAccess
     public static function resolve(User $user, ?int $requested = null): ?int
     {
         if ($requested !== null && ! self::canAccessBranch($user, $requested)) {
-            throw ValidationException::withMessages(['branch_id' => 'You cannot access the selected branch.']);
+            throw ValidationException::withMessages(['branch_id' => __('application.you_cannot_access_the_selected_branch_adb0a734')]);
         }
 
         return self::restricted($user) ? (int) $user->branch_id : $requested;
@@ -139,7 +139,7 @@ final class BranchAccess
             return;
         }
         if (array_key_exists('company_id', $model->getAttributes()) && (int) $model->company_id !== (int) $user->company_id) {
-            throw ValidationException::withMessages(['company_id' => 'The record must belong to your company.']);
+            throw ValidationException::withMessages(['company_id' => __('application.the_record_must_belong_to_your_company_cd4e5472')]);
         }
         if (self::ownership($model) === 'branch_id') {
             if (! $model->exists && $model->branch_id === null && self::restricted($user)) {
@@ -147,16 +147,16 @@ final class BranchAccess
             }
             if ((int) $model->company_id !== (int) $user->company_id
                 || ! self::canAccessBranch($user, $model->branch_id === null ? null : (int) $model->branch_id)) {
-                throw ValidationException::withMessages(['branch_id' => 'The record must belong to an accessible company branch.']);
+                throw ValidationException::withMessages(['branch_id' => __('application.the_record_must_belong_to_an_accessible_company_branch_6204bf3a')]);
             }
             if ($model->exists && self::restricted($user) && (int) $model->getRawOriginal('branch_id') !== (int) $user->branch_id) {
-                throw ValidationException::withMessages(['branch_id' => 'You cannot modify another branch’s record.']);
+                throw ValidationException::withMessages(['branch_id' => __('application.you_cannot_modify_another_branch_s_record_61a8085d')]);
             }
         }
         if ($model instanceof User && $model->branch_id !== null
             && (! Branch::withoutGlobalScopes()->where('company_id', $model->company_id)->whereKey($model->branch_id)->exists()
                 || ! self::canAccessBranch($user, (int) $model->branch_id))) {
-            throw ValidationException::withMessages(['branch_id' => 'Assigned branch must belong to the user’s company.']);
+            throw ValidationException::withMessages(['branch_id' => __('application.assigned_branch_must_belong_to_the_user_s_company_97a1fb43')]);
         }
         // Validate branch-owned foreign IDs as well as the record's own branch.
         foreach (['product', 'customer', 'supplier', 'category', 'unit', 'measurementType',
@@ -170,12 +170,12 @@ final class BranchAccess
             if ($relation instanceof BelongsTo
                 && $model->getAttribute($relation->getForeignKeyName()) !== null
                 && ! $relation->exists()) {
-                throw ValidationException::withMessages([$relation->getForeignKeyName() => 'The selected record is outside your accessible company branch.']);
+                throw ValidationException::withMessages([$relation->getForeignKeyName() => __('application.the_selected_record_is_outside_your_accessible_company_branch_7d6f167c')]);
             }
         }
         if ($parent = self::PARENTS[class_basename($model)] ?? null) {
             if (self::restricted($user) && ! $model->{$parent}()->exists()) {
-                throw ValidationException::withMessages(['branch_id' => 'The parent record is outside your accessible branch.']);
+                throw ValidationException::withMessages(['branch_id' => __('application.the_parent_record_is_outside_your_accessible_branch_e2c330af')]);
             }
         }
     }

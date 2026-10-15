@@ -14,9 +14,9 @@ state(['search' => '', 'status' => '', 'branch_id' => (\App\Support\BranchAccess
 ?>
 
 <div>
-    <x-page-header title="Customer Material Accounts" description="Funded construction-material plans, deposits, collections, and balances." :breadcrumbs="['Dashboard' => route('dashboard'), 'Material Accounts' => null]">
-        @can('customer_material_accounts.reports')<a href="{{ route('customer-material-accounts.reports') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">Reports</a>@endcan
-        @can('customer_material_accounts.create')<a href="{{ route('customer-material-accounts.create') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">New Material Account</a>@endcan
+    <x-page-header title="{{ __('application.customer_material_accounts_d0da1598') }}" description="{{ __('application.funded_construction_material_plans_deposits_collections_and_balances_924f8cb6') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Material Accounts' => null]">
+        @can('customer_material_accounts.reports')<a href="{{ route('customer-material-accounts.reports') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">{{ __('application.reports_88bc3fe3') }}</a>@endcan
+        @can('customer_material_accounts.create')<a href="{{ route('customer-material-accounts.create') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ __('application.new_material_account_5f37ccc7') }}</a>@endcan
     </x-page-header>
 
     @php
@@ -27,23 +27,23 @@ state(['search' => '', 'status' => '', 'branch_id' => (\App\Support\BranchAccess
 
     <x-card>
         <div class="mb-4 grid gap-3 md:grid-cols-3">
-            <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" placeholder="Customer, phone, project or reference">
-            <select wire:model.live="status" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">All statuses</option>@foreach (CustomerMaterialAccount::STATUSES as $value)<option value="{{ $value }}">{{ str($value)->title() }}</option>@endforeach</select>
-            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+            <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" placeholder="{{ __('application.customer_phone_project_or_reference_a974050f') }}">
+            <select wire:model.live="status" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_statuses_6405179d') }}</option>@foreach (CustomerMaterialAccount::STATUSES as $value)<option value="{{ $value }}">{{ \App\Support\UiText::label($value) }}</option>@endforeach</select>
+            <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">{{ __('application.all_branches_25c23746') }}</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
         </div>
-        <x-table :headers="['Reference / Project', 'Customer', 'Branch', 'Project Value', 'Deposited', 'Issued', 'Available', 'Status']">
+        <x-table :headers="[__('terminology.reference_project_7daecbbf'), __('application.customer_0e85749a'), __('application.branch_1627510b'), __('terminology.project_value_b57a065a'), __('terminology.deposited_647af470'), __('terminology.issued_deb5d5e2'), __('application.available_7c62a142'), __('application.status_bae7d5be')]">
             @forelse ($accounts as $account)
                 <tr>
                     <td class="px-4 py-3"><a class="font-bold text-build-orange" wire:navigate href="{{ route('customer-material-accounts.show', $account) }}">{{ $account->reference_number }}</a><p class="text-xs text-slate-500">{{ $account->project_name }}</p></td>
-                    <td class="px-4 py-3 font-bold">{{ $account->customer->name }}<p class="text-xs font-normal text-slate-500">{{ $account->customer->phone }}</p></td>
+                    <td class="px-4 py-3 font-bold">{{ $account->customer->displayName() }}<p class="text-xs font-normal text-slate-500">{{ $account->customer->phone }}</p></td>
                     <td class="px-4 py-3">{{ $account->branch->name }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($account->plannedValue()) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($account->depositedAmount()) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($account->issuedValue()) }}</td>
                     <td class="px-4 py-3 text-right font-black text-emerald-600">TZS {{ \App\Support\NumberFormatter::money($account->availableFundedBalance()) }}</td>
-                    <td class="px-4 py-3"><x-badge :color="match($account->status) { 'active' => 'green', 'draft' => 'yellow', 'cancelled' => 'red', default => 'gray' }">{{ str($account->status)->title() }}</x-badge></td>
+                    <td class="px-4 py-3"><x-badge :color="match($account->status) { 'active' => 'green', 'draft' => 'yellow', 'cancelled' => 'red', default => 'gray' }">{{ \App\Support\UiText::label($account->status) }}</x-badge></td>
                 </tr>
-            @empty<tr><td colspan="8" class="px-4 py-10 text-center text-slate-500">No customer material accounts found.</td></tr>@endforelse
+            @empty<tr><td colspan="8" class="px-4 py-10 text-center text-slate-500">{{ __('application.no_customer_material_accounts_found_3ae61def') }}</td></tr>@endforelse
         </x-table>
         <div class="mt-4">{{ $accounts->links() }}</div>
     </x-card>

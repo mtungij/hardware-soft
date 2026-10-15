@@ -8,6 +8,8 @@ use App\Models\Quotation;
 use App\Models\Scopes\CompanyScope;
 use App\Support\NumberFormatter;
 use App\Support\QuotationTemplateRegistry;
+use App\Support\UiText;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Mpdf\Mpdf;
 use Mpdf\Output\Destination;
@@ -29,8 +31,8 @@ class QuotationDocumentService
         return [
             'company' => $this->companyData($company),
             'number' => $quotation->quotation_number,
-            'date' => $quotation->quotation_date->format('d M Y'),
-            'valid_until' => $quotation->valid_until?->format('d M Y'),
+            'date' => $quotation->quotation_date->locale(app()->getLocale())->translatedFormat('d M Y'),
+            'valid_until' => $quotation->valid_until?->locale(app()->getLocale())->translatedFormat('d M Y'),
             'branch' => $quotation->branch->name,
             'customer' => $quotation->customer->only(['name', 'phone', 'address', 'email']),
             'items' => $quotation->items->map(fn ($item) => [
@@ -43,9 +45,9 @@ class QuotationDocumentService
             ])->all(),
             'currency' => $currency,
             'totals' => [
-                ['label' => 'Subtotal', 'value' => $money($quotation->subtotal)],
-                ['label' => 'Discount', 'value' => $money($quotation->discount_amount)],
-                ['label' => 'Tax', 'value' => $money($quotation->tax_amount)],
+                ['label' => UiText::translate('Subtotal'), 'value' => $money($quotation->subtotal)],
+                ['label' => UiText::translate('Discount'), 'value' => $money($quotation->discount_amount)],
+                ['label' => UiText::translate('Tax'), 'value' => $money($quotation->tax_amount)],
             ],
             'charges' => $quotation->additionalCharges->map(fn ($charge) => [
                 'label' => $charge->charge_name_snapshot, 'description' => $charge->description_snapshot,
@@ -77,15 +79,15 @@ class QuotationDocumentService
 
         return [
             'company' => $this->companyData($company), 'number' => 'QT-SAMPLE-0001',
-            'date' => '13 Sep 2026', 'valid_until' => '27 Sep 2026', 'branch' => 'Sample Branch',
-            'customer' => ['name' => 'HARDEX DEMO CUSTOMER', 'phone' => '', 'email' => '', 'address' => 'Sample construction project'],
+            'date' => Carbon::parse('2026-09-13')->locale(app()->getLocale())->translatedFormat('d M Y'), 'valid_until' => Carbon::parse('2026-09-27')->locale(app()->getLocale())->translatedFormat('d M Y'), 'branch' => __('feedback.sample_branch'),
+            'customer' => ['name' => 'HARDEX DEMO CUSTOMER', 'phone' => '', 'email' => '', 'address' => __('feedback.sample_project')],
             'items' => $items, 'currency' => 'TZS',
-            'totals' => [['label' => 'Subtotal', 'value' => 'TZS '.NumberFormatter::money($subtotal)], ['label' => 'Discount', 'value' => 'TZS 0'], ['label' => 'Tax', 'value' => 'TZS 0']],
-            'charges' => [['label' => 'Transport', 'description' => 'Sample delivery to project site', 'value' => 'TZS 50,000']],
+            'totals' => [['label' => UiText::translate('Subtotal'), 'value' => 'TZS '.NumberFormatter::money($subtotal)], ['label' => UiText::translate('Discount'), 'value' => 'TZS 0'], ['label' => UiText::translate('Tax'), 'value' => 'TZS 0']],
+            'charges' => [['label' => __('feedback.transport'), 'description' => __('feedback.sample_delivery'), 'value' => 'TZS 50,000']],
             'grand_total' => 'TZS '.NumberFormatter::money($subtotal + 50000),
-            'notes' => 'SAMPLE — for template preview only. No transaction has been created.',
-            'terms' => 'Sample terms: payment and delivery subject to agreed terms.',
-            'payments' => [], 'prepared_by' => 'Sample preparer', 'sample' => true,
+            'notes' => __('application.sample_for_template_preview_only_no_transaction_has_been_created_fa1e1913'),
+            'terms' => __('application.sample_terms_payment_and_delivery_subject_to_agreed_terms_4a4ae128'),
+            'payments' => [], 'prepared_by' => __('feedback.sample_preparer'), 'sample' => true,
         ];
     }
 
@@ -100,9 +102,9 @@ class QuotationDocumentService
     {
         Storage::disk('local')->makeDirectory('mpdf-temp');
         $pdf = new Mpdf(['format' => 'A4', 'tempDir' => Storage::disk('local')->path('mpdf-temp'), 'margin_top' => 14, 'margin_bottom' => 18, 'margin_left' => 14, 'margin_right' => 14]);
-        $pdf->SetTitle('Quotation '.$document['number']);
+        $pdf->SetTitle(UiText::translate('Quotation').' '.$document['number']);
         $pdf->SetAuthor($document['company']['company_name']);
-        $pdf->DefHTMLFooterByName('quotationFooter', '<table style="width:100%;border-top:1px solid #cbd5e1;color:#475569"><tr><td style="padding-top:2mm;font-size:8pt">'.e($document['number']).' · '.e($document['company']['company_name']).'</td><td style="padding-top:2mm;font-size:8pt;text-align:right">Page {PAGENO} of {nbpg}</td></tr></table>');
+        $pdf->DefHTMLFooterByName('quotationFooter', '<table style="width:100%;border-top:1px solid #cbd5e1;color:#475569"><tr><td style="padding-top:2mm;font-size:8pt">'.e($document['number']).' · '.e($document['company']['company_name']).'</td><td style="padding-top:2mm;font-size:8pt;text-align:right">'.e(UiText::translate('Page {PAGENO} of {nbpg}')).'</td></tr></table>');
         $pdf->WriteHTML($this->html($document, $key));
 
         return $pdf->Output('', Destination::STRING_RETURN);

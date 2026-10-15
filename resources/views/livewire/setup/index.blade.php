@@ -573,7 +573,7 @@ $complete = function () {
         return;
     }
 
-    session()->flash('success', 'System setup completed. Sign in with your Super Admin account.');
+    session()->flash('success', __('application.system_setup_completed_sign_in_with_your_super_admin_account_4d53e736'));
     $this->redirectRoute('login', navigate: false);
 };
 
@@ -587,12 +587,12 @@ $complete = function () {
                     <img src="{{ asset('images/hardex.png') }}" alt="Hardex" class="h-full w-full object-contain">
                 </div>
                 <div class="min-w-0">
-                    <p class="truncate text-xl font-black text-navy-900 dark:text-white">Hardex Hardware ERP</p>
-                    <p class="text-sm font-semibold text-slate-500">First system setup</p>
+                    <p class="truncate text-xl font-black text-navy-900 dark:text-white">{{ __('application.hardex_hardware_erp_d16ca1ba') }}</p>
+                    <p class="text-sm font-semibold text-slate-500">{{ __('application.first_system_setup_040f7c90') }}</p>
                 </div>
             </div>
             <a href="{{ route('login') }}" class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-black text-slate-600 transition hover:border-build-orange dark:border-slate-700 dark:text-slate-200">
-                Back to Login
+                {{ __('application.back_to_login_b5cd3215') }}
             </a>
         </div>
 
@@ -621,60 +621,60 @@ $complete = function () {
             <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-soft dark:border-slate-800 dark:bg-slate-900 sm:p-6">
                 @if ($step === 1)
                     <div>
-                        <h1 class="text-2xl font-black">Hardware Business Information</h1>
-                        <p class="mt-1 text-sm text-slate-500">Set the identity, contact details, branding, and localization defaults for this ERP.</p>
+                        <h1 class="text-2xl font-black">{{ __('application.hardware_business_information_619b66d2') }}</h1>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('application.set_the_identity_contact_details_branding_and_localization_defaults_for_thi_cc6aaf08') }}</p>
                         <div class="mt-6 grid gap-4 md:grid-cols-2">
-                            <x-form-input label="Company Name" name="company_name" wire:model="company_name" required />
+                            <x-form-input label="{{ __('application.company_name_8599f5cc') }}" name="company_name" wire:model="company_name" required />
                             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                                Business Type
+                                {{ __('application.business_type_29793523') }}
                                 <select wire:model="business_type" class="mt-1 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-                                    <option value="Hardware Store">Hardware</option>
+                                    <option value="Hardware Store">{{ __('application.hardware_b76ab659') }}</option>
                                     <!-- <option value="Auto Spare Parts">Auto Spare Parts</option> -->
                                 </select>
                                 @error('business_type') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                             </label>
-                            <x-form-input label="TIN Number" name="tin_number" wire:model="tin_number" />
-                            <x-form-input label="VRN Number" name="vrn_number" wire:model="vrn_number" />
-                            <x-form-input label="Phone Number" name="phone" wire:model="phone" required />
-                            <x-form-input label="WhatsApp Number" name="whatsapp_number" wire:model="whatsapp_number" required />
-                            <x-form-input label="Email Address" name="email" wire:model="email" type="email" />
+                            <x-form-input label="{{ __('application.tin_number_17e784bb') }}" name="tin_number" wire:model="tin_number" />
+                            <x-form-input label="{{ __('application.vrn_number_98f644c6') }}" name="vrn_number" wire:model="vrn_number" />
+                            <x-form-input label="{{ __('application.phone_number_ab25d61b') }}" name="phone" wire:model="phone" required />
+                            <x-form-input label="{{ __('application.whatsapp_number_51dacf06') }}" name="whatsapp_number" wire:model="whatsapp_number" required />
+                            <x-form-input label="{{ __('application.email_address_09ba557f') }}" name="email" wire:model="email" type="email" />
                             <x-tanzania-location-selects :region="$region" :district="$district" region-model="region" district-model="district" region-name="region" district-name="district" />
-                            <x-form-input label="Country" name="country" wire:model="country" required />
-                            <x-form-input label="Default Currency" name="currency" wire:model="currency" required />
-                            <x-form-input label="Timezone" name="timezone" wire:model="timezone" required />
+                            <x-form-input label="{{ __('application.country_d523ebbd') }}" name="country" wire:model="country" required />
+                            <x-form-input label="{{ __('application.default_currency_bcfc9303') }}" name="currency" wire:model="currency" required />
+                            <x-form-input label="{{ __('application.timezone_d1f7dc89') }}" name="timezone" wire:model="timezone" required />
                             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                                Language
+                                {{ __('application.language_89b86ab0') }}
                                 <select wire:model="language" class="mt-1 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-                                    <option value="sw">Kiswahili</option>
-                                    <option value="en">English</option>
+                                    <option value="sw">{{ __('application.kiswahili_1fa52793') }}</option>
+                                    <option value="en">{{ __('application.english_649df08a') }}</option>
                                 </select>
                             </label>
                             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                                Company Logo
+                                {{ __('application.company_logo_b2d0bdaa') }}
                                 <input wire:model="logo_upload" type="file" accept="image/png,image/jpeg,image/webp" class="mt-1 block w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
                                 @error('logo_upload') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                             </label>
-                            <div class="md:col-span-2"><x-form-textarea label="Physical Address" name="address" wire:model="address" rows="3" /></div>
-                            <div class="md:col-span-2"><x-form-textarea label="Business Description" name="description" wire:model="description" rows="3" /></div>
+                            <div class="md:col-span-2"><x-form-textarea label="{{ __('application.physical_address_b1e71fd3') }}" name="address" wire:model="address" rows="3" /></div>
+                            <div class="md:col-span-2"><x-form-textarea label="{{ __('application.business_description_b7a188bf') }}" name="description" wire:model="description" rows="3" /></div>
                          <div class="md:col-span-2">
   <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900 sm:p-5">
     <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <p class="text-xs font-black uppercase tracking-wide text-cyan-600 dark:text-cyan-300">
-                Mfumo wa Kupokea na Kuuza Mzigo
+                {{ __('application.goods_receiving_and_selling_mode_b82ab4f3') }}
             </p>
 
             <h2 class="mt-1 text-xl font-black text-slate-950 dark:text-white">
-                Unapokea mzigo kupitia ghala au moja kwa moja dukani?
+                {{ __('application.do_you_receive_goods_through_a_warehouse_or_directly_at_the_shop_5f7ce86b') }}
             </h2>
 
             <p class="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                Chagua mfumo unaofanana na namna hardware yako inavyofanya kazi kila siku.
+                {{ __('application.choose_the_mode_that_matches_how_your_hardware_business_works_daily_3023d1bc') }}
             </p>
         </div>
 
         <span class="inline-flex w-fit items-center rounded-full bg-cyan-100 px-3 py-1 text-xs font-black text-cyan-900 dark:bg-cyan-500/20 dark:text-cyan-100">
-            Lazima uchague
+            {{ __('application.you_must_select_7144184a') }}
         </span>
     </div>
 
@@ -696,16 +696,16 @@ $complete = function () {
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h3 class="text-lg font-black text-slate-950 dark:text-white">
-                                    Nina Ghala Kuu
+                                    {{ __('application.i_have_a_main_warehouse_fdf80f6e') }}
                                 </h3>
 
                                <span class="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white dark:bg-white dark:text-slate-900">
-    Hardware yenye Ghala Kuu
+    {{ __('application.hardware_with_main_warehouse_d4f73ac9') }}
 </span>
                             </div>
 
                             <p class="mt-3 text-sm font-bold leading-6 text-slate-800 dark:text-slate-100">
-                                Chagua hii kama mzigo unaingia kwanza kwenye ghala/store kabla ya kupelekwa sehemu ya mauzo.
+                                {{ __('application.choose_this_if_goods_enter_the_warehouse_first_before_being_sent_to_the_sel_049e2b54') }}
                             </p>
                         </div>
 
@@ -722,24 +722,24 @@ $complete = function () {
 
                     <div class="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-white">
                         <p class="text-sm font-black text-black">
-                            Mfano:
+                            {{ __('application.example_c63737ab') }}
                         </p>
 
                         <div class="mt-2 flex flex-wrap items-center gap-2 text-sm font-extrabold text-black">
                             <span class="rounded-lg bg-slate-100 px-3 py-2">
-                                Mzigo unaingia Ghala Kuu
+                                {{ __('application.goods_enter_the_main_warehouse_f5d9a100') }}
                             </span>
 
                             <span class="text-lg font-black text-cyan-600">→</span>
 
                             <span class="rounded-lg bg-slate-100 px-3 py-2">
-                                Unahamishiwa Sehemu ya Mauzo
+                                {{ __('application.transferred_to_selling_area_d8f2d828') }}
                             </span>
 
                             <span class="text-lg font-black text-cyan-600">→</span>
 
                             <span class="rounded-lg bg-slate-100 px-3 py-2">
-                                Unauzwa kwa mteja
+                                {{ __('application.sold_to_customer_a991b195') }}
                             </span>
                         </div>
                     </div>
@@ -763,16 +763,16 @@ $complete = function () {
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h3 class="text-lg font-black text-slate-950 dark:text-white">
-                                    Sina Ghala Kuu
+                                    {{ __('application.i_have_no_main_warehouse_1a100f05') }}
                                 </h3>
 
                                 <span class="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-black text-amber-900 dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-100">
-                                    Inafaa kwa hardware ndogo
+                                    {{ __('application.suitable_for_small_hardware_businesses_16c08a56') }}
                                 </span>
                             </div>
 
                             <p class="mt-3 text-sm font-bold leading-6 text-slate-800 dark:text-slate-100">
-                                Chagua hii kama mzigo unaingia moja kwa moja kwenye eneo la mauzo na kuuzwa hapo hapo.
+                                {{ __('application.choose_this_if_goods_enter_the_selling_area_directly_and_are_sold_there_83a9bb79') }}
                             </p>
                         </div>
 
@@ -788,18 +788,18 @@ $complete = function () {
 
                     <div class="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-white">
                         <p class="text-sm font-black text-black">
-                            Mfano:
+                            {{ __('application.example_c63737ab') }}
                         </p>
 
                         <div class="mt-2 flex flex-wrap items-center gap-2 text-sm font-extrabold text-black">
                             <span class="rounded-lg bg-slate-100 px-3 py-2">
-                                Mzigo unaingia Sehemu ya Mauzo
+                                {{ __('application.goods_enter_the_selling_area_ece02a4e') }}
                             </span>
 
                             <span class="text-lg font-black text-cyan-600">→</span>
 
                             <span class="rounded-lg bg-slate-100 px-3 py-2">
-                                Unauzwa moja kwa moja kwa mteja
+                                {{ __('application.sold_directly_to_customer_1392bdae') }}
                             </span>
                         </div>
                     </div>
@@ -809,7 +809,7 @@ $complete = function () {
     </div>
 
     <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs font-bold leading-5 text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
-        Unaweza kuanza na mfumo unaolingana na biashara yako. Mfumo utatumia chaguo hili kupanga namna stock inavyoingia na kuuzwa.
+        {{ __('application.start_with_the_mode_that_suits_your_business_the_system_uses_this_choice_to_1346d899') }}
     </div>
 
     @error('inventory_stock_mode')
@@ -840,40 +840,40 @@ $complete = function () {
                     </div>
                 @elseif ($step === 2)
                     <div>
-                        <h1 class="text-2xl font-black">Super Admin Account</h1>
-                        <p class="mt-1 text-sm text-slate-500">Create the first system owner with unrestricted ERP access.</p>
+                        <h1 class="text-2xl font-black">{{ __('application.super_admin_account_6cfaecba') }}</h1>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('application.create_the_first_system_owner_with_unrestricted_erp_access_295bae49') }}</p>
                         <div class="mt-6 grid gap-4 md:grid-cols-2">
-                            <x-form-input label="Full Name" name="admin_name" wire:model="admin_name" required />
-                            <x-form-input label="Phone Number" name="admin_phone" wire:model="admin_phone" required />
-                            <x-form-input label="Email Address" name="admin_email" wire:model="admin_email" type="email" required />
-                            <x-cropped-image-upload label="Profile Picture" name="admin_photo" wire:model="admin_photo" />
-                            <x-form-input label="Password" name="admin_password" wire:model="admin_password" type="password" required />
-                            <x-form-input label="Confirm Password" name="admin_password_confirmation" wire:model="admin_password_confirmation" type="password" required />
+                            <x-form-input label="{{ __('application.full_name_64346b48') }}" name="admin_name" wire:model="admin_name" required />
+                            <x-form-input label="{{ __('application.phone_number_ab25d61b') }}" name="admin_phone" wire:model="admin_phone" required />
+                            <x-form-input label="{{ __('application.email_address_09ba557f') }}" name="admin_email" wire:model="admin_email" type="email" required />
+                            <x-cropped-image-upload label="{{ __('application.profile_picture_ea918c42') }}" name="admin_photo" wire:model="admin_photo" />
+                            <x-form-input label="{{ __('application.password_8be3c943') }}" name="admin_password" wire:model="admin_password" type="password" required />
+                            <x-form-input label="{{ __('application.confirm_password_c2d404cb') }}" name="admin_password_confirmation" wire:model="admin_password_confirmation" type="password" required />
                         </div>
                     </div>
                 @elseif ($step === 3)
                     <div>
-                        <h1 class="text-2xl font-black">Branch Information</h1>
-                        <p class="mt-1 text-sm text-slate-500">Create the first operational branch. If no branch exists, this becomes MAIN.</p>
+                        <h1 class="text-2xl font-black">{{ __('application.branch_information_22c3857d') }}</h1>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('application.create_the_first_operational_branch_if_no_branch_exists_this_becomes_main_0484472e') }}</p>
                         <div class="mt-6 grid gap-4 md:grid-cols-2">
-                            <x-form-input label="Branch Name" name="branch_name" wire:model="branch_name" required />
-                            <x-form-input label="Branch Code" name="branch_code" wire:model="branch_code" required />
-                            <x-form-input label="Phone Number" name="branch_phone" wire:model="branch_phone" />
-                            <x-form-input label="Email" name="branch_email" wire:model="branch_email" type="email" />
+                            <x-form-input label="{{ __('application.branch_name_0e465da2') }}" name="branch_name" wire:model="branch_name" required />
+                            <x-form-input label="{{ __('application.branch_code_c36598ec') }}" name="branch_code" wire:model="branch_code" required />
+                            <x-form-input label="{{ __('application.phone_number_ab25d61b') }}" name="branch_phone" wire:model="branch_phone" />
+                            <x-form-input label="{{ __('application.email_84add5b2') }}" name="branch_email" wire:model="branch_email" type="email" />
                             <x-tanzania-location-selects :region="$branch_region" :district="$branch_district" region-model="branch_region" district-model="branch_district" region-name="branch_region" district-name="branch_district" />
-                            <x-form-input label="Manager Name" name="branch_manager_name" wire:model="branch_manager_name" />
+                            <x-form-input label="{{ __('application.manager_name_dca6364b') }}" name="branch_manager_name" wire:model="branch_manager_name" />
                             <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">
-                                Status
+                                {{ __('application.status_bae7d5be') }}
                                 <select wire:model="branch_status" class="mt-1 block min-h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950">
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
+                                    <option value="active">{{ __('application.active_a733b809') }}</option>
+                                    <option value="inactive">{{ __('application.inactive_09af574c') }}</option>
                                 </select>
                             </label>
                             <label class="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-sm font-bold dark:border-slate-800">
                                 <input type="checkbox" wire:model="branch_is_default" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                                Default Branch: Yes
+                                {{ __('application.default_branch_yes_051dbabc') }}
                             </label>
-                            <div class="md:col-span-2"><x-form-textarea label="Address" name="branch_address" wire:model="branch_address" rows="3" /></div>
+                            <div class="md:col-span-2"><x-form-textarea label="{{ __('application.address_d70f93df') }}" name="branch_address" wire:model="branch_address" rows="3" /></div>
                         </div>
                     </div>
                 @elseif ($step === 4 && $manufacturing_enabled)
@@ -970,17 +970,17 @@ $complete = function () {
                     </div>
                 @else
                     <div>
-                        <h1 class="text-2xl font-black">Review & Complete</h1>
-                        <p class="mt-1 text-sm text-slate-500">Confirm the setup summary before initializing the ERP.</p>
+                        <h1 class="text-2xl font-black">{{ __('application.review_complete_803fcaf0') }}</h1>
+                        <p class="mt-1 text-sm text-slate-500">{{ __('application.confirm_the_setup_summary_before_initializing_the_erp_76aaf5be') }}</p>
                         <div class="mt-6 grid gap-4 lg:grid-cols-3">
-                            <x-card title="Company Information">
-                                <dl class="space-y-2 text-sm"><dt class="font-black">Company</dt><dd>{{ $company_name }}</dd><dt class="font-black">Business Type</dt><dd>{{ $business_type }}</dd><dt class="font-black">Phone</dt><dd>{{ $phone }}</dd><dt class="font-black">WhatsApp</dt><dd>{{ $whatsapp_number }}</dd><dt class="font-black">Location</dt><dd>{{ trim($district.', '.$region.', '.$country, ', ') }}</dd><dt class="font-black">Inventory Stock Mode</dt><dd>{{ $inventory_stock_mode === 'warehouse' ? 'Nina Ghala Kuu' : 'Sina Ghala Kuu' }}</dd></dl>
+                            <x-card title="{{ __('application.company_information_2042c7a2') }}">
+                                <dl class="space-y-2 text-sm"><dt class="font-black">{{ __('application.company_7a199499') }}</dt><dd>{{ $company_name }}</dd><dt class="font-black">{{ __('application.business_type_29793523') }}</dt><dd>{{ $business_type }}</dd><dt class="font-black">{{ __('application.phone_77064d52') }}</dt><dd>{{ $phone }}</dd><dt class="font-black">{{ __('application.whatsapp_b336fc55') }}</dt><dd>{{ $whatsapp_number }}</dd><dt class="font-black">{{ __('application.location_d219c681') }}</dt><dd>{{ trim($district.', '.$region.', '.$country, ', ') }}</dd><dt class="font-black">{{ __('application.inventory_stock_mode_f1322600') }}</dt><dd>{{ $inventory_stock_mode === 'warehouse' ? __('application.i_have_a_main_warehouse_fdf80f6e') : __('application.i_have_no_main_warehouse_1a100f05') }}</dd></dl>
                             </x-card>
-                            <x-card title="Super Admin Information">
-                                <dl class="space-y-2 text-sm"><dt class="font-black">Name</dt><dd>{{ $admin_name }}</dd><dt class="font-black">Email</dt><dd>{{ $admin_email }}</dd><dt class="font-black">Phone</dt><dd>{{ $admin_phone }}</dd><dt class="font-black">Role</dt><dd>Super Admin</dd></dl>
+                            <x-card title="{{ __('application.super_admin_information_e016b8cc') }}">
+                                <dl class="space-y-2 text-sm"><dt class="font-black">{{ __('application.name_709a2322') }}</dt><dd>{{ $admin_name }}</dd><dt class="font-black">{{ __('application.email_84add5b2') }}</dt><dd>{{ $admin_email }}</dd><dt class="font-black">{{ __('application.phone_77064d52') }}</dt><dd>{{ $admin_phone }}</dd><dt class="font-black">{{ __('application.role_c3f104d1') }}</dt><dd>{{ __('application.super_admin_7da1c9a4') }}</dd></dl>
                             </x-card>
-                            <x-card title="Branch Information">
-                                <dl class="space-y-2 text-sm"><dt class="font-black">Branch</dt><dd>{{ $branch_name }}</dd><dt class="font-black">Code</dt><dd>{{ $branch_code }}</dd><dt class="font-black">Manager</dt><dd>{{ $branch_manager_name ?: $admin_name }}</dd><dt class="font-black">Default</dt><dd>{{ $branch_is_default ? 'Yes' : 'No' }}</dd></dl>
+                            <x-card title="{{ __('application.branch_information_22c3857d') }}">
+                                <dl class="space-y-2 text-sm"><dt class="font-black">{{ __('application.branch_1627510b') }}</dt><dd>{{ $branch_name }}</dd><dt class="font-black">{{ __('application.code_adac6937') }}</dt><dd>{{ $branch_code }}</dd><dt class="font-black">{{ __('application.manager_babe3050') }}</dt><dd>{{ $branch_manager_name ?: $admin_name }}</dd><dt class="font-black">{{ __('application.default_808d7dca') }}</dt><dd>{{ $branch_is_default ? __('application.yes_5397e058') : __('application.no_816c52fd') }}</dd></dl>
                             </x-card>
                             @unless ($manufacturing_enabled)
                                 <x-card :title="__('setup.business_operations')"><dl class="space-y-2 text-sm"><dt class="font-black">{{ __('setup.manufacturing_enabled') }}</dt><dd>{{ __('setup.no') }}</dd></dl></x-card>
@@ -995,13 +995,13 @@ $complete = function () {
                 @endif
 
                 <div class="mt-8 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 dark:border-slate-800 sm:flex-row sm:justify-between">
-                    <button type="button" wire:click="back" @disabled($step === 1) class="rounded-xl border border-slate-200 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700">Back</button>
+                    <button type="button" wire:click="back" @disabled($step === 1) class="rounded-xl border border-slate-200 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700">{{ __('application.back_b52b36b7') }}</button>
                     @if ($step !== 5)
-                        <button type="button" wire:click="next" class="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-cyan-500/20" wire:loading.attr="disabled">Next</button>
+                        <button type="button" wire:click="next" class="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-cyan-500/20" wire:loading.attr="disabled">{{ __('application.next_bc981983') }}</button>
                     @else
                         <button type="button" wire:click="complete" class="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-cyan-500/20" wire:loading.attr="disabled">
-                            <span wire:loading.remove>Complete Setup</span>
-                            <span wire:loading>Completing...</span>
+                            <span wire:loading.remove>{{ __('application.complete_setup_d4d04ef5') }}</span>
+                            <span wire:loading>{{ __('application.completing_fcb26bc9') }}</span>
                         </button>
                     @endif
                 </div>

@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Wasambazaji', 'create' => 'Ongeza Msambazaji', 'edit' => 'Hariri Msambazaji', 'name' => 'Jina', 'phone' => 'Simu', 'email' => 'Barua pepe', 'balance' => 'Salio'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/sw/suppliers.php';

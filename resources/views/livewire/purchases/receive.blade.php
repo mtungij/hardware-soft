@@ -109,11 +109,11 @@ $updatedDefaultStockLocationId = function ($value) {
 };
 
 $addCostType = function (): void {
-    abort_unless(auth()->user()?->hasAnyRole(['Super Admin', 'Admin']), 403);
+    abort_unless(auth()->user()?->hasAnyRole(['Super Admin', __('application.admin_4e7afebc')]), 403);
     $this->validate(['new_cost_type' => ['required', 'string', 'max:100']]);
     $name = trim($this->new_cost_type);
     if (mb_strtolower($name) === 'product cost') {
-        $this->addError('new_cost_type', 'Product Cost is already included in goods value.');
+        $this->addError('new_cost_type', __('application.product_cost_is_already_included_in_goods_value_03a55cce'));
 
         return;
     }
@@ -184,11 +184,11 @@ $applySuggestedPrice = function (int $itemId) {
         $this->validateReceiving();
         $this->validate(["lines.{$itemId}.markup_percentage" => ['required', 'numeric', 'min:0', 'max:10000', 'decimal:0,2']]);
         if ((float) ($this->lines[$itemId]['quantity'] ?? 0) > $item->remainingQuantity()) {
-            throw \Illuminate\Validation\ValidationException::withMessages(["lines.{$itemId}.quantity" => 'Quantity cannot exceed remaining quantity.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(["lines.{$itemId}.quantity" => __('application.quantity_cannot_exceed_remaining_quantity_3e9107f7')]);
         }
         $costing = $this->summary();
         if (! isset($costing['rows'][$itemId])) {
-            throw \Illuminate\Validation\ValidationException::withMessages(["lines.{$itemId}.quantity" => 'Enter a received quantity before applying a price.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(["lines.{$itemId}.quantity" => __('application.enter_a_received_quantity_before_applying_a_price_37f32923')]);
         }
         $product = Product::query()->where('company_id', $purchase->company_id)->lockForUpdate()->findOrFail($item->product_id);
         $price = $costing['rows'][$itemId]['suggested_selling_price'];
@@ -259,9 +259,9 @@ $validateReceiving = function () {
     }
 
     $this->validate($rules, [
-        'lines.*.batch_number.required' => 'Batch Number is required for this product.',
-        'lines.*.expiry_date.required' => 'Expiry Date is required for this product.',
-        'lines.*.expiry_date.after_or_equal' => 'Expiry Date cannot be earlier than the receiving date.',
+        'lines.*.batch_number.required' => __('application.batch_number_is_required_for_this_product_5c087d5b'),
+        'lines.*.expiry_date.required' => __('application.expiry_date_is_required_for_this_product_11aead73'),
+        'lines.*.expiry_date.after_or_equal' => __('application.expiry_date_cannot_be_earlier_than_the_receiving_date_a1805867'),
     ]);
 
     $hasQuantity = false;
@@ -281,7 +281,7 @@ $validateReceiving = function () {
     }
 
     if (! $hasQuantity) {
-        $this->addError('lines', 'Enter at least one quantity to receive.');
+        $this->addError('lines', __('application.enter_at_least_one_quantity_to_receive_c00542ed'));
     }
 
     if ($this->getErrorBag()->any()) {
@@ -303,7 +303,7 @@ $saveDraft = function (InventoryService $inventory) {
         'additional_costs' => $this->additional_costs,
     ]);
 
-    session()->flash('success', 'Goods receipt draft saved.');
+    session()->flash('success', __('application.goods_receipt_draft_saved_882ef2a5'));
     $this->redirectRoute('purchases.show', ['purchase' => $purchase->id], navigate: true);
 };
 
@@ -321,7 +321,7 @@ $postReceipt = function (InventoryService $inventory) {
         'additional_costs' => $this->additional_costs,
     ]);
 
-    session()->flash('success', 'Purchase received successfully.');
+    session()->flash('success', __('application.purchase_received_successfully_206f7979'));
     $this->redirectRoute('purchases.show', ['purchase' => $purchase->id], navigate: true);
 };
 
@@ -340,8 +340,8 @@ $postReceipt = function (InventoryService $inventory) {
         $showExpiryColumn = $purchase->items->contains(fn ($item) => (bool) $item->product?->tracks_expiry);
     @endphp
 
-    <x-page-header title="Receive Purchase Order" description="Pokea bidhaa za manunuzi kwenye eneo sahihi la stock." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Receive' => null]">
-        <button type="button" wire:click="receiveAll" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Receive All</button>
+    <x-page-header title="{{ __('application.receive_purchase_order_fc68a002') }}" description="{{ __('application.receive_purchased_goods_into_the_correct_stock_location_6966cf8f') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Receive' => null]">
+        <button type="button" wire:click="receiveAll" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.receive_all_1e3ea539') }}</button>
     </x-page-header>
 
     <div class="grid gap-4 lg:grid-cols-4">
@@ -349,9 +349,9 @@ $postReceipt = function (InventoryService $inventory) {
             'Purchase Number' => $purchase->reference_number,
             'Supplier' => $purchase->supplier?->name,
             'Branch' => $purchase->branch?->name,
-            'Purchase Date' => $purchase->purchase_date?->format('d M Y'),
+            'Purchase Date' => $purchase->purchase_date?->locale(app()->getLocale())->translatedFormat('d M Y'),
             'Ordered By' => $purchase->creator?->name,
-            'Purchase Status' => ucfirst($purchase->status),
+            'Purchase Status' => \App\Support\UiText::status($purchase->status),
             'Total Ordered Quantity' => \App\Support\NumberFormatter::quantity($totalOrdered),
             'Previously Received Quantity' => \App\Support\NumberFormatter::quantity($totalReceived),
             'Remaining Quantity' => \App\Support\NumberFormatter::quantity($totalRemaining),
@@ -367,13 +367,13 @@ $postReceipt = function (InventoryService $inventory) {
         <form class="space-y-5">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <div>
-                    <x-form-input label="Goods Receipt Number" name="grn_number" wire:model="grn_number" readonly required />
-                    <p class="mt-1 text-xs font-semibold text-slate-500">Generated automatically</p>
+                    <x-form-input label="{{ __('application.goods_receipt_number_f5f03df7') }}" name="grn_number" wire:model="grn_number" readonly required />
+                    <p class="mt-1 text-xs font-semibold text-slate-500">{{ __('application.generated_automatically_62571b7b') }}</p>
                 </div>
-                <x-form-input label="Receiving Date" name="received_date" type="date" wire:model="received_date" required />
-                <x-form-input label="Supplier Delivery Note Number" name="supplier_delivery_note_number" wire:model="supplier_delivery_note_number" />
-                <x-form-input label="Supplier Invoice Number" name="supplier_invoice_number" wire:model="supplier_invoice_number" />
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 xl:col-span-2">Receive All Into
+                <x-form-input label="{{ __('application.receiving_date_64d0be44') }}" name="received_date" type="date" wire:model="received_date" required />
+                <x-form-input label="{{ __('application.supplier_delivery_note_number_61ad16c8') }}" name="supplier_delivery_note_number" wire:model="supplier_delivery_note_number" />
+                <x-form-input label="{{ __('application.supplier_invoice_number_e205f5e1') }}" name="supplier_invoice_number" wire:model="supplier_invoice_number" />
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 xl:col-span-2">{{ __('application.receive_all_into_b2213487') }}
                     <select wire:model.live="default_stock_location_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                         @foreach ($locations as $location)
                             <option value="{{ $location->id }}">{{ InventorySettings::stockLocationLabel($location) }}</option>
@@ -381,7 +381,7 @@ $postReceipt = function (InventoryService $inventory) {
                     </select>
                     @error('default_stock_location_id') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 xl:col-span-2">Notes
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200 xl:col-span-2">{{ __('application.notes_70440046') }}
                     <textarea wire:model="notes" class="mt-1 block min-h-20 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
                 </label>
             </div>
@@ -392,24 +392,24 @@ $postReceipt = function (InventoryService $inventory) {
                 <table class="{{ $showBatchColumn || $showExpiryColumn ? 'min-w-[1320px]' : 'min-w-[1040px]' }} w-full text-sm">
                     <thead class="sticky top-0 z-10 bg-slate-100 text-left text-xs uppercase text-slate-500 dark:bg-slate-800">
                         <tr>
-                            <th class="px-3 py-3">Product</th>
-                            <th class="px-3 py-3">SKU</th>
-                            <th class="px-3 py-3">Purchase Unit</th>
-                            <th class="px-3 py-3 text-right">Ordered Quantity</th>
-                            <th class="px-3 py-3 text-right">Previously Received</th>
-                            <th class="px-3 py-3 text-right">Remaining Quantity</th>
-                            <th class="px-3 py-3">Received Quantity</th>
-                            <th class="px-3 py-3">Stock Increase</th>
-                            <th class="px-3 py-3">Supplier Buying Price</th>
-                            <th class="px-3 py-3">Receive Into Location</th>
+                            <th class="px-3 py-3">{{ __('application.product_dd3b86d1') }}</th>
+                            <th class="px-3 py-3">{{ __('application.sku_d59192b9') }}</th>
+                            <th class="px-3 py-3">{{ __('application.purchase_unit_9e240a38') }}</th>
+                            <th class="px-3 py-3 text-right">{{ __('application.ordered_quantity_327000f9') }}</th>
+                            <th class="px-3 py-3 text-right">{{ __('application.previously_received_1b311249') }}</th>
+                            <th class="px-3 py-3 text-right">{{ __('application.remaining_quantity_52febf6a') }}</th>
+                            <th class="px-3 py-3">{{ __('application.received_quantity_51c18ce9') }}</th>
+                            <th class="px-3 py-3">{{ __('application.stock_increase_3e7c9512') }}</th>
+                            <th class="px-3 py-3">{{ __('application.supplier_buying_price_a068bb29') }}</th>
+                            <th class="px-3 py-3">{{ __('application.receive_into_location_b6611b59') }}</th>
                             @if ($showBatchColumn)
-                                <th class="px-3 py-3">Batch Number</th>
+                                <th class="px-3 py-3">{{ __('application.batch_number_86b217fd') }}</th>
                             @endif
                             @if ($showExpiryColumn)
-                                <th class="px-3 py-3">Expiry Date</th>
+                                <th class="px-3 py-3">{{ __('application.expiry_date_8d007050') }}</th>
                             @endif
-                            <th class="px-3 py-3">Line Notes</th>
-                            <th class="px-3 py-3">Status</th>
+                            <th class="px-3 py-3">{{ __('application.line_notes_6e8da3c9') }}</th>
+                            <th class="px-3 py-3">{{ __('application.status_bae7d5be') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -419,7 +419,7 @@ $postReceipt = function (InventoryService $inventory) {
                                 <td class="px-3 py-3 font-black">
                                     {{ $item->product?->displayName() }}
                                     @if ($item->sizeLabel())
-                                        <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">Size: {{ $item->sizeLabel() }}</p>
+                                        <p class="text-xs font-bold text-cyan-700 dark:text-cyan-200">{{ __('application.size_86251551') }} {{ $item->sizeLabel() }}</p>
                                     @endif
                                 </td>
                                 <td class="px-3 py-3 font-mono">{{ $item->product?->sku }}</td>
@@ -439,12 +439,12 @@ $postReceipt = function (InventoryService $inventory) {
                                     {{ $item->stock_unit_code_snapshot ?: $item->stockUnit?->short_name }}
                                 </td>
                                 <td class="px-3 py-3">
-                                    <p>TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }} / purchase unit</p>
+                                    <p>TZS {{ \App\Support\NumberFormatter::money($item->cost_price) }} {{ __('application.purchase_unit_5725b9e9') }}</p>
                                     @if ($costRow = $summary['rows'][$item->id] ?? null)
                                         <dl class="mt-2 space-y-1 text-xs">
-                                            <dt>Supplier Buying Price / Base Unit</dt><dd>TZS {{ \App\Support\NumberFormatter::money($costRow['supplier_base_unit_cost']) }}</dd>
-                                            <dt>Landed Cost / Unit</dt><dd>TZS {{ \App\Support\NumberFormatter::money($costRow['landed_cost_per_unit']) }}</dd>
-                                            <dt class="font-black">Final Unit Cost / Base Unit</dt><dd class="font-black">TZS {{ \App\Support\NumberFormatter::money($costRow['final_unit_cost']) }}</dd>
+                                            <dt>{{ __('application.supplier_buying_price_base_unit_46a3989c') }}</dt><dd>TZS {{ \App\Support\NumberFormatter::money($costRow['supplier_base_unit_cost']) }}</dd>
+                                            <dt>{{ __('application.landed_cost_unit_5a3f32e3') }}</dt><dd>TZS {{ \App\Support\NumberFormatter::money($costRow['landed_cost_per_unit']) }}</dd>
+                                            <dt class="font-black">{{ __('application.final_unit_cost_base_unit_0a7533e5') }}</dt><dd class="font-black">TZS {{ \App\Support\NumberFormatter::money($costRow['final_unit_cost']) }}</dd>
                                         </dl>
                                     @endif
                                 </td>
@@ -461,13 +461,13 @@ $postReceipt = function (InventoryService $inventory) {
                                         @if ($item->product?->tracks_batch || $item->product?->tracks_expiry)
                                             <input wire:model="lines.{{ $item->id }}.batch_number" @required($item->product?->tracks_batch && $isReceivingLine) class="w-36 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
                                             @if ($item->product?->tracks_batch)
-                                                <span class="mt-1 block text-xs font-semibold text-slate-500">Required</span>
+                                                <span class="mt-1 block text-xs font-semibold text-slate-500">{{ __('application.required_eed6bfb4') }}</span>
                                             @else
-                                                <span class="mt-1 block text-xs font-semibold text-slate-500">Optional</span>
+                                                <span class="mt-1 block text-xs font-semibold text-slate-500">{{ __('application.optional_0c6c4102') }}</span>
                                             @endif
                                             @error("lines.{$item->id}.batch_number") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                         @else
-                                            <span class="text-xs font-semibold text-slate-400">Not required</span>
+                                            <span class="text-xs font-semibold text-slate-400">{{ __('application.not_required_45240f7a') }}</span>
                                         @endif
                                     </td>
                                 @endif
@@ -475,15 +475,15 @@ $postReceipt = function (InventoryService $inventory) {
                                     <td class="px-3 py-3">
                                         @if ($item->product?->tracks_expiry)
                                             <input wire:model="lines.{{ $item->id }}.expiry_date" type="date" min="{{ $received_date }}" @required($isReceivingLine) class="w-40 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950">
-                                            <span class="mt-1 block text-xs font-semibold text-slate-500">Required</span>
+                                            <span class="mt-1 block text-xs font-semibold text-slate-500">{{ __('application.required_eed6bfb4') }}</span>
                                             @error("lines.{$item->id}.expiry_date") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                         @else
-                                            <span class="text-xs font-semibold text-slate-400">Not required</span>
+                                            <span class="text-xs font-semibold text-slate-400">{{ __('application.not_required_45240f7a') }}</span>
                                         @endif
                                     </td>
                                 @endif
                                 <td class="px-3 py-3"><input wire:model="lines.{{ $item->id }}.notes" class="w-48 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700 dark:bg-navy-950"></td>
-                                <td class="px-3 py-3"><span class="{{ $item->remainingQuantity() > 0 ? 'badge-warning' : 'badge-success' }}">{{ $item->remainingQuantity() > 0 ? 'Open' : 'Done' }}</span></td>
+                                <td class="px-3 py-3"><span class="{{ $item->remainingQuantity() > 0 ? 'badge-warning' : 'badge-success' }}">{{ $item->remainingQuantity() > 0 ? __('application.open_cf9b7706') : __('terminology.done_e9b450d1') }}</span></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -492,50 +492,50 @@ $postReceipt = function (InventoryService $inventory) {
 
             <div class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 <div class="flex items-center justify-between gap-3">
-                    <div><h2 class="font-black">Additional / Landed Costs</h2><p class="text-xs text-slate-500">Supplier cost is the price paid for the goods. Landed cost includes expenses to bring them into stock.</p></div>
-                    <button type="button" wire:click="addAdditionalCost" class="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-bold text-white">Add Cost</button>
+                    <div><h2 class="font-black">{{ __('application.additional_landed_costs_6329229b') }}</h2><p class="text-xs text-slate-500">{{ __('application.supplier_cost_is_the_price_paid_for_the_goods_landed_cost_includes_expenses_92918faa') }}</p></div>
+                    <button type="button" wire:click="addAdditionalCost" class="rounded-lg bg-cyan-700 px-3 py-2 text-xs font-bold text-white">{{ __('application.add_cost_065a0b40') }}</button>
                 </div>
                 @if (auth()->user()?->hasAnyRole(['Super Admin', 'Admin']))
                     <div class="mt-3 flex flex-wrap items-end gap-2">
-                        <label class="text-xs font-bold">New Cost Type
-                            <input wire:model="new_cost_type" maxlength="100" class="mt-1 block rounded-lg border border-slate-200 p-2 dark:bg-navy-950" placeholder="e.g. Port charges">
+                        <label class="text-xs font-bold">{{ __('application.new_cost_type_ef89b91f') }}
+                            <input wire:model="new_cost_type" maxlength="100" class="mt-1 block rounded-lg border border-slate-200 p-2 dark:bg-navy-950" placeholder="{{ __('application.e_g_port_charges_464d9139') }}">
                         </label>
-                        <button type="button" wire:click="addCostType" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">Add Type</button>
+                        <button type="button" wire:click="addCostType" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">{{ __('application.add_type_de185074') }}</button>
                         @error('new_cost_type') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                     </div>
                 @endif
                 @foreach ($additional_costs as $index => $cost)
                     <div wire:key="receipt-cost-{{ $index }}" class="mt-3 grid gap-2 md:grid-cols-3 xl:grid-cols-7">
-                        <label class="text-xs font-bold">Cost Type
+                        <label class="text-xs font-bold">{{ __('application.cost_type_64e3d203') }}
                             <select wire:model="additional_costs.{{ $index }}.type_id" class="mt-1 w-full rounded-lg border border-slate-200 bg-white p-2 dark:bg-navy-950">
-                                <option value="">Select type</option>
+                                <option value="">{{ __('application.select_type_905d0122') }}</option>
                                 @foreach ($costTypes as $type)<option value="{{ $type->id }}">{{ $type->name }}</option>@endforeach
                             </select>
                             @error("additional_costs.{$index}.type_id") <span class="text-red-600">{{ $message }}</span> @enderror
                         </label>
-                        <label class="text-xs font-bold">Amount
+                        <label class="text-xs font-bold">{{ __('application.amount_43dc8532') }}
                             <input wire:model.live="additional_costs.{{ $index }}.amount" type="number" min="0.01" step="0.01" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950">
                             @error("additional_costs.{$index}.amount") <span class="text-red-600">{{ $message }}</span> @enderror
                         </label>
-                        <label class="text-xs font-bold">Paid To / Payee<input wire:model="additional_costs.{{ $index }}.payee" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
-                        <label class="text-xs font-bold">Payment Method<input wire:model="additional_costs.{{ $index }}.payment_method" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
-                        <label class="text-xs font-bold">Payment Reference<input wire:model="additional_costs.{{ $index }}.payment_reference" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
-                        <label class="text-xs font-bold">Notes<input wire:model="additional_costs.{{ $index }}.notes" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
-                        <button type="button" wire:click="removeAdditionalCost({{ $index }})" class="self-end rounded-lg border border-red-300 p-2 text-xs font-bold text-red-700">Remove</button>
+                        <label class="text-xs font-bold">{{ __('application.paid_to_payee_6ff4ebdf') }}<input wire:model="additional_costs.{{ $index }}.payee" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <label class="text-xs font-bold">{{ __('application.payment_method_f383f6a2') }}<input wire:model="additional_costs.{{ $index }}.payment_method" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <label class="text-xs font-bold">{{ __('application.payment_reference_80e69501') }}<input wire:model="additional_costs.{{ $index }}.payment_reference" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <label class="text-xs font-bold">{{ __('application.notes_70440046') }}<input wire:model="additional_costs.{{ $index }}.notes" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <button type="button" wire:click="removeAdditionalCost({{ $index }})" class="self-end rounded-lg border border-red-300 p-2 text-xs font-bold text-red-700">{{ __('application.remove_e963907d') }}</button>
                     </div>
                 @endforeach
             </div>
 
-            <p class="text-sm text-slate-500">Additional costs are shared by actual received base units. Supplier prices stay separate. Line allocations reconcile to the receipt total, including cent rounding.</p>
+            <p class="text-sm text-slate-500">{{ __('application.additional_costs_are_shared_by_actual_received_base_units_supplier_prices_s_4d80cbca') }}</p>
             @if (auth()->user()->can('products.view_selling_price'))
                 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                     @foreach ($purchase->items as $item)
                         @if ($costRow = $summary['rows'][$item->id] ?? null)
                             <div wire:key="pricing-{{ $item->id }}" class="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                                 <h3 class="font-black">{{ $item->product?->displayName() }}</h3>
-                                <p class="text-xs text-slate-500">Prices and profit below are per {{ $item->product?->sellingUnit?->short_name ?: $item->stockUnit?->short_name ?: 'selling unit' }}.</p>
-                                <p>Final Unit Cost: TZS {{ \App\Support\NumberFormatter::money($costRow['final_selling_unit_cost']) }}</p>
-                                <label class="mt-3 block text-sm font-bold">Markup % (Custom)
+                                <p class="text-xs text-slate-500">{{ __('application.prices_and_profit_below_are_per_547f7ea6') }} {{ $item->product?->sellingUnit?->short_name ?: $item->stockUnit?->short_name ?: 'selling unit' }}.</p>
+                                <p>{{ __('application.final_unit_cost_tzs_4ee1f9e4') }} {{ \App\Support\NumberFormatter::money($costRow['final_selling_unit_cost']) }}</p>
+                                <label class="mt-3 block text-sm font-bold">{{ __('application.markup_custom_3c15db3b') }}
                                     <input wire:model.live.debounce.300ms="lines.{{ $item->id }}.markup_percentage" type="number" min="0" max="10000" step="0.01" class="w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950">
                                 </label>
                                 @error("lines.{$item->id}.markup_percentage") <p class="text-red-600">{{ $message }}</p> @enderror
@@ -544,17 +544,17 @@ $postReceipt = function (InventoryService $inventory) {
                                         <button type="button" wire:click="$set('lines.{{ $item->id }}.markup_percentage', '{{ $preset }}')" class="rounded border px-2 py-1 text-xs">{{ $preset }}%</button>
                                     @endforeach
                                 </div>
-                                <p class="font-bold">Suggested Selling Price: TZS {{ \App\Support\NumberFormatter::money($costRow['suggested_selling_price'] ?? 0) }}</p>
-                                <p class="text-xs text-slate-500">Advisory only. Receiving does not update product prices.</p>
+                                <p class="font-bold">{{ __('application.suggested_selling_price_tzs_49da624d') }} {{ \App\Support\NumberFormatter::money($costRow['suggested_selling_price'] ?? 0) }}</p>
+                                <p class="text-xs text-slate-500">{{ __('application.advisory_only_receiving_does_not_update_product_prices_b5e1e5b8') }}</p>
                                 @if ($this->canApplySuggestedPrice())
-                                    <button type="button" wire:click="applySuggestedPrice({{ $item->id }})" wire:loading.attr="disabled" class="my-2 rounded-lg bg-build-orange px-3 py-2 font-bold text-white">Apply Suggested Price</button>
+                                    <button type="button" wire:click="applySuggestedPrice({{ $item->id }})" wire:loading.attr="disabled" class="my-2 rounded-lg bg-build-orange px-3 py-2 font-bold text-white">{{ __('application.apply_suggested_price_c6866efb') }}</button>
                                 @endif
-                                <label class="block text-sm font-bold">Selling Price for Profit Preview
+                                <label class="block text-sm font-bold">{{ __('application.selling_price_for_profit_preview_da30de58') }}
                                     <input wire:model.live.debounce.300ms="lines.{{ $item->id }}.preview_selling_price" type="number" min="0" step="0.01" class="w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950">
                                 </label>
                                 @error("lines.{$item->id}.preview_selling_price") <p class="text-red-600">{{ $message }}</p> @enderror
-                                <p>Profit Per Unit: TZS {{ \App\Support\NumberFormatter::money($costRow['profit_per_unit']) }}</p>
-                                <p>Profit Margin: {{ $costRow['profit_margin'] }}%</p>
+                                <p>{{ __('application.profit_per_unit_tzs_ef140d0f') }} {{ \App\Support\NumberFormatter::money($costRow['profit_per_unit']) }}</p>
+                                <p>{{ __('application.profit_margin_1f922692') }} {{ $costRow['profit_margin'] }}%</p>
                             </div>
                         @endif
                     @endforeach
@@ -580,23 +580,23 @@ $postReceipt = function (InventoryService $inventory) {
             </div>
 
             <div class="flex flex-wrap gap-2">
-                <button type="button" wire:click="openConfirmation" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Review Receipt</button>
-                <a href="{{ route('purchases.show', $purchase->id) }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
+                <button type="button" wire:click="openConfirmation" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ __('application.review_receipt_88081878') }}</button>
+                <a href="{{ route('purchases.show', $purchase->id) }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.cancel_77dfd213') }}</a>
             </div>
         </form>
     </x-card>
 
     <x-modal name="confirm-receiving" maxWidth="2xl">
         <div class="p-5">
-            <h2 class="text-lg font-black">Confirm Purchase Receiving</h2>
+            <h2 class="text-lg font-black">{{ __('application.confirm_purchase_receiving_4cab8910') }}</h2>
             <div class="mt-4 space-y-2 text-sm">
-                <p><span class="font-bold">Purchase:</span> {{ $purchase->reference_number }}</p>
-                <p><span class="font-bold">Supplier:</span> {{ $purchase->supplier?->name }}</p>
-                <p><span class="font-bold">Receiving Date:</span> {{ $received_date }}</p>
-                <p><span class="font-bold">Total Received Qty (Base Units):</span> {{ \App\Support\NumberFormatter::quantity($summary['quantity']) }}</p>
-                <p><span class="font-bold">Goods Value:</span> TZS {{ \App\Support\NumberFormatter::money($summary['cost']) }}</p>
-                <p><span class="font-bold">Additional Costs:</span> TZS {{ \App\Support\NumberFormatter::money($summary['additional']) }}</p>
-                <p><span class="font-bold">Total Landed Value:</span> TZS {{ \App\Support\NumberFormatter::money($summary['landed']) }}</p>
+                <p><span class="font-bold">{{ __('application.purchase_bf2ae324') }}</span> {{ $purchase->reference_number }}</p>
+                <p><span class="font-bold">{{ __('application.supplier_1c8a2129') }}</span> {{ $purchase->supplier?->name }}</p>
+                <p><span class="font-bold">{{ __('application.receiving_date_e9479d5b') }}</span> {{ $received_date }}</p>
+                <p><span class="font-bold">{{ __('application.total_received_qty_base_units_906e6651') }}</span> {{ \App\Support\NumberFormatter::quantity($summary['quantity']) }}</p>
+                <p><span class="font-bold">{{ __('application.goods_value_d79c9d5a') }}</span> TZS {{ \App\Support\NumberFormatter::money($summary['cost']) }}</p>
+                <p><span class="font-bold">{{ __('application.additional_costs_1c3f83a3') }}</span> TZS {{ \App\Support\NumberFormatter::money($summary['additional']) }}</p>
+                <p><span class="font-bold">{{ __('application.total_landed_value_8ba1a19b') }}</span> TZS {{ \App\Support\NumberFormatter::money($summary['landed']) }}</p>
             </div>
             <div class="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 @foreach ($this->locationBreakdown() as $row)
@@ -607,9 +607,9 @@ $postReceipt = function (InventoryService $inventory) {
                 @endforeach
             </div>
             <div class="mt-5 flex flex-wrap justify-end gap-2">
-                <button type="button" x-on:click="$dispatch('close-modal', 'confirm-receiving')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</button>
-                <button type="button" wire:click="saveDraft" class="rounded-xl border border-cyan-200 px-4 py-2.5 text-sm font-black text-cyan-700 dark:border-cyan-500/30 dark:text-cyan-200">Save as Draft</button>
-                <button type="button" wire:click="postReceipt" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Confirm and Post Receipt</button>
+                <button type="button" x-on:click="$dispatch('close-modal', 'confirm-receiving')" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.cancel_77dfd213') }}</button>
+                <button type="button" wire:click="saveDraft" class="rounded-xl border border-cyan-200 px-4 py-2.5 text-sm font-black text-cyan-700 dark:border-cyan-500/30 dark:text-cyan-200">{{ __('application.save_as_draft_c031325d') }}</button>
+                <button type="button" wire:click="postReceipt" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ __('application.confirm_and_post_receipt_160867be') }}</button>
             </div>
         </div>
     </x-modal>

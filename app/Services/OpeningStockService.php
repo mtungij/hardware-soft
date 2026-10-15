@@ -46,10 +46,10 @@ class OpeningStockService
     public function create(array $input, User $user): OpeningStock
     {
         if (! $user->can('opening_stock.create')) {
-            throw new AuthorizationException('You cannot create Opening Stock.');
+            throw new AuthorizationException(__('application.you_cannot_create_opening_stock_c973a229'));
         }
         if (! (bool) Setting::withoutGlobalScope(CompanyScope::class)->where('company_id', $user->company_id)->value('enable_warehouse')) {
-            throw ValidationException::withMessages(['opening_stock' => 'Opening Stock is available only when Warehouse is enabled.']);
+            throw ValidationException::withMessages(['opening_stock' => __('application.opening_stock_is_available_only_when_warehouse_is_enabled_809a08b6')]);
         }
 
         $data = Validator::make($input, [
@@ -74,7 +74,7 @@ class OpeningStockService
             $branch = Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)
                 ->where('status', 'active')->find($data['branch_id']);
             if (! $branch) {
-                throw ValidationException::withMessages(['branch_id' => 'Select an active branch in your company.']);
+                throw ValidationException::withMessages(['branch_id' => __('application.select_an_active_branch_in_your_company_58f2859c')]);
             }
             $branchId = (int) $branch->id;
             $location = StockLocation::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)
@@ -82,7 +82,7 @@ class OpeningStockService
                 ->where('can_receive_stock', true)->find($data['stock_location_id']);
             if (! $location || ($location->branch_id !== null && (int) $location->branch_id !== $branchId)
                 || ! $this->eligibleLocations($user, $branchId)->contains('id', $location->id)) {
-                throw ValidationException::withMessages(['stock_location_id' => 'Select an active receiving location you may use for this branch.']);
+                throw ValidationException::withMessages(['stock_location_id' => __('application.select_an_active_receiving_location_you_may_use_for_this_branch_3d22c258')]);
             }
 
             $prepared = [];
@@ -92,7 +92,7 @@ class OpeningStockService
                     ->where(fn ($query) => $query->whereNull('branch_id')->orWhere('branch_id', $branchId))
                     ->whereKey($line['product_id'])->lockForUpdate()->first();
                 if (! $product || ! $product->unit) {
-                    throw ValidationException::withMessages(["lines.{$index}.product_id" => 'Select an active product in this company and branch.']);
+                    throw ValidationException::withMessages(["lines.{$index}.product_id" => __('application.select_an_active_product_in_this_company_and_branch_acc9d7ac')]);
                 }
 
                 $batchNumber = filled($line['batch_number'] ?? null) ? trim((string) $line['batch_number']) : null;
@@ -139,7 +139,7 @@ class OpeningStockService
                 $unit = $conversion?->unit ?: $product->unit;
                 $baseUnitCost = round($normalized['base_unit_cost'], 2);
                 if ($baseUnitCost <= 0) {
-                    throw ValidationException::withMessages(["lines.{$index}.unit_cost" => 'Unit cost is too small after conversion to the base unit.']);
+                    throw ValidationException::withMessages(["lines.{$index}.unit_cost" => __('application.unit_cost_is_too_small_after_conversion_to_the_base_unit_0095d7fb')]);
                 }
                 $prepared[] = [
                     'product' => $product,

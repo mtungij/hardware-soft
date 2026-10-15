@@ -19,7 +19,7 @@ class LocationPriceService
         $column = match ($mode) {
             'retail' => 'retail_price',
             'wholesale' => 'wholesale_price',
-            default => throw new \InvalidArgumentException('Unknown price mode.'),
+            default => throw new \InvalidArgumentException(__('application.unknown_price_mode_2ce65868')),
         };
         $this->validateContext($product, $location, $conversion);
 
@@ -83,7 +83,7 @@ class LocationPriceService
         if (($location && (int) $product->company_id !== (int) $location->company_id)
             || ($conversion && ((int) $conversion->product_id !== (int) $product->id
                 || (int) $conversion->company_id !== (int) $product->company_id))) {
-            throw ValidationException::withMessages(['price' => 'Product, unit and location must belong to the same company.']);
+            throw ValidationException::withMessages(['price' => __('application.product_unit_and_location_must_belong_to_the_same_company_01710a53')]);
         }
     }
 
@@ -92,7 +92,7 @@ class LocationPriceService
         if ((int) $product->company_id !== (int) $location->company_id
             || ($conversion && ((int) $conversion->company_id !== (int) $product->company_id
                 || (int) $conversion->product_id !== (int) $product->id))) {
-            throw ValidationException::withMessages(['location_price' => 'Product, unit and location must belong to the same company.']);
+            throw ValidationException::withMessages(['location_price' => __('application.product_unit_and_location_must_belong_to_the_same_company_01710a53')]);
         }
 
         return LocationPrice::query()->updateOrCreate([

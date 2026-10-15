@@ -5,10 +5,11 @@ namespace App\Mail;
 use App\Models\Purchase;
 use App\Models\Setting;
 use Illuminate\Bus\Queueable;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
-use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
 class SupplierPurchaseOrderMail extends Mailable
@@ -19,15 +20,17 @@ class SupplierPurchaseOrderMail extends Mailable
         public Purchase $purchase,
         public ?Setting $settings,
         public string $pdfBinary,
-    ) {}
+    ) {
+        $this->locale(app()->getLocale());
+    }
 
     public function envelope(): Envelope
     {
         return new Envelope(
             from: $this->settings?->mail_from_email
-                ? new \Illuminate\Mail\Mailables\Address($this->settings->mail_from_email, $this->settings->mail_from_name ?: $this->settings->company_name)
+                ? new Address($this->settings->mail_from_email, $this->settings->mail_from_name ?: $this->settings->company_name)
                 : null,
-            subject: "Purchase Order {$this->purchase->reference_number} - ".($this->settings?->company_name ?? config('app.name')),
+            subject: __('mail.purchase.subject', ['reference' => $this->purchase->reference_number, 'company' => $this->settings?->company_name ?? config('app.name')], $this->locale),
         );
     }
 

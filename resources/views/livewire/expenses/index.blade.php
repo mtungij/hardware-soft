@@ -104,20 +104,20 @@ $save = function () {
     $this->reset(['editingId', 'expense_category_id', 'amount', 'reference_number', 'notes']);
     $this->payment_method = 'cash';
     $this->expense_date = now()->toDateString();
-    session()->flash('success', 'Expense saved successfully.');
+    session()->flash('success', __('application.expense_saved_successfully_3a3571a8'));
 };
 
 $delete = function (int $id) {
     Expense::findOrFail($id)->delete();
-    session()->flash('success', 'Expense deleted.');
+    session()->flash('success', __('application.expense_deleted_b44fe386'));
 };
 
 ?>
 
 <div>
-    <x-page-header title="Expenses" description="Track rent, salaries, utilities, transport, and daily operating costs." :breadcrumbs="['Dashboard' => route('dashboard'), 'Expenses' => null]">
+    <x-page-header title="{{ __('application.expenses_8d437dbf') }}" description="{{ __('application.track_rent_salaries_utilities_transport_and_daily_operating_costs_51ee1a75') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Expenses' => null]">
         <x-export-actions export="tables.expenses" :params="compact('search', 'branchFilter', 'dateFilter', 'date_from', 'date_to')" />
-        <a href="{{ route('expense-categories.index') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">Categories</a>
+        <a href="{{ route('expense-categories.index') }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">{{ __('application.categories_6ccb6007') }}</a>
     </x-page-header>
 
     @php
@@ -137,63 +137,63 @@ $delete = function (int $id) {
     @endphp
 
     <div class="grid gap-6 xl:grid-cols-[380px_1fr]">
-        <x-card :title="$editingId ? 'Edit Expense' : 'Create Expense'">
+        <x-card :title="$editingId ? __('terminology.edit_expense_2e469802') : __('terminology.create_expense_235ccbd1')">
             <form wire:submit="save" class="space-y-4">
-                <label class="block text-sm font-bold">Branch
+                <label class="block text-sm font-bold">{{ __('application.branch_1627510b') }}
                     <select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         @foreach (Branch::orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach
                     </select>
                 </label>
-                <label class="block text-sm font-bold">Category
+                <label class="block text-sm font-bold">{{ __('application.category_a3c686e7') }}
                     <select wire:model="expense_category_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="">Select category</option>
+                        <option value="">{{ __('application.select_category_a2a5cafe') }}</option>
                         @foreach (ExpenseCategory::where('status', 'active')->orderBy('name')->get() as $category)
                             <option value="{{ $category->id }}">{{ $category->name }}</option>
                         @endforeach
                     </select>
                     @error('expense_category_id') <span class="text-xs text-red-600">{{ $message }}</span> @enderror
                 </label>
-                <x-money-input label="Amount" name="amount" wire:model="amount" required />
-                <label class="block text-sm font-bold">Payment Method
+                <x-money-input label="{{ __('application.amount_43dc8532') }}" name="amount" wire:model="amount" required />
+                <label class="block text-sm font-bold">{{ __('application.payment_method_f383f6a2') }}
                     <select wire:model="payment_method" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="cash">Cash</option><option value="mobile_money">Mobile Money</option><option value="bank">Bank</option>
+                        <option value="cash">{{ __('application.cash_758ec54e') }}</option><option value="mobile_money">{{ __('application.mobile_money_6a38d1e4') }}</option><option value="bank">{{ __('application.bank_9e89988c') }}</option>
                     </select>
                 </label>
-                <x-form-input label="Reference Number" name="reference_number" wire:model="reference_number" />
-                <x-form-input label="Expense Date" name="expense_date" wire:model="expense_date" type="date" required />
-                <button class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">Save Expense</button>
+                <x-form-input label="{{ __('application.reference_number_74195db5') }}" name="reference_number" wire:model="reference_number" />
+                <x-form-input label="{{ __('application.expense_date_d64f2d6a') }}" name="expense_date" wire:model="expense_date" type="date" required />
+                <button class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ __('application.save_expense_b89a5c08') }}</button>
             </form>
         </x-card>
 
         <div class="space-y-4">
             <div class="grid gap-4 sm:grid-cols-3">
-                <x-card><p class="text-sm text-slate-500">Filtered Expenses</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($filteredTotal) }}</p></x-card>
-                <x-card><p class="text-sm text-slate-500">Entries</p><p class="mt-2 text-2xl font-black">{{ number_format($filteredCount) }}</p></x-card>
-                <x-card><p class="text-sm text-slate-500">Cash Expenses</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($cashTotal) }}</p></x-card>
+                <x-card><p class="text-sm text-slate-500">{{ __('application.filtered_expenses_0dac4bb2') }}</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($filteredTotal) }}</p></x-card>
+                <x-card><p class="text-sm text-slate-500">{{ __('application.entries_f056d0d5') }}</p><p class="mt-2 text-2xl font-black">{{ number_format($filteredCount) }}</p></x-card>
+                <x-card><p class="text-sm text-slate-500">{{ __('application.cash_expenses_2fb0f14c') }}</p><p class="mt-2 text-2xl font-black">TZS {{ \App\Support\NumberFormatter::money($cashTotal) }}</p></x-card>
             </div>
             <x-card>
                 <div class="mb-4 flex flex-wrap gap-2">
-                    <button type="button" wire:click="setDateFilter('today')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'today' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">Today</button>
-                    <button type="button" wire:click="setDateFilter('this_week')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'this_week' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">This Week</button>
-                    <button type="button" wire:click="setDateFilter('this_month')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'this_month' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">This Month</button>
+                    <button type="button" wire:click="setDateFilter('today')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'today' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">{{ __('application.today_24345a14') }}</button>
+                    <button type="button" wire:click="setDateFilter('this_week')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'this_week' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">{{ __('application.this_week_4e68dca8') }}</button>
+                    <button type="button" wire:click="setDateFilter('this_month')" class="rounded-lg px-3 py-2 text-sm font-black {{ $dateFilter === 'this_month' ? 'bg-build-orange text-white' : 'border border-slate-200 dark:border-slate-700' }}">{{ __('application.this_month_0f6cc3a8') }}</button>
                 </div>
                 <div class="mb-4 grid gap-3 md:grid-cols-4">
-                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="Search category/ref">
-                    <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">All branches</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
+                    <input wire:model.live.debounce.300ms="search" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ __('application.search_category_ref_7953b709') }}">
+                    <select wire:model.live="branchFilter" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">{{ __('application.all_branches_25c23746') }}</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
                     <input wire:model.live="date_from" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                     <input wire:model.live="date_to" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 </div>
-                <x-table :headers="['Date', 'Category', 'Method', 'Amount', 'Paid By', 'Actions']">
+                <x-table :headers="[__('application.date_eb9a4bc1'), __('application.category_a3c686e7'), __('application.method_88306943'), __('application.amount_43dc8532'), __('application.paid_by_2e06e8e0'), __('application.actions_c3cd636a')]">
                     @foreach ($expenses as $expense)
                         <tr>
-                            <td class="px-4 py-3">{{ $expense->expense_date?->format('M d, Y') }}</td>
+                            <td class="px-4 py-3">{{ $expense->expense_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
                             <td class="px-4 py-3 font-bold">{{ $expense->category?->name }}</td>
-                            <td class="px-4 py-3">{{ str($expense->payment_method)->replace('_', ' ')->title() }}</td>
+                            <td class="px-4 py-3">{{ \App\Support\UiText::label($expense->payment_method) }}</td>
                             <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($expense->amount) }}</td>
                             <td class="px-4 py-3">{{ $expense->paidBy?->name }}</td>
-                            <td class="px-4 py-3 text-right"><button wire:click="edit({{ $expense->id }})" class="text-sm font-bold text-build-orange">Edit</button><button wire:click="delete({{ $expense->id }})" wire:confirm="Delete expense?" class="ml-3 text-sm font-bold text-red-600">Delete</button></td>
+                            <td class="px-4 py-3 text-right"><button wire:click="edit({{ $expense->id }})" class="text-sm font-bold text-build-orange">{{ __('application.edit_5301648d') }}</button><button wire:click="delete({{ $expense->id }})" wire:confirm="{{ __('application.delete_expense_6c0a3512') }}" class="ml-3 text-sm font-bold text-red-600">{{ __('application.delete_f6fdbe48') }}</button></td>
                         </tr>
                     @endforeach
                 </x-table>

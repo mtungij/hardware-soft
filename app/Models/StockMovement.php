@@ -56,24 +56,24 @@ class StockMovement extends Model
     {
         static::updating(function (self $movement): void {
             if (in_array($movement->movement_type, ['internal_sale_out', 'internal_sale_in'], true)) {
-                throw new LogicException('Posted Internal Sale movements are immutable.');
+                throw new LogicException(__('application.posted_internal_sale_movements_are_immutable_75cd86f0'));
             }
             if ($movement->movement_type === 'opening_stock') {
-                throw new LogicException('Posted Opening Stock movements are immutable.');
+                throw new LogicException(__('application.posted_opening_stock_movements_are_immutable_156ff98d'));
             }
             if ($movement->production_curing_release_id) {
-                throw new LogicException('Posted curing release movements are immutable.');
+                throw new LogicException(__('application.posted_curing_release_movements_are_immutable_0ff8b92f'));
             }
         });
         static::deleting(function (self $movement): void {
             if (in_array($movement->movement_type, ['internal_sale_out', 'internal_sale_in'], true)) {
-                throw new LogicException('Posted Internal Sale movements cannot be deleted.');
+                throw new LogicException(__('application.posted_internal_sale_movements_cannot_be_deleted_599da6b9'));
             }
             if ($movement->movement_type === 'opening_stock') {
-                throw new LogicException('Posted Opening Stock movements cannot be deleted.');
+                throw new LogicException(__('application.posted_opening_stock_movements_cannot_be_deleted_9e71c51c'));
             }
             if ($movement->production_curing_release_id) {
-                throw new LogicException('Posted curing release movements cannot be deleted.');
+                throw new LogicException(__('application.posted_curing_release_movements_cannot_be_deleted_3f0c0ab2'));
             }
         });
     }

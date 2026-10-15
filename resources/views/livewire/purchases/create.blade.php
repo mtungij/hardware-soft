@@ -130,7 +130,7 @@ mount(function (InventoryService $inventory) {
 
 $addItem = function () {
     if (blank($this->supplier_id)) {
-        $this->addError('supplier_id', 'Select supplier before adding products.');
+        $this->addError('supplier_id', __('application.select_supplier_before_adding_products_2025540d'));
 
         return;
     }
@@ -283,7 +283,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
     $total = $this->toNumber($validated['grand_total']);
 
     if ($this->toNumber($validated['paid_amount']) > $total) {
-        throw ValidationException::withMessages(['paid_amount' => 'Paid amount cannot exceed the purchase total.']);
+        throw ValidationException::withMessages(['paid_amount' => __('application.paid_amount_cannot_exceed_the_purchase_total_e2d552dc')]);
     }
 
     $canUpdateSellingPrice = $this->canUpdateSellingPrice();
@@ -362,14 +362,14 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
     if ($sendEmail) {
         try {
             app(\App\Services\PurchaseOrderEmailService::class)->send($purchase, auth()->id());
-            session()->flash('success', 'Purchase saved and emailed successfully.');
+            session()->flash('success', __('application.purchase_saved_and_emailed_successfully_6e44dd01'));
         } catch (ValidationException $exception) {
-            session()->flash('error', 'Purchase saved, but email was not sent: '.$exception->validator->errors()->first());
+            session()->flash('error', __('application.purchase_saved_but_email_was_not_sent_46ac18a6').$exception->validator->errors()->first());
         } catch (\Throwable $exception) {
-            session()->flash('error', 'Purchase saved, but email was not sent: '.$exception->getMessage());
+            session()->flash('error', __('application.purchase_saved_but_email_was_not_sent_46ac18a6').\App\Support\UiText::feedback($exception->getMessage()));
         }
     } else {
-        session()->flash('success', 'Purchase saved successfully.');
+        session()->flash('success', __('application.purchase_saved_successfully_09d34781'));
     }
 
     $this->redirectRoute('purchases.index', navigate: true);
@@ -382,7 +382,7 @@ $submitPurchase = function () {
 ?>
 
 <div>
-    <x-page-header title="Create Purchase" description="Create a draft or ordered purchase. Stock is not increased until receiving." :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Create' => null]" />
+    <x-page-header title="{{ __('application.create_purchase_4e10c1b7') }}" description="{{ __('application.create_a_draft_or_ordered_purchase_stock_is_not_increased_until_receiving_df58e1ef') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'Purchases' => route('purchases.index'), 'Create' => null]" />
 
     @php
         $canUpdateSellingPrice = $this->canUpdateSellingPrice();
@@ -411,40 +411,40 @@ $submitPurchase = function () {
     <x-card>
         <form wire:submit="submitPurchase" class="space-y-6">
             <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Supplier
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.supplier_55edd462') }}
                     <select wire:model.live="supplier_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="">Select supplier</option>
+                        <option value="">{{ __('application.select_supplier_cfce5268') }}</option>
                         @foreach (Supplier::where('status', 'active')->orderBy('name')->get() as $supplier)
                             <option value="{{ $supplier->id }}">{{ $supplier->name }}</option>
                         @endforeach
                     </select>
                     @error('supplier_id') <span class="text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Branch
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.branch_1627510b') }}
                     <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         @foreach (Branch::where('status', 'active')->orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach
                     </select>
                 </label>
-                <x-form-input label="Purchase Date" name="purchase_date" type="date" wire:model="purchase_date" required />
-                <x-form-input label="Invoice Number" name="invoice_number" wire:model="invoice_number" />
-                <x-form-input label="Reference Number" name="reference_number" wire:model="reference_number" required />
-                <x-money-input label="Paid Amount" name="paid_amount" value="{{ $paid_amount }}" wire:model.blur="paid_amount" required />
-                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Payment Method
+                <x-form-input label="{{ __('application.purchase_date_74feb2ca') }}" name="purchase_date" type="date" wire:model="purchase_date" required />
+                <x-form-input label="{{ __('application.invoice_number_7754684c') }}" name="invoice_number" wire:model="invoice_number" />
+                <x-form-input label="{{ __('application.reference_number_74195db5') }}" name="reference_number" wire:model="reference_number" required />
+                <x-money-input label="{{ __('application.paid_amount_1950b3cf') }}" name="paid_amount" value="{{ $paid_amount }}" wire:model.blur="paid_amount" required />
+                <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.payment_method_f383f6a2') }}
                     <select wire:model="payment_method" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="cash">Cash</option>
-                        <option value="mobile_money">Mobile Money</option>
-                        <option value="bank">Bank</option>
+                        <option value="cash">{{ __('application.cash_758ec54e') }}</option>
+                        <option value="mobile_money">{{ __('application.mobile_money_6a38d1e4') }}</option>
+                        <option value="bank">{{ __('application.bank_9e89988c') }}</option>
                     </select>
                     @error('payment_method') <span class="text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
-                <x-form-input label="Payment Reference" name="payment_reference_number" wire:model="payment_reference_number" />
+                <x-form-input label="{{ __('application.payment_reference_80e69501') }}" name="payment_reference_number" wire:model="payment_reference_number" />
             </div>
 
             <div class="relative z-20 overflow-x-auto pb-4 transition-[padding] focus-within:pb-96">
                 <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
-                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">Product</th><th>Purchase Unit</th><th>Ordered Qty</th><th>Conversion</th><th>Base Qty</th><th>Supplier Unit Cost</th><th>Selling Price</th><th>Line Total</th><th></th></tr></thead>
+                    <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-white/5"><tr><th class="px-3 py-3">{{ __('application.product_dd3b86d1') }}</th><th>{{ __('application.purchase_unit_9e240a38') }}</th><th>{{ __('application.ordered_qty_b903ee79') }}</th><th>{{ __('application.conversion_9151f843') }}</th><th>{{ __('application.base_qty_ec4bdf4d') }}</th><th>{{ __('application.supplier_unit_cost_cb1c1045') }}</th><th>{{ __('application.selling_price_897611ec') }}</th><th>{{ __('application.line_total_2d1a09ef') }}</th><th></th></tr></thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         @foreach ($items as $index => $item)
                             @php
@@ -474,7 +474,7 @@ $submitPurchase = function () {
                                         class="hidden"
                                         @disabled(blank($supplier_id))
                                     >
-                                        <option value="">{{ blank($supplier_id) ? 'Select supplier first' : 'Select product' }}</option>
+                                        <option value="">{{ blank($supplier_id) ? __('terminology.select_supplier_first_fdf5d5b8') : __('application.select_product_596d90e5') }}</option>
                                         @if (filled($supplier_id))
                                             @foreach (Product::with(['purchaseUnit', 'unit', 'size'])->purchasable()->where('status', 'active')->orderBy('name')->get() as $product)
                                                 @php
@@ -482,12 +482,12 @@ $submitPurchase = function () {
                                                         ? $inventory->getProductStock($product->id, $storeLocation->id, $stockBranchId)
                                                         : 0;
                                                 @endphp
-                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->displayNameWithSize() }} - Purchase: {{ $product->purchaseUnit?->short_name ?: $product->unit?->short_name }} - Store Qty: {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
+                                                <option value="{{ $product->id }}" @selected((string) ($item['product_id'] ?? '') === (string) $product->id)>{{ $product->displayNameWithSize() }} {{ __('application.purchase_2a9a54dd') }} {{ $product->purchaseUnit?->short_name ?: $product->unit?->short_name }} {{ __('application.store_qty_61c0e430') }} {{ \App\Support\NumberFormatter::quantity($storeQty) }} {{ $product->unit?->short_name }} / {{ $product->sku }}</option>
                                             @endforeach
                                         @endif
                                     </select>
                                     @if (blank($supplier_id))
-                                        <span class="mt-1 block text-xs font-semibold text-amber-600">Select supplier before choosing products.</span>
+                                        <span class="mt-1 block text-xs font-semibold text-amber-600">{{ __('application.select_supplier_before_choosing_products_a4f2af50') }}</span>
                                     @endif
                                     @error("items.{$index}.product_id") <span class="block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                                 </td>
@@ -502,7 +502,7 @@ $submitPurchase = function () {
                                                 <option value="{{ $purchaseConversion->id }}" @selected((string) ($item['product_unit_conversion_id'] ?? '') === (string) $purchaseConversion->id)>{{ $purchaseConversion->unit?->short_name }}</option>
                                             @endforeach
                                         @else
-                                            <option value="">Chagua bidhaa kwanza</option>
+                                            <option value="">{{ __('application.select_a_product_first_04d808c1') }}</option>
                                         @endif
                                     </select>
                                 </td>
@@ -533,7 +533,7 @@ $submitPurchase = function () {
                                     @endif
                                 </td>
                                 <td class="px-3 py-3 font-black">TZS {{ \App\Support\NumberFormatter::moneyCompact($item['line_total'] ?? 0) }}</td>
-                                <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">Remove</button></td>
+                                <td class="px-3 py-3"><button type="button" wire:click="removeItem({{ $index }})" class="text-sm font-bold text-red-600">{{ __('application.remove_e963907d') }}</button></td>
                             </tr>
 
                         @endforeach
@@ -541,29 +541,29 @@ $submitPurchase = function () {
                 </table>
             </div>
 
-            <button type="button" wire:click="addItem" @disabled(blank($supplier_id)) class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700">Add Item</button>
+            <button type="button" wire:click="addItem" @disabled(blank($supplier_id)) class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700">{{ __('application.add_item_4dba3be5') }}</button>
 
-            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">Notes
+            <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.notes_70440046') }}
                 <textarea wire:model="notes" class="mt-1 block min-h-24 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"></textarea>
             </label>
 
             <div class="rounded-xl bg-slate-50 p-4 text-right dark:bg-white/5">
-                <p class="text-sm text-slate-500">Subtotal</p>
+                <p class="text-sm text-slate-500">{{ __('application.subtotal_97f7359e') }}</p>
                 <p class="text-lg font-bold">TZS {{ \App\Support\NumberFormatter::moneyCompact($subtotal) }}</p>
-                <p class="text-sm text-slate-500">Grand Total</p>
+                <p class="text-sm text-slate-500">{{ __('application.grand_total_91faafb1') }}</p>
                 <p class="text-2xl font-black">TZS {{ \App\Support\NumberFormatter::moneyCompact($grand_total) }}</p>
-                <p class="text-sm text-slate-500">Paid</p>
+                <p class="text-sm text-slate-500">{{ __('application.paid_dc9d4584') }}</p>
                 <p class="text-lg font-bold">TZS {{ \App\Support\NumberFormatter::moneyCompact($paid_amount) }}</p>
-                <p class="text-sm text-slate-500">Balance: TZS {{ \App\Support\NumberFormatter::moneyCompact($balance_amount) }}</p>
+                <p class="text-sm text-slate-500">{{ __('application.balance_tzs_80b5d0fe') }} {{ \App\Support\NumberFormatter::moneyCompact($balance_amount) }}</p>
             </div>
 
 
 
             <div class="flex flex-wrap gap-2">
-                <button type="submit" x-on:click="$wire.$set('save_status', 'draft', false); $wire.$set('send_purchase_email', false, false)" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Save as Draft</button>
-                <button type="submit" x-on:click="$wire.$set('save_status', 'ordered', false); $wire.$set('send_purchase_email', false, false)" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">Save as Ordered</button>
-                <button type="submit" x-on:click="$wire.$set('save_status', 'ordered', false); $wire.$set('send_purchase_email', true, false)" class="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-black text-build-orange dark:border-orange-500/30 dark:bg-orange-500/10">Save & Send PO</button>
-                <a href="{{ route('purchases.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">Cancel</a>
+                <button type="submit" x-on:click="$wire.$set('save_status', 'draft', false); $wire.$set('send_purchase_email', false, false)" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.save_as_draft_c031325d') }}</button>
+                <button type="submit" x-on:click="$wire.$set('save_status', 'ordered', false); $wire.$set('send_purchase_email', false, false)" class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ __('application.save_as_ordered_48ad6954') }}</button>
+                <button type="submit" x-on:click="$wire.$set('save_status', 'ordered', false); $wire.$set('send_purchase_email', true, false)" class="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-black text-build-orange dark:border-orange-500/30 dark:bg-orange-500/10">{{ __('application.save_send_po_d3dd8da3') }}</button>
+                <a href="{{ route('purchases.index') }}" wire:navigate class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ __('application.cancel_77dfd213') }}</a>
             </div>
         </form>
     </x-card>

@@ -101,7 +101,7 @@ final class AuthorizationScope
 
     public static function scopeFor(User $user, string $column, string $default): string
     {
-        if ($column === 'stock_scope' && $user->branch_id === null) {
+        if ($column === 'stock_scope' && ($user->branch_id === null || $user->hasRole('Super Admin', 'web'))) {
             return self::COMPANY;
         }
         if (in_array($column, ['sales_scope', 'report_scope'], true)) {

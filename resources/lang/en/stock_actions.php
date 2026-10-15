@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'purchase_in' => 'Purchase Receipt',
+    'purchase_receipt' => 'Purchase Receipt',
+    'internal_sale_in' => 'Internal Sale In',
+    'internal_sale_out' => 'Internal Sale Out',
+    'purchase_receipt_reversal' => 'Purchase Receipt Reversal',
+    'sale_out' => 'Sale Out',
+    'transfer_in' => 'Transfer In',
+    'transfer_out' => 'Transfer Out',
+    'transfer_cancel_out' => 'Cancellation Out',
+    'transfer_cancel_in' => 'Cancellation In',
+    'opening_stock' => 'Opening Stock',
+    'adjustment_in' => 'Stock Adjustment',
+    'adjustment_out' => 'Stock Adjustment',
+    'production_output' => 'Production In',
+    'production_consumption' => 'Production Consumption',
+    'curing_release_in' => 'Curing Release In',
+    'curing_release_out' => 'Curing Release Out',
+    'curing_damage' => 'Curing Damage',
+    'return_in' => 'Return In',
+    'direct_stock_in' => 'Direct Stock In',
+    'damage_out' => 'Damage Out',
+    'no_movement' => 'No movement',
+    'movement' => 'Stock Movement',
+];

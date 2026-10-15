@@ -14,6 +14,7 @@ use App\Models\ProductionOrderCosting;
 use App\Models\ProductionOrderMaterial;
 use App\Models\ProductionQualityInspection;
 use App\Support\CompanyFeatures;
+use App\Support\UiText;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -22,20 +23,24 @@ use Illuminate\Support\Collection;
 final class ProductionReportService
 {
     public const REPORTS = [
-        'summary' => ['title' => 'Production Summary', 'description' => 'Production output by order, product, machine, mould and immutable recipe snapshot.'],
-        'material-consumption' => ['title' => 'Material Consumption', 'description' => 'Planned and actual material usage and variance from order snapshots.'],
-        'costing' => ['title' => 'Production Cost', 'description' => 'Historical production costs and loss allocation from costing snapshots.', 'cost' => true],
-        'yield-loss' => ['title' => 'Yield & Loss', 'description' => 'Production yield, rejection, curing damage and released output.'],
-        'curing' => ['title' => 'Curing', 'description' => 'Curing inventory, ageing, quality approval and release readiness.'],
-        'quality' => ['title' => 'Quality Control', 'description' => 'Inspection outcomes, approvals, critical failures, retests and holds.'],
-        'releases' => ['title' => 'Finished Goods Releases', 'description' => 'Immutable release events and their paired inventory-ledger postings.'],
-        'machine-performance' => ['title' => 'Machine Performance', 'description' => 'Output versus scheduled capacity, acceptance and mould changes.'],
-        'mould-performance' => ['title' => 'Mould Performance', 'description' => 'Historical mould assignments, output, installations and maintenance state.'],
+        'summary' => ['title' => 'application.production_summary_47e73931', 'description' => 'application.production_output_by_order_product_machine_mould_and_immutable_recipe_snaps_5fbd26e7'],
+        'material-consumption' => ['title' => 'terminology.material_consumption_b1d83558', 'description' => 'application.planned_and_actual_material_usage_and_variance_from_order_snapshots_4ec27478'],
+        'costing' => ['title' => 'terminology.production_cost_b877b397', 'description' => 'application.historical_production_costs_and_loss_allocation_from_costing_snapshots_3a3107c4', 'cost' => true],
+        'yield-loss' => ['title' => 'terminology.yield_loss_635eb80f', 'description' => 'application.production_yield_rejection_curing_damage_and_released_output_c910e071'],
+        'curing' => ['title' => 'application.curing_13ba4ca8', 'description' => 'application.curing_inventory_ageing_quality_approval_and_release_readiness_ef1e82b0'],
+        'quality' => ['title' => 'application.quality_control_8f6e9ad9', 'description' => 'application.inspection_outcomes_approvals_critical_failures_retests_and_holds_92ba472a'],
+        'releases' => ['title' => 'terminology.finished_goods_releases_a9a9595f', 'description' => 'application.immutable_release_events_and_their_paired_inventory_ledger_postings_16ceb644'],
+        'machine-performance' => ['title' => 'terminology.machine_performance_b80c3066', 'description' => 'application.output_versus_scheduled_capacity_acceptance_and_mould_changes_fbfd6aaa'],
+        'mould-performance' => ['title' => 'terminology.mould_performance_d0230b85', 'description' => 'application.historical_mould_assignments_output_installations_and_maintenance_state_2750968d'],
     ];
 
     public function definition(string $report): array
     {
-        return self::REPORTS[$report] ?? abort(404);
+        $definition = self::REPORTS[$report] ?? abort(404);
+        $definition['title'] = UiText::translate($definition['title']);
+        $definition['description'] = __($definition['description']);
+
+        return $definition;
     }
 
     public function dashboard(array $filters): array
@@ -48,18 +53,18 @@ final class ProductionReportService
             && ! $costings->contains(fn ($costing) => $costing->has_missing_cost);
 
         return [
-            ['label' => 'Production Orders', 'value' => (string) $orders->count()],
-            ['label' => 'Planned Quantity', 'value' => $this->quantityByUnit($orders, 'planned_quantity')],
-            ['label' => 'Total Produced', 'value' => $this->quantityByUnit($orders, 'total_produced_quantity')],
-            ['label' => 'Accepted Output', 'value' => $this->quantityByUnit($orders, 'accepted_quantity')],
-            ['label' => 'Rejected Output', 'value' => $this->quantityByUnit($orders, 'rejected_quantity')],
-            ['label' => 'Curing Damage', 'value' => $this->quantityByUnit($completed, 'curingBatch.damaged_quantity')],
-            ['label' => 'Released Finished Goods', 'value' => $this->quantityByUnit($completed, 'curingBatch.released_quantity')],
-            ['label' => 'Production Cost', 'value' => ! $canViewCost ? 'Restricted' : ($costComplete ? 'TZS '.$this->decimalSum($costings, 'total_actual_cost', 2) : 'Incomplete costing data')],
-            ['label' => 'Average Cost / Accepted Unit', 'value' => ! $canViewCost ? 'Restricted' : ($costComplete ? 'TZS '.$this->weightedCost($costings, 'total_actual_cost', 'accepted_quantity') : 'Cost unavailable')],
-            ['label' => 'Yield Percentage', 'value' => $this->percentage($this->decimalSumRaw($orders, 'accepted_quantity'), $this->decimalSumRaw($orders, 'total_produced_quantity'))],
-            ['label' => 'Machines Used', 'value' => (string) $orders->pluck('machine_id')->filter()->unique()->count()],
-            ['label' => 'Products Produced', 'value' => (string) $orders->pluck('product_id')->filter()->unique()->count()],
+            ['label' => __('application.production_orders_b55b3ce1'), 'value' => (string) $orders->count()],
+            ['label' => __('application.planned_quantity_45230c83'), 'value' => $this->quantityByUnit($orders, 'planned_quantity')],
+            ['label' => __('terminology.total_produced_cbd1827f'), 'value' => $this->quantityByUnit($orders, 'total_produced_quantity')],
+            ['label' => __('terminology.accepted_output_d3d92c02'), 'value' => $this->quantityByUnit($orders, 'accepted_quantity')],
+            ['label' => __('terminology.rejected_output_d7600097'), 'value' => $this->quantityByUnit($orders, 'rejected_quantity')],
+            ['label' => __('terminology.curing_damage_91eefe76'), 'value' => $this->quantityByUnit($completed, 'curingBatch.damaged_quantity')],
+            ['label' => __('terminology.released_finished_goods_cec7ddbf'), 'value' => $this->quantityByUnit($completed, 'curingBatch.released_quantity')],
+            ['label' => __('terminology.production_cost_b877b397'), 'value' => ! $canViewCost ? __('terminology.restricted_aa2a08d2') : ($costComplete ? 'TZS '.$this->decimalSum($costings, 'total_actual_cost', 2) : __('terminology.incomplete_costing_data_183332ec'))],
+            ['label' => __('terminology.average_cost_accepted_unit_5dd1e3e2'), 'value' => ! $canViewCost ? __('terminology.restricted_aa2a08d2') : ($costComplete ? 'TZS '.$this->weightedCost($costings, 'total_actual_cost', 'accepted_quantity') : __('terminology.cost_unavailable_194b13a4'))],
+            ['label' => __('terminology.yield_percentage_2290c080'), 'value' => $this->percentage($this->decimalSumRaw($orders, 'accepted_quantity'), $this->decimalSumRaw($orders, 'total_produced_quantity'))],
+            ['label' => __('terminology.machines_used_6da0f608'), 'value' => (string) $orders->pluck('machine_id')->filter()->unique()->count()],
+            ['label' => __('terminology.products_produced_49b2f4e8'), 'value' => (string) $orders->pluck('product_id')->filter()->unique()->count()],
         ];
     }
 
@@ -70,7 +75,7 @@ final class ProductionReportService
         $datasets = $orders->groupBy(fn ($order) => $order->product?->unit?->short_name ?: 'unit')->map(function (Collection $rows, string $unit) use ($labels): array {
             $byDate = $rows->groupBy(fn ($order) => $order->production_date->toDateString());
 
-            return ['label' => 'Accepted ('.$unit.')', 'data' => $labels->map(fn (string $date) => $this->decimalSumRaw($byDate->get($date, collect()), 'accepted_quantity'))->all()];
+            return ['label' => __('terminology.accepted_a6aa6f30').$unit.')', 'data' => $labels->map(fn (string $date) => $this->decimalSumRaw($byDate->get($date, collect()), 'accepted_quantity'))->all()];
         })->values()->all();
 
         return ['labels' => $labels->all(), 'datasets' => $datasets];
@@ -115,15 +120,15 @@ final class ProductionReportService
         $query = (match ($group) {
             'day' => $query->orderBy('production_orders.production_date'), 'product' => $query->orderBy('production_orders.product_id'), 'family' => $query->orderBy(Product::query()->select('product_family_id')->whereColumn('products.id', 'production_orders.product_id')), 'machine' => $query->orderBy('production_orders.machine_id'), 'branch' => $query->orderBy('production_orders.branch_id'), default => $query->latest('production_orders.production_date')
         })->latest('production_orders.id');
-        $headers = ['Date', 'Order', 'Site', 'Product / Family', 'Production Method', 'Machine', 'Mould', 'Recipe Snapshot', 'Planned', 'Produced', 'Accepted', 'Rejected', 'Status', 'Started / Completed', 'Operators'];
+        $headers = [__('application.date_eb9a4bc1'), __('application.order_1d75774c'), __('application.site_5b6825d3'), __('terminology.product_family_26f0d948'), __('application.production_method_92bcfef4'), __('application.machine_65bb1b78'), __('application.mould_1fdffa4c'), __('application.recipe_snapshot_279feaa4'), __('application.planned_9cbe42aa'), __('terminology.produced_5d717336'), __('application.accepted_61a0572c'), __('application.rejected_27eeb7a2'), __('application.status_bae7d5be'), __('terminology.started_completed_09f3e89c'), __('terminology.operators_e9041435')];
         if ($group !== '') {
-            $headers = ['Group', ...$headers];
+            $headers = [__('application.group_171a0606'), ...$headers];
         }
 
         $result = $this->result($query, $limit, $export,
             $headers,
             function ($o) use ($group) {
-                $row = [$o->production_date?->format('d M Y'), $o->order_number, $o->branch?->name ?: 'Company-wide', ($o->product?->name ?: '—').' / '.($o->product?->productFamily?->name ?: '—'), $o->productionMethodLabel(), $o->machine?->name ?: '—', $o->mould?->name ?: $o->assignment?->mould?->name ?: 'Not recorded', trim(($o->snapshot?->recipe_name ?: 'Not captured').' '.($o->snapshot?->recipe_version ? 'v'.$o->snapshot->recipe_version : '')), $this->q($o->planned_quantity, $o->product?->unit?->short_name), $this->q($o->total_produced_quantity, $o->product?->unit?->short_name), $this->q($o->accepted_quantity, $o->product?->unit?->short_name), $this->q($o->rejected_quantity, $o->product?->unit?->short_name), str($o->status)->headline(), $this->dateTime($o->started_at).' / '.$this->dateTime($o->completed_at), ($o->starter?->name ?: '—').' / '.($o->completer?->name ?: '—')];
+                $row = [$o->production_date?->locale(app()->getLocale())->translatedFormat('d M Y'), $o->order_number, $o->branch?->name ?: __('application.company_wide_24f7fca3'), ($o->product?->name ?: '—').' / '.($o->product?->productFamily?->name ?: '—'), $o->productionMethodLabel(), $o->machine?->name ?: '—', $o->mould?->name ?: $o->assignment?->mould?->name ?: __('terminology.not_recorded_305cc364'), trim(($o->snapshot?->recipe_name ?: __('terminology.not_captured_70f23bfd')).' '.($o->snapshot?->recipe_version ? 'v'.$o->snapshot->recipe_version : '')), $this->q($o->planned_quantity, $o->product?->unit?->short_name), $this->q($o->total_produced_quantity, $o->product?->unit?->short_name), $this->q($o->accepted_quantity, $o->product?->unit?->short_name), $this->q($o->rejected_quantity, $o->product?->unit?->short_name), UiText::label($o->status), $this->dateTime($o->started_at).' / '.$this->dateTime($o->completed_at), ($o->starter?->name ?: '—').' / '.($o->completer?->name ?: '—')];
 
                 return $group === '' ? $row : [$this->summaryGroup($o, $group), ...$row];
             });
@@ -143,22 +148,22 @@ final class ProductionReportService
             'material' => $query->orderBy('material_product_id'), 'product' => $query->orderBy(ProductionOrder::query()->select('product_id')->whereColumn('production_orders.id', 'production_order_materials.production_order_id')), 'order' => $query->orderBy('production_order_id'), 'day' => $query->orderBy(ProductionOrder::query()->select('production_date')->whereColumn('production_orders.id', 'production_order_materials.production_order_id')), default => $query->latest('id')
         };
 
-        $headers = ['Order / Date', 'Finished Product', 'Raw Material', 'Unit', 'Planned Qty', 'Actual Qty', 'Qty Variance', 'Variance %'];
+        $headers = [__('terminology.order_date_05d87dcf'), __('terminology.finished_product_fd0d6bc4'), __('application.raw_material_9f592bac'), __('application.unit_f6b935ab'), __('application.planned_qty_50044aab'), __('terminology.actual_qty_3ca78566'), __('terminology.qty_variance_7f97846c'), __('application.variance_39330351')];
         if ($canViewCost) {
-            $headers = [...$headers, 'Planned Unit Cost', 'Actual Unit Cost', 'Planned Cost', 'Actual Cost', 'Cost Variance'];
+            $headers = [...$headers, __('terminology.planned_unit_cost_d9ad8d67'), __('terminology.actual_unit_cost_50e8638c'), __('terminology.planned_cost_a99bcda5'), __('application.actual_cost_f9368485'), __('terminology.cost_variance_5c5e2f88')];
         }
-        $headers[] = 'Raw Material Location';
+        $headers[] = __('terminology.raw_material_location_8a1badef');
         if ($group !== '') {
-            $headers = ['Group', ...$headers];
+            $headers = [__('application.group_171a0606'), ...$headers];
         }
 
         $result = $this->result($query, $limit, $export, $headers,
             function ($m) use ($canViewCost, $group) {
                 $quantityVariance = bcsub((string) ($m->actual_quantity ?? 0), (string) ($m->planned_quantity ?? 0), 4);
                 $actualUnitCost = bccomp((string) ($m->actual_quantity ?? 0), '0', 12) === 1 ? bcdiv((string) $m->actual_cost, (string) $m->actual_quantity, 4) : null;
-                $row = [($m->order?->order_number ?: '—').' / '.$m->order?->production_date?->format('d M Y'), $m->order?->product?->name ?: '—', $m->materialProduct?->name ?: $m->name, $m->unit?->short_name ?: '—', $this->q($m->planned_quantity), $this->q($m->actual_quantity), $this->q($quantityVariance), $this->percentage($quantityVariance, $m->planned_quantity)];
+                $row = [($m->order?->order_number ?: '—').' / '.$m->order?->production_date?->locale(app()->getLocale())->translatedFormat('d M Y'), $m->order?->product?->name ?: '—', $m->materialProduct?->name ?: $m->name, $m->unit?->short_name ?: '—', $this->q($m->planned_quantity), $this->q($m->actual_quantity), $this->q($quantityVariance), $this->percentage($quantityVariance, $m->planned_quantity)];
                 if ($canViewCost) {
-                    $row = [...$row, $m->unit_cost === null ? 'Cost unavailable' : $this->money($m->unit_cost), $actualUnitCost === null ? 'Cost unavailable' : $this->money($actualUnitCost), $this->money($m->planned_cost), $this->money($m->actual_cost), $this->money(bcsub((string) $m->actual_cost, (string) $m->planned_cost, 4))];
+                    $row = [...$row, $m->unit_cost === null ? __('terminology.cost_unavailable_194b13a4') : $this->money($m->unit_cost), $actualUnitCost === null ? __('terminology.cost_unavailable_194b13a4') : $this->money($actualUnitCost), $this->money($m->planned_cost), $this->money($m->actual_cost), $this->money(bcsub((string) $m->actual_cost, (string) $m->planned_cost, 4))];
                 }
                 $row = [...$row, $m->order?->rawMaterialLocation?->name ?: '—'];
 
@@ -177,15 +182,15 @@ final class ProductionReportService
             ->with(['productionOrder.product', 'productionOrder.machine', 'finalizer'])->latest('id');
 
         $result = $this->result($query, $limit, $export,
-            ['Costing', 'Order / Product', 'Date', 'Status', 'Planned Inventory', 'Actual Inventory', 'Planned Non-Inventory', 'Actual Non-Inventory', 'Total Planned', 'Total Actual', 'Rejected Loss', 'Curing Damage Loss', 'Accepted Unit Cost', 'Sellable Unit Cost', 'Variance', 'Variance %', 'Missing Cost', 'Finalised'],
-            fn ($c) => [$c->costing_number, ($c->productionOrder?->order_number ?: '—').' / '.($c->productionOrder?->product?->name ?: '—'), $c->productionOrder?->production_date?->format('d M Y'), str($c->status)->headline(), $this->money($c->planned_inventory_material_cost), $this->money($c->actual_inventory_material_cost), $this->money($c->planned_non_inventory_cost), $this->money($c->actual_non_inventory_cost), $this->money($c->total_planned_cost), $this->money($c->total_actual_cost), $this->money($c->rejected_loss_cost), $this->money($c->curing_damage_loss_cost), $this->money($c->cost_per_accepted_unit, 4), $this->money($c->cost_per_released_unit, 4), $this->money($c->cost_variance), $this->q($c->variance_percentage).'%', $c->has_missing_cost ? 'Yes' : 'No', $this->dateTime($c->finalized_at).' / '.($c->finalizer?->name ?: '—')]);
+            [__('terminology.costing_490452e4'), __('terminology.order_product_c24fe1a3'), __('application.date_eb9a4bc1'), __('application.status_bae7d5be'), __('terminology.planned_inventory_127dd9e9'), __('terminology.actual_inventory_3f39d742'), __('terminology.planned_non_inventory_a254adb8'), __('terminology.actual_non_inventory_f91d1d2a'), __('terminology.total_planned_0160f26a'), __('terminology.total_actual_6d42d938'), __('terminology.rejected_loss_6a412bcf'), __('terminology.curing_damage_loss_67afb7cc'), __('terminology.accepted_unit_cost_a9f51538'), __('terminology.sellable_unit_cost_3f751468'), __('application.variance_eb39bbf6'), __('application.variance_39330351'), __('terminology.missing_cost_d25e3e69'), __('terminology.finalised_88460574')],
+            fn ($c) => [$c->costing_number, ($c->productionOrder?->order_number ?: '—').' / '.($c->productionOrder?->product?->name ?: '—'), $c->productionOrder?->production_date?->locale(app()->getLocale())->translatedFormat('d M Y'), UiText::label($c->status), $this->money($c->planned_inventory_material_cost), $this->money($c->actual_inventory_material_cost), $this->money($c->planned_non_inventory_cost), $this->money($c->actual_non_inventory_cost), $this->money($c->total_planned_cost), $this->money($c->total_actual_cost), $this->money($c->rejected_loss_cost), $this->money($c->curing_damage_loss_cost), $this->money($c->cost_per_accepted_unit, 4), $this->money($c->cost_per_released_unit, 4), $this->money($c->cost_variance), $this->q($c->variance_percentage).'%', $c->has_missing_cost ? __('application.yes_5397e058') : __('application.no_816c52fd'), $this->dateTime($c->finalized_at).' / '.($c->finalizer?->name ?: '—')]);
         $totals = (clone $query)->reorder()->selectRaw('SUM(total_actual_cost) AS actual_cost, SUM(rejected_loss_cost) AS rejected_loss, SUM(curing_damage_loss_cost) AS damage_loss, SUM(accepted_quantity) AS accepted_qty, SUM(released_quantity) AS released_qty')->first();
         $result['totals'] = [
-            'Total actual production cost' => $this->money($totals?->actual_cost),
-            'Total rejected loss' => $this->money($totals?->rejected_loss),
-            'Total curing damage loss' => $this->money($totals?->damage_loss),
-            'Weighted accepted-unit cost' => $this->weightedValue($totals?->actual_cost, $totals?->accepted_qty),
-            'Weighted sellable-unit cost' => $this->weightedValue($totals?->actual_cost, $totals?->released_qty),
+            __('terminology.total_actual_production_cost_e13d4d84') => $this->money($totals?->actual_cost),
+            __('terminology.total_rejected_loss_1eed851f') => $this->money($totals?->rejected_loss),
+            __('terminology.total_curing_damage_loss_df68afec') => $this->money($totals?->damage_loss),
+            __('terminology.weighted_accepted_unit_cost_678e0cdd') => $this->weightedValue($totals?->actual_cost, $totals?->accepted_qty),
+            __('terminology.weighted_sellable_unit_cost_29da3f1c') => $this->weightedValue($totals?->actual_cost, $totals?->released_qty),
         ];
 
         return $result;
@@ -196,7 +201,7 @@ final class ProductionReportService
         $query = $this->orderQuery($filters)->with(['product.unit', 'curingBatch', 'qualityInspections'])->latest('production_date')->latest('id');
 
         return $this->result($query, $limit, $export,
-            ['Order / Product', 'Planned Quantity', 'Produced', 'Accepted Into Curing', 'Production Reject', 'QC Reject', 'Curing Damage', 'Released Quantity', 'Remaining Curing', 'Yield %', 'QC Pass Rate', 'QC Failure Rate', 'Rework Quantity', 'Quarantined Quantity', 'Total Recorded Loss'],
+            [__('terminology.order_product_c24fe1a3'), __('application.planned_quantity_45230c83'), __('terminology.produced_5d717336'), __('terminology.accepted_into_curing_498ab9ce'), __('terminology.production_reject_71299028'), 'QC Reject', __('terminology.curing_damage_91eefe76'), __('application.released_quantity_ed7b277d'), __('terminology.remaining_curing_0ac375f7'), __('terminology.yield_e49e1389'), 'QC Pass Rate', 'QC Failure Rate', __('terminology.rework_quantity_a07f71bb'), __('terminology.quarantined_quantity_04f1a980'), __('terminology.total_recorded_loss_af56a39f')],
             function ($o) {
                 $u = $o->product?->unit?->short_name;
                 $damage = $o->curingBatch?->damaged_quantity ?? 0;
@@ -226,15 +231,15 @@ final class ProductionReportService
             ->when($filters['search'] ?? null, fn (Builder $q, $v) => $q->where('batch_number', 'like', '%'.$v.'%'))->latest('production_date')->latest('id');
 
         return $this->result($query, $limit, $export,
-            ['Batch / Order', 'Product', 'Site / Machine', 'Curing / Destination', 'Accepted Into Curing', 'Production Reject', 'QC Reject', 'Curing Damage', 'Released', 'Remaining', 'Release Eligible', 'Curing Start', 'Earliest Sellable', 'Full Curing', 'Age', 'Ageing Bucket', 'Progress', 'QC Approval', 'Quarantine', 'Active Hold', 'Status'],
+            [__('terminology.batch_order_41676b2c'), __('application.product_dd3b86d1'), __('terminology.site_machine_03c2d0da'), __('terminology.curing_destination_7c7643b7'), __('terminology.accepted_into_curing_498ab9ce'), __('terminology.production_reject_71299028'), 'QC Reject', __('terminology.curing_damage_91eefe76'), __('application.released_35d9bc51'), __('application.remaining_cc632b5e'), __('terminology.release_eligible_a2ec77ed'), __('terminology.curing_start_213c1967'), __('terminology.earliest_sellable_f7e37cea'), __('application.full_curing_f59aa9ce'), __('terminology.age_ff9f1ff3'), __('terminology.ageing_bucket_f482515a'), __('application.progress_1b90271d'), 'QC Approval', __('application.quarantine_7f983c16'), __('terminology.active_hold_8f5b6033'), __('application.status_bae7d5be')],
             function ($b) {
                 $u = $b->product?->unit?->short_name;
                 $elapsed = max(0, $b->curing_started_at?->diffInDays(now()) ?? 0);
                 $total = max(1, $b->curing_started_at?->diffInDays($b->full_curing_at) ?? 1);
                 $progress = min(100, (int) floor(($elapsed / $total) * 100));
-                $ageBucket = bccomp((string) $b->remaining_quantity, '0', 12) === 1 && now()->gt($b->full_curing_at) ? 'Past full curing, unreleased' : (bccomp((string) $b->remaining_quantity, '0', 12) === 1 && now()->gt($b->minimum_sellable_at) ? 'Past earliest release, unreleased' : ($elapsed < 3 ? 'Less than 3 days' : ($elapsed <= 7 ? '3–7 days' : ($elapsed <= 14 ? '8–14 days' : 'More than 14 days'))));
+                $ageBucket = bccomp((string) $b->remaining_quantity, '0', 12) === 1 && now()->gt($b->full_curing_at) ? __('terminology.past_full_curing_unreleased_42ffee6c') : (bccomp((string) $b->remaining_quantity, '0', 12) === 1 && now()->gt($b->minimum_sellable_at) ? __('terminology.past_earliest_release_unreleased_73c16aac') : ($elapsed < 3 ? __('terminology.less_than_3_days_4779b27e') : ($elapsed <= 7 ? '3–7 '.__('date.day_unit') : ($elapsed <= 14 ? '8–14 '.__('date.day_unit') : __('terminology.more_than_14_days_688377a8')))));
 
-                return [($b->batch_number ?: '—').' / '.($b->productionOrder?->order_number ?: '—'), $b->product?->name ?: '—', ($b->branch?->name ?: 'Company-wide').' / '.($b->machine?->name ?: '—'), ($b->sourceLocation?->name ?: '—').' / '.($b->defaultReleaseLocation?->name ?: '—'), $this->q($b->accepted_quantity, $u), $this->q($b->productionOrder?->rejected_quantity, $u), $this->q($b->qc_rejected_quantity, $u), $this->q($b->damaged_quantity, $u), $this->q($b->released_quantity, $u), $this->q($b->remaining_quantity, $u), $this->q($b->release_eligible_quantity, $u), $this->dateTime($b->curing_started_at), $this->dateTime($b->minimum_sellable_at), $this->dateTime($b->full_curing_at), $elapsed.' days', $ageBucket, $progress.'%', $b->qc_approved_at ? 'Approved' : 'Pending', $b->status === ProductionCuringBatch::STATUS_QUARANTINED ? 'Yes' : 'No', $b->qualityHolds->where('status', 'active')->isNotEmpty() ? 'Yes' : 'No', str($b->resolvedStatus())->headline()];
+                return [($b->batch_number ?: '—').' / '.($b->productionOrder?->order_number ?: '—'), $b->product?->name ?: '—', ($b->branch?->name ?: __('application.company_wide_24f7fca3')).' / '.($b->machine?->name ?: '—'), ($b->sourceLocation?->name ?: '—').' / '.($b->defaultReleaseLocation?->name ?: '—'), $this->q($b->accepted_quantity, $u), $this->q($b->productionOrder?->rejected_quantity, $u), $this->q($b->qc_rejected_quantity, $u), $this->q($b->damaged_quantity, $u), $this->q($b->released_quantity, $u), $this->q($b->remaining_quantity, $u), $this->q($b->release_eligible_quantity, $u), $this->dateTime($b->curing_started_at), $this->dateTime($b->minimum_sellable_at), $this->dateTime($b->full_curing_at), $elapsed.' '.__('date.day_unit'), $ageBucket, $progress.'%', $b->qc_approved_at ? __('application.approved_41b81eb8') : __('application.pending_96f608c1'), $b->status === ProductionCuringBatch::STATUS_QUARANTINED ? __('application.yes_5397e058') : __('application.no_816c52fd'), $b->qualityHolds->where('status', 'active')->isNotEmpty() ? __('application.yes_5397e058') : __('application.no_816c52fd'), UiText::label($b->resolvedStatus())];
             });
     }
 
@@ -247,8 +252,8 @@ final class ProductionReportService
             ->when($filters['search'] ?? null, fn (Builder $q, $v) => $q->where('inspection_number', 'like', '%'.$v.'%'))->latest('inspected_at');
 
         return $this->result($query, $limit, $export,
-            ['Inspection', 'Batch / Order', 'Product', 'Stage / Date', 'Inspector', 'Decision', 'Approval', 'QC Accepted', 'QC Rejected', 'Disposition', 'Critical Failure', 'Retest Of', 'Active Hold', 'Approved By / At'],
-            fn ($i) => [$i->inspection_number, ($i->curingBatch?->batch_number ?: '—').' / '.($i->productionOrder?->order_number ?: '—'), $i->product?->name ?: '—', str($i->inspection_stage)->headline().' / '.$this->dateTime($i->inspected_at), $i->inspector?->name ?: '—', str($i->result)->headline(), str($i->approval_status)->headline(), $this->q($i->passed_quantity), $this->q($i->failed_quantity), $i->disposition ? str($i->disposition)->headline() : '—', $i->results->where('is_critical', true)->where('result', 'failed')->isNotEmpty() ? 'Yes' : 'No', $i->supersedes?->inspection_number ?: '—', $i->holds->where('status', 'active')->isNotEmpty() ? 'Yes' : 'No', ($i->approver?->name ?: '—').' / '.$this->dateTime($i->approved_at)]);
+            [__('terminology.inspection_d3ce4618'), __('terminology.batch_order_41676b2c'), __('application.product_dd3b86d1'), __('terminology.stage_date_e1fb3944'), __('application.inspector_8222c902'), __('application.decision_7f59a1f1'), __('application.approval_8cc047ac'), __('application.qc_accepted_1f7f91a2'), __('application.qc_rejected_a47b36d2'), __('application.disposition_009ce48f'), __('terminology.critical_failure_03da1eca'), __('terminology.retest_of_8e83dc09'), __('terminology.active_hold_8f5b6033'), __('terminology.approved_by_at_5da719ae')],
+            fn ($i) => [$i->inspection_number, ($i->curingBatch?->batch_number ?: '—').' / '.($i->productionOrder?->order_number ?: '—'), $i->product?->name ?: '—', UiText::label($i->inspection_stage).' / '.$this->dateTime($i->inspected_at), $i->inspector?->name ?: '—', UiText::label($i->result), UiText::label($i->approval_status), $this->q($i->passed_quantity), $this->q($i->failed_quantity), $i->disposition ? UiText::label($i->disposition) : '—', $i->results->where('is_critical', true)->where('result', 'failed')->isNotEmpty() ? __('application.yes_5397e058') : __('application.no_816c52fd'), $i->supersedes?->inspection_number ?: '—', $i->holds->where('status', 'active')->isNotEmpty() ? __('application.yes_5397e058') : __('application.no_816c52fd'), ($i->approver?->name ?: '—').' / '.$this->dateTime($i->approved_at)]);
     }
 
     private function releases(array $filters, int $limit, bool $export): array
@@ -260,7 +265,7 @@ final class ProductionReportService
             ->when($filters['search'] ?? null, fn (Builder $q, $v) => $q->where(fn (Builder $x) => $x->where('release_number', 'like', '%'.$v.'%')->orWhere('posting_reference', 'like', '%'.$v.'%')))->latest('released_at');
 
         return $this->result($query, $limit, $export,
-            ['Release', 'Batch / Order', 'Product', 'Quantity', 'Curing Location', 'Finished Goods Location', 'Released By / At', 'QC Approval', 'Posting Reference', 'Partial / Full', 'Remaining After', 'Ledger Pair'],
+            [__('application.release_d41f56ce'), __('terminology.batch_order_41676b2c'), __('application.product_dd3b86d1'), __('application.quantity_44f6af69'), __('application.curing_location_72020a95'), __('terminology.finished_goods_location_4040cb87'), __('terminology.released_by_at_84311926'), 'QC Approval', __('application.posting_reference_9df2e1e5'), __('terminology.partial_full_60e7fca8'), __('terminology.remaining_after_8d280688'), __('terminology.ledger_pair_52528627')],
             function ($r) {
                 $releasedThroughEvent = $r->batch?->releases->filter(fn ($event) => $event->released_at->lt($r->released_at) || ($event->released_at->equalTo($r->released_at) && $event->id <= $r->id))->reduce(fn (string $sum, $event) => bcadd($sum, (string) $event->released_quantity, 12), '0') ?? '0';
                 $damagedThroughEvent = $r->batch?->actions->where('action_type', 'damage')->filter(fn ($action) => $action->created_at->lte($r->released_at))->reduce(fn (string $sum, $action) => bcadd($sum, (string) ($action->quantity ?? 0), 12), '0') ?? '0';
@@ -269,7 +274,7 @@ final class ProductionReportService
                     $remaining = '0';
                 }
 
-                return [$r->release_number, ($r->batch?->batch_number ?: '—').' / '.($r->batch?->productionOrder?->order_number ?: '—'), $r->batch?->product?->name ?: '—', $this->q($r->released_quantity, $r->batch?->product?->unit?->short_name), $r->sourceLocation?->name ?: '—', $r->destinationLocation?->name ?: '—', ($r->releaser?->name ?: '—').' / '.$this->dateTime($r->released_at), $r->batch?->qc_approved_at ? 'Approved' : 'Pending', $r->posting_reference, bccomp($remaining, '0', 12) === 0 ? 'Full' : 'Partial', $this->q($remaining), ($r->release_out_count === 1 && $r->release_in_count === 1) ? 'Verified' : 'Incomplete'];
+                return [$r->release_number, ($r->batch?->batch_number ?: '—').' / '.($r->batch?->productionOrder?->order_number ?: '—'), $r->batch?->product?->name ?: '—', $this->q($r->released_quantity, $r->batch?->product?->unit?->short_name), $r->sourceLocation?->name ?: '—', $r->destinationLocation?->name ?: '—', ($r->releaser?->name ?: '—').' / '.$this->dateTime($r->released_at), $r->batch?->qc_approved_at ? __('application.approved_41b81eb8') : __('application.pending_96f608c1'), $r->posting_reference, bccomp($remaining, '0', 12) === 0 ? __('terminology.full_10b28a8c') : __('application.partial_65de2e2a'), $this->q($remaining), ($r->release_out_count === 1 && $r->release_in_count === 1) ? __('terminology.verified_aed3b8c6') : __('terminology.incomplete_387fd1bb')];
             });
     }
 
@@ -279,7 +284,7 @@ final class ProductionReportService
             ->withSum(['productionOrders as planned_total' => fn (Builder $q) => $this->applyOrderFilters($q, $filters)], 'planned_quantity')->withSum(['productionOrders as produced_total' => fn (Builder $q) => $this->applyOrderFilters($q, $filters)], 'total_produced_quantity')->withSum(['productionOrders as accepted_total' => fn (Builder $q) => $this->applyOrderFilters($q, $filters)], 'accepted_quantity')->withSum(['productionOrders as rejected_total' => fn (Builder $q) => $this->applyOrderFilters($q, $filters)], 'rejected_quantity')->when($filters['branch_id'] ?? null, fn (Builder $q, $v) => $q->where('branch_id', $v))->when($filters['machine_id'] ?? null, fn (Builder $q, $v) => $q->whereKey($v))->orderBy('name');
         $query->withMax(['productionOrders as last_production_date' => fn (Builder $q) => $this->applyOrderFilters($q, $filters)], 'production_date');
 
-        return $this->result($query, $limit, $export, ['Machine', 'Branch', 'Current Mould', 'Orders', 'Planned', 'Produced', 'Accepted', 'Rejected', 'Scheduled Capacity / Day', 'Output vs Capacity', 'Acceptance Rate', 'Mould Changes', 'Maintenance', 'Last Production'], fn ($m) => [$m->name, $m->branch?->name ?: 'Company-wide', $m->currentMouldInstallation?->mould?->name ?: 'Not installed', $m->order_count, $this->q($m->planned_total), $this->q($m->produced_total), $this->q($m->accepted_total), $this->q($m->rejected_total), $this->q($m->daily_capacity, $m->capacity_unit), $this->percentage($m->produced_total, $m->planned_total), $this->percentage($m->accepted_total, $m->produced_total), $m->mould_change_count, $m->status === 'maintenance' ? 'Under maintenance' : 'Available', $m->last_production_date ?: '—']);
+        return $this->result($query, $limit, $export, [__('application.machine_65bb1b78'), __('application.branch_1627510b'), __('terminology.current_mould_478bf5d6'), __('application.orders_cded0933'), __('application.planned_9cbe42aa'), __('terminology.produced_5d717336'), __('application.accepted_61a0572c'), __('application.rejected_27eeb7a2'), __('terminology.scheduled_capacity_day_8d917506'), __('terminology.output_vs_capacity_ab76acba'), __('terminology.acceptance_rate_7e1c9bb0'), __('terminology.mould_changes_e21b7bc1'), __('application.maintenance_94de303b'), __('terminology.last_production_7fd067b6')], fn ($m) => [$m->name, $m->branch?->name ?: __('application.company_wide_24f7fca3'), $m->currentMouldInstallation?->mould?->name ?: __('application.not_installed_1aab9f18'), $m->order_count, $this->q($m->planned_total), $this->q($m->produced_total), $this->q($m->accepted_total), $this->q($m->rejected_total), $this->q($m->daily_capacity, $m->capacity_unit), $this->percentage($m->produced_total, $m->planned_total), $this->percentage($m->accepted_total, $m->produced_total), $m->mould_change_count, $m->status === 'maintenance' ? __('terminology.under_maintenance_1989efd9') : __('application.available_7c62a142'), $m->last_production_date ?: '—']);
     }
 
     private function moulds(array $filters, int $limit, bool $export): array
@@ -289,7 +294,7 @@ final class ProductionReportService
             ->withCount(['compatibleMachines', 'installations as installation_count', 'installations as replacement_count' => fn (Builder $q) => $q->where('removal_reason', 'replaced'), 'productionOrders as order_count' => $orderFilter])
             ->withSum(['productionOrders as produced_total' => $orderFilter], 'total_produced_quantity')->withSum(['productionOrders as accepted_total' => $orderFilter], 'accepted_quantity')->withSum(['productionOrders as rejected_total' => $orderFilter], 'rejected_quantity')
             ->withMax('installations as last_installed_at', 'installed_at')->when($filters['mould_id'] ?? null, fn (Builder $q, $v) => $q->whereKey($v))->when($filters['family_id'] ?? null, fn (Builder $q, $v) => $q->where('product_family_id', $v))->orderBy('name');
-        $result = $this->result($query, $limit, $export, ['Mould / Code', 'Family', 'Compatible Machines', 'Orders', 'Produced', 'Accepted', 'Rejected', 'Acceptance Rate', 'Expected / Cycle', 'Expected / Day', 'Current Installation', 'Last Installed', 'Maintenance', 'Installations', 'Replacements'], fn ($m) => [($m->name ?: '—').' / '.($m->code ?: '—'), $m->family?->name ?: '—', $m->compatible_machines_count, $m->order_count, $this->q($m->produced_total), $this->q($m->accepted_total), $this->q($m->rejected_total), $this->percentage($m->accepted_total, $m->produced_total), $this->q($m->expected_output_per_cycle), $this->q($m->expected_output_per_day), $m->currentInstallation?->machine?->name ?: 'Not installed', $this->dateTime($m->last_installed_at), $m->under_maintenance ? 'Under maintenance' : ($m->active ? 'Available' : 'Inactive'), $m->installation_count, $m->replacement_count]);
+        $result = $this->result($query, $limit, $export, [__('terminology.mould_code_758389e0'), __('application.family_4efb6cb7'), __('application.compatible_machines_4b1815cd'), __('application.orders_cded0933'), __('terminology.produced_5d717336'), __('application.accepted_61a0572c'), __('application.rejected_27eeb7a2'), __('terminology.acceptance_rate_7e1c9bb0'), __('terminology.expected_cycle_c20b4ae2'), __('terminology.expected_day_1b0a915b'), __('application.current_installation_197d307c'), __('terminology.last_installed_f60301d1'), __('application.maintenance_94de303b'), __('terminology.installations_e5426e1f'), __('terminology.replacements_844abd7b')], fn ($m) => [($m->name ?: '—').' / '.($m->code ?: '—'), $m->family?->name ?: '—', $m->compatible_machines_count, $m->order_count, $this->q($m->produced_total), $this->q($m->accepted_total), $this->q($m->rejected_total), $this->percentage($m->accepted_total, $m->produced_total), $this->q($m->expected_output_per_cycle), $this->q($m->expected_output_per_day), $m->currentInstallation?->machine?->name ?: __('application.not_installed_1aab9f18'), $this->dateTime($m->last_installed_at), $m->under_maintenance ? __('terminology.under_maintenance_1989efd9') : ($m->active ? __('application.available_7c62a142') : __('application.inactive_09af574c')), $m->installation_count, $m->replacement_count]);
 
         return $result;
     }
@@ -334,14 +339,14 @@ final class ProductionReportService
     private function summaryGroup($order, string $group): string
     {
         return match ($group) {
-            'day' => $order->production_date?->format('d M Y') ?: '—', 'product' => $order->product?->name ?: '—', 'family' => $order->product?->productFamily?->name ?: '—', 'machine' => $order->machine?->name ?: '—', 'branch' => $order->branch?->name ?: 'Company-wide', default => 'Details'
+            'day' => $order->production_date?->locale(app()->getLocale())->translatedFormat('d M Y') ?: '—', 'product' => $order->product?->name ?: '—', 'family' => $order->product?->productFamily?->name ?: '—', 'machine' => $order->machine?->name ?: '—', 'branch' => $order->branch?->name ?: __('application.company_wide_24f7fca3'), default => __('application.details_dc3decbb')
         };
     }
 
     private function materialGroup($material, string $group): string
     {
         return match ($group) {
-            'material' => $material->materialProduct?->name ?: $material->name, 'product' => $material->order?->product?->name ?: '—', 'order' => $material->order?->order_number ?: '—', 'day' => $material->order?->production_date?->format('d M Y') ?: '—', default => 'Details'
+            'material' => $material->materialProduct?->name ?: $material->name, 'product' => $material->order?->product?->name ?: '—', 'order' => $material->order?->order_number ?: '—', 'day' => $material->order?->production_date?->locale(app()->getLocale())->translatedFormat('d M Y') ?: '—', default => __('application.details_dc3decbb')
         };
     }
 
@@ -352,9 +357,9 @@ final class ProductionReportService
             ->leftJoin('units as report_units', 'report_units.id', '=', 'report_products.unit_id')
             ->selectRaw("COALESCE(report_units.short_name, 'unit') AS report_unit, COUNT(production_orders.id) AS order_count, SUM(CASE WHEN production_orders.status = ? THEN 1 ELSE 0 END) AS completed_count, SUM(production_orders.planned_quantity) AS planned, SUM(production_orders.total_produced_quantity) AS produced, SUM(production_orders.accepted_quantity) AS accepted, SUM(production_orders.rejected_quantity) AS rejected", [ProductionOrder::STATUS_COMPLETED])
             ->groupBy('report_units.short_name')->get();
-        $totals = ['Orders' => (string) $rows->sum('order_count'), 'Completed orders' => (string) $rows->sum('completed_count')];
+        $totals = [__('application.orders_cded0933') => (string) $rows->sum('order_count'), __('terminology.completed_orders_b3feb297') => (string) $rows->sum('completed_count')];
         foreach ($rows as $row) {
-            foreach (['Planned' => 'planned', 'Produced' => 'produced', 'Accepted' => 'accepted', 'Rejected' => 'rejected'] as $label => $field) {
+            foreach ([__('application.planned_9cbe42aa') => 'planned', __('terminology.produced_5d717336') => 'produced', __('application.accepted_61a0572c') => 'accepted', __('application.rejected_27eeb7a2') => 'rejected'] as $label => $field) {
                 $totals[$label.' ('.$row->report_unit.')'] = $this->q($row->{$field});
             }
         }
@@ -371,12 +376,12 @@ final class ProductionReportService
             ->groupBy('report_units.short_name')->get();
         $totals = [];
         foreach ($rows as $row) {
-            $totals['Planned material ('.$row->report_unit.')'] = $this->q($row->planned);
-            $totals['Actual material ('.$row->report_unit.')'] = $this->q($row->actual);
+            $totals[__('terminology.planned_material_ea9259e6').$row->report_unit.')'] = $this->q($row->planned);
+            $totals[__('terminology.actual_material_0a72f96b').$row->report_unit.')'] = $this->q($row->actual);
         }
         if ($canViewCost) {
-            $totals['Total planned material cost'] = $this->money($rows->reduce(fn (string $sum, $row) => bcadd($sum, (string) ($row->planned_cost ?? 0), 4), '0'));
-            $totals['Total actual material cost'] = $this->money($rows->reduce(fn (string $sum, $row) => bcadd($sum, (string) ($row->actual_cost ?? 0), 4), '0'));
+            $totals[__('terminology.total_planned_material_cost_e6004da6')] = $this->money($rows->reduce(fn (string $sum, $row) => bcadd($sum, (string) ($row->planned_cost ?? 0), 4), '0'));
+            $totals[__('terminology.total_actual_material_cost_175bbc6f')] = $this->money($rows->reduce(fn (string $sum, $row) => bcadd($sum, (string) ($row->actual_cost ?? 0), 4), '0'));
         }
 
         return $totals;
@@ -385,7 +390,7 @@ final class ProductionReportService
     private function weightedValue(mixed $cost, mixed $quantity): string
     {
         if ($cost === null || $quantity === null || bccomp((string) $quantity, '0', 12) === 0) {
-            return 'Cost unavailable';
+            return __('terminology.cost_unavailable_194b13a4');
         }
 
         return $this->money(bcdiv((string) $cost, (string) $quantity, 4), 4);
@@ -393,7 +398,7 @@ final class ProductionReportService
 
     private function money(mixed $v, int $scale = 2): string
     {
-        return $v === null ? 'Cost unavailable' : 'TZS '.number_format((float) $v, $scale);
+        return $v === null ? __('terminology.cost_unavailable_194b13a4') : 'TZS '.number_format((float) $v, $scale);
     }
 
     private function dateTime(mixed $v): string
@@ -402,7 +407,7 @@ final class ProductionReportService
             return '—';
         }
 
-        return $v instanceof CarbonInterface ? $v->timezone(CompanyFeatures::currentCompany()?->timezone ?: config('app.timezone'))->format('d M Y H:i') : (string) $v;
+        return $v instanceof CarbonInterface ? $v->timezone(CompanyFeatures::currentCompany()?->timezone ?: config('app.timezone'))->locale(app()->getLocale())->translatedFormat('d M Y H:i') : (string) $v;
     }
 
     private function percentage(mixed $n, mixed $d): string

@@ -1,7 +1,17 @@
 <?php
 
 return [
-    'title' => 'Products', 'create' => 'Create Product', 'edit' => 'Edit Product', 'name' => 'Name', 'sku' => 'SKU', 'category' => 'Category', 'unit' => 'Unit', 'buying_price' => 'Buying Price', 'selling_price' => 'Retail Price', 'wholesale_price' => 'Wholesale Price', 'stock' => 'Stock',
+    'title' => 'Products',
+    'create' => 'Create Product',
+    'edit' => 'Edit Product',
+    'name' => 'Name',
+    'sku' => 'SKU',
+    'category' => 'Category',
+    'unit' => 'Unit',
+    'buying_price' => 'Buying Price',
+    'selling_price' => 'Retail Price',
+    'wholesale_price' => 'Wholesale Price',
+    'stock' => 'Stock',
     'image' => [
         'label' => 'Product Image',
         'choose' => 'Choose Image',

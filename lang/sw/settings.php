@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Mipangilio', 'company' => 'Mipangilio ya Kampuni', 'inventory' => 'Mipangilio ya Stoo', 'email' => 'Mipangilio ya Barua Pepe', 'language' => 'Lugha'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/sw/settings.php';

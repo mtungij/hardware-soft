@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Register', 'name' => 'Name', 'email' => 'Email', 'password' => 'Password', 'confirm_password' => 'Confirm Password', 'submit' => 'Register'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/en/register.php';

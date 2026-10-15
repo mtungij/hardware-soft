@@ -11,8 +11,8 @@ layout('layouts.customer');
 uses([WithPagination::class]);
 
 $receipts = computed(fn () => CustomerReceipt::with('sale')->where('customer_account_id', auth('customer')->id())->latest()->paginate(10));
-$statusLabel = fn (string $status) => __("messages.status.$status") === "messages.status.$status" ? str($status)->replace('_', ' ')->title() : __("messages.status.$status");
-$methodLabel = fn (string $method) => __("messages.methods.$method") === "messages.methods.$method" ? str($method)->replace('_', ' ')->title() : __("messages.methods.$method");
+$statusLabel = fn (string $status) => __("messages.status.$status") === "messages.status.$status" ? \App\Support\UiText::label($status) : __("messages.status.$status");
+$methodLabel = fn (string $method) => __("messages.methods.$method") === "messages.methods.$method" ? \App\Support\UiText::label($method) : __("messages.methods.$method");
 
 ?>
 
@@ -24,7 +24,7 @@ $methodLabel = fn (string $method) => __("messages.methods.$method") === "messag
         <x-table :headers="[__('messages.table.date'), __('messages.debts.invoice_number'), __('messages.table.reference'), __('messages.table.method'), __('messages.table.amount'), __('messages.table.status'), __('messages.receipts.file')]">
             @forelse ($this->receipts as $receipt)
                 <tr>
-                    <td class="px-4 py-3">{{ $receipt->created_at->format('M d, Y') }}</td>
+                    <td class="px-4 py-3">{{ $receipt->created_at->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
                     <td class="px-4 py-3 font-bold">{{ $receipt->sale?->sale_number ?: __('messages.receipts.general_payment') }}</td>
                     <td class="px-4 py-3">{{ $receipt->reference_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $this->methodLabel($receipt->payment_method) }}</td>

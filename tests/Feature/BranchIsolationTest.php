@@ -37,6 +37,7 @@ beforeEach(function () {
     $this->seed(DatabaseSeeder::class);
     $this->staff = User::where('email', 'admin@buildmart.test')->firstOrFail();
     $this->staff->forceFill(['is_system_owner' => false])->save();
+    $this->staff->syncRoles(['Admin']);
     $this->branchA = Branch::findOrFail($this->staff->branch_id);
     $this->branchB = Branch::create(['company_id' => $this->staff->company_id, 'name' => 'Private Branch B', 'code' => 'PRIVATE-B', 'status' => 'active']);
     $this->otherCompany = Company::create(['company_name' => 'Other Tenant', 'business_type' => 'hardware', 'phone' => '123', 'whatsapp_number' => '123']);
@@ -69,7 +70,7 @@ beforeEach(function () {
     $this->actingAs($this->staff)->withSession(['staff_locale' => 'en']);
 });
 
-test('assigned super admin sees only its branch across direct and parent-owned models', function () {
+test('assigned ordinary admin sees only its branch across direct and parent-owned models', function () {
     foreach ($this->rows[$this->branchA->id] as $key => $record) {
         expect($record::query()->whereKey($record->id)->exists())->toBeTrue();
         foreach ([$this->branchB, $this->branchC] as $branch) {

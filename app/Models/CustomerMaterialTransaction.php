@@ -16,8 +16,8 @@ class CustomerMaterialTransaction extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn () => throw new LogicException('Material-account statement transactions are immutable.'));
-        static::deleting(fn () => throw new LogicException('Material-account statement transactions cannot be deleted.'));
+        static::updating(fn () => throw new LogicException(__('application.material_account_statement_transactions_are_immutable_af6f7897')));
+        static::deleting(fn () => throw new LogicException(__('application.material_account_statement_transactions_cannot_be_deleted_a2f9aa40')));
     }
 
     public function account(): BelongsTo

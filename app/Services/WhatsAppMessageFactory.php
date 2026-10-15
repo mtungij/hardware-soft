@@ -6,8 +6,10 @@ use App\Models\Company;
 use App\Models\CompanyWhatsAppSetting;
 use App\Models\CustomerMaterialIssue;
 use App\Models\CustomerPayment;
+use App\Models\Product;
 use App\Models\ProductionOrder;
 use App\Models\Sale;
+use App\Models\User;
 use App\Models\WhatsAppRecipient;
 use Carbon\CarbonInterface;
 
@@ -19,6 +21,18 @@ class WhatsAppMessageFactory
         private WhatsAppLocalization $localization,
     ) {}
 
+    public function productDeleted(Product $product, Company $company, ?User $actor): string
+    {
+        return $this->localization->get($company, 'product_deleted.body', [
+            'product' => $product->displayName(),
+            'sku' => $product->sku ?: '-',
+            'branch' => $product->branch?->name ?: '-',
+            'actor' => $actor?->name ?: $this->localization->get($company, 'common.system'),
+            'date' => $this->localization->date($company, now()->timezone($company->timezone ?: config('app.timezone')), true),
+            'company' => $company->company_name,
+        ]);
+    }
+
     public function saleCompleted(Sale $sale): string
     {
         $sale->load(['company', 'branch', 'customer', 'soldBy', 'createdBy', 'items.product', 'items.productSize', 'items.sellingUnit', 'payments']);
@@ -26,7 +40,7 @@ class WhatsAppMessageFactory
         $currency = $sale->company?->currency ?: 'TZS';
         $timezone = $sale->company?->timezone ?: config('app.timezone');
         $customer = $sale->temporary_customer_name
-            ?: $sale->customer?->name
+            ?: $sale->customer?->displayName($this->localization->language($sale->company))
             ?: $this->localization->get($sale->company, 'common.walk_in_customer');
         $payment = $sale->payments->pluck('payment_method')->filter()->unique()
             ->map(fn (string $method): string => $this->paymentMethod($sale->company, $method))
@@ -49,9 +63,9 @@ class WhatsAppMessageFactory
         $products = $displayedItems->isEmpty() ? '-' : $displayedItems->implode("\n");
         $totalQuantity = $this->quantity($itemQuantity);
 
-        return $this->templates->render($sale->company, 'sale_completed', [
+        $message = $this->templates->render($sale->company, 'sale_completed', [
             'sale_number' => $sale->sale_number,
-            'date' => $this->localization->date($sale->company, $sale->created_at?->clone()->timezone($timezone), true),
+            'date' => $this->localization->date($sale->company, $sale->sale_date),
             'branch' => $sale->branch?->name ?: '-',
             'cashier' => $sale->soldBy?->name ?: $sale->createdBy?->name ?: '-',
             'customer' => $customer,
@@ -64,6 +78,13 @@ class WhatsAppMessageFactory
             'balance' => $this->money($sale->balance_amount),
             'payment' => $payment ?: '-',
         ]);
+        $recordedAt = $sale->created_at?->clone()->timezone($timezone);
+        if ($sale->sale_date?->toDateString() !== $recordedAt?->toDateString()) {
+            $message .= "\n\n".$this->localization->get($sale->company, 'sale_completed.recorded_at').': '.$this->localization->date($sale->company, $recordedAt, true)
+                ."\n".$this->localization->get($sale->company, 'sale_completed.notification_date').': '.$this->localization->date($sale->company, now($timezone), true);
+        }
+
+        return $message;
     }
 
     public function saleCancelled(Sale $sale): string
@@ -82,7 +103,7 @@ class WhatsAppMessageFactory
         $payment->loadMissing(['customer', 'branch', 'receivedBy']);
 
         return $this->templates->render($payment->company, 'customer_payment_received', [
-            'customer' => $payment->customer?->name ?: $this->localization->get($payment->company, 'common.customer'), 'amount' => $this->money($payment->amount),
+            'customer' => $payment->customer?->displayName($this->localization->language($payment->company)) ?: $this->localization->get($payment->company, 'common.customer'), 'amount' => $this->money($payment->amount),
             'reference' => $payment->receipt_number ?: $payment->reference_number ?: '-',
             'branch' => $payment->branch?->name ?: '-', 'actor' => $payment->receivedBy?->name ?: '-',
         ]);

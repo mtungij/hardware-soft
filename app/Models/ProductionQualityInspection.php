@@ -26,10 +26,10 @@ class ProductionQualityInspection extends Model
     {
         static::updating(function (self $inspection): void {
             if ($inspection->getOriginal('approval_status') === 'approved') {
-                throw new LogicException('Approved quality inspections are immutable; create a retest.');
+                throw new LogicException(__('application.approved_quality_inspections_are_immutable_create_a_retest_d884408c'));
             }
         });
-        static::deleting(fn () => throw new LogicException('Quality inspections are immutable and cannot be deleted.'));
+        static::deleting(fn () => throw new LogicException(__('application.quality_inspections_are_immutable_and_cannot_be_deleted_72352032')));
     }
 
     protected function casts(): array

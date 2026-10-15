@@ -130,6 +130,6 @@ class ProductFamily extends Model
 
     public function productionMethodLabel(): string
     {
-        return $this->production_method === self::METHOD_MOULD_ONLY ? 'Mould Only' : 'Machine + Mould';
+        return $this->production_method === self::METHOD_MOULD_ONLY ? __('application.mould_only_59c6f80b') : __('application.machine_mould_ff498316');
     }
 }

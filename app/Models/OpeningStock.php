@@ -19,8 +19,8 @@ class OpeningStock extends Model
 
     protected static function booted(): void
     {
-        static::updating(fn (): never => throw new LogicException('Posted Opening Stock cannot be edited.'));
-        static::deleting(fn (): never => throw new LogicException('Posted Opening Stock cannot be deleted.'));
+        static::updating(fn (): never => throw new LogicException(__('application.posted_opening_stock_cannot_be_edited_0d079c37')));
+        static::deleting(fn (): never => throw new LogicException(__('application.posted_opening_stock_cannot_be_deleted_9c5b4483')));
     }
 
     public function branch(): BelongsTo

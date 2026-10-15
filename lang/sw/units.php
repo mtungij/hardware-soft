@@ -1,3 +1,4 @@
 <?php
 
-return ['title' => 'Vipimo', 'create' => 'Ongeza Kipimo', 'edit' => 'Hariri Kipimo', 'name' => 'Jina', 'short_name' => 'Jina Fupi', 'description' => 'Maelezo'];
+// Compatibility for older callers; resources/lang is the canonical catalog.
+return require __DIR__.'/../../resources/lang/sw/units.php';

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\CustomerAccount;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -12,13 +13,13 @@ class EnsureCustomerApiAccountIsActive
     {
         $account = $request->user();
 
-        if (! $account) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+        if (! $account instanceof CustomerAccount || ! $account->customer || (int) $account->customer->company_id !== (int) $account->company_id) {
+            return response()->json(['message' => __('application.unauthenticated_5d595b3c')], 401);
         }
 
         if ($account->status === 'pending') {
             return response()->json([
-                'message' => 'Customer account is pending approval.',
+                'message' => __('application.customer_account_is_pending_approval_d3bd7bc4'),
                 'status' => 'pending',
             ], 423);
         }
@@ -27,17 +28,11 @@ class EnsureCustomerApiAccountIsActive
             $account->currentAccessToken()?->delete();
 
             return response()->json([
-                'message' => 'Customer account is suspended.',
+                'message' => __('application.customer_account_is_suspended_49be818a'),
                 'status' => 'suspended',
             ], 403);
         }
 
-        if ($account->must_change_password) {
-            return response()->json([
-                'message' => 'Password change required.',
-                'status' => 'password_change_required',
-            ], 428);
-        }
 
         return $next($request);
     }

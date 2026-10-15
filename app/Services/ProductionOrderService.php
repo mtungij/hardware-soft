@@ -35,24 +35,24 @@ class ProductionOrderService
         abort_unless((int) $assignment->company_id === $companyId, 404);
 
         if ($assignment->status === ProductionMachineAssignment::STATUS_CANCELLED) {
-            throw ValidationException::withMessages(['assignment' => 'Cancelled assignments cannot create production orders.']);
+            throw ValidationException::withMessages(['assignment' => __('application.cancelled_assignments_cannot_create_production_orders_b7738871')]);
         }
 
         $assignment->loadMissing(['machine.currentMouldInstallation.mould', 'mould', 'product.productFamily', 'recipe']);
         if (! $assignment->product?->isManufactured()) {
-            throw ValidationException::withMessages(['product' => 'Only manufactured products can create production orders.']);
+            throw ValidationException::withMessages(['product' => __('application.only_manufactured_products_can_create_production_orders_bdab312a')]);
         }
 
         $planned = $this->positive($data['planned_quantity'] ?? $assignment->target_quantity, 'planned_quantity');
         $method = $assignment->production_method ?: ProductFamily::METHOD_MACHINE_MOULD;
         if ($method === ProductFamily::METHOD_MACHINE_MOULD && ! $assignment->machine_id) {
-            throw ValidationException::withMessages(['machine_id' => 'Machine is required for Machine + Mould production.']);
+            throw ValidationException::withMessages(['machine_id' => __('application.machine_is_required_for_machine_mould_production_3f0bfdfe')]);
         }
         if (! $assignment->production_mould_id) {
-            throw ValidationException::withMessages(['production_mould_id' => 'Mould is required for production.']);
+            throw ValidationException::withMessages(['production_mould_id' => __('application.mould_is_required_for_production_c1acf96d')]);
         }
         if ($method === ProductFamily::METHOD_MOULD_ONLY && $assignment->machine_id) {
-            throw ValidationException::withMessages(['machine_id' => 'Mould-only production must not be silently converted into machine production.']);
+            throw ValidationException::withMessages(['machine_id' => __('application.mould_only_production_must_not_be_silently_converted_into_machine_productio_ccae7be7')]);
         }
         if ($method === ProductFamily::METHOD_MACHINE_MOULD) {
             $currentMould = $assignment->machine?->currentMouldInstallation?->mould;
@@ -129,10 +129,10 @@ class ProductionOrderService
                 ->where('production_machine_assignment_id', $assignment->id)->lockForUpdate()->first();
 
             if ($existing && $existing->status !== ProductionOrder::STATUS_CANCELLED) {
-                throw ValidationException::withMessages(['assignment' => 'This assignment already has a production order.']);
+                throw ValidationException::withMessages(['assignment' => __('application.this_assignment_already_has_a_production_order_ff25898b')]);
             }
             if ($existing?->posted_at) {
-                throw ValidationException::withMessages(['assignment' => 'A posted production order cannot be replaced.']);
+                throw ValidationException::withMessages(['assignment' => __('application.a_posted_production_order_cannot_be_replaced_86b24fad')]);
             }
 
             $values = [
@@ -218,18 +218,18 @@ class ProductionOrderService
         return DB::transaction(function () use ($order, $user): ProductionOrder {
             $order = $this->locked($order, $user);
             if ($order->status !== ProductionOrder::STATUS_PLANNED) {
-                throw ValidationException::withMessages(['status' => 'Only planned orders can be started.']);
+                throw ValidationException::withMessages(['status' => __('application.only_planned_orders_can_be_started_20640806')]);
             }
             if (! $order->snapshot()->exists() || ! $order->production_recipe_id || ! $order->materials()->exists()) {
-                throw ValidationException::withMessages(['snapshot' => 'An immutable active-recipe snapshot is required before production can start.']);
+                throw ValidationException::withMessages(['snapshot' => __('application.an_immutable_active_recipe_snapshot_is_required_before_production_can_start_bf62c553')]);
             }
             if ($order->production_method === ProductFamily::METHOD_MACHINE_MOULD) {
                 $machine = Machine::query()->forCurrentCompany()->whereKey($order->machine_id)->lockForUpdate()->firstOrFail();
                 if ($machine->status !== Machine::STATUS_ACTIVE) {
-                    throw ValidationException::withMessages(['machine' => 'The machine must be active before production starts.']);
+                    throw ValidationException::withMessages(['machine' => __('application.the_machine_must_be_active_before_production_starts_c7d918cc')]);
                 }
             } elseif ($order->production_method !== ProductFamily::METHOD_MOULD_ONLY || $order->machine_id || ! $order->production_mould_id) {
-                throw ValidationException::withMessages(['production_method' => 'The production method, machine, and mould combination is invalid.']);
+                throw ValidationException::withMessages(['production_method' => __('application.the_production_method_machine_and_mould_combination_is_invalid_c456ef46')]);
             }
             $raw = $this->lockedLocation($order->raw_material_stock_location_id, $order, $user, true);
             $inventoryLines = $order->materials()->where('line_type', ProductionOrderMaterial::TYPE_INVENTORY)->lockForUpdate()->get();
@@ -257,15 +257,15 @@ class ProductionOrderService
         return DB::transaction(function () use ($order, $materials, $accepted, $rejected, $notes, $user): ProductionOrder {
             $order = $this->locked($order, $user);
             if ($order->status !== ProductionOrder::STATUS_IN_PROGRESS) {
-                throw ValidationException::withMessages(['status' => 'Only in-progress orders can record execution.']);
+                throw ValidationException::withMessages(['status' => __('application.only_in_progress_orders_can_record_execution_057823a9')]);
             }
             $acceptedValue = $this->nonNegative($accepted, 'accepted_quantity', 4);
             $rejectedValue = $this->nonNegative($rejected, 'rejected_quantity', 4);
             $totalProduced = bcadd($acceptedValue, $rejectedValue, 4);
             if (bccomp($totalProduced, (string) $order->planned_quantity, 4) > 0) {
                 throw ValidationException::withMessages([
-                    'accepted_quantity' => 'Accepted plus rejected quantity cannot exceed the planned practical output.',
-                    'rejected_quantity' => 'Accepted plus rejected quantity cannot exceed the planned practical output.',
+                    'accepted_quantity' => __('application.accepted_plus_rejected_quantity_cannot_exceed_the_planned_practical_output_358a9ed5'),
+                    'rejected_quantity' => __('application.accepted_plus_rejected_quantity_cannot_exceed_the_planned_practical_output_358a9ed5'),
                 ]);
             }
             $lines = $order->materials()->lockForUpdate()->get();
@@ -278,7 +278,7 @@ class ProductionOrderService
                     ? $this->nonNegative($input['actual_cost'], "materials.{$line->id}.actual_cost", 4)
                     : '0';
                 if ($line->line_type === ProductionOrderMaterial::TYPE_INVENTORY && $actualQuantity === null) {
-                    throw ValidationException::withMessages(["materials.{$line->id}.actual_quantity" => 'Actual inventory consumption is required.']);
+                    throw ValidationException::withMessages(["materials.{$line->id}.actual_quantity" => __('application.actual_inventory_consumption_is_required_8644339f')]);
                 }
                 $line->update(['actual_quantity' => $actualQuantity, 'actual_cost' => $actualCost]);
             }
@@ -306,11 +306,11 @@ class ProductionOrderService
         return DB::transaction(function () use ($order, $user): ProductionOrder {
             $order = $this->locked($order, $user);
             if ($order->status !== ProductionOrder::STATUS_IN_PROGRESS || bccomp((string) $order->total_produced_quantity, '0', 4) <= 0) {
-                throw ValidationException::withMessages(['output' => 'Record accepted or rejected output before submission.']);
+                throw ValidationException::withMessages(['output' => __('application.record_accepted_or_rejected_output_before_submission_a43cf2eb')]);
             }
             foreach ($order->materials()->get() as $line) {
                 if ($line->line_type === ProductionOrderMaterial::TYPE_INVENTORY && $line->actual_quantity === null) {
-                    throw ValidationException::withMessages(['materials' => 'Record actual inventory consumption before submission.']);
+                    throw ValidationException::withMessages(['materials' => __('application.record_actual_inventory_consumption_before_submission_2c3e30fa')]);
                 }
             }
             $order->update(['status' => ProductionOrder::STATUS_AWAITING_COMPLETION, 'submitted_at' => now(), 'updated_by' => $user->id]);
@@ -348,7 +348,7 @@ class ProductionOrderService
                 return $order;
             }
             if ($order->status !== ProductionOrder::STATUS_AWAITING_COMPLETION) {
-                throw ValidationException::withMessages(['status' => 'Only orders awaiting completion can be posted.']);
+                throw ValidationException::withMessages(['status' => __('application.only_orders_awaiting_completion_can_be_posted_42f5e236')]);
             }
             $issues = $this->completionIssues($order, $user, includeStatus: false);
             if ($issues !== []) {
@@ -362,15 +362,15 @@ class ProductionOrderService
             $outputBranchId = $this->effectiveInventoryBranch($order, $output);
             if ($rawBranchId === null || $outputBranchId === null) {
                 throw ValidationException::withMessages([
-                    'location' => 'Company-wide production stock locations cannot be posted because inventory movements require a branch. Select branch-owned production locations.',
+                    'location' => __('application.company_wide_production_stock_locations_cannot_be_posted_because_inventory__ef36bd4b'),
                 ]);
             }
             $requiresCuring = (bool) $order->product?->requires_curing;
             if ($requiresCuring && ($output->is_sellable || ! in_array($output->type, ['curing', 'quarantine'], true))) {
-                throw ValidationException::withMessages(['location' => 'A curing product must post to an active non-sellable curing location.']);
+                throw ValidationException::withMessages(['location' => __('application.a_curing_product_must_post_to_an_active_non_sellable_curing_location_cd09d969')]);
             }
             if (! $requiresCuring && ! $output->is_sellable) {
-                throw ValidationException::withMessages(['location' => 'A non-curing product must post to a sellable finished-goods location.']);
+                throw ValidationException::withMessages(['location' => __('application.a_non_curing_product_must_post_to_a_sellable_finished_goods_location_c2b15e50')]);
             }
             $lines = $order->materials()->with('materialProduct')->lockForUpdate()->get();
             $postingReference = 'PRDPOST-'.$order->order_number;
@@ -560,13 +560,13 @@ class ProductionOrderService
     {
         abort_unless($user->can('production.cancel_orders'), 403);
         if (trim($reason) === '') {
-            throw ValidationException::withMessages(['cancellation_reason' => 'Cancellation reason is required.']);
+            throw ValidationException::withMessages(['cancellation_reason' => __('application.cancellation_reason_is_required_2d900d0c')]);
         }
 
         return DB::transaction(function () use ($order, $reason, $user): ProductionOrder {
             $order = $this->locked($order, $user);
             if (in_array($order->status, [ProductionOrder::STATUS_COMPLETED, ProductionOrder::STATUS_CANCELLED], true) || $order->posted_at) {
-                throw ValidationException::withMessages(['status' => 'This production order cannot be cancelled.']);
+                throw ValidationException::withMessages(['status' => __('application.this_production_order_cannot_be_cancelled_0712d251')]);
             }
             $order->update([
                 'status' => ProductionOrder::STATUS_CANCELLED, 'cancelled_at' => now(),
@@ -616,7 +616,7 @@ class ProductionOrderService
             || ($raw && ! $location->can_issue_stock) || (! $raw && ! $location->can_receive_stock)
             || ($sellable !== null && (bool) $location->is_sellable !== $sellable)
             || ($sellable === false && ! in_array($location->type, ['curing', 'quarantine'], true))) {
-            throw ValidationException::withMessages([$raw ? 'raw_material_stock_location_id' : 'finished_goods_stock_location_id' => 'Select an active, branch-compatible stock location.']);
+            throw ValidationException::withMessages([$raw ? 'raw_material_stock_location_id' : 'finished_goods_stock_location_id' => __('application.select_an_active_branch_compatible_stock_location_7f6c74c3')]);
         }
 
         return $location;
@@ -627,12 +627,12 @@ class ProductionOrderService
         $location = StockLocation::query()->where('company_id', $order->company_id)->whereKey($id)->lockForUpdate()->first();
         $location = $location ? $this->location($location->id, $order->company_id, $order->branch_id, $raw) : null;
         if (! $location) {
-            throw ValidationException::withMessages(['location' => 'Production stock location is invalid.']);
+            throw ValidationException::withMessages(['location' => __('application.production_stock_location_is_invalid_50d69d47')]);
         }
         if ($user->stockLocations()->exists()) {
             $ability = $raw ? 'can_transfer' : 'can_receive';
             if (! $user->stockLocations()->where('stock_locations.id', $location->id)->wherePivot($ability, true)->exists()) {
-                throw ValidationException::withMessages(['location' => 'You are not authorised for this production stock location.']);
+                throw ValidationException::withMessages(['location' => __('application.you_are_not_authorised_for_this_production_stock_location_d559b94b')]);
             }
         }
 
@@ -700,7 +700,7 @@ class ProductionOrderService
     {
         $number = $this->calculator->decimal($value);
         if (bccomp($number, '0', 4) <= 0) {
-            throw ValidationException::withMessages([$field => 'Quantity must be greater than zero.']);
+            throw ValidationException::withMessages([$field => __('application.quantity_must_be_greater_than_zero_a53d797f')]);
         }
 
         return bcadd($number, '0', 4);
@@ -711,10 +711,10 @@ class ProductionOrderService
         try {
             $number = $this->calculator->decimal($value);
         } catch (\InvalidArgumentException) {
-            throw ValidationException::withMessages([$field => 'Enter a valid non-negative quantity.']);
+            throw ValidationException::withMessages([$field => __('application.enter_a_valid_non_negative_quantity_525b0ebd')]);
         }
         if (bccomp($number, '0', $scale) < 0) {
-            throw ValidationException::withMessages([$field => 'Value cannot be negative.']);
+            throw ValidationException::withMessages([$field => __('application.value_cannot_be_negative_f8bc670f')]);
         }
 
         return bcadd($number, '0', $scale);

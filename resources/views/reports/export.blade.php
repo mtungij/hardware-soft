@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="utf-8">
     <title>{{ $title }}</title>
@@ -12,7 +12,7 @@
 </head>
 <body>
     <h1>{{ $title }}</h1>
-    <p>Printed by {{ auth()->user()?->name }} on {{ now()->format('Y-m-d H:i') }}</p>
+    <p>{{ __('application.printed_by_b2addf5f') }} {{ auth()->user()?->name }} {{ __('application.on_db3d405b') }} {{ now()->format('Y-m-d H:i') }}</p>
     <table>
         <thead><tr>@foreach ($headers as $header)<th>{{ $header }}</th>@endforeach</tr></thead>
         <tbody>

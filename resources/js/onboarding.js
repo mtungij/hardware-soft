@@ -1,3 +1,4 @@
+import { translate } from './localization';
 (() => {
     const state = { config: null, tourName: null, stepIndex: 0, activeTarget: null };
 
@@ -84,20 +85,20 @@
         popover.innerHTML = `
             <div class="flex items-start justify-between gap-3">
                 <div>
-                    <p class="text-xs font-bold uppercase tracking-wide text-cyan-600">Hatua ${state.stepIndex + 1} kati ya ${tour.length}</p>
+                    <p class="text-xs font-bold uppercase tracking-wide text-cyan-600">${translate('step', { current: state.stepIndex + 1, total: tour.length })}</p>
                     <h3 class="mt-1 text-lg font-bold">${step.title}</h3>
                 </div>
-                <button type="button" class="rounded-lg px-2 py-1 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" data-tour-skip>Ruka</button>
+                <button type="button" class="rounded-lg px-2 py-1 text-sm font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10" data-tour-skip>${translate('skip')}</button>
             </div>
             <p class="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">${step.body}</p>
             <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
                 <div class="h-full rounded-full bg-cyan-500" style="width: ${((state.stepIndex + 1) / tour.length) * 100}%"></div>
             </div>
             <div class="mt-4 flex items-center justify-between gap-2">
-                <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-40 dark:border-slate-700" data-tour-prev ${state.stepIndex === 0 ? 'disabled' : ''}>Hatua Iliyopita</button>
+                <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold disabled:opacity-40 dark:border-slate-700" data-tour-prev ${state.stepIndex === 0 ? 'disabled' : ''}>${translate('previous')}</button>
                 <div class="flex gap-2">
-                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700" data-tour-never>Usinionyeshe Tena</button>
-                    <button type="button" class="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white" data-tour-next>${state.stepIndex === tour.length - 1 ? 'Maliza Mwongozo' : 'Hatua Inayofuata'}</button>
+                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700" data-tour-never>${translate('never')}</button>
+                    <button type="button" class="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white" data-tour-next>${state.stepIndex === tour.length - 1 ? translate('finish') : translate('next')}</button>
                 </div>
             </div>
         `;
@@ -144,9 +145,9 @@
                 <h2 class="mt-2 text-2xl font-bold">${state.config.welcome.title}</h2>
                 <p class="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600 dark:text-slate-300">${state.config.welcome.message}</p>
                 <div class="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700" data-welcome-never>Usinionyeshe Tena</button>
-                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700" data-welcome-skip>Ruka Mwongozo</button>
-                    <button type="button" class="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white" data-welcome-start>Anza Mwongozo</button>
+                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700" data-welcome-never>${translate('never')}</button>
+                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold dark:border-slate-700" data-welcome-skip>${translate('skip_guide')}</button>
+                    <button type="button" class="rounded-lg bg-cyan-600 px-3 py-2 text-sm font-semibold text-white" data-welcome-start>${translate('start_guide')}</button>
                 </div>
             </div>
         `;
@@ -182,7 +183,7 @@
         const update = () => {
             const done = state.config.checklist.filter((item) => checked[item.key]).length;
             const total = state.config.checklist.length;
-            progressText.textContent = `${done}/${total} Imekamilika`;
+            progressText.textContent = `${done}/${total} ${translate('completed')}`;
             bar.style.width = `${total ? (done / total) * 100 : 0}%`;
             localStorage.setItem(storageKey('checklist'), JSON.stringify(checked));
             postProgress({ tour_name: 'checklist', checklist: checked, last_step: done, completed: done === total });

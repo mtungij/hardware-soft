@@ -1,0 +1,181 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Branch;
+use App\Models\Company;
+use App\Models\CustomerAccount;
+use App\Models\CustomerPurchaseRequest;
+use App\Models\DocumentSequence;
+use App\Models\Scopes\CompanyScope;
+use App\Models\User;
+use App\Support\AuthorizationScope;
+use App\Support\NumberFormatter;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class CustomerPurchaseRequestService
+{
+    public function __construct(
+        private DocumentNumberService $numbers,
+        private ProductUnitConversionService $conversions,
+        private WhatsAppNotificationService $notifications,
+        private B2bAuditService $audit,
+    ) {}
+
+    /** @param array<int, array<string, mixed>> $items */
+    public function submit(CustomerAccount $account, ?int $branchId, ?string $notes, array $items, string $submissionKey, array $options = []): CustomerPurchaseRequest
+    {
+        $existing = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)
+            ->where('customer_account_id', $account->id)->where('submission_key', $submissionKey)->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $request = DB::transaction(function () use ($account, $branchId, $notes, $items, $submissionKey, $options): CustomerPurchaseRequest {
+            $account = CustomerAccount::withoutGlobalScope(CompanyScope::class)->with('customer')->lockForUpdate()->findOrFail($account->id);
+            if (! $account->isActive() || ! $account->customer || (int) $account->customer->company_id !== (int) $account->company_id) {
+                throw ValidationException::withMessages(['account' => __('application.the_customer_account_is_not_active_or_is_not_linked_correctly_650792bf')]);
+            }
+            $existing = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)
+                ->where('company_id', $account->company_id)->where('customer_account_id', $account->id)->where('submission_key', $submissionKey)->first();
+            if ($existing) {
+                return $existing;
+            }
+            if ($items === []) {
+                throw ValidationException::withMessages(['items' => __('application.add_at_least_one_product_e2ed1f2c')]);
+            }
+            $branchId ??= $account->customer->branch_id;
+            $branch = $branchId
+                ? Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $account->company_id)->where('status', 'active')->find($branchId)
+                : Branch::withoutGlobalScope(CompanyScope::class)->where('company_id', $account->company_id)->where('status', 'active')->orderByDesc('is_default')->first();
+            if (! $branch) {
+                throw ValidationException::withMessages(['branch_id' => __('application.select_an_active_branch_belonging_to_this_company_38fce5cf')]);
+            }
+
+            $options = validator($options, [
+                'request_type' => ['sometimes', 'in:rfq,order'],
+                'delivery_requested' => ['sometimes', 'boolean'],
+                'delivery_address' => ['nullable', 'required_if:delivery_requested,true', 'string', 'max:2000'],
+                'delivery_instructions' => ['nullable', 'string', 'max:2000'],
+            ])->validate();
+            $request = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)->create([
+                'request_type' => $options['request_type'] ?? 'rfq',
+                'delivery_requested' => $options['delivery_requested'] ?? false,
+                'delivery_address' => $options['delivery_address'] ?? null,
+                'delivery_instructions' => $options['delivery_instructions'] ?? null,
+                'company_id' => $account->company_id,
+                'branch_id' => $branch->id,
+                'customer_id' => $account->customer_id,
+                'customer_account_id' => $account->id,
+                'request_number' => $this->numbers->next($account->company_id, DocumentSequence::CUSTOMER_PURCHASE_REQUEST, 'REQ'),
+                'status' => 'pending',
+                'submission_key' => $submissionKey,
+                'customer_notes' => $notes,
+                'submitted_at' => now(),
+            ]);
+
+            foreach ($items as $index => $row) {
+                $product = app(CustomerPortalCatalogue::class)->products($account, $branch->id)
+                    ->find($row['product_id'] ?? null);
+                if (! $product) {
+                    throw ValidationException::withMessages(["items.{$index}.product_id" => __('application.select_an_active_product_belonging_to_this_company_60a8ed98')]);
+                }
+                if (! is_numeric($row['quantity'] ?? null) || (float) $row['quantity'] <= 0) {
+                    throw ValidationException::withMessages(["items.{$index}.quantity" => __('application.quantity_must_be_greater_than_zero_a53d797f')]);
+                }
+                $quantity = round((float) $row['quantity'], 4);
+                $conversion = $this->conversions->resolveForSale($product, filled($row['product_unit_conversion_id'] ?? null) ? (int) $row['product_unit_conversion_id'] : null);
+                $factor = $conversion ? (float) $conversion->conversion_factor : 1.0;
+                $baseQuantity = round($quantity * $factor, 4);
+                if (! $product->acceptsStockQuantity($baseQuantity)) {
+                    throw ValidationException::withMessages(["items.{$index}.quantity" => __('application.the_selected_quantity_is_invalid_for_the_product_base_unit_f09475a3')]);
+                }
+                $unit = $conversion?->unit ?: $product->unit;
+                $location = app(CustomerPortalCatalogue::class)->location($account, $branch);
+                $price = $location ? app(LocationPriceService::class)->priceFor($product, $location, 'retail', $conversion) : ($conversion?->priceFor('retail') ?? (float) $product->selling_price);
+                $request->items()->create([
+                    'company_id' => $account->company_id,
+                    'product_id' => $product->id,
+                    'base_unit_id' => $product->unit_id,
+                    'transaction_unit_id' => $unit->id,
+                    'product_unit_conversion_id' => $conversion?->id,
+                    'product_name_snapshot' => $product->displayNameWithSize(),
+                    'sku_snapshot' => $product->sku,
+                    'base_unit_name_snapshot' => $product->unit?->short_name ?: $product->unit?->name,
+                    'transaction_unit_name_snapshot' => $unit?->short_name ?: $unit?->name,
+                    'transaction_quantity' => $quantity,
+                    'conversion_factor_snapshot' => $factor,
+                    'base_quantity' => $baseQuantity,
+                    'display_unit_price_snapshot' => (float) ($price ?? 0),
+                    'customer_notes' => $row['notes'] ?? null,
+                ]);
+            }
+            $this->audit->record($request, 'purchase_request', 'submitted', $account);
+
+            return $request->load(['items', 'branch', 'customer']);
+        });
+
+        DB::afterCommit(function () use ($request): void {
+            $company = Company::query()->find($request->company_id);
+            if (! $company) {
+                return;
+            }
+            $localization = app(WhatsAppLocalization::class);
+            $label = fn (string $key): string => $localization->get($company, 'b2b.'.$key);
+            $estimated = $request->items->sum(fn ($item): float => (float) $item->transaction_quantity * (float) $item->display_unit_price_snapshot);
+            $message = implode("\n", [
+                '*'.$label('request_title').'*', '',
+                $label('request').': '.$request->request_number,
+                $label('customer').': '.$request->customer->name,
+                $label('branch').': '.$request->branch->name,
+                $label('items').': '.$request->items->count(),
+                $label('estimated_value').': TZS '.NumberFormatter::money($estimated), '',
+                $label('request_submitted'), '',
+                $label('review_request'),
+            ]);
+            $this->notifications->queueForRecipients(
+                $company, 'customer_requests', 'customer_purchase_request_submitted',
+                'purchase-request:'.$request->id.':submitted', $message, (int) $request->branch_id,
+                metadata: ['purchase_request_id' => $request->id, 'request_number' => $request->request_number],
+            );
+        });
+
+        return $request;
+    }
+
+    public function reject(CustomerPurchaseRequest $request, User $staff, ?string $reason = null): CustomerPurchaseRequest
+    {
+        $this->beginReview($request, $staff);
+
+        return DB::transaction(function () use ($request, $staff, $reason) {
+            $request = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)->lockForUpdate()->findOrFail($request->id);
+            if (! in_array($request->status, ['pending', 'under_review'], true)) {
+                throw ValidationException::withMessages(['request' => __('portal.request_closed')]);
+            }
+            $request->update(['status' => 'rejected', 'staff_notes' => $reason, 'reviewed_by' => $staff->id, 'reviewed_at' => now(), 'rejected_at' => now()]);
+            $this->audit->record($request, 'purchase_request', 'rejected', $staff, $reason);
+
+            return $request->refresh();
+        });
+    }
+
+    public function beginReview(CustomerPurchaseRequest $request, User $staff): CustomerPurchaseRequest
+    {
+        if ((int) $request->company_id !== (int) $staff->company_id || ! $staff->can('customer_requests.review')
+            || (AuthorizationScope::scopeFor($staff, 'report_scope', AuthorizationScope::BRANCH) !== AuthorizationScope::COMPANY
+                && (int) $request->branch_id !== (int) $staff->branch_id)) {
+            abort(403);
+        }
+
+        return DB::transaction(function () use ($request, $staff): CustomerPurchaseRequest {
+            $request = CustomerPurchaseRequest::withoutGlobalScope(CompanyScope::class)->lockForUpdate()->findOrFail($request->id);
+            if ($request->status === 'pending') {
+                $request->update(['status' => 'under_review', 'reviewed_by' => $staff->id, 'reviewed_at' => now()]);
+                $this->audit->record($request, 'purchase_request', 'review_started', $staff);
+            }
+
+            return $request->refresh();
+        });
+    }
+}

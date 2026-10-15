@@ -2,6 +2,8 @@
     'title',
     'description' => null,
     'breadcrumbs' => [],
+    'translateTitle' => true,
+    'translateDescription' => true,
 ])
 
 @php
@@ -16,7 +18,7 @@
                     @if ($url)
                         <a class="hover:text-build-orange" href="{{ $url }}" wire:navigate>{{ $translateUi($label) }}</a>
                     @else
-                        <span class="font-semibold text-slate-900 dark:text-slate-200">{{ $translateUi($label) }}</span>
+                        <span class="font-semibold text-slate-900 dark:text-slate-200">{{ ! $translateTitle && $label === $title ? $label : $translateUi($label) }}</span>
                     @endif
                     @unless ($loop->last)
                         <span class="text-slate-300 dark:text-slate-600">/</span>
@@ -25,10 +27,10 @@
             </nav>
         @endif
 
-        <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ $translateUi($title) }}</h1>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">{{ $translateTitle ? $translateUi($title) : $title }}</h1>
 
         @if ($description)
-            <p class="mt-2 max-w-3xl text-sm text-slate-500 dark:text-slate-400">{{ $translateUi($description) }}</p>
+            <p class="mt-2 max-w-3xl text-sm text-slate-500 dark:text-slate-400">{{ $translateDescription ? $translateUi($description) : $description }}</p>
         @endif
     </div>
 

@@ -380,11 +380,12 @@ mount(function (Sale $sale) {
         </div>
 
         <div class="receipt-header my-[2mm] border-b border-dashed border-slate-500 pb-[2mm] text-left">
-            <p><span class="font-bold">Receipt:</span> {{ $sale->sale_number }}</p>
-            <p><span class="font-bold">Date:</span> {{ $sale->created_at?->format('d M Y H:i') }}</p>
-            <p><span class="font-bold">Cashier:</span> {{ $sale->soldBy?->name ?: $sale->createdBy?->name }}</p>
-            <p><span class="font-bold">Customer:</span> {{ $customerName }}</p>
-            <p><span class="font-bold">Sale Type:</span> {{ $sale->saleTypeLabel() }}</p>
+            <p><span class="font-bold">{{ __('application.receipt_ba12c1fa') }}</span> {{ $sale->sale_number }}</p>
+            <p><span class="font-bold">{{ __('sale_dates.label') }}</span> {{ $sale->sale_date?->locale(app()->getLocale())->translatedFormat('d M Y') }}</p>
+            <p><span class="font-bold">{{ __('sale_dates.recorded_at') }}</span> {{ $sale->created_at?->clone()->timezone(app(\App\Support\PosSaleDate::class)->timezone($sale->company_id))->locale(app()->getLocale())->translatedFormat('d M Y H:i') }}</p>
+            <p><span class="font-bold">{{ __('application.cashier_aff2c1b1') }}</span> {{ $sale->soldBy?->name ?: $sale->createdBy?->name }}</p>
+            <p><span class="font-bold">{{ __('application.customer_5e0d7363') }}</span> {{ $customerName }}</p>
+            <p><span class="font-bold">{{ __('application.sale_type_567bc6b0') }}</span> {{ $sale->saleTypeLabel() }}</p>
         </div>
 
         <div class="receipt-body">
@@ -416,28 +417,28 @@ mount(function (Sale $sale) {
                         <p class="receipt-item-location mt-0.5">{{ $item->sold_from_label ?: \App\Support\InventorySettings::stockLocationLabel($item->stockLocation) }}</p>
                     @endif
                     @if ((float) $item->allocated_order_discount > 0)
-                        <p class="receipt-item-discount mt-0.5">Order discount allocation: {{ \App\Support\NumberFormatter::money($item->allocated_order_discount) }}</p>
+                        <p class="receipt-item-discount mt-0.5">{{ __('application.order_discount_allocation_52c25130') }} {{ \App\Support\NumberFormatter::money($item->allocated_order_discount) }}</p>
                     @elseif ($discountPerUnit > 0)
-                        <p class="receipt-item-discount mt-0.5">Discount: {{ \App\Support\NumberFormatter::money($discountPerUnit) }} each</p>
+                        <p class="receipt-item-discount mt-0.5">{{ __('application.discount_811474dc') }} {{ \App\Support\NumberFormatter::money($discountPerUnit) }} {{ __('application.each_b32f279e') }}</p>
                     @endif
                 </div>
             @endforeach
         </div>
 
         <div class="receipt-summary py-[2mm]">
-            <div class="summary-row"><span>Subtotal</span><span>{{ \App\Support\NumberFormatter::money($sale->subtotal) }}</span></div>
+            <div class="summary-row"><span>{{ __('application.subtotal_97f7359e') }}</span><span>{{ \App\Support\NumberFormatter::money($sale->subtotal) }}</span></div>
             @if ((float) $sale->discount_amount > 0)
-                <div class="summary-row"><span>{{ $sale->discount_mode === 'order' ? 'Order Discount' : 'Discount' }}</span><span>-{{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</span></div>
+                <div class="summary-row"><span>{{ $sale->discount_mode === 'order' ? __('terminology.order_discount_a4d87472') : __('application.discount_b524936d') }}</span><span>-{{ \App\Support\NumberFormatter::money($sale->discount_amount) }}</span></div>
             @endif
             @if ((float) $sale->tax_amount > 0)
-                <div class="summary-row"><span>Tax/VAT</span><span>{{ \App\Support\NumberFormatter::money($sale->tax_amount) }}</span></div>
+                <div class="summary-row"><span>{{ __('application.tax_vat_5b85846e') }}</span><span>{{ \App\Support\NumberFormatter::money($sale->tax_amount) }}</span></div>
             @endif
-            <div class="summary-row summary-total my-1 border-y py-1"><span>TOTAL</span><span>{{ \App\Support\NumberFormatter::money($sale->total_amount) }}</span></div>
-            <div class="summary-row"><span>Paid</span><span>{{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</span></div>
+            <div class="summary-row summary-total my-1 border-y py-1"><span>{{ __('application.total_5c6505ae') }}</span><span>{{ \App\Support\NumberFormatter::money($sale->total_amount) }}</span></div>
+            <div class="summary-row"><span>{{ __('application.paid_dc9d4584') }}</span><span>{{ \App\Support\NumberFormatter::money($sale->paid_amount) }}</span></div>
             @if ($isOutstanding)
-                <div class="summary-row font-bold"><span>Outstanding</span><span>{{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</span></div>
+                <div class="summary-row font-bold"><span>{{ __('application.outstanding_f8ee57ec') }}</span><span>{{ \App\Support\NumberFormatter::money($sale->balance_amount) }}</span></div>
             @else
-                <div class="summary-row"><span>Change</span><span>{{ \App\Support\NumberFormatter::money($sale->change_amount) }}</span></div>
+                <div class="summary-row"><span>{{ __('application.change_64fbd995') }}</span><span>{{ \App\Support\NumberFormatter::money($sale->change_amount) }}</span></div>
             @endif
         </div>
 
@@ -450,14 +451,14 @@ mount(function (Sale $sale) {
         <div class="receipt-actions">
             <div class="receipt-action-card">
                 <div class="border-b border-slate-200 p-5">
-                    <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">Sale completed</span>
-                    <h1 class="mt-3 text-2xl font-black text-slate-950">Receipt Preview</h1>
+                    <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">{{ __('application.sale_completed_4c0886f4') }}</span>
+                    <h1 class="mt-3 text-2xl font-black text-slate-950">{{ __('application.receipt_preview_a00475b4') }}</h1>
                     <p class="mt-1 text-sm text-slate-500">{{ $sale->sale_number }}</p>
                 </div>
 
                 <div class="space-y-5 p-5">
                     <fieldset>
-                        <legend class="text-xs font-black uppercase tracking-wide text-slate-500">Receipt width</legend>
+                        <legend class="text-xs font-black uppercase tracking-wide text-slate-500">{{ __('application.receipt_width_f3a0c18d') }}</legend>
                         <div class="mt-2 grid grid-cols-2 gap-2">
                             <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 58]) }}" data-paper-selector="58" class="{{ $paperSize === '58' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700' }} rounded-xl border px-3 py-3 text-center text-sm font-black">58mm</a>
                             <a href="{{ route('sales.receipt', ['sale' => $sale, 'paper' => 80]) }}" data-paper-selector="80" class="{{ $paperSize === '80' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700' }} rounded-xl border px-3 py-3 text-center text-sm font-black">80mm</a>
@@ -465,21 +466,21 @@ mount(function (Sale $sale) {
                     </fieldset>
 
                     <button type="button" onclick="printCustomerReceipt()" class="w-full rounded-xl bg-build-orange px-4 py-3 text-sm font-black text-white shadow-lg shadow-orange-500/20">
-                        Print Receipt
+                        {{ __('application.print_receipt_4e896ec2') }}
                     </button>
 
                     <a href="{{ route('sales.receipt.complete', $sale) }}" data-skip-printing class="block w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-black text-slate-800">
-                        Skip Printing / Back to POS
+                        {{ __('application.skip_printing_back_to_pos_4276cdd7') }}
                     </a>
 
                     <a href="{{ route('sales.receipt.complete', $sale) }}" data-start-new-sale class="block text-center text-sm font-bold text-build-orange">
-                        Start New Sale
+                        {{ __('application.start_new_sale_0d6972da') }}
                     </a>
 
                     <div class="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600" data-printer-help>
-                        <p class="font-black text-slate-900">Recommended thermal printer settings</p>
-                        <p class="mt-1">Paper: {{ $paperSize }}mm · Margins: None · Scale: 100% · Browser headers/footers: Off</p>
-                        <p class="mt-2">If your browser does not return automatically after printing, use the Back to POS button above.</p>
+                        <p class="font-black text-slate-900">{{ __('application.recommended_thermal_printer_settings_1293392a') }}</p>
+                        <p class="mt-1">{{ __('application.paper_79bb6b33') }} {{ $paperSize }}{{ __('application.mm_margins_none_scale_100_browser_headers_footers_off_3509c7a9') }}</p>
+                        <p class="mt-2">{{ __('application.if_your_browser_does_not_return_automatically_after_printing_use_the_back_t_52bd3d66') }}</p>
                     </div>
                 </div>
             </div>
