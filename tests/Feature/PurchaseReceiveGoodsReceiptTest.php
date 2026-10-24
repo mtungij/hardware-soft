@@ -8,6 +8,8 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseCostType;
 use App\Models\Sale;
+use App\Models\Setting;
+use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
@@ -140,7 +142,7 @@ test('PurchaseReceive rejects an existing manually supplied GRN with a friendly 
         $this->fail('A duplicate manual GRN should be rejected.');
     } catch (ValidationException $exception) {
         expect($exception->errors()['grn_number'][0])
-            ->toBe('Namba hii ya GRN tayari imetumika. Tafadhali tumia namba nyingine.');
+            ->toBe(__('application.this_goods_receipt_number_is_already_used_please_use_another_number_b1e7a9e3'));
     }
 });
 
@@ -263,7 +265,7 @@ test('receipt landed costs are snapshotted and valued separately from supplier p
 
     $this->get(route('goods-receipts.show', $receipt))
         ->assertOk()
-        ->assertSee('Total Landed Cost')
+        ->assertSee(__('application.total_landed_cost_931201f0'))
         ->assertSee('Haulier');
 
     $item->product->update(['buying_price' => 99999]);
@@ -459,4 +461,51 @@ test('price application cannot use an item from another tenant', function () {
         ->set("lines.{$item->id}.quantity", '1')->set("lines.{$foreignId}.markup_percentage", '20')
         ->call('applySuggestedPrice', $foreignId))->toThrow(ModelNotFoundException::class);
     expect($item->product->fresh()->selling_price)->toBe($before);
+});
+
+test('direct mode purchases receive into the configured counter and reject warehouse destinations', function () {
+    $counter = StockLocation::query()->where('branch_id', $this->branch->id)->where('type', 'dispensing')->firstOrFail();
+    $counter->update(['can_sell' => true, 'is_sellable' => true, 'is_active' => true, 'status' => 'active']);
+    Setting::query()->where('company_id', $this->branch->company_id)->firstOrFail()->update([
+        'enable_warehouse' => false, 'inventory_mode' => 'single_location',
+        'default_stock_location_id' => $counter->id,
+    ]);
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin, 3);
+    $this->get('/purchases')->assertOk();
+    $this->get('/purchases/create')->assertOk();
+    Volt::test('purchases.receive', ['purchase' => $purchase])->assertSet('default_stock_location_id', (string) $counter->id);
+    $before = StockMovement::count();
+    expect(fn () => app(InventoryService::class)->receivePurchase(
+        $purchase, [$item->id => ['quantity' => 1, 'stock_location_id' => $this->location->id]], today()->toDateString(), $this->admin->id,
+    ))->toThrow(ValidationException::class);
+    expect(StockMovement::count())->toBe($before);
+    $receipt = app(InventoryService::class)->receivePurchase(
+        $purchase, [$item->id => ['quantity' => 3]], today()->toDateString(), $this->admin->id,
+    );
+    expect($receipt->stock_location_id)->toBe($counter->id)
+        ->and((float) $item->fresh()->received_quantity)->toBe(3.0);
+    $movement = StockMovement::where('reference_type', GoodsReceivingNote::class)->where('reference_id', $receipt->id)->firstOrFail();
+    $snapshot = $movement->getAttributes();
+    Volt::test('settings.inventory')->call('save')->assertHasNoErrors()->call('save')->assertHasNoErrors();
+    expect($movement->fresh()->getAttributes())->toBe($snapshot)
+        ->and(StockMovement::count())->toBe($before + 1)
+        ->and($this->location->fresh()->status)->toBe('active');
+});
+
+test('purchase receiving honors the selected custom warehouse instead of the reserved main store', function () {
+    $warehouse = StockLocation::create([
+        'company_id' => $this->branch->company_id, 'branch_id' => $this->branch->id,
+        'name' => 'Custom warehouse', 'code' => 'PARTS-WAREHOUSE', 'type' => 'warehouse',
+        'status' => 'active', 'is_active' => true, 'can_receive_stock' => true,
+    ]);
+    Setting::query()->where('company_id', $this->branch->company_id)->firstOrFail()->update([
+        'enable_warehouse' => true, 'inventory_mode' => 'multi_location', 'default_stock_location_id' => $warehouse->id,
+    ]);
+    [$purchase, $item] = grnPurchase($this->branch, $this->admin);
+    Volt::test('purchases.receive', ['purchase' => $purchase])->assertSet('default_stock_location_id', (string) $warehouse->id);
+    $receipt = app(InventoryService::class)->receivePurchase(
+        $purchase, [$item->id => ['quantity' => 1]], today()->toDateString(), $this->admin->id,
+    );
+    expect($receipt->stock_location_id)->toBe($warehouse->id)
+        ->and($receipt->items()->firstOrFail()->stock_location_id)->toBe($warehouse->id);
 });

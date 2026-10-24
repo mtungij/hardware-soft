@@ -96,8 +96,8 @@
                     ['label' => __('messages.staff.nav.inventory_summary'), 'route' => 'inventory-summary.index', 'icon' => 'summary', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                 ]],
                 ['label' => __('messages.staff.nav.purchases_group'), 'icon' => 'purchases', 'items' => [
-                    ['label' => __('messages.staff.nav.purchases'), 'route' => 'purchases.index', 'icon' => 'purchases', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant'], 'show' => $warehouseEnabled],
-                    ['label' => __('messages.staff.nav.suppliers'), 'route' => 'suppliers.index', 'icon' => 'supplier', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant'], 'show' => $warehouseEnabled],
+                    ['label' => __('messages.staff.nav.purchases'), 'route' => 'purchases.index', 'icon' => 'purchases', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant']],
+                    ['label' => __('messages.staff.nav.suppliers'), 'route' => 'suppliers.index', 'icon' => 'supplier', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier', 'Accountant']],
                 ]],
                 ['label' => __('messages.staff.nav.warehouse'), 'icon' => 'warehouse', 'items' => [
                     ['label' => __('messages.staff.nav.store_stock'), 'route' => 'store-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier'], 'show' => $warehouseEnabled],
@@ -140,8 +140,8 @@
                     ['label' => __('messages.staff.nav.customer_payments'), 'route' => 'customer-payments.create', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
                     ['label' => __('messages.staff.nav.customer_receipts'), 'route' => 'admin.customer-receipts.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.customer_deposits'), 'route' => 'admin.customer-deposits.index', 'icon' => 'bank', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
-                    ['label' => __('messages.staff.nav.supplier_payments'), 'route' => 'supplier-payments.create', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant'], 'show' => $warehouseEnabled],
-                    ['label' => __('messages.staff.nav.supplier_balances'), 'route' => 'supplier-balances.index', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant'], 'show' => $warehouseEnabled],
+                    ['label' => __('messages.staff.nav.supplier_payments'), 'route' => 'supplier-payments.create', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => __('messages.staff.nav.supplier_balances'), 'route' => 'supplier-balances.index', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.cashbook'), 'route' => 'cashbook.index', 'icon' => 'accounting', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
                 ]],
                 ['label' => __('messages.staff.nav.communications'), 'icon' => 'mail', 'items' => [
@@ -152,7 +152,7 @@
                 ]],
                 ['label' => __('messages.staff.nav.reports'), 'icon' => 'reports', 'items' => [
                     ['label' => __('messages.staff.nav.sales_reports'), 'route' => 'reports.sales', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
-                    ['label' => __('messages.staff.nav.purchase_reports'), 'route' => 'reports.purchases', 'icon' => 'reports', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant'], 'show' => $warehouseEnabled],
+                    ['label' => __('messages.staff.nav.purchase_reports'), 'route' => 'reports.purchases', 'icon' => 'reports', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.profit_reports'), 'route' => 'reports.profit-loss', 'icon' => 'chart', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => 'Internal Sales & Acquisitions', 'route' => 'reports.internal-sales', 'icon' => 'chart', 'permissions' => ['reports.internal_sales', 'reports.internal_acquisitions', 'reports.location_margins']],
                     ['label' => 'Location Margins', 'route' => 'reports.location-margins', 'icon' => 'chart', 'permission' => 'reports.location_margins', 'show' => auth()->user()?->can('stock.view_value') && auth()->user()?->can('internal_sales.view_margin')],
@@ -172,7 +172,7 @@
                     ['label' => __('messages.staff.nav.inventory_settings'), 'route' => 'settings.inventory', 'icon' => 'settings', 'roles' => ['Super Admin', 'Admin']],
                     ['label' => __('messages.staff.nav.whatsapp_notifications'), 'route' => 'settings.whatsapp', 'icon' => 'message', 'permission' => 'whatsapp.view_settings'],
                     ['label' => __('messages.staff.nav.email_settings'), 'route' => 'email-settings.index', 'icon' => 'mail', 'roles' => ['Super Admin', 'Admin', 'Manager']],
-                    ['label' => __('messages.staff.nav.email_logs'), 'route' => 'purchase-email-logs.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager'], 'show' => $warehouseEnabled],
+                    ['label' => __('messages.staff.nav.email_logs'), 'route' => 'purchase-email-logs.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager']],
                 ]],
             ];
             $user = auth()->user();

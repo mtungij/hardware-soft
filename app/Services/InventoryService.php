@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\DocumentSequence;
 use App\Models\GoodsReceivingNote;
@@ -12,6 +13,7 @@ use App\Models\PurchaseCostType;
 use App\Models\PurchaseItem;
 use App\Models\Sale;
 use App\Models\Scopes\CompanyScope;
+use App\Models\Setting;
 use App\Models\StockAdjustment;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
@@ -37,50 +39,86 @@ class InventoryService
         return $product->taxable ? round($unitPrice * 0.18, 2) : 0.0;
     }
 
-    public function getMainStoreLocation(int $branchId): StockLocation
+    public function getMainStoreLocation(int $branchId, ?int $locationId = null): StockLocation
     {
-        $location = StockLocation::query()->firstOrCreate(
-            [
-                'branch_id' => $branchId,
-                'type' => 'store',
-                'code' => 'MAIN-STORE',
-            ],
-            [
-                'name' => 'Main Store',
-                'status' => 'active',
-                'is_active' => true,
-                'is_default' => true,
-                'can_receive_stock' => true,
-                'can_issue_stock' => true,
-                'can_sell' => true,
-                'can_transfer' => true,
-                'can_transfer_to_dispensing' => true,
-            ]
-        );
-
-        return $this->ensureLocationIsActive($location);
+        return $this->resolveLocation($branchId, true, $locationId);
     }
 
-    public function getDispensingLocation(int $branchId): StockLocation
+    public function getDispensingLocation(int $branchId, ?int $locationId = null): StockLocation
     {
-        $location = StockLocation::query()->firstOrCreate(
-            [
-                'branch_id' => $branchId,
-                'type' => 'dispensing',
-                'code' => 'DISPENSING',
-            ],
-            [
-                'name' => 'Dispensing Area',
-                'status' => 'active',
-                'is_active' => true,
-                'is_dispensing_location' => true,
-                'can_receive_stock' => true,
-                'can_issue_stock' => true,
-                'can_sell' => true,
-            ]
-        );
+        return $this->resolveLocation($branchId, false, $locationId);
+    }
 
-        return $this->ensureLocationIsActive($location);
+    private function resolveLocation(int $branchId, bool $warehouse, ?int $locationId): StockLocation
+    {
+        return DB::transaction(function () use ($branchId, $warehouse, $locationId) {
+            // Serialize default creation against other settings saves for this branch.
+            $branch = Branch::query()->whereKey($branchId)->lockForUpdate()->firstOrFail();
+            $locations = StockLocation::query()->where('company_id', $branch->company_id)->where('branch_id', $branchId);
+            $valid = (clone $locations)->where('status', 'active')->where('is_active', true)
+                ->where('can_receive_stock', true);
+            if ($warehouse) {
+                $valid->whereIn('type', ['store', 'warehouse', 'branch_store'])->where('is_dispensing_location', false);
+            } else {
+                $valid->where(fn ($query) => $query->where('type', 'dispensing')->orWhere('is_dispensing_location', true))
+                    ->where('can_sell', true)->where('is_sellable', true);
+            }
+
+            if ($locationId !== null) {
+                return $this->selectInventoryLocation($branchId, $warehouse, $locationId);
+            }
+
+            $locationId ??= Setting::query()->where('company_id', $branch->company_id)->value('default_stock_location_id');
+            if ($locationId && $location = (clone $valid)->whereKey($locationId)->first()) {
+                return $location;
+            }
+            if ($location = $valid->orderByDesc('is_default')->orderBy('id')->first()) {
+                return $location;
+            }
+
+            $code = $warehouse ? 'MAIN-STORE' : 'DISPENSING';
+            // Deleted and inactive rows still occupy the database unique key.
+            if ((clone $locations)->withTrashed()->where('code', $code)->exists()) {
+                throw ValidationException::withMessages([
+                    'default_stock_location_id' => "The {$code} code is already in use by an unavailable or incompatible location. Create or select an active ".($warehouse ? 'warehouse/store' : 'dispensing location').' that can receive stock in this branch. Existing locations have not been changed.',
+                ]);
+            }
+
+            // Match the actual unique key; type is a creation attribute, never a lookup key.
+            $location = StockLocation::query()->firstOrCreate(
+                ['branch_id' => $branchId, 'code' => $code],
+                [
+                    'company_id' => $branch->company_id,
+                    'type' => $warehouse ? 'store' : 'dispensing',
+                    'name' => $warehouse ? 'Main Store' : 'Dispensing Area',
+                    'status' => 'active', 'is_active' => true,
+                    'is_default' => $warehouse,
+                    'is_dispensing_location' => ! $warehouse,
+                    'can_receive_stock' => true, 'can_issue_stock' => true,
+                    'can_sell' => true, 'is_sellable' => true,
+                    'can_transfer' => $warehouse, 'can_transfer_to_dispensing' => $warehouse,
+                ],
+            );
+
+            // Also validate the winner if another writer inserted the code concurrently.
+            return $this->selectInventoryLocation($branchId, $warehouse, (int) $location->id);
+        });
+    }
+
+    public function selectInventoryLocation(int $branchId, bool $warehouse, int $locationId): StockLocation
+    {
+        $branch = Branch::query()->findOrFail($branchId);
+        $location = StockLocation::query()->where('company_id', $branch->company_id)
+            ->where('branch_id', $branchId)->whereKey($locationId)->first();
+        $compatible = $location && $location->isActive() && $location->can_receive_stock
+            && ($warehouse
+                ? in_array($location->type, ['store', 'warehouse', 'branch_store'], true) && ! $location->is_dispensing_location
+                : ($location->type === 'dispensing' || $location->is_dispensing_location) && $location->can_sell && $location->is_sellable);
+        if (! $compatible) {
+            throw ValidationException::withMessages(['default_stock_location_id' => 'Select an active, compatible receiving location in this company and branch.']);
+        }
+
+        return $location;
     }
 
     /** Active dispensing-classified locations in a branch, including selling counters. */
@@ -94,15 +132,6 @@ class InventoryService
             ->orderByDesc('is_default')
             ->orderBy('name')
             ->get();
-    }
-
-    private function ensureLocationIsActive(StockLocation $location): StockLocation
-    {
-        if ($location->status !== 'active' || ! $location->is_active) {
-            $location->forceFill(['status' => 'active', 'is_active' => true])->save();
-        }
-
-        return $location;
     }
 
     public function getProductStock(int $productId, int $stockLocationId, ?int $branchId): float
@@ -1015,8 +1044,14 @@ class InventoryService
             return false;
         }
 
-        if (! $user) {
+        if (! $user || (int) $user->company_id !== (int) $location->company_id || ! $user->canAccessBranch($location->branch_id)) {
             return false;
+        }
+        if (! InventorySettings::warehouseEnabled()) {
+            $direct = $this->getDispensingLocation((int) $location->branch_id);
+            if ((int) $direct->id !== (int) $location->id) {
+                return false;
+            }
         }
 
         $hasPivotAccess = $user->stockLocations()
@@ -1127,7 +1162,7 @@ class InventoryService
                         $locationId = (int) ($line['stock_location_id'] ?? $header['default_stock_location_id'] ?? InventorySettings::receivingLocation($purchase->branch_id)->id);
                         $location = StockLocation::query()->whereKey($locationId)->lockForUpdate()->firstOrFail();
 
-                        if ((int) $location->branch_id !== (int) $purchase->branch_id) {
+                        if ((int) $location->company_id !== (int) $purchase->company_id || (int) $location->branch_id !== (int) $purchase->branch_id) {
                             throw ValidationException::withMessages(["lines.{$item->id}.stock_location_id" => __('application.receiving_location_does_not_belong_to_this_purchase_branch_c5d40fb5')]);
                         }
 
@@ -1373,7 +1408,9 @@ class InventoryService
                     throw ValidationException::withMessages(['receipt' => __('application.receipt_quantity_exceeds_the_remaining_purchase_quantity_2e2ddef7')]);
                 }
                 $location = StockLocation::query()->findOrFail($line->stock_location_id);
-                if (! $this->canUserReceiveIntoLocation(auth()->user(), $location)) {
+                if ((int) $location->company_id !== (int) $receipt->company_id
+                    || (int) $location->branch_id !== (int) $receipt->branch_id
+                    || ! $this->canUserReceiveIntoLocation(auth()->user(), $location)) {
                     throw ValidationException::withMessages(['receipt' => __('application.you_are_not_allowed_to_receive_stock_into_this_location_f891f063')]);
                 }
                 StockMovement::create([

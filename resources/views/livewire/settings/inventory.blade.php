@@ -6,6 +6,8 @@ use App\Models\StockMovement;
 use App\Services\InventoryService;
 use App\Support\InventorySettings;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -15,7 +17,6 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 
 state([
-    'setting' => null,
     'enable_warehouse' => true,
     'allow_direct_stock_in' => true,
     'allow_sales_from_store' => false,
@@ -26,17 +27,10 @@ state([
     'has_stock_movements' => false,
 ]);
 
-mount(function (InventoryService $inventory) {
-    $branchId = InventorySettings::branchId();
+state(['setting' => null])->locked();
 
-    $this->setting = Setting::query()->first() ?: Setting::query()->create(['company_name' => config('app.name', 'Hardex POS')]);
-    if ((bool) $this->setting->enable_warehouse) {
-        $inventory->getMainStoreLocation($branchId);
-    }
-    if (! (bool) $this->setting->enable_warehouse || $inventory->getDispensingLocations($branchId)->isEmpty()) {
-        $inventory->getDispensingLocation($branchId);
-    }
-
+mount(function () {
+    $this->setting = InventorySettings::current();
     $this->enable_warehouse = (bool) $this->setting->enable_warehouse;
     $this->allow_direct_stock_in = (bool) $this->setting->allow_direct_stock_in;
     $this->allow_sales_from_store = (bool) $this->setting->allow_sales_from_store;
@@ -44,7 +38,7 @@ mount(function (InventoryService $inventory) {
     $this->allow_multiple_dispensing_locations = (bool) $this->setting->allow_multiple_dispensing_locations;
     $this->allow_credit_sale_without_customer = (bool) ($this->setting->allow_credit_sale_without_customer ?? true);
     $this->default_stock_location_id = (string) $this->setting->default_stock_location_id;
-    $this->has_stock_movements = StockMovement::query()->exists();
+    $this->has_stock_movements = StockMovement::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)->where('company_id', $this->setting->company_id)->exists();
 });
 
 rules(fn () => [
@@ -54,44 +48,44 @@ rules(fn () => [
     'inventory_mode' => ['required', Rule::in(['single_location', 'multi_location'])],
     'allow_multiple_dispensing_locations' => ['boolean'],
     'allow_credit_sale_without_customer' => ['boolean'],
-    'default_stock_location_id' => ['nullable', Rule::exists('stock_locations', 'id')],
+    'default_stock_location_id' => ['nullable', 'integer'],
 ]);
 
 $updatedInventoryMode = function () {
     $this->enable_warehouse = $this->inventory_mode === 'multi_location';
+    $this->default_stock_location_id = '';
 };
 
 $updatedEnableWarehouse = function () {
     $this->inventory_mode = $this->enable_warehouse ? 'multi_location' : 'single_location';
+    $this->default_stock_location_id = '';
 };
 
 $save = function () {
     $validated = $this->validate();
 
-    if ($this->has_stock_movements && (bool) $validated['enable_warehouse'] !== (bool) $this->setting->enable_warehouse) {
-        $this->addError('enable_warehouse', __('application.you_cannot_change_stock_mode_after_stock_movements_have_started_please_cont_bb2bae8a'));
+    DB::transaction(function () use ($validated) {
+        $branch = \App\Models\Branch::query()->whereKey(InventorySettings::branchId())->lockForUpdate()->firstOrFail();
+        $setting = Setting::query()->where('company_id', $branch->company_id)->whereKey($this->setting->id)->lockForUpdate()->firstOrFail();
+        $validated['enable_warehouse'] = $validated['inventory_mode'] === 'multi_location';
+        if (StockMovement::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)->where('company_id', $branch->company_id)->exists()
+            && (bool) $validated['enable_warehouse'] !== (bool) $setting->enable_warehouse) {
+            throw ValidationException::withMessages(['enable_warehouse' => __('application.you_cannot_change_stock_mode_after_stock_movements_have_started_please_cont_bb2bae8a')]);
+        }
 
-        return;
-    }
-
-    $validated['enable_warehouse'] = $validated['inventory_mode'] === 'multi_location';
-
-    if (! (bool) $validated['enable_warehouse']) {
-        $validated['allow_direct_stock_in'] = true;
-        $validated['allow_sales_from_store'] = false;
-        $validated['default_stock_location_id'] = app(InventoryService::class)->getDispensingLocation(InventorySettings::branchId())->id;
-        StockLocation::query()
-            ->where('branch_id', InventorySettings::branchId())
-            ->where('type', 'store')
-            ->update(['status' => 'inactive']);
-    } else {
-        $validated['allow_direct_stock_in'] = false;
-        $mainStore = app(InventoryService::class)->getMainStoreLocation(InventorySettings::branchId());
-        $mainStore->update(['status' => 'active']);
-        $validated['default_stock_location_id'] = $validated['default_stock_location_id'] ?: $mainStore->id;
-    }
-
-    $this->setting->update($validated);
+        $inventory = app(InventoryService::class);
+        $selected = filled($validated['default_stock_location_id']) ? (int) $validated['default_stock_location_id'] : null;
+        $location = $validated['enable_warehouse']
+            ? $inventory->getMainStoreLocation($branch->id, $selected)
+            : $inventory->getDispensingLocation($branch->id, $selected);
+        $validated['default_stock_location_id'] = $location->id;
+        $validated['allow_direct_stock_in'] = ! $validated['enable_warehouse'];
+        if (! $validated['enable_warehouse']) {
+            $validated['allow_sales_from_store'] = false;
+        }
+        $setting->update($validated);
+        $this->setting = $setting;
+    });
     $this->default_stock_location_id = (string) $this->setting->refresh()->default_stock_location_id;
     $this->allow_sales_from_store = (bool) $this->setting->allow_sales_from_store;
     $this->allow_direct_stock_in = (bool) $this->setting->allow_direct_stock_in;
@@ -185,11 +179,14 @@ $save = function () {
 
             <label class="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
                 <span class="block text-sm font-black">{{ __('application.default_stock_location_7fb27249') }}</span>
-                <select wire:model="default_stock_location_id" class="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(! $enable_warehouse)>
-                    @foreach (StockLocation::query()->where('branch_id', InventorySettings::branchId())->where('status', 'active')->orderBy('type')->get() as $location)
+                <select wire:model="default_stock_location_id" class="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
+                    <option value="">{{ __('Select automatically, or choose a location') }}</option>
+                    @foreach (StockLocation::query()->where('branch_id', InventorySettings::branchId())->where('status', 'active')->where('is_active', true)->where('can_receive_stock', true)->when($enable_warehouse, fn ($query) => $query->whereIn('type', ['store', 'warehouse', 'branch_store'])->where('is_dispensing_location', false), fn ($query) => $query->where(fn ($q) => $q->where('type', 'dispensing')->orWhere('is_dispensing_location', true))->where('can_sell', true)->where('is_sellable', true))->orderBy('name')->get() as $location)
                         <option value="{{ $location->id }}">{{ $location->name }}</option>
                     @endforeach
                 </select>
+                @error('default_stock_location_id') <span class="mt-2 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
+                <p class="mt-2 text-xs text-slate-500">{{ __('If a reserved code is already in use, create a compatible location in Stock Locations, then select it here. Existing locations are preserved.') }}</p>
             </label>
 
             <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800">

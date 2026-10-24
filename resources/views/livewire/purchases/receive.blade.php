@@ -43,7 +43,9 @@ mount(function (Purchase $purchase, InventoryService $inventory) {
     }
     $this->received_date = now()->toDateString();
 
-    $defaultLocation = $this->availableReceivingLocations()->first()
+    $locations = $this->availableReceivingLocations();
+    $defaultLocation = $locations->firstWhere('id', (int) InventorySettings::current()->default_stock_location_id)
+        ?: $locations->first()
         ?: InventorySettings::receivingLocation((int) $purchase->branch_id);
     $this->default_stock_location_id = (string) $defaultLocation->id;
 
@@ -77,7 +79,7 @@ $availableReceivingLocations = function () {
     $user = auth()->user();
     $branchId = (int) ($this->purchase?->branch_id ?: Purchase::find($this->purchase_id)?->branch_id);
     $locations = $user?->permittedStockLocations('can_receive', $branchId)
-        ->filter(fn (StockLocation $location) => $location->isActive() && $location->can_receive_stock)
+        ->filter(fn (StockLocation $location) => app(InventoryService::class)->canUserReceiveIntoLocation($user, $location))
         ->values() ?? collect();
 
     if ($locations->isNotEmpty()) {
@@ -96,7 +98,7 @@ $availableReceivingLocations = function () {
             ->where('can_receive_stock', true)
             ->orderByDesc('is_default')
             ->orderBy('name')
-            ->get();
+            ->get()->filter(fn (StockLocation $location) => app(InventoryService::class)->canUserReceiveIntoLocation($user, $location))->values();
     }
 
     return collect();

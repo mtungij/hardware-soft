@@ -9,6 +9,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
+use App\Services\InventoryService;
 use App\Support\NumberFormatter;
 use Database\Seeders\AutoPartsCategorySeeder;
 use Database\Seeders\AutoPartsProductSeeder;
@@ -17,6 +18,7 @@ use Database\Seeders\DatabaseSeeder;
 use Database\Seeders\HardwareCategorySeeder;
 use Database\Seeders\HardwareProductSeeder;
 use Database\Seeders\HardwareUnitSeeder;
+use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
 
 beforeEach(function () {
@@ -89,7 +91,8 @@ test('inventory setup pages render for super admin', function () {
 });
 
 test('view roles can see inventory lists but not create pages', function () {
-    $storeKeeper = User::factory()->create(['status' => 'active']);
+    $branch = Branch::where('code', 'MAIN')->firstOrFail();
+    $storeKeeper = User::factory()->create(['status' => 'active', 'company_id' => $branch->company_id, 'branch_id' => $branch->id]);
     $storeKeeper->assignRole('Store Keeper');
 
     $this->actingAs($storeKeeper)->get('/categories')->assertOk();
@@ -111,12 +114,12 @@ test('direct inventory mode hides warehouse only workflows and keeps direct sale
     $this->actingAs($admin)->get('/dispensing-stock')->assertOk();
     $this->actingAs($admin)->get('/pos')->assertOk();
 
-    $this->actingAs($admin)->get('/suppliers')->assertForbidden();
-    $this->actingAs($admin)->get('/purchases')->assertForbidden();
-    $this->actingAs($admin)->get('/purchases/create')->assertForbidden();
+    $this->actingAs($admin)->get('/suppliers')->assertOk();
+    $this->actingAs($admin)->get('/purchases')->assertOk();
+    $this->actingAs($admin)->get('/purchases/create')->assertOk();
     $this->actingAs($admin)->get('/store-stock')->assertForbidden();
     $this->actingAs($admin)->get('/stock-transfers')->assertForbidden();
-    $this->actingAs($admin)->get('/reports/purchases')->assertForbidden();
+    $this->actingAs($admin)->get('/reports/purchases')->assertOk();
 });
 
 test('pos does not require a preferred location in multi location mode', function () {
@@ -399,28 +402,16 @@ test('direct stock in shows validation errors when save is incomplete', function
         ->assertSee('Please fix these errors:');
 });
 
-test('direct stock in reactivates inactive receiving location before saving', function () {
+test('direct stock in preserves inactive receiving locations until explicitly configured', function () {
     $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
-    $product = Product::firstOrFail();
     $location = enableDirectInventoryModeForBranch((int) $admin->branch_id);
-
     $location->update(['status' => 'inactive']);
-
     $this->actingAs($admin);
-
-    Volt::test('direct-stock-in.index')
-        ->call('selectProduct', (string) $product->id)
-        ->set('quantity', '1')
-        ->set('cost_price', '1000')
-        ->set('reason', 'Manual Entry')
-        ->call('save')
-        ->assertHasNoErrors();
-
-    expect($location->refresh()->status)->toBe('active');
-    expect(StockMovement::query()
-        ->where('movement_type', 'direct_stock_in')
-        ->where('product_id', $product->id)
-        ->exists())->toBeTrue();
+    $before = StockMovement::count();
+    expect(fn () => app(InventoryService::class)->getDispensingLocation((int) $admin->branch_id))
+        ->toThrow(ValidationException::class);
+    expect($location->fresh()->status)->toBe('inactive')
+        ->and(StockMovement::count())->toBe($before);
 });
 
 test('non admin sees but cannot update selling price when saving direct stock in', function () {

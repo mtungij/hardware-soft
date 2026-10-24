@@ -48,20 +48,6 @@ class InventorySettings
 
     public static function defaultLocation(int $branchId): StockLocation
     {
-        $setting = self::current();
-
-        if ($setting->default_stock_location_id) {
-            $location = StockLocation::query()
-                ->whereKey($setting->default_stock_location_id)
-                ->where('branch_id', $branchId)
-                ->where('status', 'active')
-                ->first();
-
-            if ($location) {
-                return $location;
-            }
-        }
-
         $inventory = app(InventoryService::class);
 
         return self::warehouseEnabled()
