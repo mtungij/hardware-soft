@@ -19,6 +19,7 @@ class RolePermissionCatalog
     public static function module(string $name): string
     {
         return match (true) {
+            str_ends_with($name, ' expenses') => 'Expenses',
             str_contains($name, 'report'), str_contains($name, 'export'), str_contains($name, 'print') => 'Reports',
             str_starts_with($name, 'production.') => 'Production',
             str_contains($name, 'dashboard') => 'Dashboard',

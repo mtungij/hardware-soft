@@ -5,10 +5,12 @@ use App\Models\Machine;
 use App\Models\ProductionOrder;
 use App\Models\ProductionQualityInspection;
 use App\Models\ProductionRecipe;
+use App\Models\Role;
 use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Services\CompanyRoleService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Support\Facades\Event;
 use Livewire\Volt\Volt;
@@ -72,6 +74,13 @@ test('ordinary hardware setup saves disabled flag and creates no production reco
     $company = Company::query()->where('company_name', 'Setup Company NoMfg')->firstOrFail();
     expect(Setting::where('company_id', $company->id)->firstOrFail()->show_receipt_after_sale)->toBeTrue()
         ->and(Setting::where('company_id', $company->id)->firstOrFail()->default_receipt_width)->toBe('80');
+    $roles = Role::where('company_id', $company->id)->with('permissions')->get();
+    expect($roles)->toHaveCount(count(CompanyRoleService::STANDARD_ROLES));
+    foreach ($roles as $role) {
+        expect($role->hasPermissionTo('create expenses'))->toBeTrue();
+    }
+    $owner = User::withoutGlobalScopes()->where('company_id', $company->id)->firstOrFail();
+    expect($owner->roles->first()->company_id)->toBe($company->id);
     expect($company->manufacturing_enabled)->toBeFalse()
         ->and(Company::count())->toBe($beforeCompanies + 1)
         ->and(Machine::count())->toBe($beforeMachines)

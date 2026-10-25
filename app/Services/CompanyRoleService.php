@@ -6,12 +6,40 @@ use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\PermissionRegistrar;
 
 class CompanyRoleService
 {
+    public const STANDARD_ROLES = ['Super Admin', 'Admin', 'Manager', 'Cashier', 'Store Keeper', 'Accountant', 'Quality Manager', 'Quality Inspector', 'Production Manager', 'Production Operator'];
+
+    /** Initialize only new company roles. An existing empty role may be an intentional revocation. */
+    public function provision(Company $company): Collection
+    {
+        $roles = DB::transaction(function () use ($company) {
+            Company::query()->whereKey($company->id)->lockForUpdate()->firstOrFail();
+            $templates = Role::query()->whereNull('company_id')->where('guard_name', 'web')
+                ->whereIn('name', self::STANDARD_ROLES)->with('permissions')->get();
+
+            return $templates->map(function (Role $template) use ($company) {
+                $role = Role::query()->where('company_id', $company->id)->where('guard_name', 'web')
+                    ->where('source_role_id', $template->id)->first() ?? Role::query()->firstOrCreate([
+                        'company_id' => $company->id, 'name' => $template->name, 'guard_name' => 'web',
+                    ], $template->only(['sales_scope', 'stock_scope', 'report_scope']) + ['source_role_id' => $template->id]);
+                if ($role->wasRecentlyCreated) {
+                    $role->syncPermissions($template->permissions->pluck('name')->push('create expenses')->unique()->all());
+                }
+
+                return $role;
+            });
+        });
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        return $roles;
+    }
+
     public function save(User $actor, ?int $roleId, array $attributes, array $permissions): Role
     {
         abort_unless($actor->company_id && $actor->can('roles.manage'), 403);

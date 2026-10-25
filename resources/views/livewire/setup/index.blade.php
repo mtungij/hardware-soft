@@ -6,6 +6,7 @@ use App\Models\Machine;
 use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\User;
+use App\Services\CompanyRoleService;
 use Database\Seeders\AutoPartsCategorySeeder;
 use Database\Seeders\AutoPartsProductSeeder;
 use Database\Seeders\AutoPartsUnitSeeder;
@@ -20,7 +21,6 @@ use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Livewire\WithFileUploads;
 use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 
 use function Livewire\Volt\layout;
@@ -470,8 +470,7 @@ $complete = function () {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
         app(RolePermissionSeeder::class)->run();
         $permissions = Permission::query()->where('guard_name', 'web')->get();
-        $role = Role::query()->firstOrCreate(['name' => 'Super Admin', 'guard_name' => 'web']);
-        $role->syncPermissions($permissions);
+        $role = app(CompanyRoleService::class)->provision($company)->firstWhere('name', 'Super Admin');
 
         $userData = [
             'branch_id' => $branch->id,

@@ -8,9 +8,11 @@
     $query = collect($params)->filter(fn ($value) => filled($value))->all();
     $pdfUrl = route('exports.download', ['export' => $export, 'format' => 'pdf'] + $query);
     $excelUrl = route('exports.download', ['export' => $export, 'format' => 'excel'] + $query);
-    $canPdf = auth()->user()?->can('export pdf') ?? false;
-    $canExcel = auth()->user()?->can('export excel') ?? false;
-    $canPrint = auth()->user()?->can('print reports') ?? false;
+    $expenseExport = in_array($export, ['tables.expenses', 'reports.expenses'], true);
+    $canExpenseExport = auth()->user()?->company_id && auth()->user()?->can('view expenses') && auth()->user()?->can('export expenses');
+    $canPdf = $expenseExport ? $canExpenseExport : auth()->user()?->can('export pdf') ?? false;
+    $canExcel = $expenseExport ? $canExpenseExport : auth()->user()?->can('export excel') ?? false;
+    $canPrint = $expenseExport ? $canExpenseExport : auth()->user()?->can('print reports') ?? false;
 @endphp
 
 <div class="hidden gap-2 sm:flex">

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ReportExportService;
+use App\Support\ExpenseAccess;
 use Illuminate\Http\Request;
 
 class GenericExportController extends Controller
@@ -11,11 +12,18 @@ class GenericExportController extends Controller
     {
         abort_unless(in_array($format, ['pdf', 'excel'], true), 404);
 
-        if ($format === 'pdf') {
+        $expenseExport = in_array($export, ['tables.expenses', 'reports.expenses'], true);
+        if ($expenseExport) {
+            ExpenseAccess::authorizeExport($request->user());
+        } else {
+            abort_unless($request->user()?->can('reports.export'), 403);
+        }
+
+        if (! $expenseExport && $format === 'pdf') {
             abort_unless($request->user()?->can('reports.export') || $request->user()?->can('export pdf'), 403);
         }
 
-        if ($format === 'excel') {
+        if (! $expenseExport && $format === 'excel') {
             abort_unless($request->user()?->can('reports.export') || $request->user()?->can('export excel'), 403);
         }
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\ReportExportService;
+use App\Support\ExpenseAccess;
 use App\Support\InventorySettings;
 use Illuminate\Http\Request;
 
@@ -13,11 +14,18 @@ class ReportExportController extends Controller
         abort_unless(in_array($format, ['excel', 'pdf'], true), 404);
         abort_if(! InventorySettings::warehouseEnabled() && in_array($report, ['purchases', 'suppliers'], true), 403);
 
+        $expenseExport = $report === 'expenses';
+        if ($expenseExport) {
+            ExpenseAccess::authorizeExport($request->user());
+        } else {
+            abort_unless($request->user()?->can('reports.export'), 403);
+        }
+
         $service = app(ReportExportService::class);
         $payload = $service->build('reports.'.$report, $request);
 
         if ($format === 'pdf') {
-            abort_unless($request->user()?->can('reports.export') || $request->user()?->can('export pdf'), 403);
+            abort_unless($expenseExport || $request->user()?->can('reports.export') || $request->user()?->can('export pdf'), 403);
 
             return response($service->generatePdf($payload['title'], $payload, $payload['filters']), 200, [
                 'Content-Type' => 'application/pdf',
@@ -25,7 +33,7 @@ class ReportExportController extends Controller
             ]);
         }
 
-        abort_unless($request->user()?->can('reports.export') || $request->user()?->can('export excel'), 403);
+        abort_unless($expenseExport || $request->user()?->can('reports.export') || $request->user()?->can('export excel'), 403);
 
         return $service->generateExcel($payload['title'], $payload, $payload['filters']);
     }

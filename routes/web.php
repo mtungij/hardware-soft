@@ -12,6 +12,7 @@ use App\Http\Controllers\QuotationTemplatePreviewController;
 use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\StockLedgerPdfController;
 use App\Http\Controllers\StockTransferNoteController;
+use App\Http\Middleware\EnsureExpenseAccess;
 use App\Models\UserOnboardingProgress;
 use App\Models\UserPreference;
 use App\Services\ProductionReportService;
@@ -254,8 +255,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Volt::route('reports/location-margins', 'reports.location-margins')->middleware(['can:reports.location_margins', 'can:stock.view_value', 'can:internal_sales.view_margin'])->name('reports.location-margins');
     Volt::route('reports/internal-sales', 'reports.internal-sales')->name('reports.internal-sales');
     Volt::route('reports/cashbook', 'reports.cashbook')->middleware('can:accounting.cashflow')->name('reports.cashbook');
-    Route::get('reports/{report}/export/{format}', ReportExportController::class)->middleware('can:reports.export')->name('reports.export');
-    Route::get('exports/{export}/{format}', GenericExportController::class)->middleware('can:reports.export')->where('export', '.*')->name('exports.download');
+    Route::get('reports/{report}/export/{format}', ReportExportController::class)->name('reports.export');
+    Route::get('exports/{export}/{format}', GenericExportController::class)->where('export', '.*')->name('exports.download');
 
     Route::prefix('customer-material-accounts')->middleware('can:customer_material_accounts.view')->group(function () {
         Volt::route('/', 'customer-material-accounts.index')->name('customer-material-accounts.index');
@@ -388,8 +389,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Volt::route('purchases/{purchase}', 'purchases.show')->name('purchases.show');
     });
 
+    Volt::route('expenses', 'expenses.index')->middleware(EnsureExpenseAccess::class)->name('expenses.index');
+
     Route::middleware('role.any:Super Admin,Admin,Manager,Accountant')->group(function () {
-        Volt::route('expenses', 'expenses.index')->name('expenses.index');
         Volt::route('expense-categories', 'expense-categories.index')->name('expense-categories.index');
         Volt::route('supplier-balances', 'supplier-balances.index')->name('supplier-balances.index');
         Volt::route('supplier-balances/{supplier}', 'supplier-balances.show')->name('supplier-balances.show');

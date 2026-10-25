@@ -7,7 +7,6 @@ use App\Models\CashbookSession;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\CustomerPayment;
-use App\Models\Expense;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseEmailLog;
@@ -23,6 +22,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Support\AuthorizationScope;
 use App\Support\BranchAccess;
+use App\Support\ExpenseAccess;
 use App\Support\InventorySettings;
 use App\Support\NumberFormatter;
 use App\Support\PosSaleDate;
@@ -35,11 +35,11 @@ class ReportExportService
 {
     public function getCompanyHeader(Request $request): array
     {
-        $settings = Setting::query()->first();
+        $settings = Setting::query()->where('company_id', $request->user()->company_id)->first();
         $branchId = BranchAccess::resolve($request->user(), $request->integer('branch_id') ?: $request->integer('branchFilter') ?: null);
         $locationId = $request->integer('stock_location_id');
         $branch = $branchId ? Branch::find($branchId) : null;
-        $location = $locationId ? StockLocation::findOrFail($locationId) : null;
+        $location = $locationId ? BranchAccess::scopeAccessibleToUser(StockLocation::query(), $request->user())->findOrFail($locationId) : null;
 
         return [
             'company_name' => $settings?->company_name ?: config('app.name', 'HARDEX ERP'),
@@ -431,6 +431,12 @@ class ReportExportService
 
     private function authorizeExport(string $key, Request $request): void
     {
+        if (in_array($key, ['tables.expenses', 'reports.expenses'], true)) {
+            ExpenseAccess::authorizeExport($request->user());
+
+            return;
+        }
+
         $permission = match (true) {
             $key === 'reports.internal-sales' => 'reports.export',
             $key === 'tables.products' => 'products.view',
@@ -466,7 +472,7 @@ class ReportExportService
 
     private function expenses(Request $request, ?int $branchId, ?string $from, ?string $to, string $search): array
     {
-        $rows = Expense::with(['category', 'branch', 'paidBy'])
+        $rows = ExpenseAccess::query($request->user())->with(['category', 'branch', 'paidBy'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($from, fn ($q) => $q->whereDate('expense_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('expense_date', '<=', $to))

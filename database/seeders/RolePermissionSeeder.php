@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Services\CompanyRoleService;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -11,8 +12,16 @@ class RolePermissionSeeder extends Seeder
 {
     private string $guard = 'web';
 
+    private array $newTemplates = [];
+
+    private function newTemplateRole(string $name): ?Role
+    {
+        return $this->newTemplates[$name] ?? null;
+    }
+
     public function run(): void
     {
+        $this->newTemplates = [];
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $groups = [
@@ -143,25 +152,7 @@ class RolePermissionSeeder extends Seeder
 
         Permission::query()->firstOrCreate(['name' => 'customers.manage_portal_access', 'guard_name' => $this->guard]);
 
-        $customizedRolePermissions = Role::query()
-            ->where('guard_name', $this->guard)
-            ->with('permissions')
-            ->get()
-            ->filter(fn (Role $role): bool => $role->permissions->isNotEmpty())
-            ->mapWithKeys(fn (Role $role): array => [$role->id => $role->permissions->pluck('name')->all()]);
-
-        $roles = [
-            'Super Admin',
-            'Admin',
-            'Manager',
-            'Cashier',
-            'Store Keeper',
-            'Accountant',
-            'Quality Manager',
-            'Quality Inspector',
-            'Production Manager',
-            'Production Operator',
-        ];
+        $roles = CompanyRoleService::STANDARD_ROLES;
 
         $scopeDefaults = [
             'Super Admin' => ['company', 'company', 'company'],
@@ -177,7 +168,11 @@ class RolePermissionSeeder extends Seeder
         ];
 
         foreach ($roles as $roleName) {
-            $role = Role::query()->firstOrCreate(['name' => $roleName, 'guard_name' => $this->guard]);
+            $role = Role::query()->firstOrCreate(['name' => $roleName, 'guard_name' => $this->guard, 'company_id' => null]);
+
+            if ($role->wasRecentlyCreated) {
+                $this->newTemplates[$roleName] = $role;
+            }
 
             if ($role->wasRecentlyCreated && isset($scopeDefaults[$roleName])) {
                 [$salesScope, $stockScope, $reportScope] = $scopeDefaults[$roleName];
@@ -189,21 +184,21 @@ class RolePermissionSeeder extends Seeder
             }
         }
 
-        Role::findByName('Super Admin', $this->guard)->syncPermissions(Permission::where('guard_name', $this->guard)->get());
-        Role::findByName('Admin', $this->guard)->syncPermissions(Permission::where('guard_name', $this->guard)->get());
-        Role::findByName('Manager', $this->guard)->syncPermissions(Permission::where('guard_name', $this->guard)->get());
-        Role::findByName('Manager', $this->guard)->revokePermissionTo('company-settings.update');
-        Role::findByName('Manager', $this->guard)->revokePermissionTo('production.manage_machines');
-        Role::findByName('Manager', $this->guard)->revokePermissionTo('production.finalize_costing');
-        Role::findByName('Manager', $this->guard)->revokePermissionTo(['production.manage_quality_plans', 'production.approve_quality']);
-        Role::findByName('Manager', $this->guard)->revokePermissionTo('production.view_cost_reports');
-        Role::findByName('Manager', $this->guard)->revokePermissionTo(['production.override_default_locations', 'production.manage_location_defaults']);
-        Role::findByName('Manager', $this->guard)->revokePermissionTo([
+        $this->newTemplateRole('Super Admin')?->syncPermissions(Permission::where('guard_name', $this->guard)->get());
+        $this->newTemplateRole('Admin')?->syncPermissions(Permission::where('guard_name', $this->guard)->get());
+        $this->newTemplateRole('Manager')?->syncPermissions(Permission::where('guard_name', $this->guard)->get());
+        $this->newTemplateRole('Manager')?->revokePermissionTo('company-settings.update');
+        $this->newTemplateRole('Manager')?->revokePermissionTo('production.manage_machines');
+        $this->newTemplateRole('Manager')?->revokePermissionTo('production.finalize_costing');
+        $this->newTemplateRole('Manager')?->revokePermissionTo(['production.manage_quality_plans', 'production.approve_quality']);
+        $this->newTemplateRole('Manager')?->revokePermissionTo('production.view_cost_reports');
+        $this->newTemplateRole('Manager')?->revokePermissionTo(['production.override_default_locations', 'production.manage_location_defaults']);
+        $this->newTemplateRole('Manager')?->revokePermissionTo([
             'users.view', 'users.create', 'users.edit', 'users.delete', 'roles.manage', 'settings.manage',
             'view users', 'create users', 'edit users', 'delete users',
             'view roles', 'edit roles', 'view settings', 'edit settings',
         ]);
-        Role::findByName('Production Manager', $this->guard)->givePermissionTo([
+        $this->newTemplateRole('Production Manager')?->givePermissionTo([
             'view dashboard', 'dashboard.view', 'dashboard.stock_summary', 'stock.view', 'products.view',
             'production.view', 'production.view_moulds', 'production.manage_moulds',
             'production.manage_machines', 'production.manage_schedule', 'production.view_recipes',
@@ -211,12 +206,12 @@ class RolePermissionSeeder extends Seeder
             'production.execute_orders', 'production.complete_orders', 'production.cancel_orders',
             'production.override_default_locations',
         ]);
-        Role::findByName('Production Operator', $this->guard)->givePermissionTo([
+        $this->newTemplateRole('Production Operator')?->givePermissionTo([
             'view dashboard', 'dashboard.view', 'production.view', 'production.view_orders',
             'production.create_orders', 'production.execute_orders',
         ]);
-        Role::findByName('Quality Manager', $this->guard)->syncPermissions(['view dashboard', 'dashboard.view', 'production.view', 'production.view_quality', 'production.manage_quality_plans', 'production.perform_quality_inspections', 'production.approve_quality', 'production.manage_quality_holds', 'production.record_qc_result', 'production.approve_qc', 'production.manage_qc_plans']);
-        Role::findByName('Quality Inspector', $this->guard)->syncPermissions(['view dashboard', 'dashboard.view', 'production.view', 'production.view_quality', 'production.perform_quality_inspections', 'production.record_qc_result']);
+        $this->newTemplateRole('Quality Manager')?->syncPermissions(['view dashboard', 'dashboard.view', 'production.view', 'production.view_quality', 'production.manage_quality_plans', 'production.perform_quality_inspections', 'production.approve_quality', 'production.manage_quality_holds', 'production.record_qc_result', 'production.approve_qc', 'production.manage_qc_plans']);
+        $this->newTemplateRole('Quality Inspector')?->syncPermissions(['view dashboard', 'dashboard.view', 'production.view', 'production.view_quality', 'production.perform_quality_inspections', 'production.record_qc_result']);
         $inventoryViewPermissions = [
             'view categories',
             'view units',
@@ -244,7 +239,7 @@ class RolePermissionSeeder extends Seeder
             'send purchase emails',
         ];
 
-        Role::findByName('Cashier', $this->guard)->syncPermissions([
+        $this->newTemplateRole('Cashier')?->syncPermissions([
             'customer_requests.view', 'customer_requests.review', 'customer_requests.create_quotation', 'customer_requests.convert_to_sale',
             'quotations.view', 'quotations.create', 'quotations.send', 'quotations.convert', 'invoices.view',
             'view dashboard',
@@ -276,10 +271,10 @@ class RolePermissionSeeder extends Seeder
             'customer_material_accounts.create',
             'customer_material_accounts.record_deposit',
         ]);
-        Role::findByName('Store Keeper', $this->guard)->syncPermissions(['view dashboard', 'dashboard.view', 'dashboard.stock_summary', 'products.view', 'products.view_buying_price', 'products.view_selling_price', 'purchases.view', 'purchases.create', 'purchases.receive', 'purchases.view_cost', 'stock.view', 'stock.adjust', 'stock.transfer', 'stock.receive', 'stock.direct_stock_in', 'opening_stock.view', 'opening_stock.create', ...$storeKeeperPermissions, 'view sales', 'sales.view', 'sell from store', 'customer_material_accounts.view', 'customer_material_accounts.issue_material', 'internal_sales.view', 'internal_sales.create', 'internal_sales.complete', 'location_prices.view', 'reports.internal_sales', 'reports.internal_acquisitions', 'internal_sales.print_delivery_note']);
-        Role::findByName('Store Keeper', $this->guard)->givePermissionTo('view stock valuation');
-        Role::findByName('Store Keeper', $this->guard)->givePermissionTo(['export pdf', 'export excel', 'print reports']);
-        Role::findByName('Accountant', $this->guard)->syncPermissions([
+        $this->newTemplateRole('Store Keeper')?->syncPermissions(['view dashboard', 'dashboard.view', 'dashboard.stock_summary', 'products.view', 'products.view_buying_price', 'products.view_selling_price', 'purchases.view', 'purchases.create', 'purchases.receive', 'purchases.view_cost', 'stock.view', 'stock.adjust', 'stock.transfer', 'stock.receive', 'stock.direct_stock_in', 'opening_stock.view', 'opening_stock.create', ...$storeKeeperPermissions, 'view sales', 'sales.view', 'sell from store', 'customer_material_accounts.view', 'customer_material_accounts.issue_material', 'internal_sales.view', 'internal_sales.create', 'internal_sales.complete', 'location_prices.view', 'reports.internal_sales', 'reports.internal_acquisitions', 'internal_sales.print_delivery_note']);
+        $this->newTemplateRole('Store Keeper')?->givePermissionTo('view stock valuation');
+        $this->newTemplateRole('Store Keeper')?->givePermissionTo(['export pdf', 'export excel', 'print reports']);
+        $this->newTemplateRole('Accountant')?->syncPermissions([
             'view dashboard',
             'dashboard.view', 'dashboard.sales_summary', 'dashboard.purchase_summary', 'dashboard.stock_summary',
             'dashboard.stock_value', 'dashboard.profit', 'dashboard.expenses', 'dashboard.receivables',
@@ -352,13 +347,14 @@ class RolePermissionSeeder extends Seeder
             'internal_sales.view', 'location_prices.view', 'reports.internal_sales', 'reports.internal_acquisitions', 'reports.location_margins', 'internal_sales.print_delivery_note', 'internal_sales.print_value_note', 'internal_sales.view_cost', 'internal_sales.view_margin',
         ]);
 
-        // Existing customized roles are never replaced by template changes during deployment.
-        foreach ($customizedRolePermissions as $roleId => $permissionNames) {
-            Role::query()->findOrFail($roleId)->syncPermissions($permissionNames);
+        foreach ($roles as $roleName) {
+            $this->newTemplateRole($roleName)?->givePermissionTo('create expenses');
         }
 
-        Role::findByName('Super Admin', $this->guard)->givePermissionTo($whatsAppPermissions);
-        Role::findByName('Admin', $this->guard)->givePermissionTo($whatsAppPermissions);
+        $this->newTemplateRole('Super Admin')?->givePermissionTo($whatsAppPermissions);
+        $this->newTemplateRole('Admin')?->givePermissionTo($whatsAppPermissions);
+
+        // Existing templates and company roles are never modified, including empty roles.
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
     }

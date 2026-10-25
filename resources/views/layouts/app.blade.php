@@ -135,7 +135,7 @@
                     ['label' => __('messages.staff.nav.customer_material_accounts'), 'route' => 'customer-material-accounts.index', 'icon' => 'bank', 'permission' => 'customer_material_accounts.view'],
                 ]],
                 ['label' => __('messages.staff.nav.accounting'), 'icon' => 'accounting', 'items' => [
-                    ['label' => __('messages.staff.nav.expenses'), 'route' => 'expenses.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
+                    ['label' => __('messages.staff.nav.expenses'), 'route' => 'expenses.index', 'icon' => 'receipt', 'permissions' => ['view expenses', 'create expenses']],
                     ['label' => __('messages.staff.nav.expense_categories'), 'route' => 'expense-categories.index', 'icon' => 'list', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
                     ['label' => __('messages.staff.nav.customer_payments'), 'route' => 'customer-payments.create', 'icon' => 'money', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant', 'Cashier']],
                     ['label' => __('messages.staff.nav.customer_receipts'), 'route' => 'admin.customer-receipts.index', 'icon' => 'receipt', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Accountant']],
