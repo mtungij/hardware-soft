@@ -4,13 +4,18 @@ use App\Models\Sale;
 use App\Models\Setting;
 use App\Support\AuthorizationScope;
 
+use function Livewire\Volt\hydrate;
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.print');
 
-state(['sale' => null, 'settings' => null]);
+state(['sale' => null, 'settings' => null])->locked();
+
+hydrate(function () {
+    AuthorizationScope::authorizeSale(auth()->user(), $this->sale);
+});
 
 mount(function (Sale $sale) {
     AuthorizationScope::authorizeSale(auth()->user(), $sale);
@@ -34,7 +39,9 @@ mount(function (Sale $sale) {
 
 <div class="receipt-page">
     @php
-        $paperSize = request()->query('paper') === '80' ? '80' : '58';
+        $savedWidth = in_array($settings?->default_receipt_width, ['58', '80'], true) ? $settings->default_receipt_width : '58';
+        $overrideWidth = request()->query('paper');
+        $paperSize = in_array($overrideWidth, ['58', '80'], true) ? $overrideWidth : $savedWidth;
         $isOutstanding = (float) $sale->balance_amount > 0 || $sale->payment_status !== 'paid';
         $customerName = $sale->temporary_customer_name ?: $sale->customer?->name ?: 'Walk-in Customer';
         $company = $sale->company;
@@ -470,12 +477,14 @@ mount(function (Sale $sale) {
                     </button>
 
                     <a href="{{ route('sales.receipt.complete', $sale) }}" data-skip-printing class="block w-full rounded-xl border border-slate-300 px-4 py-3 text-center text-sm font-black text-slate-800">
-                        {{ __('application.skip_printing_back_to_pos_4276cdd7') }}
+                        {{ auth()->user()->can('sales.create') ? __('application.skip_printing_back_to_pos_4276cdd7') : __('application.sale_details_be513b66') }}
                     </a>
 
+                    @can('sales.create')
                     <a href="{{ route('sales.receipt.complete', $sale) }}" data-start-new-sale class="block text-center text-sm font-bold text-build-orange">
                         {{ __('application.start_new_sale_0d6972da') }}
                     </a>
+                    @endcan
 
                     <div class="rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-600" data-printer-help>
                         <p class="font-black text-slate-900">{{ __('application.recommended_thermal_printer_settings_1293392a') }}</p>

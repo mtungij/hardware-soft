@@ -31,6 +31,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'timezone',
     'language',
     'receipt_footer_message',
+    'show_receipt_after_sale',
+    'default_receipt_width',
     'tax_enabled',
     'enable_warehouse',
     'allow_direct_stock_in',
@@ -60,6 +62,8 @@ class Setting extends Model
 {
     use HasCompany, HasFactory;
 
+    protected $attributes = ['show_receipt_after_sale' => true, 'default_receipt_width' => '80'];
+
     public function defaultBranch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'default_branch_id');
@@ -83,6 +87,8 @@ class Setting extends Model
     protected function casts(): array
     {
         return [
+            'show_receipt_after_sale' => 'boolean',
+            'default_receipt_width' => 'string',
             'tax_enabled' => 'boolean',
             'show_tax_identifiers_on_receipt' => 'boolean',
             'enable_warehouse' => 'boolean',

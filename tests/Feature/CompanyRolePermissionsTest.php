@@ -42,7 +42,7 @@ test('role editor shows all web permissions by module with existing selections',
         ->assertSee('Custom New Capability')->assertDontSee('api.only');
     expect(RolePermissionCatalog::module('reports.sales'))->toBe('Reports')
         ->and(RolePermissionCatalog::module('sales.discount'))->toBe('Sales / POS')
-        ->and(RolePermissionCatalog::groups()->flatten()->count())->toBe(Permission::where('guard_name', 'web')->count());
+        ->and(RolePermissionCatalog::groups()->flatten()->count())->toBe(Permission::where('guard_name', 'web')->where('name', '!=', 'print receipt')->count());
 });
 
 test('granting and revoking role permissions preserves other permissions and other companies', function () {

@@ -17,6 +17,8 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 
 state([
+    'show_receipt_after_sale' => true,
+    'default_receipt_width' => '80',
     'enable_warehouse' => true,
     'allow_direct_stock_in' => true,
     'allow_sales_from_store' => false,
@@ -30,7 +32,10 @@ state([
 state(['setting' => null])->locked();
 
 mount(function () {
+    abort_unless(auth()->user()?->company_id && auth()->user()->can('settings.manage'), 403);
     $this->setting = InventorySettings::current();
+    $this->default_receipt_width = $this->setting->default_receipt_width;
+    $this->show_receipt_after_sale = (bool) $this->setting->show_receipt_after_sale;
     $this->enable_warehouse = (bool) $this->setting->enable_warehouse;
     $this->allow_direct_stock_in = (bool) $this->setting->allow_direct_stock_in;
     $this->allow_sales_from_store = (bool) $this->setting->allow_sales_from_store;
@@ -62,6 +67,7 @@ $updatedEnableWarehouse = function () {
 };
 
 $save = function () {
+    abort_unless(auth()->user()?->company_id && auth()->user()->can('settings.manage'), 403);
     $validated = $this->validate();
 
     DB::transaction(function () use ($validated) {
@@ -94,6 +100,23 @@ $save = function () {
     $this->allow_credit_sale_without_customer = (bool) ($this->setting->allow_credit_sale_without_customer ?? true);
 
     session()->flash('success', __('application.inventory_settings_saved_b34a74b8'));
+};
+
+$saveReceiptSettings = function () {
+    abort_unless(auth()->user()?->company_id && auth()->user()->can('settings.manage'), 403);
+    $validated = $this->validate([
+        'show_receipt_after_sale' => ['required', 'boolean'],
+        'default_receipt_width' => ['required', 'string', Rule::in(['58', '80'])],
+    ]);
+    DB::transaction(function () use ($validated) {
+        $setting = Setting::query()->where('company_id', auth()->user()->company_id)
+            ->whereKey($this->setting->id)->lockForUpdate()->firstOrFail();
+        $setting->update($validated);
+        $this->setting = $setting;
+    });
+    $this->default_receipt_width = $this->setting->default_receipt_width;
+    $this->show_receipt_after_sale = (bool) $this->setting->show_receipt_after_sale;
+    session()->flash('success', __('settings.receipt_settings_saved'));
 };
 
 ?>
@@ -223,6 +246,34 @@ $save = function () {
 
             <div class="lg:col-span-2 flex justify-end">
                 <button class="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-cyan-500/20">{{ __('application.save_inventory_settings_787e3141') }}</button>
+            </div>
+        </form>
+    </x-card>
+
+    <x-card class="mt-6" :title="__('settings.pos_receipt_settings')">
+        <form wire:submit="saveReceiptSettings" class="space-y-4">
+            <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+                <span>
+                    <span class="block text-sm font-black">{{ __('settings.show_receipt_after_sale') }}</span>
+                    <span class="mt-1 block text-xs text-slate-500">{{ __('settings.show_receipt_after_sale_description') }}</span>
+                </span>
+                <input type="checkbox" wire:model="show_receipt_after_sale" class="h-5 w-5 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500">
+            </label>
+            @error('show_receipt_after_sale') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+            <fieldset>
+                <legend class="text-sm font-black">{{ __('settings.default_receipt_width') }}</legend>
+                <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                    @foreach (['58' => 'receipt_width_58', '80' => 'receipt_width_80'] as $width => $label)
+                        <label class="flex cursor-pointer items-center gap-3 rounded-xl border p-4 {{ $default_receipt_width === (string) $width ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-500/10' : 'border-slate-200 dark:border-slate-800' }}">
+                            <input type="radio" name="default_receipt_width" wire:model.live="default_receipt_width" value="{{ $width }}" class="h-4 w-4 border-slate-300 text-cyan-500 focus:ring-cyan-500">
+                            <span class="text-sm font-semibold">{{ __('settings.'.$label) }}</span>
+                        </label>
+                    @endforeach
+                </div>
+                @error('default_receipt_width') <p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
+            </fieldset>
+            <div class="flex justify-end">
+                <button class="rounded-xl bg-cyan-500 px-5 py-3 text-sm font-black text-white">{{ __('settings.save_receipt_settings') }}</button>
             </div>
         </form>
     </x-card>

@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'sale_completed_ready' => 'Sale :number completed successfully. Ready for the next sale.',
     'purchase_request_submitted' => 'Purchase request :number submitted.',
     'announcement_published' => 'Announcement published to :count customers.',
     'sale_invoice_queued' => 'Sale :number completed and invoice queued.',

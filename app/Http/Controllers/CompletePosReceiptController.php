@@ -17,6 +17,8 @@ class CompletePosReceiptController extends Controller
             "Mauzo yamekamilika kwa mafanikio. Risiti {$sale->sale_number} imehifadhiwa."
         );
 
-        return redirect()->route('pos.index');
+        return request()->user()->can('sales.create')
+            ? redirect()->route('pos.index')
+            : redirect()->route('sales.show', $sale);
     }
 }

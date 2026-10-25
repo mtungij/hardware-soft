@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'sale_completed_ready' => 'Mauzo :number yamekamilika kwa mafanikio. Tayari kwa mauzo yanayofuata.',
     'purchase_request_submitted' => 'Ombi la ununuzi :number limewasilishwa.',
     'announcement_published' => 'Tangazo limechapishwa kwa wateja :count.',
     'sale_invoice_queued' => 'Mauzo :number yamekamilika na ankara imepangwa kutumwa.',

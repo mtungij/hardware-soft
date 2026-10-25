@@ -53,6 +53,7 @@ state([
     'payment_amount_manually_edited' => false,
     'submission_token' => '',
     'processing' => false,
+    'sale_success_message' => '',
 ]);
 
 mount(function (InventoryService $inventory) {
@@ -581,6 +582,10 @@ $quickAddCustomerFromWarning = function () {
 };
 
 $resetCompletedSale = function () {
+    $this->resetErrorBag();
+    $this->sale_success_message = '';
+    $this->search = '';
+    $this->barcode = '';
     $this->sale_date = $this->companyToday();
     $this->backdate_confirmed = false;
     $this->cart = [];
@@ -614,6 +619,7 @@ $completeSale = function (InventoryService $inventory) {
     }
 
     $this->processing = true;
+    $this->sale_success_message = '';
 
     try {
         $fallbackLocationId = filled($this->stock_location_id)
@@ -718,8 +724,13 @@ $completeSale = function (InventoryService $inventory) {
             ],
         );
 
+        $showReceipt = (bool) InventorySettings::current()->show_receipt_after_sale;
         $this->resetCompletedSale();
-        $this->redirectRoute('sales.receipt', $sale, navigate: true);
+        if ($showReceipt) {
+            $this->redirectRoute('sales.receipt', $sale, navigate: true);
+        } else {
+            $this->sale_success_message = __('feedback.sale_completed_ready', ['number' => $sale->sale_number]);
+        }
     } catch (ValidationException $exception) {
         $message = $exception->validator->errors()->first()
             ?: __('feedback.sale_incomplete');
@@ -764,6 +775,10 @@ $completeSale = function (InventoryService $inventory) {
     @endphp
 
     <x-page-header title="{{ __('application.pos_sales_450223da') }}" description="{{ __('application.build_one_sale_from_any_authorised_selling_location_7444c542') }}" :breadcrumbs="['Dashboard' => route('dashboard'), 'POS Sales' => null]" />
+
+    @if ($sale_success_message)
+        <div role="status" aria-live="polite" class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200">{{ $sale_success_message }}</div>
+    @endif
 
     <div class="grid gap-6 xl:grid-cols-[1fr_440px]">
         <div class="space-y-5">

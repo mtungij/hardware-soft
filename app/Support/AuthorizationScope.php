@@ -43,9 +43,9 @@ final class AuthorizationScope
         return self::sales(Sale::withoutGlobalScopes()->whereKey($sale->id), $user)->exists();
     }
 
-    public static function authorizeSale(User $user, Sale $sale): void
+    public static function authorizeSale(?User $user, Sale $sale): void
     {
-        abort_unless($user->can('sales.view') && self::canAccessSale($user, $sale), 403);
+        abort_unless($user && $user->can('sales.view') && self::canAccessSale($user, $sale), 403);
     }
 
     /** @return Collection<int, int> */

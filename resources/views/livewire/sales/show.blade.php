@@ -3,13 +3,18 @@
 use App\Models\Sale;
 use App\Support\AuthorizationScope;
 
+use function Livewire\Volt\hydrate;
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['sale' => null]);
+state(['sale' => null])->locked();
+
+hydrate(function () {
+    AuthorizationScope::authorizeSale(auth()->user(), $this->sale);
+});
 
 mount(function (Sale $sale) {
     AuthorizationScope::authorizeSale(auth()->user(), $sale);

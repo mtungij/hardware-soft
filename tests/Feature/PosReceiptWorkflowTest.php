@@ -1,13 +1,17 @@
 <?php
 
 use App\Models\Branch;
+use App\Models\Company;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Models\Setting;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\InventoryService;
 use Database\Seeders\DatabaseSeeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Volt\Volt;
 
 beforeEach(function () {
@@ -18,7 +22,8 @@ beforeEach(function () {
     $this->actingAs($this->admin);
 });
 
-test('Pos successful checkout creates one sale clears cart and redirects to receipt preview', function () {
+test('Pos successful checkout creates one sale clears cart and redirects to receipt preview', function (string $width) {
+    Setting::where('company_id', $this->admin->company_id)->firstOrFail()->update(['default_receipt_width' => $width]);
     $component = posReceiptComponent($this->location, $this->product);
     $submissionToken = $component->get('submission_token');
 
@@ -35,9 +40,11 @@ test('Pos successful checkout creates one sale clears cart and redirects to rece
 
     expect(Sale::query()->where('idempotency_key', $submissionToken)->count())->toBe(1)
         ->and($component->get('submission_token'))->not->toBe($submissionToken);
-});
+    $this->get(route('sales.receipt', $sale))->assertOk()->assertSee('data-paper-size="'.$width.'"', false);
+})->with(['58', '80']);
 
-test('Pos failed checkout keeps cart and does not create or redirect to a receipt', function () {
+test('Pos failed checkout keeps cart and does not create or redirect to a receipt', function (bool $showReceipt) {
+    Setting::query()->where('company_id', $this->admin->company_id)->firstOrFail()->update(['show_receipt_after_sale' => $showReceipt]);
     $component = posReceiptComponent($this->location, $this->product)
         ->set('cart.0.quantity', '100');
     $cart = $component->get('cart');
@@ -51,7 +58,7 @@ test('Pos failed checkout keeps cart and does not create or redirect to a receip
         ->assertNoRedirect();
 
     expect(Sale::query()->count())->toBe($saleCount);
-});
+})->with([true, false]);
 
 test('Pos repeated submission token returns the committed sale without duplicating stock movement', function () {
     $service = app(InventoryService::class);
@@ -205,3 +212,95 @@ function posReceiptSale(StockLocation $location, Product $product, Branch $branc
         idempotencyKey: (string) str()->uuid(),
     );
 }
+
+test('disabled receipt preview clears POS and repeated requests preserve payments and stock', function (string $width) {
+    Setting::query()->where('company_id', $this->admin->company_id)->firstOrFail()->update(['show_receipt_after_sale' => false, 'default_receipt_width' => $width]);
+    $component = posReceiptComponent($this->location, $this->product)->set('notes', 'First sale');
+    $token = $component->get('submission_token');
+    $cart = $component->get('cart');
+    $payments = $component->get('payments');
+    $stock = app(InventoryService::class)->getProductStock($this->product->id, $this->location->id, $this->branch->id);
+    $component->call('completeSale')->assertHasNoErrors()->assertNoRedirect()
+        ->assertSet('cart', [])->assertSet('customer_id', '')->assertSet('notes', '')
+        ->assertSet('discount_mode', 'none')->assertSet('order_discount_value', '0')
+        ->assertSet('payments', [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']])
+        ->assertSet('processing', false)->assertSeeHtml('role="status"');
+    $sale = Sale::where('idempotency_key', $token)->firstOrFail();
+    $component->assertSee($sale->sale_number);
+    expect($component->get('submission_token'))->not->toBe($token)
+        ->and($sale->payments()->count())->toBe(1)->and((float) $sale->payments()->sum('amount'))->toBe(100.0)
+        ->and(app(InventoryService::class)->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($stock - 1);
+    $component->call('completeSale')->assertHasErrors('cart')->assertNoRedirect();
+    $component->set('cart', $cart)->set('payments', $payments)->set('submission_token', $token)
+        ->call('completeSale')->assertHasNoErrors()->assertNoRedirect();
+    expect(Sale::where('idempotency_key', $token)->count())->toBe(1)
+        ->and($sale->payments()->count())->toBe(1)
+        ->and(StockMovement::where('reference_type', Sale::class)->where('reference_id', $sale->id)->where('movement_type', 'sale_out')->count())->toBe(1)
+        ->and(app(InventoryService::class)->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($stock - 1);
+    $this->get(route('sales.receipt', $sale))->assertOk();
+    $component->set('cart', $cart)->set('payments', $payments)->call('completeSale')->assertHasNoErrors()->assertNoRedirect();
+    expect(Sale::where('created_by', $this->admin->id)->count())->toBe(2)
+        ->and(app(InventoryService::class)->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($stock - 2);
+})->with(['58', '80']);
+
+test('POS reads its authenticated company preference freshly after checkout', function () {
+    $company = Company::create(['company_name' => 'Receipt preference other company', 'business_type' => 'hardware', 'phone' => '255700000001', 'whatsapp_number' => '255700000001']);
+    DB::table('settings')->insert(['company_id' => $company->id, 'company_name' => $company->company_name, 'show_receipt_after_sale' => false, 'created_at' => now(), 'updated_at' => now()]);
+    $component = posReceiptComponent($this->location, $this->product);
+    $token = $component->get('submission_token');
+    $component->call('completeSale')->assertHasNoErrors();
+    $sale = Sale::where('idempotency_key', $token)->firstOrFail();
+    $component->assertRedirect(route('sales.receipt', $sale));
+    $component = posReceiptComponent($this->location, $this->product);
+    Setting::query()->where('company_id', $this->admin->company_id)->firstOrFail()->update(['show_receipt_after_sale' => false]);
+    $component->call('completeSale')->assertHasNoErrors()->assertNoRedirect()->assertSet('cart', []);
+});
+
+test('migration enables receipts for existing companies without changing sale payments or stock', function () {
+    $sale = posReceiptSale($this->location, $this->product, $this->branch, $this->admin);
+    $before = [$sale->fresh()->getAttributes(), $sale->payments()->get()->map->getAttributes()->all(), StockMovement::orderBy('id')->get()->map->getAttributes()->all()];
+    $migration = require database_path('migrations/2026_10_25_000002_add_show_receipt_after_sale_to_settings.php');
+    $migration->down();
+    try {
+        $migration->up();
+        expect((bool) DB::table('settings')->where('company_id', $this->admin->company_id)->value('show_receipt_after_sale'))->toBeTrue();
+        expect([$sale->fresh()->getAttributes(), $sale->payments()->get()->map->getAttributes()->all(), StockMovement::orderBy('id')->get()->map->getAttributes()->all()])->toBe($before);
+    } finally {
+        if (! Schema::hasColumn('settings', 'show_receipt_after_sale')) {
+            $migration->up();
+        }
+    }
+});
+
+test('width migration preserves existing 58mm behavior and financial records while new settings default to 80mm', function () {
+    $sale = posReceiptSale($this->location, $this->product, $this->branch, $this->admin);
+    $before = [$sale->fresh()->getAttributes(), $sale->payments()->get()->map->getAttributes()->all(), StockMovement::orderBy('id')->get()->map->getAttributes()->all()];
+    $settingsBefore = DB::table('settings')->orderBy('id')->get()->map(function ($row) {
+        $attributes = (array) $row;
+        unset($attributes['default_receipt_width']);
+
+        return $attributes;
+    })->all();
+    $migration = require database_path('migrations/2026_10_25_000003_add_default_receipt_width_to_settings.php');
+    $migration->down();
+    try {
+        $migration->up();
+        expect(DB::table('settings')->pluck('default_receipt_width')->unique()->all())->toBe(['58']);
+        $settingsAfter = DB::table('settings')->orderBy('id')->get()->map(function ($row) {
+            $attributes = (array) $row;
+            unset($attributes['default_receipt_width']);
+
+            return $attributes;
+        })->all();
+        expect($settingsAfter)->toBe($settingsBefore);
+        expect([$sale->fresh()->getAttributes(), $sale->payments()->get()->map->getAttributes()->all(), StockMovement::orderBy('id')->get()->map->getAttributes()->all()])->toBe($before);
+        $this->get(route('sales.receipt', $sale))->assertOk()->assertSee('data-paper-size="58"', false);
+        $company = Company::create(['company_name' => 'New width business', 'business_type' => 'hardware', 'phone' => '255700000009', 'whatsapp_number' => '255700000009']);
+        $id = DB::table('settings')->insertGetId(['company_id' => $company->id, 'company_name' => $company->company_name]);
+        expect(DB::table('settings')->where('id', $id)->value('default_receipt_width'))->toBe('80');
+    } finally {
+        if (! Schema::hasColumn('settings', 'default_receipt_width')) {
+            $migration->up();
+        }
+    }
+});

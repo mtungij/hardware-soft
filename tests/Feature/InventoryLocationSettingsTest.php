@@ -10,12 +10,15 @@ use App\Services\InventoryService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
+use Spatie\Permission\Models\Permission;
 
 beforeEach(function () {
     $this->company = Company::create(['company_name' => 'Parts company', 'business_type' => 'hardware', 'phone' => '255700000001', 'whatsapp_number' => '255700000001']);
     $this->branch = Branch::create(['company_id' => $this->company->id, 'name' => 'Parts branch', 'code' => 'PARTS', 'status' => 'active']);
     $this->setting = Setting::create(['company_id' => $this->company->id, 'company_name' => 'Parts company', 'enable_warehouse' => false, 'inventory_mode' => 'single_location']);
     $this->user = User::factory()->create(['company_id' => $this->company->id, 'branch_id' => $this->branch->id]);
+    Permission::findOrCreate('settings.manage', 'web');
+    $this->user->givePermissionTo('settings.manage');
     $this->actingAs($this->user);
     $this->inventory = app(InventoryService::class);
 });

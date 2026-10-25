@@ -11,7 +11,8 @@ class RolePermissionCatalog
 {
     public static function groups(): Collection
     {
-        return Permission::query()->where('guard_name', 'web')->orderBy('name')->get()
+        // Retain historical permission rows and grants; receipts inherit sale access.
+        return Permission::query()->where('guard_name', 'web')->where('name', '!=', 'print receipt')->orderBy('name')->get()
             ->groupBy(fn ($permission) => self::module($permission->name))->sortKeys();
     }
 

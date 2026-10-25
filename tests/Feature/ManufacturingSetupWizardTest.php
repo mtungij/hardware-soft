@@ -70,6 +70,8 @@ test('ordinary hardware setup saves disabled flag and creates no production reco
     setupWizard('NoMfg')->call('complete')->assertRedirect(route('login'));
 
     $company = Company::query()->where('company_name', 'Setup Company NoMfg')->firstOrFail();
+    expect(Setting::where('company_id', $company->id)->firstOrFail()->show_receipt_after_sale)->toBeTrue()
+        ->and(Setting::where('company_id', $company->id)->firstOrFail()->default_receipt_width)->toBe('80');
     expect($company->manufacturing_enabled)->toBeFalse()
         ->and(Company::count())->toBe($beforeCompanies + 1)
         ->and(Machine::count())->toBe($beforeMachines)
