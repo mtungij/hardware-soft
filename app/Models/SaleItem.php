@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AuthorizesSaleDiscounts;
 use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['company_id', 'sale_id', 'product_id', 'product_unit_conversion_id', 'product_size_id', 'stock_location_id', 'selling_unit_id', 'base_unit_id', 'conversion_factor', 'conversion_factor_to_base', 'selling_unit_name_snapshot', 'selling_unit_code_snapshot', 'base_unit_name_snapshot', 'base_unit_code_snapshot', 'base_unit_cost', 'location_base_unit_cost', 'sold_from_label', 'sale_type', 'quantity', 'base_quantity', 'unit_cost', 'unit_price', 'item_discount_type', 'item_discount_value', 'discount_per_unit', 'discount_amount', 'discount_total', 'allocated_order_discount', 'gross_total', 'net_unit_price', 'net_total', 'tax_amount', 'line_total'])]
 class SaleItem extends Model
 {
-    use HasCompany, HasFactory;
+    use AuthorizesSaleDiscounts, HasCompany, HasFactory;
 
     public function sale(): BelongsTo
     {

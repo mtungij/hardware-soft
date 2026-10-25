@@ -8,7 +8,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
-use Spatie\Permission\Models\Role;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
@@ -65,7 +64,7 @@ rules(fn () => [
     'phone' => ['nullable', 'string', 'max:30'],
     'password' => ['nullable'],
     'status' => ['required', 'in:active,inactive'],
-    'role' => ['required', 'exists:roles,name'],
+    'role' => ['required', \Illuminate\Validation\Rule::in(\App\Models\Role::availableForCompany((int) auth()->user()->company_id)->pluck('name')->all())],
     'branch_id' => ['nullable', Rule::exists('branches', 'id')->where('company_id', auth()->user()->company_id)->where(fn ($query) => $query->when(\App\Support\BranchAccess::restricted(), fn ($query) => $query->where('id', auth()->user()->branch_id)))],
     'profile_photo' => ['nullable', 'string', 'max:255'],
     'sales_location_access' => [
@@ -274,7 +273,7 @@ $save = function () {
                 @error('status') <span class="mt-1 block text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
             </label>
 
-            @php $selectedRole = filled($role) ? Role::with('permissions')->where('name', $role)->first() : null; @endphp
+            @php $selectedRole = filled($role) ? \App\Models\Role::namedForCompany($role, (int) auth()->user()->company_id) : null; @endphp
             @if ($selectedRole)
                 <div class="rounded-xl border border-cyan-200 bg-cyan-50/50 p-4 text-sm dark:border-cyan-500/30 dark:bg-cyan-500/10">
                     <p class="font-black">{{ $selectedRole->name }} {{ __('application.access_summary_6b761adf') }}</p>
@@ -292,7 +291,7 @@ $save = function () {
                 {{ __('application.assigned_role_d15e6d6f') }}
                 <select wire:model.live="role" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                     <option value="">{{ __('application.select_role_04fa02bb') }}</option>
-                    @foreach (Role::orderBy('name')->pluck('name') as $roleName)
+                    @foreach (\App\Models\Role::availableForCompany((int) auth()->user()->company_id)->pluck('name') as $roleName)
                         <option value="{{ $roleName }}">{{ $roleName }}</option>
                     @endforeach
                 </select>

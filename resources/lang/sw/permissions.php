@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'apply_discount' => 'Ruhusu Punguzo',
+    'company_role_help' => 'Mabadiliko ya jukumu yanatumika kwa watumiaji wa kampuni yako pekee. Majukumu ya pamoja hunakiliwa yanapohifadhiwa kwa mara ya kwanza.',
     'p_7e68617cd6f7' => 'Fikia POS',
     'p_0d8bbfacf741' => 'Angalia Hesabu',
     'p_f96850c24d1b' => 'Rekebisha Gharama ya Kupokea Ununuzi',

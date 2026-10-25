@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Traits\HasRoles;
 use Throwable;
 
@@ -24,6 +25,25 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasCompany, HasFactory, HasRoles, Notifiable;
+
+    protected function getStoredRole($role): \Spatie\Permission\Contracts\Role
+    {
+        $role = \Illuminate\Support\enum_value($role);
+        if (is_string($role) && ! is_numeric($role)) {
+            $resolved = Role::namedForCompany($role, (int) $this->company_id, $this->getDefaultGuardName());
+        } else {
+            $resolved = $role instanceof \Spatie\Permission\Contracts\Role
+                ? $role : Role::query()->where('guard_name', $this->getDefaultGuardName())->find($role);
+            if ($resolved && $resolved->company_id === null) {
+                $resolved = Role::namedForCompany($resolved->name, (int) $this->company_id, $this->getDefaultGuardName());
+            }
+        }
+        if (! $resolved || ($resolved->company_id !== null && (int) $resolved->company_id !== (int) $this->company_id)) {
+            throw ValidationException::withMessages(['role' => 'Select a role belonging to this company.']);
+        }
+
+        return $resolved;
+    }
 
     public function sendPasswordResetNotification($token): void
     {

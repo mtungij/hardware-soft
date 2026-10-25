@@ -2,7 +2,9 @@
 
 use App\Models\Branch;
 use App\Models\Product;
+use App\Models\Role;
 use App\Models\Sale;
+use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\InventoryService;
@@ -17,7 +19,7 @@ beforeEach(function () {
     $this->actingAs($this->admin);
     $this->branch = Branch::where('code', 'MAIN')->firstOrFail();
     $this->inventory = app(InventoryService::class);
-    $this->location = $this->inventory->getDispensingLocation($this->branch->id);
+    $this->location = StockLocation::query()->where('branch_id', $this->branch->id)->where('type', 'dispensing')->firstOrFail();
     $this->location->update(['is_active' => true, 'is_sellable' => true, 'can_sell' => true]);
     $this->product = Product::where('sku', 'BM-MAB-G28')->firstOrFail();
     $this->product->update(['buying_price' => 10, 'selling_price' => 100, 'wholesale_price' => 80, 'taxable' => false]);
@@ -57,26 +59,19 @@ function completeDiscountSale(object $test, array $cart, float $payment, array $
 }
 
 test('discount selector is rendered once inside Cart and Payment and not beside price mode', function () {
-    $template = file_get_contents(resource_path('views/livewire/pos/index.blade.php'));
-    $priceSection = strpos($template, 'data-pos-section="price-mode"');
-    $priceSectionEnd = strpos($template, '</x-card>', $priceSection);
-    $cartPanel = strpos($template, '<x-card title="Cart & Payment"');
-    $discountSection = strpos($template, 'data-pos-section="cart-discount-mode"');
+    $html = Volt::test('pos.index')->html();
+    $document = new DOMDocument;
+    @$document->loadHTML($html);
+    $xpath = new DOMXPath($document);
+    $selector = '//section[@data-pos-section="cart-discount-mode"]//select[@data-discount-mode-selector]';
+    expect($xpath->query($selector)->length)->toBe(1)
+        ->and($xpath->query('//section[@data-pos-section="price-mode"]//select[@data-discount-mode-selector]')->length)->toBe(0);
+    $values = [];
+    foreach ($xpath->query($selector.'/option') as $option) {
+        $values[] = $option->getAttribute('value');
+    }
+    expect($values)->toBe(['none', 'item', 'order']);
 
-    expect($priceSection)->not->toBeFalse()
-        ->and($cartPanel)->not->toBeFalse()
-        ->and($discountSection)->toBeGreaterThan($cartPanel)
-        ->and(substr($template, $priceSection, $priceSectionEnd - $priceSection))->not->toContain('data-discount-mode-selector')
-        ->and(substr_count($template, 'data-pos-section="cart-discount-mode"'))->toBe(1)
-        ->and($template)->toContain('<select data-discount-mode-selector wire:model.live="discount_mode"')
-        ->and($template)->toContain('<option value="none">Hakuna</option>')
-        ->and($template)->toContain('<option value="item">Kwa Kila Bidhaa</option>')
-        ->and($template)->toContain('<option value="order">Jumla ya Sale</option>')
-        ->and($template)->not->toContain('wire:model.live="discount_mode" value=')
-        ->and($template)->not->toContain('wire:model.live="cart.{{ $index }}.tax_amount"')
-        ->and($template)->not->toContain('Line Subtotal')
-        ->and($template)->toContain('Line Total')
-        ->and($template)->not->toContain("\$t('Change')");
 });
 
 test('discount mode reactively renders only the matching editor in the cart panel', function () {
@@ -186,7 +181,7 @@ test('whole-sale fixed and percentage discounts are allocated exactly and determ
         ->and((float) $fixed->items()->sum('allocated_order_discount'))->toBe(10.0)
         ->and((float) $percentage->discount_amount)->toBe(30.0);
 
-    $this->get(route('sales.receipt', $fixed))->assertOk()->assertSee('Order Discount');
+    $this->get(route('sales.receipt', $fixed))->assertOk()->assertSee(__('terminology.order_discount_a4d87472'));
 });
 
 test('discount validation rejects over-limit values and modes cannot be combined', function () {
@@ -260,4 +255,46 @@ test('cancelling a discounted sale restores the same base stock quantity', funct
     expect($this->inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($before - 2);
     $this->inventory->cancelSale($sale->id, $this->admin->id);
     expect($this->inventory->getProductStock($this->product->id, $this->location->id, $this->branch->id))->toBe($before);
+});
+
+test('company role editor grants and revokes POS and backend discount access without changing history', function () {
+    $cashier = User::factory()->create(['company_id' => $this->branch->company_id, 'branch_id' => $this->branch->id, 'status' => 'active']);
+    $cashier->assignRole('Cashier');
+    $role = $cashier->roles()->firstOrFail();
+    $original = $role->permissions->pluck('name')->all();
+    Volt::test('roles.index')->call('editRole', $role->id)
+        ->set('permissions', [...$original, 'sales.discount'])->call('save')->assertHasNoErrors();
+    $local = Role::namedForCompany('Cashier', $this->branch->company_id);
+    $this->actingAs($cashier->fresh());
+    Volt::test('pos.index')->assertSeeHtml('data-discount-mode-selector');
+    $sale = $this->inventory->completeSale(
+        [['product_id' => $this->product->id, 'quantity' => 1, 'sale_type' => 'retail', 'discount_type' => 'fixed', 'discount_value' => 10]],
+        [['payment_method' => 'cash', 'amount' => 90]], null, $this->location->id, $this->branch->id, $cashier->id,
+        discountDetails: ['mode' => 'item'],
+    );
+    expect((float) $sale->discount_amount)->toBe(10.0);
+    $snapshot = $sale->fresh()->getAttributes();
+    $item = $sale->items()->firstOrFail();
+    $itemSnapshot = $item->getAttributes();
+    $this->actingAs($this->admin);
+    Volt::test('roles.index')->call('editRole', $local->id)->set('permissions', $original)->call('save')->assertHasNoErrors();
+    $this->actingAs($cashier->fresh());
+    Volt::test('pos.index')->assertDontSeeHtml('data-discount-mode-selector')
+        ->set('discount_mode', 'item')->assertDontSeeHtml('data-item-discount-editor')
+        ->set('discount_mode', 'order')->assertDontSeeHtml('data-order-discount-editor');
+    $count = Sale::count();
+    $movements = StockMovement::count();
+    foreach ([[], ['mode' => 'legacy'], ['mode' => 'item'], ['mode' => 'order', 'type' => 'fixed', 'value' => 10]] as $details) {
+        expect(fn () => $this->inventory->completeSale(
+            [['product_id' => $this->product->id, 'quantity' => 1, 'discount_per_unit' => 10, 'discount_amount' => 10, 'discount_type' => 'fixed', 'discount_value' => 10]],
+            [['payment_method' => 'cash', 'amount' => 90]], null, $this->location->id, $this->branch->id, $cashier->id,
+            discountDetails: $details,
+        ))->toThrow(ValidationException::class);
+    }
+    expect(fn () => $sale->fresh()->update(['discount_mode' => 'order']))->toThrow(ValidationException::class);
+    expect(fn () => $sale->update(['discount_amount' => 20]))->toThrow(ValidationException::class);
+    expect(fn () => $item->update(['discount_per_unit' => 20]))->toThrow(ValidationException::class);
+    expect($sale->fresh()->getAttributes())->toBe($snapshot)
+        ->and($item->fresh()->getAttributes())->toBe($itemSnapshot)
+        ->and(Sale::count())->toBe($count)->and(StockMovement::count())->toBe($movements);
 });

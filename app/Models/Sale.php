@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\AuthorizesSaleDiscounts;
 use App\Models\Concerns\HasCompany;
 use App\Support\InventorySettings;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -51,7 +52,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 ])]
 class Sale extends Model
 {
-    use HasCompany, HasFactory;
+    use AuthorizesSaleDiscounts, HasCompany, HasFactory;
 
     public function saleType(): string
     {

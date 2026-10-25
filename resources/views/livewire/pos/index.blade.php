@@ -1064,7 +1064,7 @@ $completeSale = function (InventoryService $inventory) {
                                 {{ $t(__('application.unit_price_1eea68d0')) }}
                                 <input type="text" value="TZS {{ \App\Support\NumberFormatter::money($unitPrice) }}" readonly aria-readonly="true" class="mt-1 w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-sm font-bold normal-case tracking-normal text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
                             </label>
-                            @if ($discount_mode === 'item')
+                            @if ($this->canApplyDiscount() && $discount_mode === 'item')
                                 <div data-item-discount-editor class="contents">
                                     <label class="block min-w-0 text-[11px] font-black uppercase tracking-wide text-slate-500 dark:text-slate-400">
                                         {{ __('application.discount_type_ab547ca1') }}
@@ -1082,7 +1082,7 @@ $completeSale = function (InventoryService $inventory) {
                         </div>
 
                         <div class="mt-2 grid gap-1 text-xs text-slate-500 dark:text-slate-400">
-                            @if ($discount_mode === 'item')
+                            @if ($this->canApplyDiscount() && $discount_mode === 'item')
                                 <div class="flex justify-between"><span>{{ __('application.discount_b524936d') }}</span><span>TZS {{ \App\Support\NumberFormatter::money($lineDiscount) }}</span></div>
                             @endif
                             <div class="flex justify-between font-black text-slate-800 dark:text-slate-100"><span>{{ __('application.line_total_2d1a09ef') }}</span><span>TZS {{ \App\Support\NumberFormatter::money(max(0, ($quantity * $unitPrice) - $lineDiscount + ($quantity * $taxPerUnit))) }}</span></div>
@@ -1103,7 +1103,7 @@ $completeSale = function (InventoryService $inventory) {
 
                 @error('cart') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
 
-                @if ($discount_mode === 'order')
+                @if ($this->canApplyDiscount() && $discount_mode === 'order')
                     <div data-order-discount-editor class="rounded-lg border border-orange-200 bg-orange-50 p-3 dark:border-orange-500/30 dark:bg-orange-500/10">
                         <p class="text-xs font-black uppercase tracking-wide text-orange-700 dark:text-orange-200">{{ __('application.total_discount_63987053') }}</p>
                         <div class="mt-2 grid gap-2 sm:grid-cols-2">

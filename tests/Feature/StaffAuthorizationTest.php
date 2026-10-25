@@ -228,6 +228,7 @@ test('role administrator can persist feature permissions and data scopes togethe
         'report_scope' => 'own',
     ]);
 
+    $sourceSnapshot = $role->fresh()->getAttributes();
     $this->actingAs($admin);
 
     Volt::test('roles.index')
@@ -239,7 +240,8 @@ test('role administrator can persist feature permissions and data scopes togethe
         ->call('save')
         ->assertHasNoErrors();
 
-    $role->refresh();
+    expect($role->fresh()->getAttributes())->toBe($sourceSnapshot);
+    $role = App\Models\Role::namedForCompany('Scoped Operator', $admin->company_id);
     expect($role->sales_scope)->toBe('branch')
         ->and($role->stock_scope)->toBe('branch')
         ->and($role->report_scope)->toBe('branch')

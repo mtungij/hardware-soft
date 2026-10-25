@@ -519,7 +519,10 @@ class InventoryService
             if (! in_array($discountMode, ['legacy', 'none', 'item', 'order'], true)) {
                 throw ValidationException::withMessages(['discount_mode' => __('application.the_selected_discount_mode_is_invalid_f5a9fc18')]);
             }
-            if ($discountMode !== 'legacy' && $discountMode !== 'none' && ! $cashier->can('sales.discount')) {
+            $requestsDiscount = in_array($discountMode, ['item', 'order'], true)
+                || collect($cart)->contains(fn ($row) => (float) ($row['discount_per_unit'] ?? 0) > 0
+                    || (float) ($row['discount_amount'] ?? 0) > 0 || (float) ($row['discount_value'] ?? 0) > 0);
+            if ($requestsDiscount && ! $cashier->can('sales.discount')) {
                 throw ValidationException::withMessages(['discount_mode' => __('application.you_are_not_authorized_to_apply_discounts_ba8e3486')]);
             }
             $orderDiscountType = $discountMode === 'order' ? (string) ($discountDetails['type'] ?? '') : null;

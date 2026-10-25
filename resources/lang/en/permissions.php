@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'apply_discount' => 'Apply Discount',
+    'company_role_help' => 'Role changes apply only to users in your company. Shared roles are copied when first saved.',
     'p_7e68617cd6f7' => 'Access pos',
     'p_0d8bbfacf741' => 'View accounting',
     'p_f96850c24d1b' => 'Adjust purchase receiving cost',

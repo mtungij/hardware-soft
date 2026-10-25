@@ -86,9 +86,7 @@ class UiText
 
     public static function permission(string $name): string
     {
-        $key = 'permissions.p_'.substr(sha1($name), 0, 12);
-
-        return Lang::has($key, app()->getLocale(), false) ? __($key) : __('permissions.other');
+        return RolePermissionCatalog::label($name);
     }
 
     public static function withLocale(string $locale, callable $callback): mixed

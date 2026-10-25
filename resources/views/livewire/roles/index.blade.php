@@ -1,7 +1,8 @@
 <?php
 
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
+use App\Models\Role;
+use App\Services\CompanyRoleService;
+use App\Support\RolePermissionCatalog;
 use Spatie\Permission\PermissionRegistrar;
 use Illuminate\Validation\Rule;
 
@@ -12,7 +13,6 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 
 state([
-    'role_id' => null,
     'name' => '',
     'permissions' => [],
     'sales_scope' => 'branch',
@@ -20,17 +20,16 @@ state([
     'report_scope' => 'branch',
 ]);
 
+state(['role_id' => null])->locked();
+
 rules(fn () => [
     'name' => [
         'required',
         'string',
         'max:255',
-        Rule::unique('roles', 'name')
-            ->where(fn ($query) => $query->where('guard_name', 'web'))
-            ->ignore($this->role_id),
     ],
     'permissions' => ['array'],
-    'permissions.*' => ['exists:permissions,name'],
+    'permissions.*' => ['string', Rule::exists('permissions', 'name')->where('guard_name', 'web')],
     'sales_scope' => ['required', Rule::in(['own', 'branch', 'company'])],
     'stock_scope' => ['required', Rule::in(['assigned_locations', 'branch', 'company'])],
     'report_scope' => ['required', Rule::in(['own', 'branch', 'company'])],
@@ -38,7 +37,11 @@ rules(fn () => [
 
 $editRole = function (int $roleId) {
     abort_unless(auth()->user()->can('roles.manage'), 403);
-    $role = Role::with('permissions')->findOrFail($roleId);
+    $role = Role::query()->forCompany((int) auth()->user()->company_id)->where('guard_name', 'web')->with('permissions')->findOrFail($roleId);
+
+    if ($role->company_id === null) {
+        $role = Role::query()->where('company_id', auth()->user()->company_id)->where('source_role_id', $role->id)->with('permissions')->first() ?: $role;
+    }
 
     $this->role_id = $role->id;
     $this->name = $role->name;
@@ -53,19 +56,12 @@ $save = function () {
     $validated = $this->validate();
     $validated['permissions'] = $validated['permissions'] ?? [];
 
-    $role = $this->role_id
-        ? Role::query()->findOrFail($this->role_id)
-        : new Role(['guard_name' => 'web']);
-
-    $role->name = $validated['name'];
-    $role->guard_name = 'web';
-    $role->sales_scope = $validated['sales_scope'];
-    $role->stock_scope = $validated['stock_scope'];
-    $role->report_scope = $validated['report_scope'];
-    $role->save();
-
-    $role->syncPermissions($validated['permissions']);
-    app(PermissionRegistrar::class)->forgetCachedPermissions();
+    app(CompanyRoleService::class)->save(auth()->user(), $this->role_id, [
+        'name' => $validated['name'],
+        'sales_scope' => $validated['sales_scope'],
+        'stock_scope' => $validated['stock_scope'],
+        'report_scope' => $validated['report_scope'],
+    ], $validated['permissions']);
 
     $this->reset(['role_id', 'name', 'permissions']);
     $this->sales_scope = 'branch';
@@ -83,9 +79,9 @@ $clearForm = function () {
 
 $deleteRole = function (int $roleId) {
     abort_unless(auth()->user()->can('roles.manage'), 403);
-    $role = Role::findOrFail($roleId);
+    $role = Role::query()->where('company_id', auth()->user()->company_id)->where('guard_name', 'web')->findOrFail($roleId);
 
-    if (in_array($role->name, ['Super Admin', 'Admin'], true) || $role->users()->exists()) {
+    if (in_array($role->name, ['Super Admin', 'Admin'], true) || \Illuminate\Support\Facades\DB::table('model_has_roles')->where('role_id', $role->id)->exists()) {
         session()->flash('error', __('application.this_role_cannot_be_deleted_while_protected_or_assigned_to_users_a609818b'));
         return;
     }
@@ -110,26 +106,9 @@ $deleteRole = function (int $roleId) {
     />
 
     @php
-        $roles = Role::withCount('users')->with('permissions')->orderBy('name')->get();
-        $sectionFor = function (string $name): string {
-            $normalized = str($name)->lower()->toString();
-
-            return match (true) {
-                str_contains($normalized, 'dashboard') => 'Dashboard',
-                str_contains($normalized, 'sale'), str_contains($normalized, 'pos') => 'Sales / POS',
-                str_contains($normalized, 'product'), str_contains($normalized, 'categor'), str_contains($normalized, 'unit') => 'Products',
-                str_contains($normalized, 'purchase'), str_contains($normalized, 'supplier') => 'Purchases',
-                str_contains($normalized, 'stock'), str_contains($normalized, 'inventory'), str_contains($normalized, 'goods receipt') => 'Warehouse / Stock',
-                str_starts_with($normalized, 'production.') => 'Production',
-                str_contains($normalized, 'customer') => 'Customers',
-                str_contains($normalized, 'accounting'), str_contains($normalized, 'expense'), str_contains($normalized, 'cashbook'), str_contains($normalized, 'profit') => 'Accounting',
-                str_contains($normalized, 'report'), str_contains($normalized, 'export'), str_contains($normalized, 'print') => 'Reports',
-                str_contains($normalized, 'user'), str_contains($normalized, 'role') => 'Users',
-                default => 'Settings & Other',
-            };
-        };
-        $permissionGroups = Permission::orderBy('name')->get()->groupBy(fn ($permission) => $sectionFor($permission->name));
-        $permissionLabel = fn (string $name): string => \App\Support\UiText::permission($name);
+        $roles = Role::availableForCompany((int) auth()->user()->company_id);
+        $permissionGroups = RolePermissionCatalog::groups();
+        $permissionLabel = fn (string $name): string => RolePermissionCatalog::label($name);
     @endphp
 
     <div class="grid gap-6 xl:grid-cols-[420px_1fr]">
@@ -149,12 +128,12 @@ $deleteRole = function (int $roleId) {
                 <div class="space-y-4">
                     @foreach ($permissionGroups as $group => $groupPermissions)
                         <div class="rounded-xl border border-slate-200 p-3 dark:border-slate-800">
-                            <p class="mb-2 text-sm font-black">{{ __('permissions.s_'.substr(sha1($group), 0, 12)) }}</p>
+                            <p class="mb-2 text-sm font-black">{{ \Illuminate\Support\Facades\Lang::has('permissions.s_'.substr(sha1($group), 0, 12)) ? __('permissions.s_'.substr(sha1($group), 0, 12)) : $group }}</p>
                             <div class="grid grid-cols-2 gap-2">
                                 @foreach ($groupPermissions as $permission)
                                     <label wire:key="permission-{{ $permission->id }}" class="flex items-center gap-2 text-sm">
                                         <input type="checkbox" wire:model="permissions" value="{{ $permission->name }}" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                                        <span>{{ $permissionLabel($permission->name) }}</span>
+                                        <span>{{ $permissionLabel($permission->name) }}<span class="block text-xs text-slate-500">{{ $permission->name }}</span></span>
                                     </label>
                                 @endforeach
                             </div>
@@ -162,6 +141,10 @@ $deleteRole = function (int $roleId) {
                     @endforeach
                 </div>
 
+                @error('name') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
+                @error('permissions') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
+                @error('permissions.*') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
+                <p class="text-xs text-slate-500">{{ __('permissions.company_role_help') }}</p>
                 <div class="flex gap-2">
                     <button class="rounded-xl bg-build-orange px-4 py-2.5 text-sm font-black text-white">{{ $role_id ? $t(__('application.update_role_7d1c623c')) : $t(__('application.save_role_2f46bd88')) }}</button>
                     <button type="button" wire:click="clearForm" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-black dark:border-slate-700">{{ $t(__('application.clear_719ea396')) }}</button>
