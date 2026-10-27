@@ -7,6 +7,7 @@ use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Product;
 use App\Models\Purchase;
+use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
@@ -27,6 +28,7 @@ beforeEach(function () {
     Purchase::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'supplier_id' => $supplier->id, 'purchase_date' => today(), 'reference_number' => 'ACC-PO-001', 'status' => 'ordered', 'payment_status' => 'unpaid', 'total_amount' => 10000, 'paid_amount' => 0, 'balance_amount' => 10000, 'created_by' => $admin->id]);
     Expense::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'expense_category_id' => ExpenseCategory::where('name', 'Rent')->firstOrFail()->id, 'amount' => 100, 'payment_method' => 'cash', 'reference_number' => 'EXP-SEED-0001', 'expense_date' => today(), 'paid_by' => $admin->id]);
     CashbookSession::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'session_date' => today()->subDay(), 'opening_cash' => 0, 'expected_cash' => 0, 'status' => 'closed', 'opened_by' => $admin->id, 'closed_by' => $admin->id, 'closed_at' => now()]);
+    StockLocation::where('branch_id', $branch->id)->where('code', 'DISPENSING')->update(['can_receive_stock' => true, 'can_sell' => true, 'is_sellable' => true, 'is_active' => true, 'status' => 'active']);
     $dispensing = app(InventoryService::class)->getDispensingLocation($branch->id);
     $dispensing->update(['can_sell' => true, 'can_issue_stock' => true, 'is_active' => true, 'status' => 'active']);
     StockMovement::create(['company_id' => $companyId, 'branch_id' => $branch->id, 'product_id' => Product::firstOrFail()->id, 'stock_location_id' => $dispensing->id, 'movement_type' => 'direct_stock_in', 'quantity' => 10, 'quantity_in' => 10, 'quantity_out' => 0, 'unit_cost' => 100, 'created_by' => $admin->id, 'movement_date' => today()]);
@@ -51,7 +53,8 @@ test('phase six accounting pages render for super admin', function () {
 });
 
 test('phase six report pages render for accountant', function () {
-    $accountant = User::factory()->create(['status' => 'active']);
+    $branch = Branch::where('code', 'MAIN')->firstOrFail();
+    $accountant = User::factory()->create(['company_id' => $branch->company_id, 'branch_id' => $branch->id, 'status' => 'active']);
     $accountant->assignRole('Accountant');
 
     foreach (['sales', 'purchases', 'expenses', 'customers', 'suppliers', 'stock-valuation', 'profit-loss', 'cashbook'] as $report) {
@@ -152,11 +155,12 @@ test('cashbook enforces one open session and closes with difference', function (
     $service->openSession($branch->id, $date, 50000, $admin->id);
 })->throws(ValidationException::class);
 
-test('cashier can view customer balances and cashbook but not expenses', function () {
-    $cashier = User::factory()->create(['status' => 'active']);
+test('cashier can view balances cashbook and the authorized create expense form', function () {
+    $branch = Branch::where('code', 'MAIN')->firstOrFail();
+    $cashier = User::factory()->create(['company_id' => $branch->company_id, 'branch_id' => $branch->id, 'status' => 'active']);
     $cashier->assignRole('Cashier');
 
     $this->actingAs($cashier)->get('/customer-balances')->assertOk();
     $this->actingAs($cashier)->get('/cashbook')->assertOk();
-    $this->actingAs($cashier)->get('/expenses')->assertForbidden();
+    $this->actingAs($cashier)->get('/expenses')->assertOk()->assertSeeHtml('wire:submit="save"')->assertDontSee('Filtered Expenses');
 });

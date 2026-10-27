@@ -28,7 +28,7 @@ state([
     'order_discount_type' => 'fixed',
     'order_discount_value' => '0',
     'cart' => [],
-    'payments' => [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']],
+    'payments' => [['payment_method' => \App\Services\PaymentMethodService::defaultValue(null, \App\Support\InventorySettings::branchId()), 'amount' => '0', 'reference_number' => '']],
     'notes' => '',
     'sale_date' => '',
     'backdate_confirmed' => false,
@@ -489,8 +489,20 @@ $removeItem = function (int $index) {
     $this->syncDefaultPaymentAmount();
 };
 
+$addCreditBalance = function () {
+    abort_unless($this->canCreditSale(), 403);
+    if (count($this->payments) === 1 && ! $this->payment_amount_manually_edited) {
+        $this->payments = [['payment_method' => 'credit', 'amount' => (string) $this->grandTotal(), 'reference_number' => '']];
+    } else {
+        $money = collect($this->payments)->reject(fn ($payment) => ($payment['payment_method'] ?? '') === 'credit')->filter(fn ($payment) => (float) ($payment['amount'] ?? 0) > 0);
+        $this->payments = $money->values()->all();
+        $this->payments[] = ['payment_method' => 'credit', 'amount' => (string) max(0, $this->grandTotal() - $money->sum('amount')), 'reference_number' => ''];
+    }
+    $this->syncDefaultPaymentAmount();
+};
+
 $addPayment = function () {
-    $this->payments[] = ['payment_method' => 'cash', 'amount' => '0', 'reference_number' => ''];
+    $this->payments[] = ['payment_method' => \App\Services\PaymentMethodService::defaultValue(null, \App\Support\InventorySettings::branchId()), 'amount' => '0', 'reference_number' => ''];
 };
 
 $removePayment = function (int $index) {
@@ -589,7 +601,7 @@ $resetCompletedSale = function () {
     $this->sale_date = $this->companyToday();
     $this->backdate_confirmed = false;
     $this->cart = [];
-    $this->payments = [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']];
+    $this->payments = [['payment_method' => \App\Services\PaymentMethodService::defaultValue(null, \App\Support\InventorySettings::branchId()), 'amount' => '0', 'reference_number' => '']];
     $this->customer_id = '';
     $this->sale_type = 'retail';
     $this->discount_mode = 'none';
@@ -655,7 +667,7 @@ $completeSale = function (InventoryService $inventory) {
             'cart.*.discount_value' => ['required_if:discount_mode,item', 'numeric', 'min:0'],
             'cart.*.tax_amount' => ['required', 'numeric', 'min:0'],
             'payments' => ['required', 'array', 'min:1'],
-            'payments.*.payment_method' => ['required', 'in:cash,mobile_money,bank,credit'],
+            'payments.*.payment_method' => ['required', new \App\Rules\AvailablePaymentMethod(true)],
             'payments.*.amount' => ['required', 'numeric', 'min:0'],
             'temporary_customer_name' => ['nullable', 'string', 'max:255'],
             'temporary_customer_phone' => ['nullable', 'string', 'max:30'],
@@ -1150,14 +1162,8 @@ $completeSale = function (InventoryService $inventory) {
                 <div class="space-y-2">
                     @foreach ($payments as $index => $payment)
                         <div class="grid grid-cols-[1fr_1fr_auto] gap-2">
-                            <select wire:model.live="payments.{{ $index }}.payment_method" wire:change="syncDefaultPaymentAmount" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                                <option value="cash">{{ $t(__('application.cash_758ec54e')) }}</option>
-                                <option value="mobile_money">{{ $t(__('application.mobile_money_6a38d1e4')) }}</option>
-                                <option value="bank">{{ $t(__('application.bank_9e89988c')) }}</option>
-                                @if ($this->canCreditSale())
-                                    <option value="credit">{{ $t(__('application.credit_8a45d339')) }}</option>
-                                @endif
-                            </select>
+                            @if (($payment['payment_method'] ?? null) === 'credit')<span class="text-sm font-bold">{{ __('payments.credit') }}</span>@else
+                            <select wire:model.live="payments.{{ $index }}.payment_method" wire:change="syncDefaultPaymentAmount" class="rounded-lg border border-slate-200 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><x-payment-method-options :branch-id="\App\Support\InventorySettings::branchId()" /></select>@endif
                             <span data-money-field wire:ignore class="block min-w-0">
                                 <input type="text" inputmode="decimal" data-money-display class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                                 <input type="hidden" data-money-value data-money-manual-flag="payment_amount_manually_edited" value="{{ $payment['amount'] ?? '' }}" wire:model.live="payments.{{ $index }}.amount">
@@ -1168,6 +1174,7 @@ $completeSale = function (InventoryService $inventory) {
                     @error('payments') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
                     @error('payments.*.amount') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror
                     <button type="button" wire:click="addPayment" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-bold dark:border-slate-700">{{ $t(__('application.add_payment_b5118402')) }}</button>
+                    @if($this->canCreditSale())<button type="button" wire:click="addCreditBalance" class="rounded-lg border px-3 py-2 text-sm font-bold">{{ __('payments.credit') }}</button>@endif
                 </div>
 
                 @error('sale') <p class="text-sm font-semibold text-red-600">{{ $message }}</p> @enderror

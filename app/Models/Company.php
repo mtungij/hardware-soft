@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\PaymentMethodService;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -37,6 +38,15 @@ use Illuminate\Support\Facades\Schema;
 class Company extends Model
 {
     use HasFactory;
+
+    protected static function booted(): void
+    {
+        static::created(function (self $company) {
+            if (Schema::hasTable('payment_methods')) {
+                PaymentMethodService::seedDefaults($company->id);
+            }
+        });
+    }
 
     protected function casts(): array
     {

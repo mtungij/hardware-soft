@@ -66,7 +66,7 @@ $setTab = fn (string $tab) => $this->activeTab = $tab;
             ->when($branch_id, fn ($query) => $query->where('branch_id', $branch_id))
             ->when($date_from, fn ($query) => $query->whereDate('payment_date', '>=', $date_from))
             ->when($date_to, fn ($query) => $query->whereDate('payment_date', '<=', $date_to))
-            ->when($payment_method, fn ($query) => $query->where('payment_method', $payment_method));
+            ->when($payment_method, fn ($query) => \App\Services\PaymentMethodService::filter($query, $payment_method));
 
         $sales = $salesQuery->oldest('sale_date')->oldest('created_at')->get();
         $payments = $paymentsQuery->oldest('payment_date')->oldest('created_at')->get();
@@ -106,7 +106,7 @@ $setTab = fn (string $tab) => $this->activeTab = $tab;
                     'sort' => $payment->payment_date?->toDateString().' '.$payment->created_at?->format('H:i:s'),
                     'type' => 'Payment',
                     'reference' => $payment->receipt_number ?: ($payment->reference_number ?: 'PAY-'.$payment->id),
-                    'description' => $methodLabel($payment->payment_method).' payment'.($payment->reference_number ? ' / Ref '.$payment->reference_number : ''),
+                    'description' => $payment->paymentMethodLabel().' payment'.($payment->reference_number ? ' / Ref '.$payment->reference_number : ''),
                     'debit' => 0,
                     'credit' => (float) $payment->amount,
                     'model' => $payment,
@@ -161,7 +161,7 @@ $setTab = fn (string $tab) => $this->activeTab = $tab;
             <select wire:model.live="transaction_type" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_transactions_f46e1df2') }}</option><option value="credit_sale">{{ __('application.credit_sale_e7c45bcf') }}</option><option value="payment">{{ __('application.payment_b41a92be') }}</option><option value="return">{{ __('application.return_24f096b2') }}</option><option value="adjustment">{{ __('application.adjustment_7f0496ac') }}</option></select>
             <input wire:model.live.debounce.300ms="sale_number" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" placeholder="{{ __('application.sale_number_adb3a494') }}">
             <select wire:model.live="product_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_products_60fe93b6') }}</option>@foreach (Product::with('size')->orderBy('name')->get() as $product)<option value="{{ $product->id }}">{{ $product->displayNameWithSize() }}</option>@endforeach</select>
-            <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_methods_06a3fcd1') }}</option><option value="cash">{{ __('application.cash_758ec54e') }}</option><option value="mobile_money">{{ __('application.mobile_money_6a38d1e4') }}</option><option value="bank">{{ __('application.bank_9e89988c') }}</option></select>
+            <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_methods_06a3fcd1') }}</option><x-payment-method-options :branch-id="$branch_id ?? null" :history="true"  /></select>
         </div>
     </x-card>
 
@@ -220,7 +220,7 @@ $setTab = fn (string $tab) => $this->activeTab = $tab;
                         <td class="px-4 py-3">{{ $payment->created_at?->format('H:i') }}</td>
                         <td class="px-4 py-3 font-mono text-xs">{{ $payment->receipt_number ?: 'PAY-'.$payment->id }}</td>
                         <td class="px-4 py-3 text-right font-black">{{ $money($payment->amount) }}</td>
-                        <td class="px-4 py-3">{{ $methodLabel($payment->payment_method) }}</td>
+                        <td class="px-4 py-3">{{ $payment->paymentMethodLabel() }}</td>
                         <td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td>
                         <td class="px-4 py-3">{{ $payment->branch?->name ?? '-' }}</td>
                         <td class="px-4 py-3">{{ $payment->receivedBy?->name ?? '-' }}</td>

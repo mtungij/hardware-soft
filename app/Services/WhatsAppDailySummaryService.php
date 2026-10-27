@@ -8,7 +8,6 @@ use App\Models\Expense;
 use App\Models\GoodsReceivingNote;
 use App\Models\Purchase;
 use App\Models\Sale;
-use App\Models\SalePayment;
 use App\Models\Scopes\CompanyScope;
 use App\Models\User;
 use App\Models\WhatsAppRecipient;
@@ -36,11 +35,7 @@ class WhatsAppDailySummaryService
 
         $saleIds = (clone $sales)->pluck('id');
         $total = (float) (clone $sales)->sum('total_amount');
-        $credit = (float) SalePayment::withoutGlobalScope(CompanyScope::class)
-            ->where('company_id', $company->id)
-            ->whereIn('sale_id', $saleIds->all() ?: [0])
-            ->where('payment_method', 'credit')
-            ->sum('amount');
+        $credit = (float) Sale::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->whereIn('id', $saleIds)->sum('balance_amount');
 
         $data = [
             'company_name' => $company->company_name,

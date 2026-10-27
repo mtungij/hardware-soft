@@ -3,15 +3,16 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
+use App\Models\Concerns\HasPaymentMethod;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use LogicException;
 
-#[Fillable(['company_id', 'customer_material_account_id', 'branch_id', 'transaction_type', 'reference_number', 'idempotency_key', 'amount', 'payment_method', 'payment_reference', 'transacted_at', 'notes', 'reason', 'received_by'])]
+#[Fillable(['company_id', 'customer_material_account_id', 'branch_id', 'transaction_type', 'reference_number', 'idempotency_key', 'amount', 'payment_method', 'payment_method_id', 'payment_method_name_snapshot', 'payment_method_type_snapshot', 'payment_submission_key', 'payment_reference', 'transacted_at', 'notes', 'reason', 'received_by'])]
 class CustomerMaterialCashTransaction extends Model
 {
-    use HasCompany;
+    use HasCompany, HasPaymentMethod;
 
     protected static function booted(): void
     {

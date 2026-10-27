@@ -26,7 +26,7 @@ class QuotationDocumentService
         }
         $currency = $company->currency ?: 'TZS';
         $money = fn ($value) => $currency.' '.NumberFormatter::money($value);
-        $methods = CompanyPaymentMethod::withoutGlobalScope(CompanyScope::class)->where('company_id', $quotation->company_id)->forDocument('quotation')->get();
+        $methods = CompanyPaymentMethod::withoutGlobalScope(CompanyScope::class)->where('company_id', $quotation->company_id)->forDocument('quotation', $quotation->branch_id)->get();
 
         return [
             'company' => $this->companyData($company),

@@ -67,7 +67,7 @@ mount(function () {
         $isItemView = $view !== 'invoices';
         $customerLabel = fn ($customer): string => $customer?->name ?: $t('walk_in_customer');
         $cashierLabel = fn ($sale): string => $sale?->soldBy?->name ?: ($sale?->createdBy?->name ?: '-');
-        $paymentLabel = fn (string $method): string => $t('method_'.$method);
+        $paymentLabel = fn (string $method): string => in_array($method, ['cash', 'mobile_money', 'bank', 'credit'], true) ? $t('method_'.$method) : $method;
         $saleTypeLabel = fn (string $type): string => $type === 'wholesale' ? $t('wholesale') : $t('retail');
         $lineCost = fn (SaleItem $item): float => $canViewProfit
             ? ($item->base_unit_cost !== null
@@ -75,7 +75,7 @@ mount(function () {
                 : (float) $item->quantity * (float) $item->unit_cost)
             : 0.0;
         $lineProfit = fn (SaleItem $item): float => $canViewProfit ? (float) $item->line_total - $lineCost($item) : 0.0;
-        $paymentMethods = ['cash', 'mobile_money', 'bank', 'credit'];
+        $paymentMethods = [];
         $assignedLocationIds = AuthorizationScope::scopeFor(auth()->user(), 'stock_scope', AuthorizationScope::ASSIGNED_LOCATIONS) === AuthorizationScope::ASSIGNED_LOCATIONS
             ? AuthorizationScope::stockLocationIds(auth()->user())
             : null;
@@ -96,7 +96,7 @@ mount(function () {
                         ->when($customer_id, fn ($q) => $q->where('customer_id', $customer_id))
                         ->when($cashier_id, fn ($q) => $q->where(fn ($cashierQuery) => $cashierQuery->where('sold_by', $cashier_id)->orWhere('created_by', $cashier_id)))
                         ->when($branch_id, fn ($q) => $q->where('branch_id', $branch_id))
-                        ->when($payment_method, fn ($q) => $q->whereHas('payments', fn ($paymentQuery) => $paymentQuery->where('payment_method', $payment_method)))
+                        ->when($payment_method, fn ($q) => $q->whereHas('payments', fn ($paymentQuery) => \App\Services\PaymentMethodService::filter($paymentQuery, $payment_method)))
                         ->when($date_from, fn ($q) => $q->whereDate('sale_date', '>=', $date_from))
                         ->when($date_to, fn ($q) => $q->whereDate('sale_date', '<=', $date_to));
                 })
@@ -185,9 +185,7 @@ mount(function () {
             </select>
             <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
                 <option value="">{{ $t('all_payment_methods') }}</option>
-                @foreach ($paymentMethods as $method)
-                    <option value="{{ $method }}">{{ $paymentLabel($method) }}</option>
-                @endforeach
+                <x-payment-method-options :history="true" :branch-id="$branch_id ?? null" />
             </select>
             <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                 <option value="">{{ $t('all_branches') }}</option>
@@ -209,7 +207,7 @@ mount(function () {
                     $sale = $items->first()->sale;
                     $saleTypes = $items->pluck('sale_type')->filter()->unique()->values();
                     $stockSources = $items->map(fn ($item) => $item->sold_from_label ?: ($item->stockLocation ? InventorySettings::stockLocationLabel($item->stockLocation) : '-'))->filter()->unique()->values();
-                    $paymentMethods = $sale?->payments?->pluck('payment_method')->filter()->unique()->values() ?? collect();
+                    $paymentMethods = $sale?->payments?->map(fn ($payment) => $payment->paymentMethodLabel())->filter()->unique()->values() ?? collect();
 
                     return [
                         'sale' => $sale,
@@ -221,7 +219,7 @@ mount(function () {
                         'sales' => (float) $items->sum('line_total'),
                         'profit' => (float) $items->sum(fn ($item) => $lineProfit($item)),
                         'sale_type' => $saleTypes->count() > 1 ? __('messages.sales_items.mixed') : $saleTypeLabel((string) ($saleTypes->first() ?: 'retail')),
-                        'payment_method' => $sale?->payment_status === 'partial' ? __('messages.sales_items.partial') : ($paymentMethods->count() > 1 ? __('messages.sales_items.mixed') : ($paymentMethods->isEmpty() ? '-' : $paymentLabel((string) $paymentMethods->first()))),
+                        'payment_method' => $paymentMethods->isEmpty() ? (($sale?->balance_amount ?? 0) > 0 ? __('payments.credit') : '-') : $paymentMethods->map($paymentLabel)->join(', '),
                         'stock_source' => $stockSources->count() > 1 ? __('messages.sales_items.mixed_locations') : (string) ($stockSources->first() ?: '-'),
                     ];
                 })

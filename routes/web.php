@@ -358,6 +358,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('settings.company');
     Volt::route('settings/document-templates/quotations', 'settings.quotation-templates')->middleware('company-settings.update')->name('settings.quotation-templates');
     Route::get('settings/document-templates/quotations/{template}/preview', QuotationTemplatePreviewController::class)->middleware('company-settings.update')->name('settings.quotation-templates.preview');
+    Volt::route('settings/payments/payment-methods', 'settings.payment-methods')->middleware('can:payment_methods.view')->name('settings.payment-methods');
     Volt::route('settings/commercial-documents', 'settings.commercial-documents')
         ->middleware('can:payment_methods.view')
         ->name('settings.commercial-documents');

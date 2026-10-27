@@ -16,18 +16,19 @@ use function Livewire\Volt\uses;
 layout('layouts.customer');
 uses([WithFileUploads::class]);
 
-state(['sale_id' => '', 'amount' => '', 'payment_method' => 'mobile_money', 'reference_number' => '', 'receipt_file' => null, 'notes' => '']);
+state(['payment_submission_key' => null])->locked();
+state(['sale_id' => '', 'amount' => '', 'payment_method' => \App\Services\PaymentMethodService::defaultValue(), 'reference_number' => '', 'receipt_file' => null, 'notes' => '']);
 
 rules(fn () => [
     'sale_id' => ['nullable', Rule::exists('sales', 'id')->where('company_id', auth('customer')->user()->company_id)->where('customer_id', auth('customer')->user()->customer_id)],
     'amount' => ['required', 'numeric', 'gt:0'],
-    'payment_method' => ['required', 'in:mobile_money,bank,cash_deposit'],
+    'payment_method' => ['required', new \App\Rules\AvailablePaymentMethod(false, $this->sales->firstWhere('id', (int) $this->sale_id)?->branch_id ?? auth('customer')->user()->customer?->branch_id)],
     'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_receipts', 'reference_number')->where('company_id', auth('customer')->user()->company_id)->where('customer_id', auth('customer')->user()->customer_id)],
     'receipt_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
     'notes' => ['nullable', 'string', 'max:1000'],
 ]);
 
-mount(function () {
+mount(function () { $this->payment_submission_key = (string) str()->uuid();
     $this->sale_id = (string) request('sale_id', '');
 });
 
@@ -44,7 +45,7 @@ $save = function () {
 
     $path = $this->receipt_file->store('customer-receipts', 'local');
 
-    CustomerReceipt::create([
+    CustomerReceipt::firstOrCreate(['company_id' => $account->company_id, 'payment_submission_key' => $this->payment_submission_key], [
         'customer_account_id' => $account->id,
         'customer_id' => $account->customer_id,
         'sale_id' => $sale?->id,
@@ -77,9 +78,7 @@ $save = function () {
             </label>
             <x-money-input :label="__('messages.receipts.amount')" name="amount" wire:model="amount" required />
             <label class="block text-sm font-bold">{{ __('messages.receipts.payment_method') }}
-                <select wire:model="payment_method" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="mobile_money">{{ __('messages.methods.mobile_money') }}</option><option value="bank">{{ __('messages.methods.bank') }}</option><option value="cash_deposit">{{ __('messages.methods.cash_deposit') }}</option>
-                </select>
+                <select wire:model="payment_method" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><x-payment-method-options :branch-id="$this->sales->firstWhere('id', (int) $sale_id)?->branch_id ?? null"   /></select>
             </label>
             <x-form-input :label="__('messages.receipts.reference_number')" name="reference_number" wire:model="reference_number" />
             <label class="block text-sm font-bold">{{ __('messages.receipts.receipt_file') }}

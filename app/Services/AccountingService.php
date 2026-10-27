@@ -5,10 +5,13 @@ namespace App\Services;
 use App\Models\Customer;
 use App\Models\CustomerPayment;
 use App\Models\CustomerPaymentAllocation;
+use App\Models\CustomerReceipt;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\Supplier;
 use App\Models\SupplierPayment;
+use App\Models\User;
+use App\Support\BranchAccess;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -60,14 +63,30 @@ class AccountingService
     {
         return DB::transaction(function () use ($customer, $data, $receivedBy) {
             $customer = Customer::query()->whereKey($customer->id)->lockForUpdate()->firstOrFail();
+            $actor = User::withoutGlobalScopes()->findOrFail($receivedBy);
+            abort_unless((int) $actor->company_id === (int) $customer->company_id && BranchAccess::canAccessBranch($actor, (int) $data['branch_id']), 403);
+            if (! empty($data['payment_submission_key'])) {
+                $existing = CustomerPayment::query()->where('company_id', $customer->company_id)->where('payment_submission_key', $data['payment_submission_key'])->lockForUpdate()->first();
+                if ($existing) {
+                    abort_unless((int) $existing->customer_id === (int) $customer->id, 403);
+
+                    return $existing;
+                }
+            }
             $amount = (float) $data['amount'];
-            $balance = $this->customerBalance($customer);
+            if (! is_finite($amount) || $amount <= 0) {
+                throw ValidationException::withMessages(['amount' => __('payments.positive_amount')]);
+            }
+            $sales = Sale::query()->where('company_id', $customer->company_id)->where('customer_id', $customer->id)->where('status', 'completed')->where('balance_amount', '>', 0)->oldest('sale_date')->lockForUpdate()->get();
+            $balance = (float) $customer->opening_balance + (float) $sales->sum('balance_amount');
 
             if ($amount > $balance) {
                 throw ValidationException::withMessages(['amount' => __('application.customer_payment_cannot_exceed_outstanding_balance_3910d37e')]);
             }
 
-            $payment = CustomerPayment::create([
+            $payment = new CustomerPayment([
+                'company_id' => $customer->company_id,
+                'payment_submission_key' => $data['payment_submission_key'] ?? null,
                 'branch_id' => $data['branch_id'],
                 'customer_id' => $customer->id,
                 'receipt_number' => $this->nextCustomerPaymentReceiptNumber(),
@@ -79,10 +98,18 @@ class AccountingService
                 'notes' => $data['notes'] ?? null,
             ]);
 
+            if (! empty($data['source_receipt_id'])) {
+                abort_unless($actor->can('approve customer receipts'), 403);
+                $source = CustomerReceipt::query()->where('company_id', $customer->company_id)->where('customer_id', $customer->id)->findOrFail($data['source_receipt_id']);
+                abort_unless($source->status === 'pending' && (float) $source->amount === $amount, 403);
+                $payment->inheritPaymentMethod($source);
+            }
+            $payment->save();
+
             $customer->decrement('balance_amount', min($amount, (float) $customer->balance_amount));
 
             $remaining = $amount;
-            foreach (Sale::query()->where('customer_id', $customer->id)->where('status', 'completed')->where('balance_amount', '>', 0)->oldest('sale_date')->lockForUpdate()->get() as $sale) {
+            foreach ($sales as $sale) {
                 if ($remaining <= 0) {
                     break;
                 }
@@ -91,13 +118,16 @@ class AccountingService
                 $newPaid = (float) $sale->paid_amount + $applied;
                 $newBalance = max(0, (float) $sale->balance_amount - $applied);
 
-                $sale->payments()->create([
+                $allocatedPayment = $sale->payments()->make([
+                    'customer_payment_id' => $payment->id,
                     'payment_method' => $data['payment_method'],
                     'amount' => $applied,
                     'reference_number' => $data['reference_number'] ?? null,
                     'received_by' => $receivedBy,
                     'payment_date' => $data['payment_date'],
                 ]);
+
+                $allocatedPayment->inheritPaymentMethod($payment)->save();
 
                 CustomerPaymentAllocation::create([
                     'company_id' => $customer->company_id,
@@ -118,30 +148,44 @@ class AccountingService
             }
 
             return $payment;
-        });
+        }, attempts: 10);
     }
 
     private function nextCustomerPaymentReceiptNumber(): string
     {
-        do {
-            $number = 'CPAY-'.now()->format('Ymd').'-'.str_pad((string) (CustomerPayment::whereDate('created_at', today())->count() + 1), 4, '0', STR_PAD_LEFT);
-        } while (CustomerPayment::where('receipt_number', $number)->exists());
-
-        return $number;
+        // Counting rows races across different customers and tenants. Existing
+        // receipt numbers stay intact; new numbers use a unique sortable suffix.
+        return 'CPAY-'.now()->format('Ymd').'-'.str()->ulid();
     }
 
     public function paySupplier(Supplier $supplier, array $data, int $paidBy): SupplierPayment
     {
         return DB::transaction(function () use ($supplier, $data, $paidBy) {
             $supplier = Supplier::query()->whereKey($supplier->id)->lockForUpdate()->firstOrFail();
+            $actor = User::withoutGlobalScopes()->findOrFail($paidBy);
+            abort_unless((int) $actor->company_id === (int) $supplier->company_id && BranchAccess::canAccessBranch($actor, (int) $data['branch_id']), 403);
+            if (! empty($data['payment_submission_key'])) {
+                $existing = SupplierPayment::query()->where('company_id', $supplier->company_id)->where('payment_submission_key', $data['payment_submission_key'])->lockForUpdate()->first();
+                if ($existing) {
+                    abort_unless((int) $existing->supplier_id === (int) $supplier->id, 403);
+
+                    return $existing;
+                }
+            }
             $amount = (float) $data['amount'];
-            $balance = $this->supplierBalance($supplier);
+            if (! is_finite($amount) || $amount <= 0) {
+                throw ValidationException::withMessages(['amount' => __('payments.positive_amount')]);
+            }
+            $purchases = Purchase::query()->where('company_id', $supplier->company_id)->where('supplier_id', $supplier->id)->where('status', '!=', 'cancelled')->where('balance_amount', '>', 0)->oldest('purchase_date')->lockForUpdate()->get();
+            $balance = (float) $supplier->opening_balance + (float) $purchases->sum('balance_amount');
 
             if ($amount > $balance) {
                 throw ValidationException::withMessages(['amount' => __('application.supplier_payment_cannot_exceed_outstanding_balance_8b97bb14')]);
             }
 
             $payment = SupplierPayment::create([
+                'company_id' => $supplier->company_id,
+                'payment_submission_key' => $data['payment_submission_key'] ?? null,
                 'branch_id' => $data['branch_id'],
                 'supplier_id' => $supplier->id,
                 'amount' => $amount,
@@ -153,7 +197,7 @@ class AccountingService
             ]);
 
             $remaining = $amount;
-            foreach (Purchase::query()->where('supplier_id', $supplier->id)->where('status', '!=', 'cancelled')->where('balance_amount', '>', 0)->oldest('purchase_date')->lockForUpdate()->get() as $purchase) {
+            foreach ($purchases as $purchase) {
                 if ($remaining <= 0) {
                     break;
                 }
@@ -172,6 +216,6 @@ class AccountingService
             }
 
             return $payment;
-        });
+        }, attempts: 10);
     }
 }

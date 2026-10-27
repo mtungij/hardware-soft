@@ -31,7 +31,7 @@ state([
     'reference_number' => '',
     'notes' => '',
     'paid_amount' => 0.0,
-    'payment_method' => 'cash',
+    'payment_method' => \App\Services\PaymentMethodService::defaultValue(),
     'payment_reference_number' => '',
     'subtotal' => 0.0,
     'grand_total' => 0.0,
@@ -235,7 +235,7 @@ $savePurchase = function (string $status, bool $sendEmail = false) {
         'reference_number' => ['required', 'string', 'max:255', 'unique:purchases,reference_number'],
         'notes' => ['nullable', 'string', 'max:1000'],
         'paid_amount' => ['required', 'numeric', 'min:0'],
-        'payment_method' => ['required', 'in:cash,mobile_money,bank'],
+        'payment_method' => ['required', new \App\Rules\AvailablePaymentMethod(false, $this->branch_id ? (int) $this->branch_id : null)],
         'payment_reference_number' => ['nullable', 'string', 'max:255'],
         'subtotal' => ['required', 'numeric', 'min:0'],
         'grand_total' => ['required', 'numeric', 'min:0'],
@@ -379,6 +379,7 @@ $submitPurchase = function () {
     return $this->savePurchase($this->save_status, $this->send_purchase_email);
 };
 
+$updatedBranchId = function () { $this->payment_method = \App\Services\PaymentMethodService::defaultValue(null, $this->branch_id ? (int) $this->branch_id : null); };
 ?>
 
 <div>
@@ -421,7 +422,7 @@ $submitPurchase = function () {
                     @error('supplier_id') <span class="text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.branch_1627510b') }}
-                    <select wire:model="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
+                    <select wire:model.live="branch_id" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())>
                         @foreach (Branch::where('status', 'active')->orderBy('name')->get() as $branch)
                             <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                         @endforeach
@@ -432,11 +433,7 @@ $submitPurchase = function () {
                 <x-form-input label="{{ __('application.reference_number_74195db5') }}" name="reference_number" wire:model="reference_number" required />
                 <x-money-input label="{{ __('application.paid_amount_1950b3cf') }}" name="paid_amount" value="{{ $paid_amount }}" wire:model.blur="paid_amount" required />
                 <label class="block text-sm font-bold text-slate-700 dark:text-slate-200">{{ __('application.payment_method_f383f6a2') }}
-                    <select wire:model="payment_method" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="cash">{{ __('application.cash_758ec54e') }}</option>
-                        <option value="mobile_money">{{ __('application.mobile_money_6a38d1e4') }}</option>
-                        <option value="bank">{{ __('application.bank_9e89988c') }}</option>
-                    </select>
+                    <select wire:model="payment_method" class="mt-1 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><x-payment-method-options :branch-id="$branch_id ?? null"   /></select>
                     @error('payment_method') <span class="text-xs font-semibold text-red-600">{{ $message }}</span> @enderror
                 </label>
                 <x-form-input label="{{ __('application.payment_reference_80e69501') }}" name="payment_reference_number" wire:model="payment_reference_number" />

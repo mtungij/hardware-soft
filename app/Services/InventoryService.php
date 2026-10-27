@@ -571,6 +571,16 @@ class InventoryService
                 throw ValidationException::withMessages(['cart' => __('application.a_selected_selling_location_is_outside_the_current_company_b273d6cf')]);
             }
 
+            foreach ($payments as $payment) {
+                $amount = $payment['amount'] ?? null;
+                if (! is_numeric($amount) || ! is_finite((float) $amount) || (float) $amount < 0) {
+                    throw ValidationException::withMessages(['payments' => __('payments.positive_amount')]);
+                }
+                if (($payment['payment_method'] ?? null) !== 'credit' && (float) $amount > 0) {
+                    PaymentMethodService::resolve($payment['payment_method'] ?? null, $companyId, $branchId);
+                }
+            }
+
             $containsCredit = collect($payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
 
             $creditCustomerUnassigned = false;
@@ -869,8 +879,49 @@ class InventoryService
                 }
             }
 
+            // Only cash tender may generate change. Electronic payments
+            // must not exceed the amount due.
+            $nonCashPaid = 0.0;
+            $cashPaid = 0.0;
+
+            foreach ($payments as $payment) {
+                if (($payment['payment_method'] ?? null) === 'credit') {
+                    continue;
+                }
+
+                $amount = (float) ($payment['amount'] ?? 0);
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $method = PaymentMethodService::resolve(
+                    $payment['payment_method'],
+                    $companyId,
+                    $branchId
+                );
+
+                if ($method->type === 'cash') {
+                    $cashPaid += $amount;
+                } else {
+                    $nonCashPaid += $amount;
+                }
+            }
+
+            if (round($nonCashPaid - $total, 2) > 0) {
+                throw ValidationException::withMessages([
+                    'payments' => __('payments.noncash_overpayment'),
+                ]);
+            }
+
+            $change = max(0, round($paid - $total, 2));
+
+            if ($change > 0 && round($cashPaid - $change, 2) < 0) {
+                throw ValidationException::withMessages([
+                    'payments' => __('payments.cash_change_only'),
+                ]);
+            }
+
             $balance = max(0, $total - $paid);
-            $change = max(0, $paid - $total);
             $paymentStatus = $balance <= 0 ? 'paid' : ($paid > 0 ? 'partial' : 'unpaid');
             $saleType = collect($preparedItems)->contains(fn (array $item) => $item['sale_type'] === 'wholesale') ? 'wholesale' : 'retail';
 
@@ -969,11 +1020,31 @@ class InventoryService
                 ]);
             }
 
+            // Allocate returned change against cash payments only.
+            // Store net received amounts so reconciliation remains accurate.
+            $remainingChange = $change;
+
             foreach ($payments as $payment) {
                 $method = $payment['payment_method'] ?? null;
                 $amount = (float) ($payment['amount'] ?? 0);
 
-                if (! $method || $amount <= 0) {
+                if ($method === 'credit' || ! $method || $amount <= 0) {
+                    continue;
+                }
+
+                $resolvedMethod = PaymentMethodService::resolve(
+                    $method,
+                    $companyId,
+                    $branchId
+                );
+
+                if ($resolvedMethod->type === 'cash' && $remainingChange > 0) {
+                    $deduction = min($amount, $remainingChange);
+                    $amount = round($amount - $deduction, 2);
+                    $remainingChange = round($remainingChange - $deduction, 2);
+                }
+
+                if ($amount <= 0) {
                     continue;
                 }
 

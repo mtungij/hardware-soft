@@ -14,7 +14,7 @@ class CashbookService
 {
     public function totals(int $branchId, string $date): array
     {
-        $cashSales = SalePayment::query()
+        $cashSales = SalePayment::query()->whereNull('customer_payment_id')
             ->where('payment_method', 'cash')
             ->whereDate('payment_date', $date)
             ->whereHas('sale', fn ($query) => $query->where('branch_id', $branchId)->where('status', 'completed'))

@@ -234,7 +234,7 @@ $validateReceiving = function () {
         'additional_costs.*.type_id' => ['required', Rule::exists('purchase_cost_types', 'id')->where('company_id', auth()->user()->company_id)->where('is_active', true)->where('name', '!=', 'Product Cost')],
         'additional_costs.*.amount' => ['required', 'numeric', 'gt:0', 'decimal:0,2'],
         'additional_costs.*.payee' => ['nullable', 'string', 'max:255'],
-        'additional_costs.*.payment_method' => ['nullable', 'string', 'max:100'],
+        'additional_costs.*.payment_method' => ['nullable', new \App\Rules\AvailablePaymentMethod()],
         'additional_costs.*.payment_reference' => ['nullable', 'string', 'max:255'],
         'additional_costs.*.notes' => ['nullable', 'string', 'max:1000'],
         'lines.*.markup_percentage' => ['nullable', 'numeric', 'min:0', 'max:10000', 'decimal:0,2'],
@@ -520,7 +520,7 @@ $postReceipt = function (InventoryService $inventory) {
                             @error("additional_costs.{$index}.amount") <span class="text-red-600">{{ $message }}</span> @enderror
                         </label>
                         <label class="text-xs font-bold">{{ __('application.paid_to_payee_6ff4ebdf') }}<input wire:model="additional_costs.{{ $index }}.payee" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
-                        <label class="text-xs font-bold">{{ __('application.payment_method_f383f6a2') }}<input wire:model="additional_costs.{{ $index }}.payment_method" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
+                        <label class="text-xs font-bold">{{ __('application.payment_method_f383f6a2') }}<select wire:model="additional_costs.{{ $index }}.payment_method" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"><option value=""></option><x-payment-method-options :branch-id="$branch_id ?? null" /></select></label>
                         <label class="text-xs font-bold">{{ __('application.payment_reference_80e69501') }}<input wire:model="additional_costs.{{ $index }}.payment_reference" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
                         <label class="text-xs font-bold">{{ __('application.notes_70440046') }}<input wire:model="additional_costs.{{ $index }}.notes" class="mt-1 w-full rounded-lg border border-slate-200 p-2 dark:bg-navy-950"></label>
                         <button type="button" wire:click="removeAdditionalCost({{ $index }})" class="self-end rounded-lg border border-red-300 p-2 text-xs font-bold text-red-700">{{ __('application.remove_e963907d') }}</button>

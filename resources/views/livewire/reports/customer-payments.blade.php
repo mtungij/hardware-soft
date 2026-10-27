@@ -34,18 +34,18 @@ mount(function () {
 <div>
     @php
         $money = fn ($value) => 'TZS '.\App\Support\NumberFormatter::money($value);
-        $methodLabel = fn ($method) => str((string) $method)->replace('_', ' ')->title();
-        $methods = ['cash', 'mobile_money', 'bank'];
+        $methodLabel = fn ($method) => $method;
         $query = CustomerPayment::query()
             ->with(['customer', 'branch', 'receivedBy'])
             ->when($date_from, fn ($q) => $q->whereDate('payment_date', '>=', $date_from))
             ->when($date_to, fn ($q) => $q->whereDate('payment_date', '<=', $date_to))
             ->when($customer_id, fn ($q) => $q->where('customer_id', $customer_id))
             ->when($branch_id, fn ($q) => $q->where('branch_id', $branch_id))
-            ->when($payment_method, fn ($q) => $q->where('payment_method', $payment_method))
+            ->when($payment_method, fn ($q) => \App\Services\PaymentMethodService::filter($q, $payment_method))
             ->when($received_by, fn ($q) => $q->where('received_by', $received_by));
         $payments = (clone $query)->latest('payment_date')->latest()->paginate(25);
-        $totalsByMethod = (clone $query)->selectRaw('payment_method, sum(amount) as amount')->groupBy('payment_method')->pluck('amount', 'payment_method');
+        $totalsByMethod = (clone $query)->get()->groupBy(fn ($payment) => $payment->paymentMethodLabel())->map(fn ($group) => $group->sum('amount'));
+        $methods = $totalsByMethod->keys()->all();
         $grandTotal = (clone $query)->sum('amount');
         $dailyGroups = (clone $query)->oldest('payment_date')->get()->groupBy(fn ($payment) => $payment->payment_date?->format('Y-m-d'));
         $exportParams = compact('date_from', 'date_to', 'customer_id', 'branch_id', 'payment_method', 'received_by');
@@ -61,7 +61,7 @@ mount(function () {
             <input wire:model.live="date_to" type="date" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
             <select wire:model.live="customer_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_customers_872f2c2f') }}</option>@foreach (Customer::where(fn ($q) => $q->where('is_system_customer', false)->orWhereNull('is_system_customer'))->orderBy('name')->get() as $customer)<option value="{{ $customer->id }}">{{ $customer->displayName() }}</option>@endforeach</select>
             <select wire:model.live="branch_id" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(\App\Support\BranchAccess::restricted())><option value="">{{ __('application.all_branches_0bf51d9a') }}</option>@foreach (Branch::orderBy('name')->get() as $branch)<option value="{{ $branch->id }}">{{ $branch->name }}</option>@endforeach</select>
-            <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_methods_06a3fcd1') }}</option>@foreach ($methods as $method)<option value="{{ $method }}">{{ $methodLabel($method) }}</option>@endforeach</select>
+            <select wire:model.live="payment_method" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_methods_06a3fcd1') }}</option><x-payment-method-options :history="true" :branch-id="$branch_id ?: null" /></select>
             <select wire:model.live="received_by" class="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><option value="">{{ __('application.all_received_by_9b674ea0') }}</option>@foreach (User::orderBy('name')->get() as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select>
         </div>
     </x-card>
@@ -79,7 +79,7 @@ mount(function () {
                 <div class="rounded-lg bg-slate-50 p-3 dark:bg-white/5">
                     <p class="font-black">{{ \Illuminate\Support\Carbon::parse($date)->locale(app()->getLocale())->translatedFormat('d F Y') }}</p>
                     @foreach ($methods as $method)
-                        <div class="mt-1 flex justify-between text-sm"><span>{{ $methodLabel($method) }}</span><span class="font-bold">{{ $money($rows->where('payment_method', $method)->sum('amount')) }}</span></div>
+                        <div class="mt-1 flex justify-between text-sm"><span>{{ $methodLabel($method) }}</span><span class="font-bold">{{ $money($rows->filter(fn ($payment) => $payment->paymentMethodLabel() === $method)->sum('amount')) }}</span></div>
                     @endforeach
                     <div class="mt-2 flex justify-between border-t border-slate-200 pt-2 text-sm font-black dark:border-slate-700"><span>{{ __('application.total_b25928c6') }}</span><span>{{ $money($rows->sum('amount')) }}</span></div>
                 </div>
@@ -99,7 +99,7 @@ mount(function () {
                     <td class="px-4 py-3 font-bold">{{ $payment->customer?->displayName() }}</td>
                     <td class="px-4 py-3">{{ $payment->customer?->phone ?: '-' }}</td>
                     <td class="px-4 py-3 text-right font-black">{{ $money($payment->amount) }}</td>
-                    <td class="px-4 py-3">{{ $methodLabel($payment->payment_method) }}</td>
+                    <td class="px-4 py-3">{{ $payment->paymentMethodLabel() }}</td>
                     <td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $payment->branch?->name ?? '-' }}</td>
                     <td class="px-4 py-3">{{ $payment->receivedBy?->name ?? '-' }}</td>

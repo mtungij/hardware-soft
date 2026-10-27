@@ -4,6 +4,7 @@ use App\Models\CustomerDeposit;
 use Illuminate\Validation\Rule;
 use Livewire\WithFileUploads;
 
+use function Livewire\Volt\mount;
 use function Livewire\Volt\layout;
 use function Livewire\Volt\rules;
 use function Livewire\Volt\state;
@@ -12,22 +13,25 @@ use function Livewire\Volt\uses;
 layout('layouts.customer');
 uses([WithFileUploads::class]);
 
-state(['amount' => '', 'payment_method' => 'mobile_money', 'reference_number' => '', 'receipt_file' => null, 'notes' => '']);
+state(['payment_submission_key' => null])->locked();
+state(['amount' => '', 'payment_method' => \App\Services\PaymentMethodService::defaultValue(), 'reference_number' => '', 'receipt_file' => null, 'notes' => '']);
 
 rules(fn () => [
     'amount' => ['required', 'numeric', 'gt:0'],
-    'payment_method' => ['required', 'in:mobile_money,bank,cash_deposit'],
+    'payment_method' => ['required', new \App\Rules\AvailablePaymentMethod()],
     'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_deposits', 'reference_number')->where('company_id', auth('customer')->user()->company_id)->where('customer_id', auth('customer')->user()->customer_id)],
     'receipt_file' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
     'notes' => ['nullable', 'string', 'max:1000'],
 ]);
+
+mount(function () { $this->payment_submission_key = (string) str()->uuid(); });
 
 $save = function () {
     $data = $this->validate();
     $account = auth('customer')->user()->load('customer');
     $path = $this->receipt_file->store('customer-deposits', 'local');
 
-    CustomerDeposit::create([
+    CustomerDeposit::firstOrCreate(['company_id' => $account->company_id, 'payment_submission_key' => $this->payment_submission_key], [
         'customer_account_id' => $account->id,
         'customer_id' => $account->customer_id,
         'branch_id' => $account->customer?->branch_id,
@@ -53,9 +57,7 @@ $save = function () {
         <form wire:submit="save" class="space-y-4">
             <x-money-input :label="__('messages.deposits.amount')" name="amount" wire:model="amount" required />
             <label class="block text-sm font-bold">{{ __('messages.deposits.payment_method') }}
-                <select wire:model="payment_method" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                    <option value="mobile_money">{{ __('messages.methods.mobile_money') }}</option><option value="bank">{{ __('messages.methods.bank') }}</option><option value="cash_deposit">{{ __('messages.methods.cash_deposit') }}</option>
-                </select>
+                <select wire:model="payment_method" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><x-payment-method-options :branch-id="$branch_id ?? null"   /></select>
             </label>
             <x-form-input :label="__('messages.deposits.reference_number')" name="reference_number" wire:model="reference_number" />
             <label class="block text-sm font-bold">{{ __('messages.deposits.receipt_file') }}

@@ -28,7 +28,7 @@ class B2bDocumentPdfService
         $quotation->loadMissing(['company', 'branch', 'customer', 'creator', 'items', 'additionalCharges']);
         $paymentMethods = CompanyPaymentMethod::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $quotation->company_id)
-            ->forDocument($quotation->document_type)
+            ->forDocument($quotation->document_type, $quotation->branch_id)
             ->get();
         $path = 'documents/'.$quotation->company_id.'/quotations/'.$quotation->quotation_number.'-'.app()->getLocale().'.pdf';
         $this->write('pdf.b2b-quotation', compact('quotation', 'paymentMethods'), $path, $quotation->quotation_number);
@@ -41,7 +41,7 @@ class B2bDocumentPdfService
         $invoice->loadMissing(['company', 'customer', 'quotation', 'sale.branch', 'sale.createdBy', 'sale.payments', 'sale.items.product', 'sale.additionalCharges']);
         $paymentMethods = CompanyPaymentMethod::withoutGlobalScope(CompanyScope::class)
             ->where('company_id', $invoice->company_id)
-            ->forDocument('invoice')
+            ->forDocument('invoice', $invoice->sale?->branch_id)
             ->get();
         $path = 'documents/'.$invoice->company_id.'/invoices/'.$invoice->invoice_number.'-'.app()->getLocale().'.pdf';
         $this->write('pdf.b2b-sales-invoice', compact('invoice', 'paymentMethods'), $path, $invoice->invoice_number);

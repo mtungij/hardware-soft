@@ -75,7 +75,7 @@ body{font-family:sans-serif;color:#172033;font-size:9pt}.brand{color:#f97316;fon
 </tr>
 </table>
 <div class="section">{{ __('application.payment_method_s_dc381eaa') }}</div>
-<div>{{ $sale->payments->pluck('payment_method')->map(fn($method)=>\App\Support\UiText::label($method))->join(', ') ?: __('application.credit_outstanding_c575826e') }}</div>@if($paymentMethods->isNotEmpty())<div class="section">{{ __('application.payment_instructions_f3fa021f') }}</div>
+<div>{{ $sale->payments->map(fn ($payment) => $payment->paymentMethodLabel())->join(', ') ?: __('application.credit_outstanding_c575826e') }}</div>@if($paymentMethods->isNotEmpty())<div class="section">{{ __('application.payment_instructions_f3fa021f') }}</div>
 <div class="muted">{{ __('application.use_payment_reference_e3549df1') }} <b>{{ $invoice->invoice_number }}</b>
 </div>@foreach($paymentMethods as $method)<div style="margin-top:2mm">
 <b>{{ $method->display_name }}</b>@if($method->provider) · {{ $method->provider }}@endif@if($method->bank_name) · {{ $method->bank_name }}@endif<br>@if($method->account_name){{ __('application.account_name_3e29c383') }} {{ $method->account_name }}<br>@endif @if($method->account_number){{ __('application.account_ac06ef9e') }} {{ $method->account_number }}<br>@endif @if($method->phone_or_business_number){{ __('application.number_73089985') }} {{ $method->phone_or_business_number }}<br>@endif @if($method->branch_name){{ __('application.branch_8b31d33d') }} {{ $method->branch_name }}<br>@endif @if($method->instructions){{ $method->instructions }}@endif</div>@endforeach @endif<div class="section">{{ __('application.prepared_by_447abf81') }}</div>

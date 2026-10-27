@@ -3,13 +3,14 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
+use App\Models\Concerns\HasPaymentMethod;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CustomerDeposit extends Model
 {
-    use HasCompany;
+    use HasCompany, HasPaymentMethod;
 
     protected $fillable = [
         'company_id',
@@ -19,7 +20,7 @@ class CustomerDeposit extends Model
         'amount',
         'used_amount',
         'balance_amount',
-        'payment_method',
+        'payment_method', 'payment_method_id', 'payment_method_name_snapshot', 'payment_method_type_snapshot', 'payment_submission_key',
         'reference_number',
         'receipt_file',
         'notes',

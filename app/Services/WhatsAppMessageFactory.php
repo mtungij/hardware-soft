@@ -42,7 +42,7 @@ class WhatsAppMessageFactory
         $customer = $sale->temporary_customer_name
             ?: $sale->customer?->displayName($this->localization->language($sale->company))
             ?: $this->localization->get($sale->company, 'common.walk_in_customer');
-        $payment = $sale->payments->pluck('payment_method')->filter()->unique()
+        $payment = $sale->payments->map(fn ($payment) => $payment->paymentMethodLabel())->filter()->unique()
             ->map(fn (string $method): string => $this->paymentMethod($sale->company, $method))
             ->join(', ');
         $itemQuantity = (float) $sale->items->sum('quantity');

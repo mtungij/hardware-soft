@@ -26,7 +26,7 @@ $methodLabel = fn (string $method) => __("messages.methods.$method") === "messag
                 <tr>
                     <td class="px-4 py-3">{{ $deposit->created_at->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
                     <td class="px-4 py-3">{{ $deposit->reference_number ?: '-' }}</td>
-                    <td class="px-4 py-3">{{ $this->methodLabel($deposit->payment_method) }}</td>
+                    <td class="px-4 py-3">{{ $deposit->paymentMethodLabel() }}</td>
                     <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->amount) }}</td>
                     <td class="px-4 py-3 text-right">TZS {{ \App\Support\NumberFormatter::money($deposit->used_amount) }}</td>
                     <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->balance_amount) }}</td>

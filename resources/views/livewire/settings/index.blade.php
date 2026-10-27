@@ -119,6 +119,7 @@ $removeLogo = function () {
 ?>
 
 <div>
+    @can('payment_methods.view')<a href="{{ route('settings.payment-methods') }}" wire:navigate class="mb-4 block rounded-xl border p-4 font-bold">{{ __('payments.payments') }} → {{ __('payments.title') }}</a>@endcan
     <x-page-header
         title="{{ __('application.system_settings_142fad61') }}"
         description="{{ __('application.configure_company_identity_defaults_receipts_tax_and_visual_theme_7a82ad05') }}"

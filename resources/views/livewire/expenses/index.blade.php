@@ -18,6 +18,7 @@ use function Livewire\Volt\uses;
 layout('layouts.app');
 uses([WithPagination::class]);
 
+state(['payment_submission_key' => null])->locked();
 state([
     'search' => '',
     'branchFilter' => (BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
@@ -27,7 +28,7 @@ state([
     'branch_id' => (BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
     'expense_category_id' => '',
     'amount' => '',
-    'payment_method' => 'cash',
+    'payment_method' => \App\Services\PaymentMethodService::defaultValue(),
     'reference_number' => '',
     'expense_date' => '',
     'notes' => '',
@@ -48,13 +49,13 @@ rules(fn () => [
     'branch_id' => ['required', 'integer', Rule::exists('branches', 'id')->where('company_id', auth()->user()->company_id)->whereIn('id', BranchAccess::branches(auth()->user())->pluck('id')->all())],
     'expense_category_id' => ['required', 'integer', Rule::exists('expense_categories', 'id')->where('company_id', auth()->user()->company_id)],
     'amount' => ['required', 'numeric', 'gt:0'],
-    'payment_method' => ['required', 'in:cash,mobile_money,bank'],
+    'payment_method' => ['required', new \App\Rules\AvailablePaymentMethod(false, $this->branch_id ? (int) $this->branch_id : null)],
     'reference_number' => ['nullable', 'string', 'max:255'],
     'expense_date' => ['required', 'date'],
     'notes' => ['nullable', 'string', 'max:1000'],
 ]);
 
-mount(function () {
+mount(function () { $this->payment_submission_key = (string) str()->uuid();
     ExpenseAccess::authorizeEntry(auth()->user());
     $this->search = request('search', $this->search);
     $this->branchFilter = (string) (BranchAccess::resolve(auth()->user(), request('branchFilter', $this->branchFilter) ? (int) request('branchFilter', $this->branchFilter) : null) ?? '');
@@ -108,7 +109,8 @@ $edit = function (int $id) {
     $this->branch_id = (string) $expense->branch_id;
     $this->expense_category_id = (string) $expense->expense_category_id;
     $this->amount = (string) $expense->amount;
-    $this->payment_method = $expense->payment_method;
+    $this->payment_submission_key = (string) str()->uuid();
+    $this->payment_method = $expense->payment_method_id ? 'method:'.$expense->payment_method_id : $expense->payment_method;
     $this->reference_number = $expense->reference_number;
     $this->expense_date = $expense->expense_date->toDateString();
     $this->notes = $expense->notes;
@@ -123,12 +125,13 @@ $save = function () {
             ExpenseAccess::authorize(auth()->user(), 'edit expenses', $expense);
             $expense->update($data);
         } else {
-            Expense::create($data + ['company_id' => auth()->user()->company_id, 'paid_by' => auth()->id()]);
+            Expense::firstOrCreate(['company_id' => auth()->user()->company_id, 'payment_submission_key' => $this->payment_submission_key], $data + ['company_id' => auth()->user()->company_id, 'paid_by' => auth()->id()]);
         }
     });
     $this->reset(['editingId', 'expense_category_id', 'amount', 'reference_number', 'notes']);
-    $this->payment_method = 'cash';
+    $this->payment_method = \App\Services\PaymentMethodService::defaultValue();
     $this->expense_date = now()->toDateString();
+    $this->payment_submission_key = (string) str()->uuid();
     session()->flash('success', __('application.expense_saved_successfully_3a3571a8'));
 };
 
@@ -140,6 +143,7 @@ $delete = function (int $id) {
     session()->flash('success', __('application.expense_deleted_b44fe386'));
 };
 
+$updatedBranchId = function () { $this->payment_method = \App\Services\PaymentMethodService::defaultValue(null, $this->branch_id ? (int) $this->branch_id : null); };
 ?>
 
 <div>
@@ -175,7 +179,7 @@ $delete = function (int $id) {
             <x-card :title="$editingId ? __('terminology.edit_expense_2e469802') : __('terminology.create_expense_235ccbd1')">
                 <form wire:submit="save" class="space-y-4">
                     <label class="block text-sm font-bold">{{ __('application.branch_1627510b') }}
-                        <select wire:model="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(BranchAccess::restricted())>
+                        <select wire:model.live="branch_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950" @disabled(BranchAccess::restricted())>
                             @foreach (BranchAccess::branches(auth()->user())->orderBy('name')->get() as $branch)
                                 <option value="{{ $branch->id }}">{{ $branch->name }}</option>
                             @endforeach
@@ -192,9 +196,7 @@ $delete = function (int $id) {
                     </label>
                     <x-money-input label="{{ __('application.amount_43dc8532') }}" name="amount" wire:model="amount" required />
                     <label class="block text-sm font-bold">{{ __('application.payment_method_f383f6a2') }}
-                        <select wire:model="payment_method" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            <option value="cash">{{ __('application.cash_758ec54e') }}</option><option value="mobile_money">{{ __('application.mobile_money_6a38d1e4') }}</option><option value="bank">{{ __('application.bank_9e89988c') }}</option>
-                        </select>
+                        <select wire:model="payment_method" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><x-payment-method-options :branch-id="$branch_id ?? null"   /></select>
                     </label>
                     <x-form-input label="{{ __('application.reference_number_74195db5') }}" name="reference_number" wire:model="reference_number" />
                     <x-form-input label="{{ __('application.expense_date_d64f2d6a') }}" name="expense_date" wire:model="expense_date" type="date" required />
@@ -228,7 +230,7 @@ $delete = function (int $id) {
                             <tr>
                                 <td class="px-4 py-3">{{ $expense->expense_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
                                 <td class="px-4 py-3 font-bold">{{ $expense->category?->name }}</td>
-                                <td class="px-4 py-3">{{ \App\Support\UiText::label($expense->payment_method) }}</td>
+                                <td class="px-4 py-3">{{ $expense->paymentMethodLabel() }}</td>
                                 <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($expense->amount) }}</td>
                                 <td class="px-4 py-3">{{ $expense->paidBy?->name }}</td>
                                 <td class="px-4 py-3 text-right">@can('edit expenses')<button wire:click="edit({{ $expense->id }})" class="text-sm font-bold text-build-orange">{{ __('application.edit_5301648d') }}</button>@endcan @can('delete expenses')<button wire:click="delete({{ $expense->id }})" wire:confirm="{{ __('application.delete_expense_6c0a3512') }}" class="ml-3 text-sm font-bold text-red-600">{{ __('application.delete_f6fdbe48') }}</button>@endcan</td>

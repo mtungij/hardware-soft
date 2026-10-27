@@ -9,6 +9,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\InventoryService;
+use App\Services\PaymentMethodService;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -223,7 +224,7 @@ test('disabled receipt preview clears POS and repeated requests preserve payment
     $component->call('completeSale')->assertHasNoErrors()->assertNoRedirect()
         ->assertSet('cart', [])->assertSet('customer_id', '')->assertSet('notes', '')
         ->assertSet('discount_mode', 'none')->assertSet('order_discount_value', '0')
-        ->assertSet('payments', [['payment_method' => 'cash', 'amount' => '0', 'reference_number' => '']])
+        ->assertSet('payments', [['payment_method' => PaymentMethodService::defaultValue(), 'amount' => '0', 'reference_number' => '']])
         ->assertSet('processing', false)->assertSeeHtml('role="status"');
     $sale = Sale::where('idempotency_key', $token)->firstOrFail();
     $component->assertSee($sale->sale_number);

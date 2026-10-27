@@ -43,6 +43,7 @@ beforeEach(function () {
     $this->admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
     $this->branch = Branch::where('code', 'MAIN')->firstOrFail();
     $this->company = $this->branch->company;
+    StockLocation::where('branch_id', $this->branch->id)->where('code', 'DISPENSING')->update(['can_receive_stock' => true, 'can_sell' => true, 'is_sellable' => true, 'is_active' => true, 'status' => 'active']);
     $this->location = app(InventoryService::class)->getDispensingLocation($this->branch->id);
     $this->location->update(['status' => 'active', 'is_active' => true, 'can_sell' => true, 'is_sellable' => true]);
     $this->product = Product::query()->where('status', 'active')->firstOrFail();

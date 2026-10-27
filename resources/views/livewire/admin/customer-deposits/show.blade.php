@@ -66,7 +66,7 @@ $reject = function () {
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.customer_0e85749a') }}</dt><dd class="font-bold">{{ $deposit->customer?->displayName() }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.amount_43dc8532') }}</dt><dd class="font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->amount) }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.balance_90eef613') }}</dt><dd class="font-bold">TZS {{ \App\Support\NumberFormatter::money($deposit->balance_amount) }}</dd></div>
-                <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.method_88306943') }}</dt><dd class="font-bold">{{ \App\Support\UiText::label($deposit->payment_method) }}</dd></div>
+                <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.method_88306943') }}</dt><dd class="font-bold">{{ $deposit->paymentMethodLabel() }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.reference_db1c7845') }}</dt><dd class="font-bold">{{ $deposit->reference_number ?: '-' }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.status_bae7d5be') }}</dt><dd class="font-bold">{{ \App\Support\UiText::label($deposit->status) }}</dd></div>
             </dl>

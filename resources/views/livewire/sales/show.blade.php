@@ -129,7 +129,7 @@ mount(function (Sale $sale) {
             @foreach ($sale->payments as $payment)
                 <tr class="border-t border-slate-100 dark:border-slate-800">
                     <td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
-                    <td class="px-4 py-3">{{ \App\Support\UiText::label($payment->payment_method) }}</td>
+                    <td class="px-4 py-3">{{ $payment->paymentMethodLabel() }}</td>
                     <td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $payment->receivedBy?->name }}</td>
                     <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td>

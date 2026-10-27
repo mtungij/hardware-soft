@@ -294,7 +294,7 @@ class ReportExportService
             : (float) $item->quantity * (float) $item->unit_cost;
         $lineProfit = fn (SaleItem $item): float => (float) $item->line_total - $lineCost($item);
         $tr = fn (string $key): string => __('messages.sales_items.'.$key);
-        $paymentLabel = fn (string $method): string => $tr('method_'.$method);
+        $paymentLabel = fn (string $method): string => in_array($method, ['cash', 'mobile_money', 'bank', 'credit'], true) ? $tr('method_'.$method) : $method;
 
         $rows = SaleItem::query()
             ->with(['sale.customer', 'sale.soldBy', 'sale.createdBy', 'sale.payments', 'product.unit', 'product.category', 'product.size', 'sellingUnit', 'stockLocation'])
@@ -304,7 +304,7 @@ class ReportExportService
                     ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
                     ->when($request->integer('customer_id'), fn ($q, $id) => $q->where('customer_id', $id))
                     ->when($request->integer('cashier_id'), fn ($q, $id) => $q->where(fn ($cashierQuery) => $cashierQuery->where('sold_by', $id)->orWhere('created_by', $id)))
-                    ->when($request->string('payment_method')->toString(), fn ($q, $method) => $q->whereHas('payments', fn ($paymentQuery) => $paymentQuery->where('payment_method', $method)))
+                    ->when($request->string('payment_method')->toString(), fn ($q, $method) => $q->whereHas('payments', fn ($paymentQuery) => PaymentMethodService::filter($paymentQuery, $method)))
                     ->when($from, fn ($q) => $q->whereDate('sale_date', '>=', $from))
                     ->when($to, fn ($q) => $q->whereDate('sale_date', '<=', $to));
             })
@@ -329,7 +329,7 @@ class ReportExportService
                 $sale = $items->first()->sale;
                 $saleTypes = $items->pluck('sale_type')->filter()->unique()->values();
                 $stockSources = $items->map(fn ($item) => $item->sold_from_label ?: $item->stockLocation?->name)->filter()->unique()->values();
-                $paymentMethods = $sale?->payments?->pluck('payment_method')->filter()->unique()->values() ?? collect();
+                $paymentMethods = $sale?->payments?->map(fn ($payment) => $payment->paymentMethodLabel())->filter()->unique()->values() ?? collect();
                 $cost = $items->sum(fn ($item) => $lineCost($item));
                 $sales = (float) $items->sum('line_total');
 
@@ -342,7 +342,7 @@ class ReportExportService
                     'sales' => $sales,
                     'profit' => $sales - $cost,
                     'sale_type' => $saleTypes->count() > 1 ? $tr('mixed') : ($saleTypes->first() === 'wholesale' ? $tr('wholesale') : $tr('retail')),
-                    'payment_method' => $sale?->payment_status === 'partial' ? $tr('partial') : ($paymentMethods->count() > 1 ? $tr('mixed') : ($paymentMethods->isEmpty() ? '-' : $paymentLabel((string) $paymentMethods->first()))),
+                    'payment_method' => $paymentMethods->isEmpty() ? (($sale?->balance_amount ?? 0) > 0 ? __('payments.credit') : '-') : $paymentMethods->map($paymentLabel)->join(', '),
                     'stock_source' => $stockSources->count() > 1 ? $tr('mixed_locations') : (string) ($stockSources->first() ?: '-'),
                     'cashier' => $sale?->soldBy?->name ?? $sale?->createdBy?->name,
                 ];
@@ -372,10 +372,8 @@ class ReportExportService
 
         $exportRows = $rows->map(function (SaleItem $item) use ($canViewProfit, $lineCost, $lineProfit, $paymentLabel, $tr): array {
             $sale = $item->sale;
-            $paymentMethods = $sale?->payments?->pluck('payment_method')->filter()->unique()->values() ?? collect();
-            $method = $sale?->payment_status === 'partial'
-                ? $tr('partial')
-                : ($paymentMethods->count() > 1 ? $tr('mixed') : ($paymentMethods->isEmpty() ? '-' : $paymentLabel((string) $paymentMethods->first())));
+            $paymentMethods = $sale?->payments?->map(fn ($payment) => $payment->paymentMethodLabel())->filter()->unique()->values() ?? collect();
+            $method = $paymentMethods->isEmpty() ? (($sale?->balance_amount ?? 0) > 0 ? __('payments.credit') : '-') : $paymentMethods->map($paymentLabel)->join(', ');
             $row = [
                 $sale?->sale_number,
                 $sale?->created_at?->format('H:i'),
@@ -419,7 +417,7 @@ class ReportExportService
             $tr('total_invoices') => number_format($rows->pluck('sale_id')->unique()->count()),
             $tr('total_products_sold') => $this->formatQuantity($rows->sum('quantity')),
             $tr('cash_sales_total') => $this->formatCurrency(SalePayment::whereIn('sale_id', $rows->pluck('sale_id')->unique())->where('payment_method', 'cash')->sum('amount')),
-            $tr('credit_sales_total') => $this->formatCurrency(SalePayment::whereIn('sale_id', $rows->pluck('sale_id')->unique())->where('payment_method', 'credit')->sum('amount')),
+            $tr('credit_sales_total') => $this->formatCurrency(Sale::whereIn('id', $rows->pluck('sale_id')->unique())->sum('balance_amount')),
         ];
 
         if ($canViewProfit) {
@@ -483,7 +481,7 @@ class ReportExportService
             ->latest()
             ->get();
 
-        return [__('application.expense_report_285d669e'), [__('application.date_eb9a4bc1'), __('application.category_a3c686e7'), __('application.branch_1627510b'), __('application.method_88306943'), __('application.paid_by_2e06e8e0'), __('application.amount_43dc8532')], $rows->map(fn ($expense) => [$this->formatDate($expense->expense_date), $expense->category?->name, $expense->branch?->name, UiText::label($expense->payment_method), $expense->paidBy?->name, $this->formatCurrency($expense->amount)])->all(), [__('application.total_expenses_750134b6') => $this->formatCurrency($rows->sum('amount'))]];
+        return [__('application.expense_report_285d669e'), [__('application.date_eb9a4bc1'), __('application.category_a3c686e7'), __('application.branch_1627510b'), __('application.method_88306943'), __('application.paid_by_2e06e8e0'), __('application.amount_43dc8532')], $rows->map(fn ($expense) => [$this->formatDate($expense->expense_date), $expense->category?->name, $expense->branch?->name, $expense->paymentMethodLabel(), $expense->paidBy?->name, $this->formatCurrency($expense->amount)])->all(), [__('application.total_expenses_750134b6') => $this->formatCurrency($rows->sum('amount'))]];
     }
 
     private function customerPayments(Request $request, ?int $branchId, ?string $from, ?string $to): array
@@ -495,7 +493,7 @@ class ReportExportService
         $rows = CustomerPayment::with(['customer', 'branch', 'receivedBy'])
             ->when($branchId, fn ($q) => $q->where('branch_id', $branchId))
             ->when($customerId, fn ($q) => $q->where('customer_id', $customerId))
-            ->when($method, fn ($q) => $q->where('payment_method', $method))
+            ->when($method, fn ($q) => PaymentMethodService::filter($q, $method))
             ->when($receivedBy, fn ($q) => $q->where('received_by', $receivedBy))
             ->when($from, fn ($q) => $q->whereDate('payment_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('payment_date', '<=', $to))
@@ -512,18 +510,15 @@ class ReportExportService
                 $payment->customer?->displayName(),
                 $payment->customer?->phone,
                 $this->formatCurrency($payment->amount),
-                UiText::label($payment->payment_method),
+                $payment->paymentMethodLabel(),
                 $payment->reference_number,
                 $payment->branch?->name,
                 $payment->receivedBy?->name,
                 $payment->notes,
             ])->all(),
-            [
-                __('application.cash_payments_49416736') => $this->formatCurrency($rows->where('payment_method', 'cash')->sum('amount')),
-                __('application.mobile_money_payments_e2dfddd5') => $this->formatCurrency($rows->where('payment_method', 'mobile_money')->sum('amount')),
-                __('application.bank_payments_b8d4227f') => $this->formatCurrency($rows->where('payment_method', 'bank')->sum('amount')),
+            array_merge($rows->groupBy(fn ($payment) => $payment->paymentMethodLabel())->map(fn ($group) => $this->formatCurrency($group->sum('amount')))->all(), [
                 __('application.total_payments_53b493df') => $this->formatCurrency($rows->sum('amount')),
-            ],
+            ]),
         ];
     }
 

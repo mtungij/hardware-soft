@@ -46,7 +46,7 @@ $balance = computed(fn () => app(AccountingService::class)->customerBalance($thi
         <x-card title="{{ __('application.payments_44357ae5') }}">
             <x-table :headers="[__('application.date_eb9a4bc1'), __('application.method_88306943'), __('application.reference_db1c7845'), __('application.amount_43dc8532')]">
                 @foreach ($this->payments as $payment)
-                    <tr><td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td><td class="px-4 py-3">{{ \App\Support\UiText::label($payment->payment_method) }}</td><td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td></tr>
+                    <tr><td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td><td class="px-4 py-3">{{ $payment->paymentMethodLabel() }}</td><td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td></tr>
                 @endforeach
             </x-table>
         </x-card>

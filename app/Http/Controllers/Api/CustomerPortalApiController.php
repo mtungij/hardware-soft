@@ -7,8 +7,10 @@ use App\Models\CustomerDeposit;
 use App\Models\CustomerNotification;
 use App\Models\CustomerReceipt;
 use App\Models\Sale;
+use App\Rules\AvailablePaymentMethod;
 use App\Services\AccountingService;
 use App\Services\CustomerPortalCredentialService;
+use App\Services\PaymentMethodService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -59,6 +61,32 @@ class CustomerPortalApiController extends Controller
         return response()->json($this->salePayload($sale->load('items.product', 'payments'), true, true));
     }
 
+    public function paymentMethods(Request $request): JsonResponse
+    {
+        $account = $request->user()->load('customer');
+        $branchId = $account->customer?->branch_id;
+        if ($request->filled('invoice_id')) {
+            $branchId = Sale::where('company_id', $account->company_id)->where('customer_id', $account->customer_id)->findOrFail($request->integer('invoice_id'))->branch_id;
+        }
+        $methods = PaymentMethodService::available($account->company_id, $branchId)
+            ->get(['id', 'display_name', 'type', 'account_name', 'account_number', 'instructions', 'is_default', 'sort_order']);
+
+        return response()->json(['data' => $methods]);
+    }
+
+    private function paymentSubmissionKey(Request $request, string $purpose): string
+    {
+        $key = $request->header('Idempotency-Key') ?: $request->input('payment_submission_key');
+        if ($key) {
+            validator(['key' => $key], ['key' => ['required', 'uuid']])->validate();
+
+            return $key;
+        }
+        $proof = $request->input('reference_number') ?: ($request->file('receipt')?->isValid() ? hash_file('sha256', $request->file('receipt')->getRealPath()) : '');
+
+        return substr(hash('sha256', $request->user()->id.'|'.$purpose.'|'.$proof), 0, 36);
+    }
+
     public function receipts(Request $request): JsonResponse
     {
         $receipts = CustomerReceipt::with('sale')
@@ -72,10 +100,18 @@ class CustomerPortalApiController extends Controller
     public function storeReceipt(Request $request): JsonResponse
     {
         $account = $request->user()->load('customer');
+        $submissionKey = $this->paymentSubmissionKey($request, 'receipt');
+        $existing = CustomerReceipt::query()->where('company_id', $account->company_id)->where('payment_submission_key', $submissionKey)->first();
+        if ($existing) {
+            abort_unless((int) $existing->customer_id === (int) $account->customer_id, 403);
+
+            return response()->json($this->receiptPayload($existing));
+        }
+        $paymentBranch = $request->integer('invoice_id') ? Sale::where('company_id', $account->company_id)->where('customer_id', $account->customer_id)->whereKey($request->integer('invoice_id'))->value('branch_id') : $account->customer?->branch_id;
         $data = $request->validate([
-            'invoice_id' => ['nullable', Rule::exists('sales', 'id')->where('customer_id', $account->customer_id)->where('company_id', $account->company_id)],
+            'invoice_id' => ['nullable', 'integer', Rule::exists('sales', 'id')->where('customer_id', $account->customer_id)->where('company_id', $account->company_id)],
             'amount' => ['required', 'numeric', 'gt:0'],
-            'payment_method' => ['required', 'in:mobile_money,bank,cash_deposit'],
+            'payment_method' => ['required', new AvailablePaymentMethod(false, $paymentBranch)],
             'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_receipts', 'reference_number')->where('customer_id', $account->customer_id)],
             'receipt' => ['required', ValidationFile::types(['jpg', 'jpeg', 'png', 'pdf'])->max(5 * 1024)],
             'notes' => ['nullable', 'string', 'max:1000'],
@@ -87,7 +123,7 @@ class CustomerPortalApiController extends Controller
             throw ValidationException::withMessages(['amount' => __('application.receipt_amount_cannot_exceed_the_selected_invoice_balance_6ac26ed3')]);
         }
 
-        $receipt = CustomerReceipt::create([
+        $receipt = CustomerReceipt::firstOrCreate(['company_id' => $account->company_id, 'customer_id' => $account->customer_id, 'payment_submission_key' => $submissionKey], [
             'company_id' => $account->company_id,
             'customer_account_id' => $account->id,
             'customer_id' => $account->customer_id,
@@ -116,15 +152,22 @@ class CustomerPortalApiController extends Controller
     public function storeDeposit(Request $request): JsonResponse
     {
         $account = $request->user()->load('customer');
+        $submissionKey = $this->paymentSubmissionKey($request, 'deposit');
+        $existing = CustomerDeposit::query()->where('company_id', $account->company_id)->where('payment_submission_key', $submissionKey)->first();
+        if ($existing) {
+            abort_unless((int) $existing->customer_id === (int) $account->customer_id, 403);
+
+            return response()->json($this->depositPayload($existing));
+        }
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'gt:0'],
-            'payment_method' => ['required', 'in:mobile_money,bank,cash_deposit'],
+            'payment_method' => ['required', new AvailablePaymentMethod],
             'reference_number' => ['nullable', 'string', 'max:255', Rule::unique('customer_deposits', 'reference_number')->where('customer_id', $account->customer_id)],
             'receipt' => ['required', ValidationFile::types(['jpg', 'jpeg', 'png', 'pdf'])->max(5 * 1024)],
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $deposit = CustomerDeposit::create([
+        $deposit = CustomerDeposit::firstOrCreate(['company_id' => $account->company_id, 'customer_id' => $account->customer_id, 'payment_submission_key' => $submissionKey], [
             'company_id' => $account->company_id,
             'customer_account_id' => $account->id,
             'customer_id' => $account->customer_id,
@@ -258,6 +301,8 @@ class CustomerPortalApiController extends Controller
             'invoice_number' => $receipt->sale?->sale_number,
             'amount' => (float) $receipt->amount,
             'payment_method' => $receipt->payment_method,
+            'payment_method_id' => $receipt->payment_method_id,
+            'payment_method_name' => $receipt->paymentMethodLabel(),
             'reference_number' => $receipt->reference_number,
             'status' => $receipt->status,
             'notes' => $receipt->notes,
@@ -275,6 +320,8 @@ class CustomerPortalApiController extends Controller
             'used_amount' => (float) $deposit->used_amount,
             'remaining_balance' => (float) $deposit->balance_amount,
             'payment_method' => $deposit->payment_method,
+            'payment_method_id' => $deposit->payment_method_id,
+            'payment_method_name' => $deposit->paymentMethodLabel(),
             'reference_number' => $deposit->reference_number,
             'status' => $deposit->status,
             'notes' => $deposit->notes,
@@ -290,6 +337,8 @@ class CustomerPortalApiController extends Controller
             'id' => $payment->id,
             'amount' => (float) $payment->amount,
             'payment_method' => $payment->payment_method,
+            'payment_method_id' => $payment->payment_method_id,
+            'payment_method_name' => $payment->paymentMethodLabel(),
             'reference_number' => $payment->reference_number,
             'payment_date' => $payment->payment_date?->toDateString(),
         ];

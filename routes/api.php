@@ -21,6 +21,7 @@ Route::prefix('customer')->middleware([SetCustomerApiLocale::class, 'throttle:cu
             Route::post('requests', [CustomerOrderingController::class, 'store']);
             Route::get('quotations', [CustomerOrderingController::class, 'quotations']);
             Route::post('quotations/{quotation}/decision', [CustomerOrderingController::class, 'decide']);
+            Route::get('payment-methods', [CustomerPortalApiController::class, 'paymentMethods'])->name('api.customer.payment-methods');
             Route::get('dashboard', [CustomerPortalApiController::class, 'dashboard'])->name('api.customer.dashboard');
             Route::get('debts', [CustomerPortalApiController::class, 'debts'])->name('api.customer.debts');
             Route::get('debts/{sale}', [CustomerPortalApiController::class, 'debt'])->name('api.customer.debts.show');

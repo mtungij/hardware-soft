@@ -116,7 +116,7 @@ $postReceipt = function (InventoryService $inventory): void {
                     <td class="px-4 py-3">{{ $cost->cost_type_name_snapshot }}</td>
                     <td class="px-4 py-3">TZS {{ \App\Support\NumberFormatter::money($cost->amount) }}</td>
                     <td class="px-4 py-3">{{ $cost->payee ?: '-' }}</td>
-                    <td class="px-4 py-3">{{ $cost->payment_method ?: '-' }}</td>
+                    <td class="px-4 py-3">{{ $cost->payment_method ? $cost->paymentMethodLabel() : '-' }}</td>
                     <td class="px-4 py-3">{{ $cost->payment_reference ?: '-' }}</td>
                     <td class="px-4 py-3">{{ $cost->notes ?: '-' }}</td>
                 </tr>

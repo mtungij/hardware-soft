@@ -41,7 +41,7 @@ $methodLabel = fn (string $method) => __("messages.methods.$method") === "messag
         <x-card :title="__('messages.statements.payments')">
             <x-table :headers="[__('messages.table.date'), __('messages.table.method'), __('messages.table.reference'), __('messages.table.amount')]">
                 @forelse ($this->payments as $payment)
-                    <tr><td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td><td class="px-4 py-3">{{ $this->methodLabel($payment->payment_method) }}</td><td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td></tr>
+                    <tr><td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td><td class="px-4 py-3">{{ $payment->paymentMethodLabel() }}</td><td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td><td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td></tr>
                 @empty
                     <tr><td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500">{{ __('messages.statements.no_payments') }}</td></tr>
                 @endforelse

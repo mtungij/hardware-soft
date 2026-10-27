@@ -12,23 +12,27 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
+state(['sale' => null])->locked();
+state(['payment_submission_key' => null])->locked();
 state([
-    'sale' => null,
-    'payment_method' => 'cash',
+    'payment_method' => \App\Services\PaymentMethodService::defaultValue(),
     'amount' => '',
     'reference_number' => '',
 ]);
 
-mount(function (Sale $sale) {
+mount(function (Sale $sale) { $this->payment_submission_key = (string) str()->uuid();
     AuthorizationScope::authorizeSale(auth()->user(), $sale);
     $this->sale = $sale->load(['customer', 'payments']);
     $this->amount = (string) $sale->balance_amount;
 });
 
+$updatedAmount = function () { $this->payment_submission_key = (string) str()->uuid(); };
+
 $receivePayment = function () {
     abort_unless(auth()->user()->can('sales.edit') || auth()->user()->can('receive sale payments'), 403);
+    AuthorizationScope::authorizeSale(auth()->user(), $this->sale);
     $this->validate([
-        'payment_method' => ['required', 'in:cash,mobile_money,bank'],
+        'payment_method' => ['required', new \App\Rules\AvailablePaymentMethod(false, $this->sale->branch_id)],
         'amount' => ['required', 'numeric', 'gt:0'],
         'reference_number' => ['nullable', 'string', 'max:255'],
     ]);
@@ -36,17 +40,30 @@ $receivePayment = function () {
     DB::transaction(function () {
         $sale = Sale::query()->whereKey($this->sale->id)->lockForUpdate()->firstOrFail();
 
+        AuthorizationScope::authorizeSale(auth()->user(), $sale);
+        if ($sale->payments()->where('payment_submission_key', $this->payment_submission_key)->exists()) { return; }
+
         if ($sale->status !== 'completed') {
             throw ValidationException::withMessages(['sale' => __('application.cancelled_sales_cannot_receive_payments_946394cb')]);
         }
 
-        $amount = min((float) $this->amount, (float) $sale->balance_amount);
+        $amount = (float) $this->amount;
+        $balance = (float) $sale->balance_amount;
 
-        if ($amount <= 0) {
-            throw ValidationException::withMessages(['amount' => __('application.this_sale_has_no_outstanding_balance_edb01eed')]);
+        if ($balance <= 0) {
+            throw ValidationException::withMessages([
+                'amount' => __('application.this_sale_has_no_outstanding_balance_edb01eed'),
+            ]);
+        }
+
+        if ($amount > $balance) {
+            throw ValidationException::withMessages([
+                'amount' => __('payments.invoice_overpayment'),
+            ]);
         }
 
         $sale->payments()->create([
+            'payment_submission_key' => $this->payment_submission_key,
             'payment_method' => $this->payment_method,
             'amount' => $amount,
             'reference_number' => $this->reference_number ?: null,
@@ -73,6 +90,7 @@ $receivePayment = function () {
         $this->reference_number = '';
     });
 
+    $this->payment_submission_key = (string) str()->uuid();
     session()->flash('success', __('application.payment_received_successfully_e4e05f98'));
 };
 
@@ -100,7 +118,7 @@ $receivePayment = function () {
                 @foreach ($sale->payments as $payment)
                     <tr class="border-t border-slate-100 dark:border-slate-800">
                         <td class="px-4 py-3">{{ $payment->payment_date?->locale(app()->getLocale())->translatedFormat('M d, Y') }}</td>
-                        <td class="px-4 py-3">{{ \App\Support\UiText::label($payment->payment_method) }}</td>
+                        <td class="px-4 py-3">{{ $payment->paymentMethodLabel() }}</td>
                         <td class="px-4 py-3">{{ $payment->reference_number ?: '-' }}</td>
                         <td class="px-4 py-3 text-right font-bold">TZS {{ \App\Support\NumberFormatter::money($payment->amount) }}</td>
                     </tr>
@@ -114,13 +132,9 @@ $receivePayment = function () {
             @else
                 <form wire:submit="receivePayment" class="space-y-4">
                     <label class="block text-sm font-bold">{{ __('application.payment_method_f383f6a2') }}</label>
-                    <select wire:model="payment_method" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                        <option value="cash">{{ __('application.cash_758ec54e') }}</option>
-                        <option value="mobile_money">{{ __('application.mobile_money_6a38d1e4') }}</option>
-                        <option value="bank">{{ __('application.bank_9e89988c') }}</option>
-                    </select>
+                    <select wire:model="payment_method" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950"><x-payment-method-options :branch-id="$sale->branch_id"   /></select>
                     <x-money-input label="{{ __('application.amount_43dc8532') }}" name="amount" wire:model="amount" required />
-                    <x-form-input label="{{ __('application.reference_number_74195db5') }}" wire:model="reference_number" />
+                    <x-form-input label="{{ __('application.reference_number_74195db5') }}" name="reference_number" wire:model="reference_number" />
                     <button class="w-full rounded-lg bg-build-orange px-4 py-3 text-sm font-black text-white">{{ __('application.receive_payment_09fd7056') }}</button>
                 </form>
             @endif

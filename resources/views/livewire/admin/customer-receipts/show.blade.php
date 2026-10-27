@@ -11,13 +11,17 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['receipt' => null, 'rejection_reason' => '']);
+state(['receipt' => null])->locked();
+state(['rejection_reason' => '']);
 
 mount(function (CustomerReceipt $customerReceipt) {
     $this->receipt = $customerReceipt->load(['customer', 'sale', 'account', 'approvedBy', 'rejectedBy']);
 });
 
 $approve = function (AccountingService $accounting) {
+    abort_unless(auth()->user()->can('approve customer receipts'), 403);
+    \Illuminate\Support\Facades\DB::transaction(function () use ($accounting) {
+    $this->receipt = CustomerReceipt::query()->where('company_id', auth()->user()->company_id)->lockForUpdate()->findOrFail($this->receipt->id);
     if ($this->receipt->status !== 'pending') {
         throw ValidationException::withMessages(['receipt' => __('application.only_pending_receipts_can_be_approved_1fb83546')]);
     }
@@ -25,7 +29,9 @@ $approve = function (AccountingService $accounting) {
     $payment = $accounting->receiveCustomerPayment($this->receipt->customer, [
         'branch_id' => $this->receipt->branch_id ?: $this->receipt->customer->branch_id,
         'amount' => (float) $this->receipt->amount,
-        'payment_method' => $this->receipt->payment_method === 'cash_deposit' ? 'cash' : $this->receipt->payment_method,
+        'source_receipt_id' => $this->receipt->id,
+        'payment_submission_key' => $this->receipt->payment_submission_key ?: substr(hash('sha256', 'receipt:'.$this->receipt->id), 0, 36),
+        'payment_method' => $this->receipt->payment_method_id ? 'method:'.$this->receipt->payment_method_id : ($this->receipt->payment_method === 'cash_deposit' ? 'cash' : $this->receipt->payment_method),
         'reference_number' => $this->receipt->reference_number,
         'payment_date' => now()->toDateString(),
         'notes' => 'Approved from customer portal receipt #'.$this->receipt->id,
@@ -42,6 +48,7 @@ $approve = function (AccountingService $accounting) {
         'notifiable_id' => $this->receipt->id,
     ]);
     $this->receipt->refresh();
+    });
     session()->flash('success', __('application.receipt_approved_and_customer_payment_recorded_cfbcb6cd'));
 };
 
@@ -71,7 +78,7 @@ $reject = function () {
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.customer_0e85749a') }}</dt><dd class="font-bold">{{ $receipt->customer?->displayName() }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.sale_0028d743') }}</dt><dd class="font-bold">{{ $receipt->sale?->sale_number ?: __('terminology.general_payment_1ef4b5b6') }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.amount_43dc8532') }}</dt><dd class="font-bold">TZS {{ \App\Support\NumberFormatter::money($receipt->amount) }}</dd></div>
-                <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.method_88306943') }}</dt><dd class="font-bold">{{ \App\Support\UiText::label($receipt->payment_method) }}</dd></div>
+                <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.method_88306943') }}</dt><dd class="font-bold">{{ $receipt->paymentMethodLabel() }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.reference_db1c7845') }}</dt><dd class="font-bold">{{ $receipt->reference_number ?: '-' }}</dd></div>
                 <div><dt class="text-xs font-black uppercase text-slate-400">{{ __('application.status_bae7d5be') }}</dt><dd class="font-bold">{{ \App\Support\UiText::label($receipt->status) }}</dd></div>
             </dl>
