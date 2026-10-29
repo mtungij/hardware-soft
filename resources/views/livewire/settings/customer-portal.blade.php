@@ -10,7 +10,7 @@ layout('layouts.app');
 state(['company_id' => '', 'show_prices' => false]);
 $authorizePortalCompany = function (int $companyId): void {
     $user = auth()->user();
-    abort_unless($user && ($user->is_system_owner || ($user->hasAnyRole(['Super Admin', 'Admin']) && (int) $user->company_id === $companyId)), 403);
+    abort_unless($user && ($user->is_system_owner || ($user->can('company-settings.update') && (int) $user->company_id === $companyId)), 403);
 };
 $companies = computed(function () {
     $user = auth()->user();

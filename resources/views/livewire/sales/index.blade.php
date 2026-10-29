@@ -117,9 +117,9 @@ mount(function () {
 
     <x-page-header :title="$view === 'items' ? $t('todays_sales_summary') : ($isItemView ? $t('daily_sales_product_details') : $t('sales'))" :description="$isItemView ? $t('daily_sales_description') : $t('sales_description')" :breadcrumbs="['Dashboard' => route('dashboard'), $t('sales') => null]">
         <x-export-actions :export="$isItemView ? 'tables.sales-items' : 'tables.sales'" :params="$exportParams" />
-        @role('Super Admin|Admin|Manager|Cashier')
+        @can('sales.create')
             <a href="{{ route('pos.index') }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white shadow-sm">{{ $t('open_pos') }}</a>
-        @endrole
+        @endcan
     </x-page-header>
 
     <x-card>
@@ -578,14 +578,14 @@ mount(function () {
                             <div class="flex flex-wrap justify-end gap-2">
                                 <a href="{{ route('sales.show', $sale) }}" wire:navigate class="text-sm font-bold text-navy-700 dark:text-white">{{ $t('view_action') }}</a>
                                 <a href="{{ route('sales.receipt', $sale) }}" wire:navigate class="text-sm font-bold text-build-orange">{{ $t('receipt') }}</a>
-                                @if ($sale->status === 'completed' && (float) $sale->balance_amount > 0)
+                                @if ($sale->status === 'completed' && (float) $sale->balance_amount > 0 && (auth()->user()->can('sales.edit') || auth()->user()->can('receive sale payments')))
                                     <a href="{{ route('sales.payments', $sale) }}" wire:navigate class="text-sm font-bold text-emerald-700 dark:text-emerald-300">{{ $t('payment') }}</a>
                                 @endif
-                                @role('Super Admin|Admin')
+                                @can('sales.cancel')
                                     @if ($sale->status === 'completed')
                                         <a href="{{ route('sales.cancel', $sale) }}" wire:navigate class="text-sm font-bold text-red-600">{{ $t('cancel') }}</a>
                                     @endif
-                                @endrole
+                                @endcan
                             </div>
                         </td>
                     </tr>

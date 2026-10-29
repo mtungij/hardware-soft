@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\ManufacturingRoleAccess;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Spatie\Permission\Contracts\Role as RoleContract;
@@ -27,14 +28,16 @@ class Role extends \Spatie\Permission\Models\Role
         return $query->where(fn ($query) => $query->where('company_id', $companyId)->orWhereNull('company_id'));
     }
 
-    public static function availableForCompany(int $companyId): Collection
+    public static function availableForCompany(int $companyId, bool $includeDisabled = false): Collection
     {
         $roles = static::query()->forCompany($companyId)->where('guard_name', 'web')
             ->with('permissions')->withCount(['users' => fn ($query) => $query->where('company_id', $companyId)])
             ->orderByDesc('company_id')->orderBy('name')->get();
         $sources = $roles->pluck('source_role_id')->filter()->all();
 
-        return $roles->reject(fn ($role) => in_array($role->id, $sources, true))->unique('name')->sortBy('name')->values();
+        return $roles->reject(fn ($role) => in_array($role->id, $sources, true))
+            ->when(! $includeDisabled && ! ManufacturingRoleAccess::enabled($companyId), fn ($roles) => $roles->reject(fn ($role) => ManufacturingRoleAccess::role($role)))
+            ->unique('name')->sortBy('name')->values();
     }
 
     public static function namedForCompany(string $name, int $companyId, string $guard = 'web'): ?self

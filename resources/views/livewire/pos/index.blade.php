@@ -71,8 +71,8 @@ mount(function (InventoryService $inventory) {
     $this->submission_token = (string) str()->uuid();
 });
 
-$canCreditSale = fn () => auth()->user()->can('create credit sales') || auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
-$canCreateUnassignedCreditSale = fn () => auth()->user()->can('create unassigned credit sales') || auth()->user()->hasAnyRole(['Super Admin', 'Admin', 'Manager']);
+$canCreditSale = fn () => auth()->user()->can('create credit sales');
+$canCreateUnassignedCreditSale = fn () => auth()->user()->can('create unassigned credit sales');
 $canApplyDiscount = fn () => auth()->user()->can('sales.discount');
 
 $updatedDiscountMode = function ($mode) {

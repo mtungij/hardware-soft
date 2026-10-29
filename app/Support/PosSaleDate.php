@@ -30,7 +30,7 @@ final class PosSaleDate
 
     public function canBackdate(User $user): bool
     {
-        return $user->is_system_owner || $user->hasRole('Super Admin', 'web') || $user->can('sales.backdate');
+        return $user->can('sales.backdate');
     }
 
     public function validate(User $user, int $branchId, mixed $value = null, bool $confirmed = false): string

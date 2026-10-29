@@ -48,10 +48,7 @@ state([
 
 $authorizeCompanySettings = function (): void {
     $user = auth()->user();
-    $authorized = $user && (
-        $user->hasAnyRole(['Super Admin', 'Admin'])
-        || $user->can('company-settings.update')
-    );
+    $authorized = $user && $user->company_id && $user->can('company-settings.update');
 
     abort_unless($authorized, 403);
 };

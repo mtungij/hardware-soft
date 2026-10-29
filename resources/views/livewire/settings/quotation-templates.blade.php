@@ -11,7 +11,7 @@ layout('layouts.app');
 $company = computed(fn () => Company::findOrFail(auth()->user()->company_id));
 $setDefault = function (string $key): void {
     $user = auth()->user();
-    abort_unless($user && ($user->hasAnyRole(['Super Admin', 'Admin']) || $user->can('company-settings.update')), 403);
+    abort_unless($user && $user->company_id && $user->can('company-settings.update'), 403);
     $template = QuotationTemplateRegistry::require($key);
     Company::findOrFail($user->company_id)->update(['quotation_template_key' => $template['key']]);
     unset($this->company);

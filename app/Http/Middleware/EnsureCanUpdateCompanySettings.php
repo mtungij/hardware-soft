@@ -11,10 +11,7 @@ class EnsureCanUpdateCompanySettings
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        $authorized = $user && (
-            $user->hasAnyRole(['Super Admin', 'Admin'])
-            || $user->can('company-settings.update')
-        );
+        $authorized = $user && $user->company_id && $user->can('company-settings.update');
 
         abort_unless($authorized, 403);
 

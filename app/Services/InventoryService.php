@@ -515,6 +515,7 @@ class InventoryService
             $preferredLocation = StockLocation::query()->whereKey($stockLocationId)->lockForUpdate()->firstOrFail();
             $companyId = (int) $preferredLocation->company_id;
             $cashier = User::withoutGlobalScope(CompanyScope::class)->where('company_id', $companyId)->findOrFail($createdBy);
+            abort_unless($cashier->can('sales.create') && $cashier->canAccessBranch($branchId), 403);
             $discountMode = $discountDetails === [] ? 'legacy' : (string) ($discountDetails['mode'] ?? 'none');
             if (! in_array($discountMode, ['legacy', 'none', 'item', 'order'], true)) {
                 throw ValidationException::withMessages(['discount_mode' => __('application.the_selected_discount_mode_is_invalid_f5a9fc18')]);
@@ -582,10 +583,12 @@ class InventoryService
             }
 
             $containsCredit = collect($payments)->contains(fn ($payment) => ($payment['payment_method'] ?? null) === 'credit');
+            abort_if($containsCredit && ! $cashier->can('create credit sales'), 403);
 
             $creditCustomerUnassigned = false;
 
             if ($containsCredit && ! $customerId) {
+                abort_unless($cashier->can('create unassigned credit sales'), 403);
                 if (! (bool) (InventorySettings::current()->allow_credit_sale_without_customer ?? true)) {
                     throw ValidationException::withMessages(['customer_id' => UiText::translate('Select a customer or create a customer before completing this credit sale.')]);
                 }
@@ -1068,7 +1071,12 @@ class InventoryService
     public function cancelSale(int $saleId, int $cancelledBy): Sale
     {
         return DB::transaction(function () use ($saleId, $cancelledBy) {
+            $staff = auth('web')->user();
+            abort_if($staff && (int) $staff->id !== $cancelledBy, 403);
+            $actor = User::query()->findOrFail($cancelledBy);
+            abort_unless($actor->can('sales.cancel'), 403);
             $sale = Sale::query()->with(['items'])->whereKey($saleId)->lockForUpdate()->firstOrFail();
+            AuthorizationScope::authorizeSale($actor, $sale);
 
             if ($sale->status !== 'completed') {
                 throw ValidationException::withMessages(['sale' => __('application.only_completed_sales_can_be_cancelled_e7810744')]);

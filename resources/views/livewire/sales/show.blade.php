@@ -27,7 +27,7 @@ mount(function (Sale $sale) {
     <x-page-header title="{{ __('application.sale_details_be513b66') }}" :description="$sale->sale_number" :breadcrumbs="['Dashboard' => route('dashboard'), 'Sales' => route('sales.index'), $sale->sale_number => null]">
         <div class="flex gap-2">
             <a href="{{ route('sales.receipt', $sale) }}" wire:navigate class="rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold dark:border-slate-700">{{ __('application.receipt_f6ce3b6f') }}</a>
-            @if ($sale->status === 'completed' && (float) $sale->balance_amount > 0)
+            @if ($sale->status === 'completed' && (float) $sale->balance_amount > 0 && (auth()->user()->can('sales.edit') || auth()->user()->can('receive sale payments')))
                 <a href="{{ route('sales.payments', $sale) }}" wire:navigate class="rounded-lg bg-build-orange px-4 py-2 text-sm font-bold text-white">{{ __('application.receive_payment_09fd7056') }}</a>
             @endif
         </div>

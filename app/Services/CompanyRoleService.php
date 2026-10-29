@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Company;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\ManufacturingRoleAccess;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -46,11 +47,31 @@ class CompanyRoleService
         $role = DB::transaction(function () use ($actor, $roleId, $attributes, $permissions) {
             Company::query()->whereKey($actor->company_id)->lockForUpdate()->firstOrFail();
             $source = $roleId ? Role::query()->forCompany($actor->company_id)->where('guard_name', 'web')->findOrFail($roleId) : null;
+            abort_if(($source?->name === 'Super Admin' || $attributes['name'] === 'Super Admin') && ! $actor->hasRole('Super Admin', 'web'), 403);
+            if ($source && in_array($source->name, ['Super Admin', 'Admin'], true) && $attributes['name'] !== $source->name) {
+                throw ValidationException::withMessages(['name' => __('roles.protected_name')]);
+            }
             $role = $source;
             if ($source && $source->company_id === null) {
                 $role = Role::query()->where('company_id', $actor->company_id)->where('source_role_id', $source->id)->first();
             }
+            if (! ManufacturingRoleAccess::enabled((int) $actor->company_id)) {
+                $effective = $role ?? $source;
+                abort_if(($effective && ManufacturingRoleAccess::role($effective)) || ManufacturingRoleAccess::name($attributes['name']), 403);
+                $existing = $effective?->permissions->pluck('name')->all() ?? [];
+                $newManufacturing = array_filter(array_diff($permissions, $existing), ManufacturingRoleAccess::permission(...));
+                if ($newManufacturing) {
+                    throw ValidationException::withMessages(['permissions' => __('roles.manufacturing_disabled')]);
+                }
+                $permissions = array_values(array_unique(array_merge($permissions, array_filter($existing, ManufacturingRoleAccess::permission(...)))));
+            }
             $ignoredIds = array_filter([$role?->id, $source?->company_id === null ? $source?->id : $source?->source_role_id]);
+            if ($source?->company_id !== null && $source) {
+                $templateId = Role::query()->whereNull('company_id')->where('guard_name', 'web')->where('name', $source->name)->value('id');
+                if ($templateId) {
+                    $ignoredIds[] = $templateId;
+                }
+            }
             if (Role::query()->forCompany($actor->company_id)->where('guard_name', 'web')
                 ->where('name', $attributes['name'])->whereNotIn('id', $ignoredIds)->exists()) {
                 throw ValidationException::withMessages(['name' => 'This company already has a role with that name.']);
@@ -69,6 +90,13 @@ class CompanyRoleService
                     DB::table('model_has_roles')->insertOrIgnore(['role_id' => $role->id, 'model_type' => $assignment->model_type, 'model_id' => $assignment->model_id]);
                 }
                 $pivot->delete();
+            }
+            // Do not allow the last active administrator to accidentally remove
+            // all web-based role recovery access. Never silently regrant it.
+            $canRecover = User::withoutGlobalScopes()->where('company_id', $actor->company_id)->where('status', 'active')
+                ->get()->contains(fn (User $user) => $user->can('roles.manage'));
+            if (! $canRecover) {
+                throw ValidationException::withMessages(['permissions' => __('roles.last_administrator')]);
             }
 
             return $role;

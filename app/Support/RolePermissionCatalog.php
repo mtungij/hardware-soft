@@ -13,15 +13,16 @@ class RolePermissionCatalog
     {
         // Retain historical permission rows and grants; receipts inherit sale access.
         return Permission::query()->where('guard_name', 'web')->where('name', '!=', 'print receipt')->orderBy('name')->get()
+            ->reject(fn ($permission) => ! CompanyFeatures::manufacturingEnabled() && ManufacturingRoleAccess::permission($permission->name))
             ->groupBy(fn ($permission) => self::module($permission->name))->sortKeys();
     }
 
     public static function module(string $name): string
     {
         return match (true) {
+            str_starts_with($name, 'production.') => 'Production',
             str_ends_with($name, ' expenses') => 'Expenses',
             str_contains($name, 'report'), str_contains($name, 'export'), str_contains($name, 'print') => 'Reports',
-            str_starts_with($name, 'production.') => 'Production',
             str_contains($name, 'dashboard') => 'Dashboard',
             str_contains($name, 'sale'), str_contains($name, 'pos') => 'Sales / POS',
             str_contains($name, 'purchase'), str_contains($name, 'supplier') => 'Purchases',
@@ -38,6 +39,9 @@ class RolePermissionCatalog
     {
         if ($name === 'sales.discount') {
             return __('permissions.apply_discount');
+        }
+        if ($name === 'sales.cancel') {
+            return __('roles.cancel_sales');
         }
         $key = 'permissions.p_'.substr(sha1($name), 0, 12);
 

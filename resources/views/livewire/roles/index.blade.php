@@ -3,14 +3,19 @@
 use App\Models\Role;
 use App\Services\CompanyRoleService;
 use App\Support\RolePermissionCatalog;
+use App\Support\ManufacturingRoleAccess;
 use Spatie\Permission\PermissionRegistrar;
 use Illuminate\Validation\Rule;
 
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
+use function Livewire\Volt\hydrate;
 use function Livewire\Volt\rules;
 use function Livewire\Volt\state;
 
 layout('layouts.app');
+mount(fn () => abort_unless(auth()->user()?->company_id && auth()->user()->can('roles.manage'), 403));
+hydrate(fn () => abort_unless(auth()->user()?->company_id && auth()->user()->can('roles.manage'), 403));
 
 state([
     'name' => '',
@@ -42,10 +47,12 @@ $editRole = function (int $roleId) {
     if ($role->company_id === null) {
         $role = Role::query()->where('company_id', auth()->user()->company_id)->where('source_role_id', $role->id)->with('permissions')->first() ?: $role;
     }
+    abort_if(! ManufacturingRoleAccess::enabled((int) auth()->user()->company_id) && ManufacturingRoleAccess::role($role), 403);
+    abort_if($role->name === 'Super Admin' && ! auth()->user()->hasRole('Super Admin', 'web'), 403);
 
     $this->role_id = $role->id;
     $this->name = $role->name;
-    $this->permissions = $role->permissions->pluck('name')->all();
+    $this->permissions = $role->permissions->pluck('name')->filter(fn ($name) => ManufacturingRoleAccess::enabled((int) auth()->user()->company_id) || ! ManufacturingRoleAccess::permission($name))->values()->all();
     $this->sales_scope = $role->sales_scope ?: 'branch';
     $this->stock_scope = $role->stock_scope ?: 'assigned_locations';
     $this->report_scope = $role->report_scope ?: 'branch';
@@ -64,6 +71,7 @@ $save = function () {
     ], $validated['permissions']);
 
     $this->reset(['role_id', 'name', 'permissions']);
+    $this->permissions = [];
     $this->sales_scope = 'branch';
     $this->stock_scope = 'assigned_locations';
     $this->report_scope = 'branch';
@@ -72,6 +80,7 @@ $save = function () {
 
 $clearForm = function () {
     $this->reset(['role_id', 'name', 'permissions']);
+    $this->permissions = [];
     $this->sales_scope = 'branch';
     $this->stock_scope = 'assigned_locations';
     $this->report_scope = 'branch';
@@ -80,6 +89,7 @@ $clearForm = function () {
 $deleteRole = function (int $roleId) {
     abort_unless(auth()->user()->can('roles.manage'), 403);
     $role = Role::query()->where('company_id', auth()->user()->company_id)->where('guard_name', 'web')->findOrFail($roleId);
+    abort_if(! ManufacturingRoleAccess::enabled((int) auth()->user()->company_id) && ManufacturingRoleAccess::role($role), 403);
 
     if (in_array($role->name, ['Super Admin', 'Admin'], true) || \Illuminate\Support\Facades\DB::table('model_has_roles')->where('role_id', $role->id)->exists()) {
         session()->flash('error', __('application.this_role_cannot_be_deleted_while_protected_or_assigned_to_users_a609818b'));
@@ -111,7 +121,7 @@ $deleteRole = function (int $roleId) {
         $permissionLabel = fn (string $name): string => RolePermissionCatalog::label($name);
     @endphp
 
-    <div class="grid gap-6 xl:grid-cols-[420px_1fr]">
+    <div class="grid min-w-0 gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
         <x-card :title="$role_id ? __('application.edit_role_b075b676') : __('application.create_role_5bea05a8')" description="{{ __('application.create_or_edit_a_role_and_assign_permissions_759e84cc') }}">
             <form wire:submit="save" class="space-y-4">
                 <x-form-input label="{{ __('application.role_name_a8b23a08') }}" name="name" wire:model="name" required />
@@ -131,9 +141,9 @@ $deleteRole = function (int $roleId) {
                             <p class="mb-2 text-sm font-black">{{ \Illuminate\Support\Facades\Lang::has('permissions.s_'.substr(sha1($group), 0, 12)) ? __('permissions.s_'.substr(sha1($group), 0, 12)) : $group }}</p>
                             <div class="grid grid-cols-2 gap-2">
                                 @foreach ($groupPermissions as $permission)
-                                    <label wire:key="permission-{{ $permission->id }}" class="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" wire:model="permissions" value="{{ $permission->name }}" class="rounded border-slate-300 text-build-orange focus:ring-build-orange">
-                                        <span>{{ $permissionLabel($permission->name) }}<span class="block text-xs text-slate-500">{{ $permission->name }}</span></span>
+                                    <label wire:key="permission-{{ $permission->id }}" class="flex min-w-0 items-start gap-2 text-sm">
+                                        <input type="checkbox" wire:model="permissions" value="{{ $permission->name }}" class="mt-0.5 shrink-0 rounded border-slate-300 text-build-orange focus:ring-build-orange">
+                                        <span class="min-w-0 flex-1 whitespace-normal break-words [overflow-wrap:anywhere]">{{ $permissionLabel($permission->name) }}<span class="block text-xs text-slate-500">{{ $permission->name }}</span></span>
                                     </label>
                                 @endforeach
                             </div>

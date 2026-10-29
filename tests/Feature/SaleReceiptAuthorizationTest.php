@@ -103,6 +103,7 @@ test('receipt and completion endpoints deny foreign companies branches and other
 test('even company scope and super admin cannot expose receipts from another company', function () {
     $this->role->update(['sales_scope' => 'company']);
     $super = Role::namedForCompany('Super Admin', $this->company->id) ?: Role::create(['name' => 'Super Admin', 'guard_name' => 'web']);
+    auth()->logout(); // Fixture setup, rather than a receipt viewer escalating its own role.
     $this->reader->assignRole($super);
     $this->actingAs($this->reader->fresh());
     $this->get(route('sales.receipt', $this->foreignSale))->assertNotFound();

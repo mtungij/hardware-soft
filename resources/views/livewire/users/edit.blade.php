@@ -17,7 +17,6 @@ use function Livewire\Volt\state;
 layout('layouts.app');
 
 state([
-    'user' => null,
     'name' => '',
     'email' => '',
     'phone' => '',
@@ -33,9 +32,11 @@ state([
     'location_type_filter' => '',
     'show_selected_only' => false,
 ]);
+state(['user' => null])->locked();
 
 mount(function (User $user) {
     abort_unless((int) $user->company_id === (int) auth()->user()->company_id, 404);
+    abort_if($user->hasRole('Super Admin', 'web') && ! auth()->user()->hasRole('Super Admin', 'web'), 403);
     abort_unless(! \App\Support\BranchAccess::restricted() || (int) $user->branch_id === (int) auth()->user()->branch_id, 403);
     $this->user = $user;
     $this->name = $user->name;
@@ -210,6 +211,7 @@ $syncStockLocationAccess = function () {
 
 $save = function () {
     abort_unless(auth()->user()->can('users.edit'), 403);
+    abort_if($this->user->hasRole('Super Admin', 'web') && ! auth()->user()->hasRole('Super Admin', 'web'), 403);
     $validated = $this->validate();
 
     if ($this->password) {

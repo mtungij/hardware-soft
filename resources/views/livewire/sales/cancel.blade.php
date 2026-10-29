@@ -10,7 +10,7 @@ use function Livewire\Volt\state;
 
 layout('layouts.app');
 
-state(['sale' => null]);
+state(['sale' => null])->locked();
 
 mount(function (Sale $sale) {
     AuthorizationScope::authorizeSale(auth()->user(), $sale);

@@ -1,0 +1,1690 @@
+{
+ "registered_count": 368,
+ "referenced_count": 191,
+ "registered_permissions": [
+ "access pos",
+ "accounting.cashflow",
+ "accounting.expenses",
+ "accounting.profit_loss",
+ "accounting.view",
+ "additional_charge_types.manage",
+ "additional_charge_types.view",
+ "adjust purchase receiving cost",
+ "adjust store stock",
+ "approve announcements",
+ "approve branches",
+ "approve cashbook",
+ "approve categories",
+ "approve customer accounts",
+ "approve customer balances",
+ "approve customer deposits",
+ "approve customer messages",
+ "approve customer receipts",
+ "approve customers",
+ "approve dashboard",
+ "approve direct stock in",
+ "approve dispensing stock",
+ "approve expense categories",
+ "approve expenses",
+ "approve financial reports",
+ "approve inventory summary",
+ "approve message templates",
+ "approve products",
+ "approve purchases",
+ "approve roles",
+ "approve sales",
+ "approve sent messages",
+ "approve settings",
+ "approve stock adjustment",
+ "approve stock movements",
+ "approve stock transfers",
+ "approve store stock",
+ "approve supplier balances",
+ "approve suppliers",
+ "approve units",
+ "approve users",
+ "assign default stock location",
+ "assign receiving locations",
+ "assign selling locations",
+ "assign transfer locations",
+ "assign unassigned credit customer",
+ "cancel goods receipts",
+ "cancel stock transfers",
+ "commercial_charges.apply",
+ "company-settings.update",
+ "complete stock transfers",
+ "create announcements",
+ "create branches",
+ "create cashbook",
+ "create categories",
+ "create credit sales",
+ "create customer balances",
+ "create customer messages",
+ "create customers",
+ "create dashboard",
+ "create direct stock in",
+ "create dispensing stock",
+ "create expense categories",
+ "create expenses",
+ "create financial reports",
+ "create inventory summary",
+ "create message templates",
+ "create products",
+ "create purchases",
+ "create roles",
+ "create sales",
+ "create sent messages",
+ "create settings",
+ "create stock movements",
+ "create stock transfers",
+ "create store stock",
+ "create supplier balances",
+ "create suppliers",
+ "create unassigned credit sales",
+ "create units",
+ "create users",
+ "customer_material_accounts.cancel",
+ "customer_material_accounts.create",
+ "customer_material_accounts.edit",
+ "customer_material_accounts.issue_material",
+ "customer_material_accounts.override_price",
+ "customer_material_accounts.record_deposit",
+ "customer_material_accounts.refund",
+ "customer_material_accounts.reports",
+ "customer_material_accounts.view",
+ "customer_requests.convert_to_sale",
+ "customer_requests.create_quotation",
+ "customer_requests.review",
+ "customer_requests.view",
+ "customer-balances.view",
+ "customer-payment-reports.view",
+ "customer-payments.create",
+ "customer-payments.print",
+ "customer-payments.view",
+ "customer-statements.export",
+ "customer-statements.view",
+ "customers.manage_portal_access",
+ "dashboard.expenses",
+ "dashboard.profit",
+ "dashboard.purchase_summary",
+ "dashboard.receivables",
+ "dashboard.sales_summary",
+ "dashboard.stock_summary",
+ "dashboard.stock_value",
+ "dashboard.view",
+ "delete announcements",
+ "delete branches",
+ "delete cashbook",
+ "delete categories",
+ "delete customer balances",
+ "delete customer messages",
+ "delete customers",
+ "delete dashboard",
+ "delete direct stock in",
+ "delete dispensing stock",
+ "delete expense categories",
+ "delete expenses",
+ "delete financial reports",
+ "delete inventory summary",
+ "delete message templates",
+ "delete products",
+ "delete purchases",
+ "delete roles",
+ "delete sales",
+ "delete sent messages",
+ "delete settings",
+ "delete stock movements",
+ "delete stock transfers",
+ "delete store stock",
+ "delete supplier balances",
+ "delete suppliers",
+ "delete units",
+ "delete users",
+ "edit announcements",
+ "edit branches",
+ "edit cashbook",
+ "edit categories",
+ "edit customer balances",
+ "edit customer messages",
+ "edit customers",
+ "edit dashboard",
+ "edit direct stock in",
+ "edit dispensing stock",
+ "edit draft goods receipts",
+ "edit expense categories",
+ "edit expenses",
+ "edit financial reports",
+ "edit inventory summary",
+ "edit message templates",
+ "edit products",
+ "edit purchases",
+ "edit roles",
+ "edit sales",
+ "edit sent messages",
+ "edit settings",
+ "edit stock movements",
+ "edit stock transfers",
+ "edit store stock",
+ "edit supplier balances",
+ "edit suppliers",
+ "edit units",
+ "edit users",
+ "export announcements",
+ "export branches",
+ "export cashbook",
+ "export categories",
+ "export customer balances",
+ "export customer messages",
+ "export customers",
+ "export dashboard",
+ "export direct stock in",
+ "export dispensing stock",
+ "export excel",
+ "export expense categories",
+ "export expenses",
+ "export financial reports",
+ "export inventory summary",
+ "export message templates",
+ "export pdf",
+ "export products",
+ "export purchases",
+ "export reports",
+ "export roles",
+ "export sales",
+ "export sent messages",
+ "export settings",
+ "export stock movements",
+ "export stock transfers",
+ "export store stock",
+ "export supplier balances",
+ "export suppliers",
+ "export units",
+ "export users",
+ "internal_sales.cancel",
+ "internal_sales.complete",
+ "internal_sales.create",
+ "internal_sales.override_price",
+ "internal_sales.print_delivery_note",
+ "internal_sales.print_value_note",
+ "internal_sales.view",
+ "internal_sales.view_cost",
+ "internal_sales.view_margin",
+ "invoices.export",
+ "invoices.send",
+ "invoices.view",
+ "location_prices.manage",
+ "location_prices.view",
+ "manage cashbook",
+ "manage cross branch stock locations",
+ "manage customer communications",
+ "manage customer portal",
+ "manage email settings",
+ "manage user stock locations",
+ "opening_stock.create",
+ "opening_stock.view",
+ "pay suppliers",
+ "payment_methods.manage",
+ "payment_methods.view",
+ "post goods receipts",
+ "print receipt",
+ "print reports",
+ "production.approve_qc",
+ "production.approve_quality",
+ "production.cancel_orders",
+ "production.complete_orders",
+ "production.create_orders",
+ "production.execute_orders",
+ "production.export_reports",
+ "production.finalize_costing",
+ "production.manage_costing",
+ "production.manage_curing",
+ "production.manage_location_defaults",
+ "production.manage_machines",
+ "production.manage_moulds",
+ "production.manage_product_families",
+ "production.manage_qc_plans",
+ "production.manage_quality_holds",
+ "production.manage_quality_plans",
+ "production.manage_recipes",
+ "production.manage_schedule",
+ "production.override_default_locations",
+ "production.override_order_locations",
+ "production.override_qc_separation",
+ "production.perform_quality_inspections",
+ "production.record_qc_result",
+ "production.release_curing",
+ "production.view",
+ "production.view_batch_traceability",
+ "production.view_cost_reports",
+ "production.view_costing",
+ "production.view_curing",
+ "production.view_moulds",
+ "production.view_orders",
+ "production.view_product_families",
+ "production.view_quality",
+ "production.view_recipes",
+ "production.view_reports",
+ "products.create",
+ "products.delete",
+ "products.edit",
+ "products.edit_buying_price",
+ "products.edit_selling_price",
+ "products.view",
+ "products.view_buying_price",
+ "products.view_selling_price",
+ "publish announcements",
+ "purchases.approve",
+ "purchases.create",
+ "purchases.edit",
+ "purchases.export",
+ "purchases.receive",
+ "purchases.view",
+ "purchases.view_cost",
+ "quotations.cancel",
+ "quotations.convert",
+ "quotations.create",
+ "quotations.edit",
+ "quotations.send",
+ "quotations.view",
+ "receive credit payments",
+ "receive customer payments",
+ "receive purchases",
+ "receive sale payments",
+ "reports.expenses",
+ "reports.export",
+ "reports.internal_acquisitions",
+ "reports.internal_sales",
+ "reports.location_margins",
+ "reports.profit",
+ "reports.purchases",
+ "reports.receivables",
+ "reports.sales",
+ "reports.stock",
+ "resend purchase emails",
+ "roles.manage",
+ "sales.backdate",
+ "sales.cancel",
+ "sales.create",
+ "sales.discount",
+ "sales.edit",
+ "sales.export",
+ "sales.refund",
+ "sales.view",
+ "sales.view_cost",
+ "sales.view_profit",
+ "sell from dispensing",
+ "sell from multiple locations",
+ "sell from store",
+ "send customer messages",
+ "send purchase emails",
+ "settings.manage",
+ "stock.adjust",
+ "stock.direct_stock_in",
+ "stock.receive",
+ "stock.transfer",
+ "stock.view",
+ "stock.view_value",
+ "users.create",
+ "users.delete",
+ "users.edit",
+ "users.view",
+ "view all stock locations",
+ "view announcements",
+ "view branches",
+ "view cashbook",
+ "view categories",
+ "view customer balances",
+ "view customer messages",
+ "view customer notifications",
+ "view customer statements",
+ "view customers",
+ "view dashboard",
+ "view direct stock in",
+ "view dispensing stock",
+ "view email logs",
+ "view expense categories",
+ "view expenses",
+ "view financial reports",
+ "view inventory summary",
+ "view message templates",
+ "view products",
+ "view purchases",
+ "view roles",
+ "view sales",
+ "view sales profit",
+ "view sent messages",
+ "view settings",
+ "view stock movements",
+ "view stock transfers",
+ "view stock valuation",
+ "view store stock",
+ "view supplier balances",
+ "view suppliers",
+ "view unassigned credit sales",
+ "view units",
+ "view user stock locations",
+ "view users",
+ "whatsapp.manage_recipients",
+ "whatsapp.manage_settings",
+ "whatsapp.manage_templates",
+ "whatsapp.retry_failed",
+ "whatsapp.view_logs",
+ "whatsapp.view_settings"
+ ],
+ "required_administration_abilities": [
+ "roles.manage",
+ "dashboard.view",
+ "settings.manage",
+ "company-settings.update",
+ "products.view",
+ "stock.view",
+ "purchases.view",
+ "accounting.view",
+ "reports.sales",
+ "sales.view",
+ "sales.create",
+ "sales.cancel",
+ "whatsapp.view_settings",
+ "whatsapp.view_logs"
+ ],
+ "literal_references": {
+ "access pos": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "accounting.cashflow": [
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "accounting.expenses": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "accounting.profit_loss": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "accounting.view": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "app/Services/WhatsAppDebtReminderService.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "additional_charge_types.manage": [
+ "resources/views/livewire/settings/commercial-documents.blade.php"
+ ],
+ "adjust store stock": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "approve customer receipts": [
+ "app/Services/AccountingService.php",
+ "resources/views/livewire/admin/customer-receipts/show.blade.php"
+ ],
+ "approve purchases": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "cancel stock transfers": [
+ "app/Models/StockTransfer.php"
+ ],
+ "commercial_charges.apply": [
+ "app/Services/B2bQuotationService.php",
+ "resources/views/livewire/customer-requests/show.blade.php",
+ "resources/views/livewire/direct-sales/create.blade.php",
+ "resources/views/livewire/quotations/create.blade.php"
+ ],
+ "company-settings.update": [
+ "app/Http/Middleware/EnsureCanUpdateCompanySettings.php",
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/settings/company.blade.php",
+ "resources/views/livewire/settings/customer-portal.blade.php",
+ "resources/views/livewire/settings/quotation-templates.blade.php"
+ ],
+ "create credit sales": [
+ "app/Services/InventoryService.php",
+ "resources/views/livewire/pos/index.blade.php"
+ ],
+ "create direct stock in": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "create expenses": [
+ "app/Support/ExpenseAccess.php",
+ "resources/views/livewire/expenses/index.blade.php"
+ ],
+ "create products": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "create purchases": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "create sales": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "create stock transfers": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "create unassigned credit sales": [
+ "app/Services/InventoryService.php",
+ "resources/views/livewire/pos/index.blade.php"
+ ],
+ "create users": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "customer-balances.view": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "app/Services/WhatsAppDebtReminderService.php"
+ ],
+ "customer_material_accounts.cancel": [
+ "resources/views/livewire/customer-material-accounts/show.blade.php"
+ ],
+ "customer_material_accounts.create": [
+ "resources/views/livewire/customer-material-accounts/index.blade.php",
+ "routes/web.php"
+ ],
+ "customer_material_accounts.edit": [
+ "resources/views/livewire/customer-material-accounts/show.blade.php",
+ "routes/web.php"
+ ],
+ "customer_material_accounts.issue_material": [
+ "resources/views/livewire/customer-material-accounts/show.blade.php"
+ ],
+ "customer_material_accounts.record_deposit": [
+ "resources/views/livewire/customer-material-accounts/show.blade.php"
+ ],
+ "customer_material_accounts.refund": [
+ "resources/views/livewire/customer-material-accounts/show.blade.php"
+ ],
+ "customer_material_accounts.reports": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/customer-material-accounts/index.blade.php",
+ "routes/web.php"
+ ],
+ "customer_material_accounts.view": [
+ "app/Observers/OperationalWhatsAppObserver.php",
+ "resources/views/layouts/app.blade.php",
+ "routes/web.php"
+ ],
+ "customer_requests.convert_to_sale": [
+ "resources/views/livewire/customer-requests/show.blade.php"
+ ],
+ "customer_requests.review": [
+ "app/Services/CustomerPurchaseRequestService.php",
+ "resources/views/livewire/customer-requests/show.blade.php"
+ ],
+ "customer_requests.view": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/dashboard.blade.php",
+ "routes/web.php"
+ ],
+ "customers.manage_portal_access": [
+ "app/Services/CustomerPortalCredentialService.php",
+ "resources/views/livewire/admin/customer-accounts/show.blade.php",
+ "resources/views/livewire/customers/edit.blade.php"
+ ],
+ "dashboard.expenses": [
+ "resources/views/livewire/dashboard.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "dashboard.profit": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "resources/views/livewire/dashboard.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "dashboard.purchase_summary": [
+ "resources/views/livewire/dashboard.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "dashboard.receivables": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "app/Services/WhatsAppDebtReminderService.php",
+ "resources/views/livewire/dashboard.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "dashboard.sales_summary": [
+ "resources/views/livewire/dashboard.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "dashboard.stock_summary": [
+ "resources/views/livewire/dashboard.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "dashboard.stock_value": [
+ "resources/views/livewire/dashboard.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "dashboard.view": [
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "delete expenses": [
+ "resources/views/livewire/expenses/index.blade.php"
+ ],
+ "delete products": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "delete users": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "edit expenses": [
+ "resources/views/livewire/expenses/index.blade.php"
+ ],
+ "edit products": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "edit purchases": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "edit roles": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "edit settings": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "edit users": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "export excel": [
+ "app/Http/Controllers/GenericExportController.php",
+ "app/Http/Controllers/ReportExportController.php",
+ "resources/views/components/export-actions.blade.php",
+ "resources/views/livewire/sales/index.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "export expenses": [
+ "resources/views/components/export-actions.blade.php",
+ "resources/views/livewire/expenses/index.blade.php"
+ ],
+ "export pdf": [
+ "app/Http/Controllers/GenericExportController.php",
+ "app/Http/Controllers/ReportExportController.php",
+ "resources/views/components/export-actions.blade.php",
+ "resources/views/livewire/sales/index.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "export reports": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "internal_sales.cancel": [
+ "app/Services/InternalSaleService.php",
+ "resources/views/livewire/internal-sales/show.blade.php"
+ ],
+ "internal_sales.complete": [
+ "app/Services/InternalSaleService.php",
+ "resources/views/livewire/internal-sales/create.blade.php",
+ "resources/views/livewire/internal-sales/show.blade.php"
+ ],
+ "internal_sales.create": [
+ "app/Services/InternalSaleService.php",
+ "resources/views/livewire/internal-sales/index.blade.php",
+ "resources/views/livewire/internal-sales/show.blade.php",
+ "routes/web.php"
+ ],
+ "internal_sales.override_price": [
+ "app/Services/InternalSaleService.php"
+ ],
+ "internal_sales.print_delivery_note": [
+ "resources/views/livewire/internal-sales/index.blade.php",
+ "resources/views/livewire/internal-sales/show.blade.php"
+ ],
+ "internal_sales.print_value_note": [
+ "resources/views/livewire/internal-sales/show.blade.php"
+ ],
+ "internal_sales.view": [
+ "app/Services/InternalSaleDocumentService.php",
+ "resources/views/layouts/app.blade.php",
+ "routes/web.php"
+ ],
+ "internal_sales.view_cost": [
+ "app/Services/ReportExportService.php",
+ "resources/views/livewire/internal-sales/show.blade.php",
+ "resources/views/livewire/reports/internal-sales.blade.php"
+ ],
+ "internal_sales.view_margin": [
+ "app/Services/InternalSaleReportService.php",
+ "app/Services/ReportExportService.php",
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/internal-sales/show.blade.php",
+ "resources/views/livewire/reports/internal-sales.blade.php",
+ "routes/web.php"
+ ],
+ "invoices.send": [
+ "app/Services/B2bQuotationService.php",
+ "resources/views/livewire/customers/edit.blade.php",
+ "routes/web.php"
+ ],
+ "invoices.view": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/customers/edit.blade.php",
+ "routes/web.php"
+ ],
+ "location_prices.manage": [
+ "resources/views/livewire/location-pricing/index.blade.php"
+ ],
+ "location_prices.view": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/location-pricing/index.blade.php",
+ "routes/web.php"
+ ],
+ "manage cashbook": [
+ "resources/views/livewire/cashbook/index.blade.php",
+ "resources/views/livewire/cashbook/show.blade.php"
+ ],
+ "manage cross branch stock locations": [
+ "app/Models/ProductionCuringBatch.php",
+ "app/Models/ProductionOrderCosting.php",
+ "app/Models/ProductionQualityHold.php",
+ "app/Models/ProductionQualityInspection.php",
+ "app/Services/ProductionCostingService.php",
+ "app/Services/ProductionQualityService.php",
+ "app/Services/ProductionReportService.php",
+ "resources/views/livewire/production/costing/index.blade.php",
+ "resources/views/livewire/production/overview.blade.php"
+ ],
+ "manage email settings": [
+ "resources/views/livewire/email-settings/index.blade.php"
+ ],
+ "opening_stock.create": [
+ "app/Services/OpeningStockService.php",
+ "resources/views/livewire/opening-stock/create.blade.php",
+ "resources/views/livewire/opening-stock/index.blade.php",
+ "resources/views/livewire/stock-adjustments/index.blade.php",
+ "routes/web.php"
+ ],
+ "opening_stock.view": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/opening-stock/index.blade.php",
+ "resources/views/livewire/opening-stock/show.blade.php",
+ "routes/web.php"
+ ],
+ "pay suppliers": [
+ "resources/views/livewire/supplier-payments/create.blade.php"
+ ],
+ "payment_methods.manage": [
+ "app/Services/PaymentMethodService.php",
+ "resources/views/livewire/settings/commercial-documents.blade.php",
+ "resources/views/livewire/settings/payment-methods.blade.php"
+ ],
+ "payment_methods.view": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/settings/index.blade.php",
+ "resources/views/livewire/settings/payment-methods.blade.php",
+ "routes/web.php"
+ ],
+ "print reports": [
+ "resources/views/components/export-actions.blade.php"
+ ],
+ "production.approve_qc": [
+ "resources/views/livewire/production/quality/inspections/show.blade.php"
+ ],
+ "production.approve_quality": [
+ "resources/views/livewire/production/orders/show.blade.php",
+ "resources/views/livewire/production/quality/inspections/index.blade.php",
+ "resources/views/livewire/production/quality/inspections/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.cancel_orders": [
+ "app/Services/ProductionOrderService.php",
+ "resources/views/livewire/production/orders/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.complete_orders": [
+ "app/Services/ProductionOrderService.php",
+ "resources/views/livewire/production/orders/execute.blade.php",
+ "resources/views/livewire/production/orders/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.create_orders": [
+ "app/Services/ProductionOrderService.php",
+ "resources/views/livewire/production/orders/create.blade.php",
+ "resources/views/livewire/production/orders/index.blade.php",
+ "resources/views/livewire/production/schedule/index.blade.php",
+ "routes/web.php"
+ ],
+ "production.execute_orders": [
+ "app/Services/ProductionOrderService.php",
+ "resources/views/livewire/production/orders/execute.blade.php",
+ "resources/views/livewire/production/orders/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.export_reports": [
+ "app/Http/Controllers/ProductionReportExportController.php",
+ "resources/views/livewire/production/reports/report.blade.php",
+ "routes/web.php"
+ ],
+ "production.finalize_costing": [
+ "app/Services/ProductionCostingService.php",
+ "resources/views/livewire/production/costing/show.blade.php",
+ "resources/views/livewire/production/orders/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.manage_costing": [
+ "app/Services/ProductionCostingService.php",
+ "resources/views/livewire/production/costing/index.blade.php",
+ "resources/views/livewire/production/costing/show.blade.php",
+ "resources/views/livewire/production/orders/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.manage_curing": [
+ "app/Services/ProductionCuringService.php",
+ "resources/views/livewire/production/curing/show.blade.php",
+ "resources/views/livewire/production/orders/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.manage_location_defaults": [
+ "resources/views/livewire/settings/company.blade.php"
+ ],
+ "production.manage_machines": [
+ "resources/views/livewire/production/machines/index.blade.php"
+ ],
+ "production.manage_moulds": [
+ "resources/views/livewire/production/moulds/index.blade.php",
+ "resources/views/livewire/production/overview.blade.php",
+ "routes/web.php"
+ ],
+ "production.manage_product_families": [
+ "resources/views/livewire/production/overview.blade.php",
+ "resources/views/livewire/production/product-families/index.blade.php",
+ "routes/web.php"
+ ],
+ "production.manage_qc_plans": [
+ "resources/views/livewire/production/quality/plans/form.blade.php"
+ ],
+ "production.manage_quality_holds": [
+ "resources/views/livewire/production/quality/holds/index.blade.php",
+ "routes/web.php"
+ ],
+ "production.manage_quality_plans": [
+ "resources/views/livewire/production/quality/plans/form.blade.php",
+ "resources/views/livewire/production/quality/plans/index.blade.php",
+ "resources/views/livewire/production/quality/plans/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.manage_recipes": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/production/recipes/form.blade.php",
+ "resources/views/livewire/production/recipes/index.blade.php",
+ "resources/views/livewire/production/recipes/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.manage_schedule": [
+ "resources/views/livewire/production/schedule/index.blade.php"
+ ],
+ "production.override_default_locations": [
+ "app/Services/ProductionOrderService.php",
+ "resources/views/livewire/production/orders/create.blade.php"
+ ],
+ "production.override_order_locations": [
+ "app/Services/ProductionOrderService.php",
+ "resources/views/livewire/production/orders/create.blade.php"
+ ],
+ "production.override_qc_separation": [
+ "app/Services/ProductionQualityService.php"
+ ],
+ "production.perform_quality_inspections": [
+ "app/Services/ProductionQualityService.php",
+ "resources/views/livewire/production/orders/show.blade.php",
+ "resources/views/livewire/production/quality/inspections/form.blade.php",
+ "resources/views/livewire/production/quality/inspections/index.blade.php",
+ "resources/views/livewire/production/quality/inspections/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.record_qc_result": [
+ "resources/views/livewire/production/quality/inspections/show.blade.php"
+ ],
+ "production.release_curing": [
+ "app/Services/ProductionCuringService.php",
+ "resources/views/livewire/production/curing/show.blade.php",
+ "resources/views/livewire/production/orders/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.view": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/production/machines/index.blade.php",
+ "resources/views/livewire/production/overview.blade.php",
+ "resources/views/livewire/production/schedule/index.blade.php",
+ "resources/views/livewire/production/setup-checklist.blade.php",
+ "routes/web.php"
+ ],
+ "production.view_batch_traceability": [
+ "resources/views/livewire/production/reports/batch-traceability.blade.php",
+ "routes/web.php"
+ ],
+ "production.view_cost_reports": [
+ "app/Http/Controllers/ProductionReportExportController.php",
+ "app/Services/ProductionReportService.php",
+ "resources/views/livewire/production/reports/batch-traceability.blade.php",
+ "resources/views/livewire/production/reports/index.blade.php",
+ "resources/views/livewire/production/reports/report.blade.php"
+ ],
+ "production.view_costing": [
+ "resources/views/livewire/production/orders/show.blade.php",
+ "resources/views/livewire/production/overview.blade.php",
+ "routes/web.php"
+ ],
+ "production.view_curing": [
+ "resources/views/livewire/production/orders/show.blade.php",
+ "resources/views/livewire/production/overview.blade.php",
+ "routes/web.php"
+ ],
+ "production.view_moulds": [
+ "resources/views/livewire/production/overview.blade.php",
+ "routes/web.php"
+ ],
+ "production.view_orders": [
+ "routes/web.php"
+ ],
+ "production.view_product_families": [
+ "resources/views/livewire/production/overview.blade.php",
+ "routes/web.php"
+ ],
+ "production.view_quality": [
+ "resources/views/livewire/production/orders/show.blade.php",
+ "resources/views/livewire/production/overview.blade.php",
+ "resources/views/livewire/production/quality/holds/index.blade.php",
+ "resources/views/livewire/production/quality/inspections/index.blade.php",
+ "resources/views/livewire/production/quality/inspections/show.blade.php",
+ "resources/views/livewire/production/quality/plans/index.blade.php",
+ "resources/views/livewire/production/quality/plans/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.view_recipes": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/production/recipes/form.blade.php",
+ "resources/views/livewire/production/recipes/index.blade.php",
+ "resources/views/livewire/production/recipes/show.blade.php",
+ "routes/web.php"
+ ],
+ "production.view_reports": [
+ "app/Http/Controllers/ProductionReportExportController.php",
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/production/reports/index.blade.php",
+ "resources/views/livewire/production/reports/report.blade.php",
+ "routes/web.php"
+ ],
+ "products.create": [
+ "resources/views/livewire/products/create.blade.php",
+ "resources/views/livewire/products/index.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "products.delete": [
+ "resources/views/livewire/products/index.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "products.edit": [
+ "resources/views/livewire/products/edit.blade.php",
+ "resources/views/livewire/products/index.blade.php",
+ "resources/views/livewire/purchases/receive.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "products.edit_buying_price": [
+ "resources/views/livewire/products/base-unit-pricing-fields.blade.php",
+ "resources/views/livewire/products/create.blade.php",
+ "resources/views/livewire/products/edit.blade.php",
+ "resources/views/livewire/products/index.blade.php",
+ "resources/views/livewire/products/unit-conversions-fields.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "products.edit_selling_price": [
+ "app/Services/B2bQuotationService.php",
+ "resources/views/livewire/customer-requests/show.blade.php",
+ "resources/views/livewire/direct-sales/create.blade.php",
+ "resources/views/livewire/direct-stock-in/index.blade.php",
+ "resources/views/livewire/products/base-unit-pricing-fields.blade.php",
+ "resources/views/livewire/products/create.blade.php",
+ "resources/views/livewire/products/edit.blade.php",
+ "resources/views/livewire/products/unit-conversions-fields.blade.php",
+ "resources/views/livewire/purchases/receive.blade.php",
+ "resources/views/livewire/quotations/create.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "products.view": [
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "products.view_buying_price": [
+ "app/Services/ReportExportService.php",
+ "resources/views/livewire/products/base-unit-pricing-fields.blade.php",
+ "resources/views/livewire/products/edit.blade.php",
+ "resources/views/livewire/products/index.blade.php",
+ "resources/views/livewire/products/unit-conversions-fields.blade.php",
+ "resources/views/livewire/users/create.blade.php",
+ "resources/views/livewire/users/edit.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "products.view_selling_price": [
+ "app/Services/ReportExportService.php",
+ "resources/views/livewire/products/base-unit-pricing-fields.blade.php",
+ "resources/views/livewire/products/edit.blade.php",
+ "resources/views/livewire/products/unit-conversions-fields.blade.php",
+ "resources/views/livewire/purchases/receive.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "purchases.approve": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "purchases.create": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "purchases.edit": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "purchases.export": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "purchases.receive": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "purchases.view": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "purchases.view_cost": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "app/Services/WhatsAppPurchaseNotificationService.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "quotations.convert": [
+ "resources/views/livewire/quotations/show.blade.php"
+ ],
+ "quotations.create": [
+ "resources/views/livewire/customers/edit.blade.php",
+ "resources/views/livewire/quotations/index.blade.php",
+ "routes/web.php"
+ ],
+ "quotations.send": [
+ "resources/views/livewire/customer-requests/show.blade.php",
+ "resources/views/livewire/quotations/show.blade.php"
+ ],
+ "quotations.view": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/customers/edit.blade.php",
+ "routes/web.php"
+ ],
+ "receive customer payments": [
+ "resources/views/livewire/customer-payments/create.blade.php"
+ ],
+ "receive purchases": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "receive sale payments": [
+ "resources/views/livewire/sales/index.blade.php",
+ "resources/views/livewire/sales/payments.blade.php",
+ "resources/views/livewire/sales/show.blade.php"
+ ],
+ "reports.expenses": [
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "reports.export": [
+ "app/Http/Controllers/GenericExportController.php",
+ "app/Http/Controllers/ReportExportController.php",
+ "app/Services/ReportExportService.php",
+ "resources/views/livewire/reports/internal-sales.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "reports.internal_acquisitions": [
+ "resources/views/livewire/reports/internal-sales.blade.php"
+ ],
+ "reports.internal_sales": [
+ "resources/views/livewire/reports/internal-sales.blade.php"
+ ],
+ "reports.location_margins": [
+ "app/Services/InternalSaleReportService.php",
+ "app/Services/ReportExportService.php",
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/reports/internal-sales.blade.php",
+ "routes/web.php"
+ ],
+ "reports.profit": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "resources/views/livewire/dashboard.blade.php",
+ "resources/views/livewire/reports/internal-sales.blade.php",
+ "resources/views/livewire/reports/location-margins.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "reports.purchases": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "reports.receivables": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "app/Services/WhatsAppDebtReminderService.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "reports.sales": [
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "reports.stock": [
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "resend purchase emails": [
+ "app/Http/Controllers/PurchaseOrderPdfController.php",
+ "resources/views/livewire/purchases/index.blade.php",
+ "resources/views/livewire/purchases/show.blade.php"
+ ],
+ "roles.manage": [
+ "app/Services/CompanyRoleService.php",
+ "resources/views/livewire/roles/index.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "sales.backdate": [
+ "app/Support/PosSaleDate.php"
+ ],
+ "sales.cancel": [
+ "app/Services/InventoryService.php",
+ "resources/views/livewire/sales/cancel.blade.php",
+ "resources/views/livewire/sales/index.blade.php",
+ "routes/web.php"
+ ],
+ "sales.create": [
+ "app/Http/Controllers/CompletePosReceiptController.php",
+ "app/Services/InventoryService.php",
+ "resources/views/livewire/customers/edit.blade.php",
+ "resources/views/livewire/dashboard.blade.php",
+ "resources/views/livewire/sales/index.blade.php",
+ "resources/views/livewire/sales/receipt.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "sales.discount": [
+ "app/Models/Concerns/AuthorizesSaleDiscounts.php",
+ "app/Services/B2bQuotationService.php",
+ "app/Services/InventoryService.php",
+ "resources/views/livewire/customer-requests/show.blade.php",
+ "resources/views/livewire/direct-sales/create.blade.php",
+ "resources/views/livewire/pos/index.blade.php",
+ "resources/views/livewire/quotations/create.blade.php"
+ ],
+ "sales.edit": [
+ "resources/views/livewire/sales/index.blade.php",
+ "resources/views/livewire/sales/payments.blade.php",
+ "resources/views/livewire/sales/show.blade.php"
+ ],
+ "sales.export": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "sales.view": [
+ "app/Services/WhatsAppDailySummaryService.php",
+ "app/Support/AuthorizationScope.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "sales.view_cost": [
+ "app/Services/ReportExportService.php",
+ "app/Services/WhatsAppDailySummaryService.php",
+ "resources/views/livewire/reports/sales.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "sales.view_profit": [
+ "app/Services/ReportExportService.php",
+ "app/Services/WhatsAppDailySummaryService.php",
+ "resources/views/livewire/reports/sales.blade.php",
+ "resources/views/livewire/sales/index.blade.php",
+ "resources/views/livewire/users/create.blade.php",
+ "resources/views/livewire/users/edit.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "send purchase emails": [
+ "app/Http/Controllers/PurchaseOrderPdfController.php",
+ "resources/views/livewire/purchases/index.blade.php",
+ "resources/views/livewire/purchases/show.blade.php"
+ ],
+ "settings.manage": [
+ "resources/views/livewire/dashboard.blade.php",
+ "resources/views/livewire/settings/inventory.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "stock.adjust": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "stock.direct_stock_in": [
+ "resources/views/livewire/direct-stock-in/index.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "stock.receive": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "stock.transfer": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "stock.view": [
+ "app/Services/StockLedgerReadService.php",
+ "app/Services/StockTransferNoteService.php",
+ "app/Services/WhatsAppDailySummaryService.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "stock.view_value": [
+ "app/Http/Controllers/StockLedgerPdfController.php",
+ "app/Services/InternalSaleReportService.php",
+ "app/Services/ReportExportService.php",
+ "app/Services/WhatsAppDailySummaryService.php",
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/reports/internal-sales.blade.php",
+ "resources/views/livewire/stock-movements/index.blade.php",
+ "resources/views/livewire/store-stock/index.blade.php",
+ "resources/views/livewire/users/create.blade.php",
+ "resources/views/livewire/users/edit.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "users.create": [
+ "resources/views/livewire/users/create.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "users.delete": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "users.edit": [
+ "resources/views/livewire/users/edit.blade.php",
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "users.view": [
+ "routes/web.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view all stock locations": [
+ "app/Services/InventoryService.php",
+ "resources/views/livewire/stock-adjustments/create.blade.php"
+ ],
+ "view cashbook": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view customer balances": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view dashboard": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view dispensing stock": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view expenses": [
+ "app/Support/ExpenseAccess.php",
+ "resources/views/components/export-actions.blade.php",
+ "resources/views/livewire/expenses/index.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view financial reports": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view inventory summary": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view products": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view purchases": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view roles": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view sales": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view sales profit": [
+ "resources/views/livewire/users/create.blade.php",
+ "resources/views/livewire/users/edit.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view settings": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view stock valuation": [
+ "resources/views/livewire/users/create.blade.php",
+ "resources/views/livewire/users/edit.blade.php",
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view store stock": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "view users": [
+ "app/Support/LegacyPermissionAliases.php"
+ ],
+ "whatsapp.manage_recipients": [
+ "resources/views/livewire/settings/whatsapp.blade.php"
+ ],
+ "whatsapp.manage_settings": [
+ "resources/views/livewire/settings/whatsapp.blade.php"
+ ],
+ "whatsapp.manage_templates": [
+ "resources/views/livewire/settings/whatsapp.blade.php"
+ ],
+ "whatsapp.retry_failed": [
+ "resources/views/livewire/settings/whatsapp-logs.blade.php"
+ ],
+ "whatsapp.view_logs": [
+ "resources/views/livewire/settings/whatsapp-logs.blade.php",
+ "routes/web.php"
+ ],
+ "whatsapp.view_settings": [
+ "resources/views/layouts/app.blade.php",
+ "resources/views/livewire/settings/whatsapp.blade.php",
+ "routes/web.php"
+ ]
+ },
+ "missing": [],
+ "registered_without_literal_check": [
+ "additional_charge_types.view",
+ "adjust purchase receiving cost",
+ "approve announcements",
+ "approve branches",
+ "approve cashbook",
+ "approve categories",
+ "approve customer accounts",
+ "approve customer balances",
+ "approve customer deposits",
+ "approve customer messages",
+ "approve customers",
+ "approve dashboard",
+ "approve direct stock in",
+ "approve dispensing stock",
+ "approve expense categories",
+ "approve expenses",
+ "approve financial reports",
+ "approve inventory summary",
+ "approve message templates",
+ "approve products",
+ "approve roles",
+ "approve sales",
+ "approve sent messages",
+ "approve settings",
+ "approve stock adjustment",
+ "approve stock movements",
+ "approve stock transfers",
+ "approve store stock",
+ "approve supplier balances",
+ "approve suppliers",
+ "approve units",
+ "approve users",
+ "assign default stock location",
+ "assign receiving locations",
+ "assign selling locations",
+ "assign transfer locations",
+ "assign unassigned credit customer",
+ "cancel goods receipts",
+ "complete stock transfers",
+ "create announcements",
+ "create branches",
+ "create cashbook",
+ "create categories",
+ "create customer balances",
+ "create customer messages",
+ "create customers",
+ "create dashboard",
+ "create dispensing stock",
+ "create expense categories",
+ "create financial reports",
+ "create inventory summary",
+ "create message templates",
+ "create roles",
+ "create sent messages",
+ "create settings",
+ "create stock movements",
+ "create store stock",
+ "create supplier balances",
+ "create suppliers",
+ "create units",
+ "customer_material_accounts.override_price",
+ "customer_requests.create_quotation",
+ "customer-payment-reports.view",
+ "customer-payments.create",
+ "customer-payments.print",
+ "customer-payments.view",
+ "customer-statements.export",
+ "customer-statements.view",
+ "delete announcements",
+ "delete branches",
+ "delete cashbook",
+ "delete categories",
+ "delete customer balances",
+ "delete customer messages",
+ "delete customers",
+ "delete dashboard",
+ "delete direct stock in",
+ "delete dispensing stock",
+ "delete expense categories",
+ "delete financial reports",
+ "delete inventory summary",
+ "delete message templates",
+ "delete purchases",
+ "delete roles",
+ "delete sales",
+ "delete sent messages",
+ "delete settings",
+ "delete stock movements",
+ "delete stock transfers",
+ "delete store stock",
+ "delete supplier balances",
+ "delete suppliers",
+ "delete units",
+ "edit announcements",
+ "edit branches",
+ "edit cashbook",
+ "edit categories",
+ "edit customer balances",
+ "edit customer messages",
+ "edit customers",
+ "edit dashboard",
+ "edit direct stock in",
+ "edit dispensing stock",
+ "edit draft goods receipts",
+ "edit expense categories",
+ "edit financial reports",
+ "edit inventory summary",
+ "edit message templates",
+ "edit sales",
+ "edit sent messages",
+ "edit stock movements",
+ "edit stock transfers",
+ "edit store stock",
+ "edit supplier balances",
+ "edit suppliers",
+ "edit units",
+ "export announcements",
+ "export branches",
+ "export cashbook",
+ "export categories",
+ "export customer balances",
+ "export customer messages",
+ "export customers",
+ "export dashboard",
+ "export direct stock in",
+ "export dispensing stock",
+ "export expense categories",
+ "export financial reports",
+ "export inventory summary",
+ "export message templates",
+ "export products",
+ "export purchases",
+ "export roles",
+ "export sales",
+ "export sent messages",
+ "export settings",
+ "export stock movements",
+ "export stock transfers",
+ "export store stock",
+ "export supplier balances",
+ "export suppliers",
+ "export units",
+ "export users",
+ "invoices.export",
+ "manage customer communications",
+ "manage customer portal",
+ "manage user stock locations",
+ "post goods receipts",
+ "print receipt",
+ "publish announcements",
+ "quotations.cancel",
+ "quotations.edit",
+ "receive credit payments",
+ "sales.refund",
+ "sell from dispensing",
+ "sell from multiple locations",
+ "sell from store",
+ "send customer messages",
+ "view announcements",
+ "view branches",
+ "view categories",
+ "view customer messages",
+ "view customer notifications",
+ "view customer statements",
+ "view customers",
+ "view direct stock in",
+ "view email logs",
+ "view expense categories",
+ "view message templates",
+ "view sent messages",
+ "view stock movements",
+ "view stock transfers",
+ "view supplier balances",
+ "view suppliers",
+ "view unassigned credit sales",
+ "view units",
+ "view user stock locations"
+ ],
+ "legacy_any_grant_rules": {
+ "dashboard.view": [
+ "view dashboard"
+ ],
+ "dashboard.sales_summary": [
+ "view sales"
+ ],
+ "dashboard.purchase_summary": [
+ "view purchases"
+ ],
+ "dashboard.stock_summary": [
+ "view inventory summary",
+ "view store stock",
+ "view dispensing stock"
+ ],
+ "dashboard.stock_value": [
+ "view stock valuation"
+ ],
+ "dashboard.profit": [
+ "view sales profit"
+ ],
+ "dashboard.expenses": [
+ "view expenses"
+ ],
+ "dashboard.receivables": [
+ "view customer balances"
+ ],
+ "sales.create": [
+ "create sales",
+ "access pos"
+ ],
+ "sales.view": [
+ "view sales"
+ ],
+ "sales.view_cost": [
+ "view sales profit"
+ ],
+ "sales.view_profit": [
+ "view sales profit"
+ ],
+ "sales.export": [
+ "export reports",
+ "export pdf",
+ "export excel"
+ ],
+ "products.view": [
+ "view products"
+ ],
+ "products.create": [
+ "create products"
+ ],
+ "products.edit": [
+ "edit products"
+ ],
+ "products.delete": [
+ "delete products"
+ ],
+ "products.view_buying_price": [
+ "view sales profit",
+ "view stock valuation"
+ ],
+ "products.edit_buying_price": [
+ "edit products"
+ ],
+ "products.view_selling_price": [
+ "view products"
+ ],
+ "products.edit_selling_price": [
+ "edit products"
+ ],
+ "purchases.view": [
+ "view purchases"
+ ],
+ "purchases.create": [
+ "create purchases"
+ ],
+ "purchases.edit": [
+ "edit purchases"
+ ],
+ "purchases.approve": [
+ "approve purchases"
+ ],
+ "purchases.receive": [
+ "receive purchases"
+ ],
+ "purchases.view_cost": [
+ "view purchases"
+ ],
+ "purchases.export": [
+ "export reports"
+ ],
+ "stock.view": [
+ "view inventory summary",
+ "view store stock",
+ "view dispensing stock"
+ ],
+ "stock.adjust": [
+ "adjust store stock"
+ ],
+ "stock.transfer": [
+ "create stock transfers"
+ ],
+ "stock.receive": [
+ "receive purchases"
+ ],
+ "stock.view_value": [
+ "view stock valuation"
+ ],
+ "stock.direct_stock_in": [
+ "create direct stock in"
+ ],
+ "reports.sales": [
+ "view financial reports",
+ "view sales"
+ ],
+ "reports.stock": [
+ "view inventory summary"
+ ],
+ "reports.purchases": [
+ "view financial reports",
+ "view purchases"
+ ],
+ "reports.profit": [
+ "view sales profit"
+ ],
+ "reports.expenses": [
+ "view expenses"
+ ],
+ "reports.receivables": [
+ "view customer balances"
+ ],
+ "reports.export": [
+ "export reports",
+ "export pdf",
+ "export excel"
+ ],
+ "accounting.view": [
+ "view financial reports"
+ ],
+ "accounting.expenses": [
+ "view expenses"
+ ],
+ "accounting.profit_loss": [
+ "view sales profit"
+ ],
+ "accounting.cashflow": [
+ "view cashbook"
+ ],
+ "users.view": [
+ "view users"
+ ],
+ "users.create": [
+ "create users"
+ ],
+ "users.edit": [
+ "edit users"
+ ],
+ "users.delete": [
+ "delete users"
+ ],
+ "roles.manage": [
+ "view roles",
+ "edit roles"
+ ],
+ "settings.manage": [
+ "view settings",
+ "edit settings"
+ ]
+ },
+ "super_admin_roles": [
+ {
+ "id": 5,
+ "company_id": null,
+ "permissions_count": 368,
+ "cancellation_assigned": true,
+ "role_management_assigned": true
+ }
+ ],
+ "active_super_admin_access_preflight": [
+ {
+ "user_id": 2,
+ "company_id": 4,
+ "missing_abilities": []
+ },
+ {
+ "user_id": 3,
+ "company_id": 5,
+ "missing_abilities": []
+ },
+ {
+ "user_id": 4,
+ "company_id": 6,
+ "missing_abilities": []
+ }
+ ],
+ "direct_cancellation_grants": [
+ {
+ "user_id": 1,
+ "company_id": 3
+ },
+ {
+ "user_id": 2,
+ "company_id": 4
+ },
+ {
+ "user_id": 3,
+ "company_id": 5
+ },
+ {
+ "user_id": 4,
+ "company_id": 6
+ }
+ ],
+ "sales_authorization": {
+ "view_and_receipts": "sales.view plus company/branch/sale scope; no print receipt requirement",
+ "pos_and_create": "sales.create (legacy create sales/access pos grants remain explicit aliases)",
+ "cancel": "sales.cancel AND sales.view AND accessible completed sale; no Super Admin or edit sales bypass",
+ "payments": "sales.edit OR receive sale payments, plus sale access and transactional balance checks",
+ "discount": "sales.discount; independently checked in POS, sale service and sale model",
+ "backdate": "sales.backdate plus existing date/branch/cashbook validation; no identity bypass",
+ "credit": "create credit sales; create unassigned credit sales additionally required when no customer selected",
+ "refund": "sales.refund retained independently; no sales refund endpoint currently exists and cancellation does not issue a cash refund",
+ "exports": "report access plus reports.export/export pdf/export excel legacy grants"
+ },
+ "administrative_safety": {
+ "super_admin_editing": "roles.manage plus Super Admin identity required to edit or assign Super Admin; identity alone grants no business ability",
+ "last_administrator": "Role saves cannot remove role-management access from every active company administrator",
+ "console_recovery": "php artisan roles:recover-admin COMPANY_ID USER_ID --force; grants only direct roles.manage to an active existing company Super Admin",
+ "data_scope_exceptions": "Super Admin remains company-wide for branch visibility. Explicit platform is_system_owner scope and customer-portal settings access remain; they never authorize sales cancellation.",
+ "seeders": "Initialize new templates/users only; preserve existing grants, assignments and passwords"
+ },
+ "notes": [
+ "Read-only; dynamic permission expressions require manual review.",
+ "print receipt is retained historically but excluded from the role catalog.",
+ "Manufacturing permissions are offered only when the company capability is enabled.",
+ "Super Admin has no blanket Gate bypass. Direct user grants and legacy aliases remain effective independently of role grants."
+ ]
+}

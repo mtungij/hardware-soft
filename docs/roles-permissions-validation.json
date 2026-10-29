@@ -1,0 +1,186 @@
+{
+  "status": "Ready for review; not committed or deployed",
+  "tests": {
+    "database": "Disposable SQLite only; production database was read only for permission preflight",
+    "distinct_passed": 185,
+    "remaining_failed": 0,
+    "per_suite": {
+      "CompanyRolePermissionsTest": 16,
+      "SaleReceiptAuthorizationTest": 13,
+      "PosDiscountWorkflowTest": 11,
+      "PaymentMethodsTest": 21,
+      "CompanySuperAdminAndSaleDateTest": 13,
+      "SalesPermissionAuditTest": 16,
+      "StaffAuthorizationTest": 10,
+      "InventoryLocationSettingsTest": 7,
+      "PurchaseReceiveGoodsReceiptTest": 19,
+      "AccountingPhaseTest": 7,
+      "SalesItemReportTest": 4,
+      "CustomerPortalTest": 5,
+      "CustomerPortalApiTest": 2,
+      "WhatsAppNotificationModuleTest": 41
+    },
+    "browser_checks_passed": 31,
+    "browser_checks_failed": 0,
+    "viewports": [
+      1440,
+      768,
+      390
+    ],
+    "locales": [
+      "en",
+      "sw"
+    ],
+    "initial_failure_and_fix": "13 backdating tests initially failed in setup because the dispensing fixture lacked receiving flags. Corrected the disposable test fixture before invoking the strict resolver; all 13 then passed."
+  },
+  "verification": {
+    "roles_ui": "Matches commit 3ed58ef markup except the four prior wrapping/alignment CSS class adjustments",
+    "pint": "passed",
+    "php_syntax": "passed",
+    "git_diff_check": "passed",
+    "production_writes": false,
+    "production_reseed": false,
+    "committed": false,
+    "deployed": false
+  },
+  "root_causes": [
+    "Super Admin Gate::before returned true for every ability regardless of checkbox selections.",
+    "The legacy edit sales permission implied sales.cancel.",
+    "The Sales Cancel link was restricted by role instead of the canonical permission.",
+    "InventoryService::cancelSale lacked its own actor permission and sale scope checks; cancellation Livewire model state was unlocked.",
+    "SuperAdminSeeder repeatedly synchronized all permissions and reset existing seeded owner data and assignments.",
+    "Backdating and credit-sale role bypasses and company settings role bypasses made some revocations ineffective."
+  ],
+  "remaining_boundaries": [
+    "Four existing direct user sales.cancel grants remain unchanged; role-only revocation does not remove direct grants or grants from other roles.",
+    "Explicit legacy aliases remain documented in roles-permissions-audit.json, except edit sales no longer grants cancellation.",
+    "Super Admin company-wide branch visibility and explicit system-owner scope behavior remain; they do not authorize cancellation without sales.cancel.",
+    "Historical/generated permissions without literal source checks are listed in the audit. Dynamic permission expressions require manual review.",
+    "There is no sales refund endpoint; cancellation preserves payment history and does not issue a cash refund.",
+    "Recovery requires trusted container/host console access; no HTTP recovery endpoint exists."
+  ],
+  "database_migrations_needed": false,
+  "docker_reviewed_deployment": {
+    "before_rollout": [
+      "Review this report and the diff before committing or building a release.",
+      "Back up each tenant database and preserve its existing environment, APP_KEY, database connection, storage mounts and cache configuration.",
+      "Use the existing Docker image rollout process for every tenant application and worker. Set RUN_MIGRATIONS=false for this authorization-only release.",
+      "Run the read-only audit using the candidate code and each tenant configuration; review active_super_admin_access_preflight and direct_cancellation_grants before switching traffic."
+    ],
+    "per_application_container_commands": [
+      "docker exec -w /var/www/html APP_CONTAINER php artisan permissions:audit",
+      "docker exec -w /var/www/html APP_CONTAINER php artisan permission:cache-reset",
+      "docker exec -w /var/www/html APP_CONTAINER php artisan config:cache",
+      "docker exec -w /var/www/html APP_CONTAINER php artisan route:cache",
+      "docker exec -w /var/www/html APP_CONTAINER php artisan view:cache"
+    ],
+    "workers": "Roll out the same reviewed image to each tenant worker and restart its long-running processes through the existing supervisor/orchestrator. Do not leave workers running old code.",
+    "recovery_only_if_required": "docker exec -w /var/www/html APP_CONTAINER php artisan roles:recover-admin COMPANY_ID USER_ID --force",
+    "recovery_effect": "Grants only direct roles.manage to the explicitly identified active existing Super Admin in that company; logs recovery. It does not assign roles or grant sales.cancel or other business permissions.",
+    "post_rollout": "For each tenant, verify login, roles, sales.cancel grant/revoke including a fresh login, an authorized receipt, a purchase and report access, and worker health. Do not run production seeders or migrate:fresh."
+  },
+  "reproduction_commands": [
+    "PAO_DISABLE=1 php artisan test --bootstrap=tests/SafeDatabaseBootstrap.php tests/Feature/CompanyRolePermissionsTest.php tests/Feature/SaleReceiptAuthorizationTest.php --compact",
+    "PAO_DISABLE=1 php artisan test --bootstrap=tests/SafeDatabaseBootstrap.php tests/Feature/PosDiscountWorkflowTest.php tests/Feature/PaymentMethodsTest.php --compact",
+    "PAO_DISABLE=1 php artisan test --bootstrap=tests/SafeDatabaseBootstrap.php tests/Feature/CompanySuperAdminAndSaleDateTest.php tests/Feature/SalesPermissionAuditTest.php --compact",
+    "PAO_DISABLE=1 php artisan test --bootstrap=tests/SafeDatabaseBootstrap.php tests/Feature/StaffAuthorizationTest.php tests/Feature/InventoryLocationSettingsTest.php tests/Feature/PurchaseReceiveGoodsReceiptTest.php tests/Feature/AccountingPhaseTest.php tests/Feature/SalesItemReportTest.php tests/Feature/CustomerPortalTest.php tests/Feature/CustomerPortalApiTest.php tests/Feature/WhatsAppNotificationModuleTest.php --compact",
+    "node tests/Browser/RolesOriginalLayout.mjs",
+    "php vendor/bin/pint --dirty --test",
+    "git diff --check"
+  ],
+  "changed_files": [
+    "app/Console/Commands/AuditPermissions.php",
+    "app/Console/Commands/RecoverRoleAdministration.php",
+    "app/Http/Middleware/EnsureCanUpdateCompanySettings.php",
+    "app/Models/Role.php",
+    "app/Models/User.php",
+    "app/Providers/AppServiceProvider.php",
+    "app/Services/CompanyRoleService.php",
+    "app/Services/InventoryService.php",
+    "app/Support/LegacyPermissionAliases.php",
+    "app/Support/ManufacturingRoleAccess.php",
+    "app/Support/PosSaleDate.php",
+    "app/Support/RolePermissionCatalog.php",
+    "database/seeders/SuperAdminSeeder.php",
+    "docs/roles-permissions-audit.json",
+    "docs/roles-permissions-validation.json",
+    "resources/lang/en/roles.php",
+    "resources/lang/sw/roles.php",
+    "resources/views/livewire/pos/index.blade.php",
+    "resources/views/livewire/roles/index.blade.php",
+    "resources/views/livewire/sales/cancel.blade.php",
+    "resources/views/livewire/sales/index.blade.php",
+    "resources/views/livewire/sales/show.blade.php",
+    "resources/views/livewire/settings/company.blade.php",
+    "resources/views/livewire/settings/customer-portal.blade.php",
+    "resources/views/livewire/settings/quotation-templates.blade.php",
+    "resources/views/livewire/users/edit.blade.php",
+    "tests/Browser/RolesOriginalLayout.mjs",
+    "tests/Browser/fixtures/roles-ui.php",
+    "tests/Feature/CompanyRolePermissionsTest.php",
+    "tests/Feature/CompanySuperAdminAndSaleDateTest.php",
+    "tests/Feature/PaymentMethodsTest.php",
+    "tests/Feature/SaleReceiptAuthorizationTest.php",
+    "tests/Feature/SalesPermissionAuditTest.php",
+    "tests/SafeDatabaseBootstrap.php"
+  ],
+  "change_summary_by_file": {
+    "app/Console/Commands/AuditPermissions.php": "Read-only permission/source audit, actual Super Admin grants, direct cancellation overrides and per-user access preflight.",
+    "app/Console/Commands/RecoverRoleAdministration.php": "Console-only, explicit company/user/force recovery for active existing same-company Super Admin; grants only roles.manage and logs the event.",
+    "app/Http/Middleware/EnsureCanUpdateCompanySettings.php": "Require an explicit company context and company-settings.update rather than administrator-role bypass.",
+    "app/Models/Role.php": "Retain company-specific role resolution and hide manufacturing roles when disabled.",
+    "app/Models/User.php": "Reject foreign-company and disabled manufacturing assignments; prevent ordinary users assigning Super Admin.",
+    "app/Providers/AppServiceProvider.php": "Remove Super Admin blanket Gate bypass; use the documented legacy alias map.",
+    "app/Services/CompanyRoleService.php": "Company-isolated permission synchronization, protected Super Admin editing, manufacturing restrictions and last-administrator safety.",
+    "app/Services/InventoryService.php": "Enforce sale-create, credit and cancellation permissions in services; cancellation rechecks actor identity and sale scope.",
+    "app/Support/LegacyPermissionAliases.php": "Centralize retained legacy any-grant rules; edit sales does not imply sales.cancel.",
+    "app/Support/ManufacturingRoleAccess.php": "Reuse existing company manufacturing capability for specialist-role and permission eligibility.",
+    "app/Support/PosSaleDate.php": "Require sales.backdate without identity-based bypass.",
+    "app/Support/RolePermissionCatalog.php": "Offer registered applicable web permissions, keep production in its module and label sales.cancel explicitly.",
+    "database/seeders/SuperAdminSeeder.php": "Initialize new records only; preserve existing permissions, assignments, passwords and account data.",
+    "docs/roles-permissions-audit.json": "Read-only database/source inventory, literal references, effective rules and existing direct overrides.",
+    "docs/roles-permissions-validation.json": "Verification counts, failure resolution, all changed files and reviewed Docker deployment procedure.",
+    "resources/lang/en/roles.php": "English cancellation and authorization/safety messages.",
+    "resources/lang/sw/roles.php": "Swahili cancellation and authorization/safety messages.",
+    "resources/views/livewire/pos/index.blade.php": "Honor configurable credit-sale permissions.",
+    "resources/views/livewire/roles/index.blade.php": "Preserve original form/table and four prior wrapping fixes; enforce role-management and manufacturing restrictions.",
+    "resources/views/livewire/sales/cancel.blade.php": "Lock the sale model against forged replacement; retain canonical cancellation authorization.",
+    "resources/views/livewire/sales/index.blade.php": "Show POS, payment and Cancel actions according to effective permissions instead of role names.",
+    "resources/views/livewire/sales/show.blade.php": "Show payment action only when the user can receive payments.",
+    "resources/views/livewire/settings/company.blade.php": "Require company context and company-settings.update when mounting and saving.",
+    "resources/views/livewire/settings/customer-portal.blade.php": "Honor company settings permission for tenant administrators while retaining explicit platform-owner exception.",
+    "resources/views/livewire/settings/quotation-templates.blade.php": "Require company context and company-settings.update rather than role bypass.",
+    "resources/views/livewire/users/edit.blade.php": "Protect existing Super Admin accounts from ordinary editors and lock the target user model.",
+    "tests/Browser/RolesOriginalLayout.mjs": "English/Swahili desktop/tablet/mobile layout and original editor browser regression checks.",
+    "tests/Browser/fixtures/roles-ui.php": "Synthetic isolated SQLite browser fixtures with explicitly assigned permissions.",
+    "tests/Feature/CompanyRolePermissionsTest.php": "Role management, tenant isolation, manufacturing, original UI and localization regressions.",
+    "tests/Feature/CompanySuperAdminAndSaleDateTest.php": "Correct stale disposable dispensing-location fixture before running date/scope tests.",
+    "tests/Feature/PaymentMethodsTest.php": "Give synthetic Super Admin explicit permissions instead of relying on the removed bypass.",
+    "tests/Feature/SaleReceiptAuthorizationTest.php": "Set up the Super Admin fixture outside the unauthorized receipt-viewer context.",
+    "tests/Feature/SalesPermissionAuditTest.php": "Grant/revoke, real credential reauthentication, cancellation/stock/payment/audit, service impersonation, cross-scope, seeding and recovery regressions.",
+    "tests/SafeDatabaseBootstrap.php": "Only additive migrations in strictly disposable test databases; avoids migrate:fresh."
+  },
+  "validation_limits": [
+    "The 185 distinct automated regression cases use disposable SQLite databases. The configured local MySQL database was used only for read-only permission and active Super Admin access preflight.",
+    "The Docker release and individual customer containers have not been deployed or tested in production; run the documented preflight separately for every tenant.",
+    "The source inventory detects literal permission checks. Dynamic authorization expressions remain a manual-review boundary."
+  ],
+  "resolved_test_failures": [
+    {
+      "issue": "13 backdating cases failed before assertions because the test dispensing location lacked receive/sell flags.",
+      "fix": "Corrected only the disposable fixture before invoking the strict resolver. All 13 passed."
+    },
+    {
+      "issue": "A new preservation assertion compared an unrefreshed model against database defaults.",
+      "fix": "Capture the refreshed database snapshot. Preservation and grant/revoke cases passed."
+    },
+    {
+      "issue": "The initial foreign-user fixture was created while another tenant was authenticated, so the tenant write scope correctly reassigned its company.",
+      "fix": "Create the foreign fixture without the tenant session and assert its ownership before testing. HTTP, Livewire and service denials passed."
+    },
+    {
+      "issue": "An audit-preflight-only WhatsApp ability used a nonexistent shorthand name.",
+      "fix": "Use the registered whatsapp.view_settings and whatsapp.view_logs names; add a registration assertion. All three active Super Admin users have no missing checked administration abilities."
+    }
+  ]
+}

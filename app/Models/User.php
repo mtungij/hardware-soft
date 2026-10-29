@@ -6,6 +6,7 @@ namespace App\Models;
 use App\Models\Concerns\HasCompany;
 use App\Notifications\HardexResetPassword;
 use App\Support\BranchAccess;
+use App\Support\ManufacturingRoleAccess;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -40,6 +41,16 @@ class User extends Authenticatable
         }
         if (! $resolved || ($resolved->company_id !== null && (int) $resolved->company_id !== (int) $this->company_id)) {
             throw ValidationException::withMessages(['role' => 'Select a role belonging to this company.']);
+        }
+        $actor = auth('web')->user();
+        if ($resolved->name === 'Super Admin' && $actor && ! $actor->hasRole('Super Admin', 'web')) {
+            throw ValidationException::withMessages(['role' => __('roles.super_admin_protected')]);
+        }
+
+        if (! ManufacturingRoleAccess::enabled((int) $this->company_id)
+            && ManufacturingRoleAccess::role($resolved)
+            && (! $this->exists || ! $this->roles()->where('roles.id', $resolved->id)->exists())) {
+            throw ValidationException::withMessages(['role' => __('roles.manufacturing_disabled')]);
         }
 
         return $resolved;

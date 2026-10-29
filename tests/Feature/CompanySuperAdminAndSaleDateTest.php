@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SalesInvoice;
+use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\Supplier;
 use App\Models\User;
@@ -37,6 +38,8 @@ beforeEach(function () {
     $this->company = Company::findOrFail($this->admin->company_id);
     $this->company->update(['timezone' => 'Africa/Dar_es_Salaam']);
     $this->branch = Branch::withoutGlobalScopes()->findOrFail($this->admin->branch_id);
+    StockLocation::query()->where('branch_id', $this->branch->id)->where('code', 'DISPENSING')
+        ->update(['can_receive_stock' => true, 'can_sell' => true, 'is_sellable' => true, 'is_active' => true, 'status' => 'active']);
     $this->location = app(InventoryService::class)->getDispensingLocation($this->branch->id);
     $this->location->update(['can_sell' => true, 'is_sellable' => true, 'is_active' => true, 'status' => 'active']);
     $this->product = Product::withoutGlobalScopes()->where('company_id', $this->company->id)->firstOrFail();

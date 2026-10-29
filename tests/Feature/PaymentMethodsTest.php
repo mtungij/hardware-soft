@@ -40,10 +40,11 @@ beforeEach(function () {
     $this->otherBranch = Branch::create(['company_id' => $this->company->id, 'code' => 'OTHER', 'name' => 'Other', 'status' => 'active']);
     $this->foreignBranch = Branch::create(['company_id' => $this->otherCompany->id, 'code' => 'FOREIGN', 'name' => 'Foreign', 'status' => 'active']);
     Setting::create(['company_id' => $this->company->id, 'company_name' => 'Dynamic payments A', 'enable_warehouse' => false, 'inventory_mode' => 'single_location']);
-    foreach (['payment_methods.view', 'payment_methods.manage', 'sales.view', 'receive sale payments', 'receive customer payments', 'pay suppliers', 'approve customer receipts', 'view expenses', 'create expenses', 'export expenses'] as $name) {
+    foreach (['payment_methods.view', 'payment_methods.manage', 'sales.create', 'create credit sales', 'create unassigned credit sales', 'sales.view', 'receive sale payments', 'receive customer payments', 'pay suppliers', 'approve customer receipts', 'view expenses', 'create expenses', 'export expenses'] as $name) {
         Permission::findOrCreate($name, 'web');
     }
     $role = Role::create(['company_id' => $this->company->id, 'name' => 'Super Admin', 'guard_name' => 'web']);
+    $role->syncPermissions(Permission::where('guard_name', 'web')->get());
     $this->admin = User::factory()->create(['company_id' => $this->company->id, 'branch_id' => $this->branch->id, 'status' => 'active']);
     $this->admin->assignRole($role);
     $this->customer = Customer::create(['company_id' => $this->company->id, 'branch_id' => $this->branch->id, 'name' => 'Payment customer', 'phone' => '255700001111', 'customer_type' => 'credit', 'credit_limit' => 100000, 'status' => 'active']);
