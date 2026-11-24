@@ -7,6 +7,7 @@ use App\Models\StockLocation;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\InventoryService;
+use App\Support\InventorySettings;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Validation\ValidationException;
 use Livewire\Volt\Volt;
@@ -32,6 +33,56 @@ function inventoryTestLocation($test, array $attributes = []): StockLocation
         'can_sell' => true, 'is_sellable' => true, 'is_dispensing_location' => false,
     ]);
 }
+
+test('the direct stock in preference and warehouse mode are saved independently', function (bool $warehouse, bool $directStockIn) {
+    $this->setting->update(['allow_direct_stock_in' => $directStockIn]);
+    $component = Volt::test('settings.inventory')
+        ->assertSet('allow_direct_stock_in', $directStockIn)
+        ->set('enable_warehouse', $warehouse)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($this->setting->refresh()->enable_warehouse)->toBe($warehouse)
+        ->and($this->setting->allow_direct_stock_in)->toBe($directStockIn)
+        ->and(InventorySettings::directStockInAllowed())->toBe($directStockIn);
+
+    $component->set('allow_direct_stock_in', ! $directStockIn)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($this->setting->refresh()->enable_warehouse)->toBe($warehouse)
+        ->and($this->setting->allow_direct_stock_in)->toBe(! $directStockIn)
+        ->and(InventorySettings::directStockInAllowed())->toBe(! $directStockIn);
+})->with([
+    'warehouse on, direct stock in on' => [true, true],
+    'warehouse on, direct stock in off' => [true, false],
+    'warehouse off, direct stock in on' => [false, true],
+    'warehouse off, direct stock in off' => [false, false],
+]);
+
+test('saving direct stock in honors the warehouse flag on older setup records', function () {
+    $this->setting->update(['inventory_mode' => 'multi_location', 'allow_direct_stock_in' => true]);
+
+    Volt::test('settings.inventory')->assertSet('inventory_mode', 'single_location')
+        ->set('allow_direct_stock_in', false)->call('save')->assertHasNoErrors();
+
+    expect($this->setting->refresh()->enable_warehouse)->toBeFalse()
+        ->and($this->setting->allow_direct_stock_in)->toBeFalse();
+});
+
+test('inventory settings opened together preserve changes to the other flag', function (bool $warehouseSavedFirst) {
+    $this->setting->update(['allow_direct_stock_in' => false]);
+    $warehouse = Volt::test('settings.inventory')->set('enable_warehouse', true);
+    $direct = Volt::test('settings.inventory')->set('allow_direct_stock_in', true);
+
+    $first = $warehouseSavedFirst ? $warehouse : $direct;
+    $second = $warehouseSavedFirst ? $direct : $warehouse;
+    $first->call('save')->assertHasNoErrors();
+    $second->call('save')->assertHasNoErrors();
+
+    expect($this->setting->refresh()->enable_warehouse)->toBeTrue()
+        ->and($this->setting->allow_direct_stock_in)->toBeTrue();
+})->with(['warehouse first' => true, 'direct stock in first' => false]);
 
 test('reserved warehouse code on a dispensing location requires explicit resolution and mount is read only', function () {
     $conflict = inventoryTestLocation($this, ['code' => 'MAIN-STORE', 'type' => 'dispensing', 'name' => 'SPARE PARTS 02', 'is_dispensing_location' => true]);
@@ -82,6 +133,18 @@ test('default creation is idempotent and branch isolated', function () {
     $second = $this->inventory->getMainStoreLocation($other->id);
     expect($second->code)->toBe('MAIN-STORE')->and($second->id)->not->toBe($first->id);
     expect(fn () => $this->inventory->getMainStoreLocation($other->id, $first->id))->toThrow(ValidationException::class);
+});
+
+test('branchless staff resolve inventory defaults within their own company', function () {
+    $this->app['auth']->forgetGuards();
+    $otherCompany = Company::create(['company_name' => 'Other company', 'business_type' => 'hardware', 'phone' => '255700000002', 'whatsapp_number' => '255700000002']);
+    $foreignBranch = Branch::create(['company_id' => $otherCompany->id, 'name' => 'Foreign main', 'code' => 'MAIN']);
+    $this->setting->update(['default_branch_id' => $foreignBranch->id]);
+    $user = User::factory()->create(['company_id' => $this->company->id, 'branch_id' => null]);
+
+    $this->actingAs($user);
+
+    expect(InventorySettings::branchId())->toBe($this->branch->id);
 });
 
 test('foreign company locations cannot be selected or resolved by another tenant', function () {

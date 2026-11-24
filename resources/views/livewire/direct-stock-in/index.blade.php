@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Branch;
 use App\Models\Product;
 use App\Models\StockLocation;
 use App\Models\StockMovement;
@@ -13,6 +12,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\WithPagination;
 
+use function Livewire\Volt\boot;
 use function Livewire\Volt\layout;
 use function Livewire\Volt\mount;
 use function Livewire\Volt\rules;
@@ -23,7 +23,7 @@ layout('layouts.app');
 uses([WithPagination::class]);
 
 state([
-    'branch_id' => (\App\Support\BranchAccess::restricted() ? (string) auth()->user()->branch_id : ''),
+    'branch_id' => '',
     'product_id' => '',
     'stock_in_unit_options' => [],
     'stock_in_lines' => [],
@@ -37,23 +37,29 @@ state([
     'idempotency_key' => '',
 ]);
 
-mount(function (InventoryService $inventory) {
-    abort_unless(auth()->user()->can('stock.direct_stock_in'), 403);
-    abort_unless(InventorySettings::directStockInAllowed(), 403);
+boot(function () {
+    abort_unless(auth()->user()?->can('stock.direct_stock_in') && InventorySettings::directStockInAllowed(), 403);
+});
 
+mount(function () {
     $this->branch_id = (string) InventorySettings::branchId();
-    $this->stock_location_id = (string) InventorySettings::receivingLocation((int) $this->branch_id)->id;
+    abort_unless(auth()->user()->canAccessBranch((int) $this->branch_id), 403);
+
+    $location = InventorySettings::receivingLocation((int) $this->branch_id);
+    if (AuthorizationScope::canAccessStockLocation(auth()->user(), $location->id, 'can_receive')) {
+        $this->stock_location_id = (string) $location->id;
+    }
     $this->movement_date = now()->toDateString();
     $this->idempotency_key = (string) Str::uuid();
 });
 
 rules(fn () => [
-    'branch_id' => ['required', 'exists:branches,id'],
-    'product_id' => ['required', 'exists:products,id'],
+    'branch_id' => ['required', 'integer'],
+    'product_id' => ['required', Rule::exists('products', 'id')->where('company_id', auth()->user()->company_id)],
     'quantity' => ['nullable', 'numeric', 'gt:0'],
     'cost_price' => ['required', 'numeric', 'min:0'],
     'selling_price' => ['nullable', 'numeric', 'min:0'],
-    'stock_location_id' => ['required', Rule::exists('stock_locations', 'id')],
+    ...(InventorySettings::warehouseEnabled() ? ['stock_location_id' => ['required', 'integer']] : []),
     'reason' => ['required', Rule::in(['Opening Stock', 'Direct Purchase', 'Manual Entry', 'Stock Correction', 'Other'])],
     'notes' => ['nullable', 'string', 'max:1000'],
     'movement_date' => ['required', 'date'],
@@ -90,7 +96,7 @@ $updatedSellingPrice = function ($value) {
 };
 
 $selectProduct = function (string $productId) {
-    $product = $productId ? Product::query()->with('unit')->find($productId) : null;
+    $product = $productId ? Product::query()->where('company_id', auth()->user()->company_id)->with('unit')->find($productId) : null;
 
     $this->product_id = $product ? (string) $product->id : '';
     $conversions = $product ? app(ProductUnitConversionService::class)->purchasable($product) : collect();
@@ -138,9 +144,6 @@ $selectProduct = function (string $productId) {
 };
 
 $save = function (InventoryService $inventory) {
-    abort_unless(auth()->user()->can('stock.direct_stock_in'), 403);
-    abort_unless(InventorySettings::directStockInAllowed(), 403);
-
     $this->resetErrorBag();
 
     try {
@@ -179,14 +182,19 @@ $save = function (InventoryService $inventory) {
         unset($line);
     }
 
-    if (! InventorySettings::warehouseEnabled()) {
-        $data['stock_location_id'] = InventorySettings::receivingLocation((int) $data['branch_id'])->id;
-    }
+    $branchId = (int) $data['branch_id'];
+    $user = auth()->user();
+    abort_unless($user->canAccessBranch($branchId), 403);
 
-    abort_unless(AuthorizationScope::canAccessStockLocation(auth()->user(), (int) $data['stock_location_id'], 'can_receive'), 403);
+    $warehouse = InventorySettings::warehouseEnabled();
+    $locationId = $warehouse
+        ? (int) $data['stock_location_id']
+        : InventorySettings::receivingLocation($branchId)->id;
+    abort_unless(AuthorizationScope::canAccessStockLocation($user, $locationId, 'can_receive'), 403);
 
     try {
-        $inventory->directStockInBatch($data, auth()->id());
+        $data['stock_location_id'] = $locationId;
+        $inventory->directStockInBatch($data, $user->id, warehouseDestination: $warehouse);
     } catch (ValidationException $exception) {
         session()->flash('error', $exception->validator->errors()->first() ?: 'Direct stock in could not be saved.');
 
@@ -203,7 +211,7 @@ $save = function (InventoryService $inventory) {
     $this->reset(['product_id', 'stock_in_unit_options', 'stock_in_lines', 'quantity', 'cost_price', 'selling_price', 'notes']);
     $this->reason = 'Opening Stock';
     $this->movement_date = now()->toDateString();
-    $this->stock_location_id = (string) InventorySettings::receivingLocation((int) $this->branch_id)->id;
+    $this->stock_location_id = (string) $locationId;
     $this->idempotency_key = (string) Str::uuid();
     $this->resetPage();
 
@@ -217,7 +225,7 @@ $save = function (InventoryService $inventory) {
 
     @php
         $canUpdateSellingPrice = $this->canUpdateSellingPrice();
-        $selectedProduct = filled($product_id) ? Product::query()->with('unit')->find($product_id) : null;
+        $selectedProduct = filled($product_id) ? Product::query()->where('company_id', auth()->user()->company_id)->with('unit')->find($product_id) : null;
         $baseUnitLabel = $selectedProduct?->unit?->name ?: $selectedProduct?->unit?->short_name ?: 'base units';
         $normalizedStockTotal = collect($stock_in_lines)->sum(function (array $line): float {
             $quantity = is_numeric($line['quantity'] ?? null) ? (float) $line['quantity'] : 0;
@@ -281,7 +289,7 @@ $save = function (InventoryService $inventory) {
                         class="hidden"
                     >
                         <option value="" @selected(blank($product_id))>{{ __('application.select_product_596d90e5') }}</option>
-                        @foreach (Product::with('size')->where('status', 'active')->orderBy('name')->get() as $product)
+                        @foreach (Product::with('size')->where('company_id', auth()->user()->company_id)->where('status', 'active')->orderBy('name')->get() as $product)
                             <option value="{{ $product->id }}" @selected((string) $product_id === (string) $product->id)>{{ $product->displayNameWithSize() }} / {{ $product->sku }}</option>
                         @endforeach
                     </select>
@@ -368,7 +376,8 @@ $save = function (InventoryService $inventory) {
                 @if (InventorySettings::warehouseEnabled())
                     <label class="block text-sm font-bold">{{ __('application.stock_location_50e3c4fe') }}
                         <select wire:model="stock_location_id" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-700 dark:bg-navy-950">
-                            @foreach (StockLocation::whereIn('id', AuthorizationScope::stockLocationIds(auth()->user(), 'can_receive'))->where('branch_id', $branch_id)->where('status', 'active')->orderBy('type')->get() as $location)
+                            <option value="">{{ __('application.select_location_a33e96b2') }}</option>
+                            @foreach (StockLocation::warehouseReceiving()->whereIn('id', AuthorizationScope::stockLocationIds(auth()->user(), 'can_receive'))->where('branch_id', $branch_id)->orderBy('name')->get() as $location)
                                 <option value="{{ $location->id }}">{{ $location->name }}</option>
                             @endforeach
                         </select>
@@ -398,6 +407,7 @@ $save = function (InventoryService $inventory) {
             @php
                 $recentEntries = StockMovement::query()
                     ->with(['product', 'stockLocation', 'creator'])
+                    ->where('company_id', auth()->user()->company_id)
                     ->where('movement_type', 'direct_stock_in')
                     ->latest('id')
                     ->limit(120)

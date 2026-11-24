@@ -67,6 +67,14 @@ class StockLocation extends Model
         return $query->where('is_sellable', true)->where('can_sell', true);
     }
 
+    public function scopeWarehouseReceiving(Builder $query): Builder
+    {
+        return $query->where('status', 'active')->where('is_active', true)
+            ->where('can_receive_stock', true)
+            ->whereIn('type', ['store', 'warehouse', 'branch_store'])
+            ->where('is_dispensing_location', false);
+    }
+
     public function scopeNonSellable(Builder $query): Builder
     {
         return $query->where('is_sellable', false);

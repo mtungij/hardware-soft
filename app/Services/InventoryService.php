@@ -55,14 +55,11 @@ class InventoryService
             // Serialize default creation against other settings saves for this branch.
             $branch = Branch::query()->whereKey($branchId)->lockForUpdate()->firstOrFail();
             $locations = StockLocation::query()->where('company_id', $branch->company_id)->where('branch_id', $branchId);
-            $valid = (clone $locations)->where('status', 'active')->where('is_active', true)
-                ->where('can_receive_stock', true);
-            if ($warehouse) {
-                $valid->whereIn('type', ['store', 'warehouse', 'branch_store'])->where('is_dispensing_location', false);
-            } else {
-                $valid->where(fn ($query) => $query->where('type', 'dispensing')->orWhere('is_dispensing_location', true))
+            $valid = $warehouse
+                ? (clone $locations)->warehouseReceiving()
+                : (clone $locations)->where('status', 'active')->where('is_active', true)->where('can_receive_stock', true)
+                    ->where(fn ($query) => $query->where('type', 'dispensing')->orWhere('is_dispensing_location', true))
                     ->where('can_sell', true)->where('is_sellable', true);
-            }
 
             if ($locationId !== null) {
                 return $this->selectInventoryLocation($branchId, $warehouse, $locationId);
@@ -109,11 +106,9 @@ class InventoryService
     {
         $branch = Branch::query()->findOrFail($branchId);
         $location = StockLocation::query()->where('company_id', $branch->company_id)
-            ->where('branch_id', $branchId)->whereKey($locationId)->first();
-        $compatible = $location && $location->isActive() && $location->can_receive_stock
-            && ($warehouse
-                ? in_array($location->type, ['store', 'warehouse', 'branch_store'], true) && ! $location->is_dispensing_location
-                : ($location->type === 'dispensing' || $location->is_dispensing_location) && $location->can_sell && $location->is_sellable);
+            ->where('branch_id', $branchId)->when($warehouse, fn ($query) => $query->warehouseReceiving())->find($locationId);
+        $compatible = $location && ($warehouse || ($location->isActive() && $location->can_receive_stock
+            && ($location->type === 'dispensing' || $location->is_dispensing_location) && $location->can_sell && $location->is_sellable));
         if (! $compatible) {
             throw ValidationException::withMessages(['default_stock_location_id' => 'Select an active, compatible receiving location in this company and branch.']);
         }
@@ -309,12 +304,25 @@ class InventoryService
     /**
      * @return EloquentCollection<int, StockMovement>
      */
-    public function directStockInBatch(array $data, int $createdBy): EloquentCollection
+    public function directStockInBatch(array $data, int $createdBy, bool $warehouseDestination = false): EloquentCollection
     {
-        return DB::transaction(function () use ($data, $createdBy) {
+        return DB::transaction(function () use ($data, $createdBy, $warehouseDestination) {
             $product = Product::query()->with(['unit.measurementType'])->whereKey($data['product_id'])->lockForUpdate()->firstOrFail();
             $location = StockLocation::query()->whereKey($data['stock_location_id'])->lockForUpdate()->firstOrFail();
             $companyId = (int) $product->company_id;
+            $branchId = (int) $data['branch_id'];
+            if ($warehouseDestination) {
+                $this->selectInventoryLocation($branchId, true, $location->id);
+            }
+            if ((int) $location->company_id !== $companyId
+                || ($location->branch_id !== null && (int) $location->branch_id !== $branchId)
+                || ! Branch::query()->where('company_id', $companyId)->whereKey($branchId)->exists()) {
+                throw ValidationException::withMessages(['stock_location_id' => __('application.the_record_must_belong_to_an_accessible_company_branch_6204bf3a')]);
+            }
+            if ($product->branch_id !== null && (int) $product->branch_id !== $branchId) {
+                throw ValidationException::withMessages(['product_id' => __('application.the_selected_record_is_outside_your_accessible_company_branch_7d6f167c')]);
+            }
+
             $idempotencyKey = filled($data['idempotency_key'] ?? null) ? (string) $data['idempotency_key'] : null;
 
             if ($idempotencyKey) {
@@ -325,6 +333,7 @@ class InventoryService
 
                 if ($existing) {
                     if ($existing->movement_type !== 'direct_stock_in'
+                        || (int) $existing->branch_id !== $branchId
                         || (int) $existing->product_id !== (int) $product->id
                         || (int) $existing->stock_location_id !== (int) $location->id) {
                         throw ValidationException::withMessages(['idempotency_key' => __('application.this_submission_key_has_already_been_used_for_another_stock_entry_ba5f7906')]);
@@ -470,7 +479,7 @@ class InventoryService
 
                 $movements->push(StockMovement::create([
                     'company_id' => $companyId,
-                    'branch_id' => (int) $data['branch_id'],
+                    'branch_id' => $branchId,
                     'product_id' => $product->id,
                     'product_unit_conversion_id' => $conversion?->id,
                     'transaction_unit_id' => $transactionUnit?->id,

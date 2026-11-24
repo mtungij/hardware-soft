@@ -11,6 +11,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\InventoryService;
 use App\Support\NumberFormatter;
+use App\Support\UiText;
 use Database\Seeders\AutoPartsCategorySeeder;
 use Database\Seeders\AutoPartsProductSeeder;
 use Database\Seeders\AutoPartsUnitSeeder;
@@ -120,6 +121,130 @@ test('direct inventory mode hides warehouse only workflows and keeps direct sale
     $this->actingAs($admin)->get('/store-stock')->assertForbidden();
     $this->actingAs($admin)->get('/stock-transfers')->assertForbidden();
     $this->actingAs($admin)->get('/reports/purchases')->assertOk();
+});
+
+test('direct stock in navigation, dashboard and page access follow the preference in both modes', function (bool $warehouse) {
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    $warehouse ? enableWarehouseInventoryModeForBranch($admin->branch_id) : enableDirectInventoryModeForBranch($admin->branch_id);
+    $setting = Setting::where('company_id', $admin->company_id)->firstOrFail();
+    $setting->update(['allow_direct_stock_in' => true]);
+    $menu = 'href="'.route('direct-stock-in.index').'"';
+
+    $this->actingAs($admin)->get('/direct-stock-in')->assertOk();
+    $this->get('/categories')->assertOk()->assertSeeHtml($menu);
+    $this->get('/dashboard')->assertOk()->assertSee(UiText::translate('Direct Stock In Today'));
+
+    $entry = Volt::test('direct-stock-in.index');
+    $setting->update(['allow_direct_stock_in' => false]);
+    $entry->call('save')->assertForbidden();
+    $this->get('/direct-stock-in')->assertForbidden();
+    $this->get('/categories')->assertOk()->assertDontSeeHtml($menu);
+    $this->get('/dashboard')->assertOk()->assertDontSee(UiText::translate('Direct Stock In Today'));
+})->with(['warehouse mode' => true, 'direct mode' => false]);
+
+test('an enabled direct stock in page still requires the stock permission', function () {
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    enableWarehouseInventoryModeForBranch($admin->branch_id);
+    Setting::where('company_id', $admin->company_id)->update(['allow_direct_stock_in' => true]);
+    $cashier = User::factory()->create(['company_id' => $admin->company_id, 'branch_id' => $admin->branch_id]);
+    $cashier->assignRole('Cashier');
+
+    $this->actingAs($cashier)->get('/direct-stock-in')->assertForbidden();
+    $this->get('/dashboard')->assertOk()
+        ->assertDontSeeHtml('href="'.route('direct-stock-in.index').'"')
+        ->assertDontSee(UiText::translate('Direct Stock In Today'));
+});
+
+test('direct stock in posts to the receiving location for the active mode', function (bool $warehouse, bool $alternate = false) {
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    [$store, $dispensing] = enableWarehouseInventoryModeForBranch($admin->branch_id);
+    if (! $warehouse) {
+        enableDirectInventoryModeForBranch($admin->branch_id);
+    }
+    Setting::where('company_id', $admin->company_id)->update(['allow_direct_stock_in' => true]);
+
+    $this->actingAs($admin);
+    $product = Product::where('company_id', $admin->company_id)->firstOrFail();
+    $default = $warehouse ? $store : $dispensing;
+    $target = $alternate ? StockLocation::create([
+        'company_id' => $admin->company_id, 'branch_id' => $admin->branch_id,
+        'code' => 'SECOND-WAREHOUSE', 'name' => 'Second warehouse', 'type' => 'warehouse',
+        'status' => 'active', 'is_active' => true, 'can_receive_stock' => true, 'is_dispensing_location' => false,
+    ]) : $default;
+    $other = $warehouse ? $dispensing : $store;
+    $inventory = app(InventoryService::class);
+    $targetStock = $inventory->getProductStock($product->id, $target->id, $admin->branch_id);
+    $otherStock = $inventory->getProductStock($product->id, $other->id, $admin->branch_id);
+    $locationCount = StockLocation::where('company_id', $admin->company_id)->count();
+
+    Volt::test('direct-stock-in.index')
+        ->assertSet('stock_location_id', (string) $default->id)
+        ->set('stock_location_id', (string) ($warehouse ? $target->id : $other->id))
+        ->set('product_id', (string) $product->id)
+        ->set('quantity', '2')
+        ->set('cost_price', '1000')
+        ->set('reason', 'Direct Purchase')
+        ->set('notes', 'Mode destination check')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSee('Direct stock in saved.');
+
+    $this->assertDatabaseHas('stock_movements', [
+        'company_id' => $admin->company_id,
+        'branch_id' => $admin->branch_id,
+        'stock_location_id' => $target->id,
+        'product_id' => $product->id,
+        'movement_type' => 'direct_stock_in',
+        'quantity' => 2,
+        'quantity_in' => 2,
+        'quantity_out' => 0,
+        'unit_cost' => 1000,
+        'created_by' => $admin->id,
+        'notes' => 'Direct Purchase - Mode destination check',
+    ]);
+    expect($inventory->getProductStock($product->id, $target->id, $admin->branch_id))->toBe($targetStock + 2)
+        ->and($inventory->getProductStock($product->id, $other->id, $admin->branch_id))->toBe($otherStock)
+        ->and(StockLocation::where('company_id', $admin->company_id)->count())->toBe($locationCount);
+})->with(['warehouse mode' => [true], 'alternate warehouse' => [true, true], 'direct mode' => [false]]);
+
+test('warehouse direct stock in rejects dispensing, mismatched branches and foreign company locations', function () {
+    $admin = User::where('email', 'admin@buildmart.test')->firstOrFail();
+    [$store, $dispensing] = enableWarehouseInventoryModeForBranch($admin->branch_id);
+    Setting::where('company_id', $admin->company_id)->update(['allow_direct_stock_in' => true]);
+    $otherCompany = Company::create([
+        'company_name' => 'Other stock company', 'business_type' => 'hardware',
+        'phone' => '255700000002', 'whatsapp_number' => '255700000002',
+    ]);
+    $otherBranch = Branch::create(['company_id' => $admin->company_id, 'name' => 'Second Store', 'code' => 'DSI-2']);
+    $foreignBranch = Branch::create(['company_id' => $otherCompany->id, 'name' => 'Foreign Store', 'code' => 'DSI-FOREIGN']);
+    $otherStore = app(InventoryService::class)->getMainStoreLocation($otherBranch->id);
+    $foreignStore = app(InventoryService::class)->getMainStoreLocation($foreignBranch->id);
+    $before = StockMovement::count();
+    $locationCount = StockLocation::count();
+
+    $this->actingAs($admin);
+    $product = Product::where('company_id', $admin->company_id)->firstOrFail();
+    $entry = fn () => Volt::test('direct-stock-in.index')
+        ->set('product_id', (string) $product->id)
+        ->set('quantity', '2')
+        ->set('cost_price', '1000');
+
+    $entry()->set('stock_location_id', (string) $dispensing->id)->call('save')->assertHasErrors('default_stock_location_id');
+    $entry()->set('stock_location_id', (string) $otherStore->id)->call('save')->assertHasErrors('default_stock_location_id');
+    $entry()->set('stock_location_id', (string) $foreignStore->id)->call('save')->assertForbidden();
+    $entry()->set('branch_id', (string) $foreignBranch->id)->call('save')->assertForbidden();
+    $entry()->set('quantity', '-2')->call('save')->assertHasErrors('quantity');
+
+    $storeKeeper = User::factory()->create(['company_id' => $admin->company_id, 'branch_id' => $admin->branch_id]);
+    $storeKeeper->assignRole('Store Keeper');
+    $storeKeeper->stockLocations()->attach($store->id, [
+        'company_id' => $admin->company_id, 'branch_id' => $admin->branch_id, 'can_receive' => true,
+    ]);
+    $this->actingAs($storeKeeper);
+    $entry()->set('branch_id', (string) $otherBranch->id)->call('save')->assertForbidden();
+
+    expect(StockMovement::withoutGlobalScopes()->count())->toBe($before)
+        ->and(StockLocation::withoutGlobalScopes()->whereNull('deleted_at')->count())->toBe($locationCount);
 });
 
 test('pos does not require a preferred location in multi location mode', function () {

@@ -60,7 +60,7 @@
                 'production' => ['M4 20V10l5 3V9l5 3V4h6v16H4Z', 'M8 20v-3', 'M13 20v-3', 'M18 20v-3'],
             ];
             $warehouseEnabled = \App\Support\InventorySettings::warehouseEnabled();
-            $directStockInAllowed = \App\Support\InventorySettings::directStockInAllowed();
+            $directStockInAllowed = \App\Support\InventorySettings::directStockInAllowed() && auth()->user()?->can('stock.direct_stock_in');
             $productionVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
                 && auth()->user()?->can('production.view');
             $productFamiliesVisible = \App\Support\CompanyFeatures::manufacturingEnabled()
@@ -102,7 +102,7 @@
                 ['label' => __('messages.staff.nav.warehouse'), 'icon' => 'warehouse', 'items' => [
                     ['label' => __('messages.staff.nav.store_stock'), 'route' => 'store-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier'], 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.dispensing_stock'), 'route' => 'dispensing-stock.index', 'icon' => 'stock', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Cashier']],
-                    ['label' => __('messages.staff.nav.direct_stock_in'), 'route' => 'direct-stock-in.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper'], 'show' => $directStockInAllowed && ! $warehouseEnabled],
+                    ['label' => __('messages.staff.nav.direct_stock_in'), 'route' => 'direct-stock-in.index', 'icon' => 'adjust', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper'], 'show' => $directStockInAllowed],
                     ['label' => 'Opening Stock', 'route' => 'opening-stock.index', 'icon' => 'stock', 'permission' => 'opening_stock.view', 'show' => $warehouseEnabled],
                     ['label' => __('messages.staff.nav.stock_transfers'), 'route' => 'stock-transfers.index', 'icon' => 'transfer', 'roles' => ['Super Admin', 'Admin', 'Manager', 'Store Keeper', 'Accountant'], 'show' => $warehouseEnabled],
                     ['label' => 'Internal Sales', 'route' => 'internal-sales.index', 'icon' => 'transfer', 'permission' => 'internal_sales.view'],

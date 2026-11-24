@@ -540,7 +540,7 @@ $complete = function () {
             'language' => $company->language,
             'default_branch_id' => $branch->id,
             'enable_warehouse' => $enableWarehouse,
-            'allow_direct_stock_in' => ! $enableWarehouse,
+            'inventory_mode' => $enableWarehouse ? 'multi_location' : 'single_location',
             'allow_sales_from_store' => false,
             'default_stock_location_id' => $enableWarehouse ? $mainStoreLocation?->id : $dispensingLocation->id,
             'default_raw_material_location_id' => $productionLocations->get('RAW-MATERIALS')?->id,
@@ -549,6 +549,10 @@ $complete = function () {
             'theme_color' => '#06b6d4',
             'system_initialized' => true,
         ];
+
+        if (! $setting->system_initialized) {
+            $settingData['allow_direct_stock_in'] = ! $enableWarehouse;
+        }
 
         if ($settingHasCompanyId) {
             $settingData['company_id'] = $company->id;

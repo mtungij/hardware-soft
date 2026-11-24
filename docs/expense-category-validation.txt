@@ -1,0 +1,113 @@
+HARDEX expense-category tenant isolation validation — 2026-10-29
+
+Root cause
+The Volt editor used Rule::unique('expense_categories', 'name') without company_id.
+The original migration also created a global name unique index. The subsequent
+multi-company migration did not replace this particular index. Eloquent company
+scopes do not apply to the validator's raw table queries or database indexes.
+HasCompany assigns ordinary staff ownership correctly. ExpenseCategorySeeder
+already includes company_id in firstOrCreate; it needed no change.
+
+Read-only inspection
+The local hardex_local database uses InnoDB, MySQL 8.4, utf8mb4_unicode_ci for
+name, and expense_categories_name_unique(name). It contains 0 categories and
+0 expenses; duplicate tenant/name groups and null-owner categories both number 0.
+No migration or data writes were performed on that database. Historical data
+preservation was instead verified using deliberately populated disposable tables.
+
+Changed files
+app/Models/ExpenseCategory.php
+  Squish whitespace on explicitly assigned names without rewriting stored rows.
+resources/views/livewire/expense-categories/index.blade.php
+  Resolve company from authenticated staff; scope listing, edit, validation and
+  deletion explicitly, including system owners. Lock editingId, verify ownership
+  before ignoring it, recheck authorization and ownership on hydration. Compare
+  names case-insensitively with consistent whitespace handling. Convert database
+  uniqueness races to field errors. Block deletion when any branch references
+  the category. Existing route role policy remains unchanged.
+database/migrations/2026_10_29_000001_scope_expense_category_names_to_company.php
+  Preflight duplicate company/name combinations. Add composite uniqueness before
+  dropping any global name-only unique index, discovered by columns rather than
+  assuming its name. Reuse an existing composite index. Retry safely following
+  partially applied DDL. No updates/deletes or foreign-key disabling. Forward-only;
+  down intentionally retains the safe constraint.
+tests/Feature/ExpenseCategoryIsolationTest.php
+  Company duplicates, normalized duplicates, unchanged and conflicting edits,
+  scoped listing/search, foreign action denial including system owners, locked ID,
+  forged company, revoked access, guests, tenant switches, other-branch expense
+  references, form CRUD/status, malformed names and independent database constraint.
+tests/Unit/ExpenseCategoryMigrationTest.php
+  Global/custom index, existing composite and absent-unique scenarios; retry;
+  complete fixture-row snapshots including linked expenses; safe duplicate refusal;
+  actual concurrent MySQL processes creating exactly one category.
+docs/expense-category-validation.txt
+  This report and rollout procedure.
+
+The previous Roles & Permissions work is preserved at baseline commit 85cfa3c.
+No roles, assignments, permissions, production records or unrelated pages changed.
+Expense entry already validates category ownership and explicitly scopes its
+selector; the unchanged ExpenseAuthorizationTest covers forged category assignment,
+company/branch isolation and financial history. No expense-entry code change needed.
+The original category HTML, Tailwind classes, labels and localization keys compare
+identically to Git HEAD after excluding the embedded server-side query block.
+HTTP rendering and Livewire form actions were tested; no new visual browser audit.
+
+Validation
+Both engines use tests/SafeDatabaseBootstrap.php: additive migrations only, never
+migrate:fresh. SQLite is :memory:. MySQL 8.4.11 uses a newly created private database
+hardex_expense_validation at /tmp/hardex-mysql-validation/validation.sock.
+No existing application or production database was migrated, reset or reseeded.
+
+Suites: ExpenseCategoryIsolationTest, ExpenseAuthorizationTest,
+ExpenseRoleDefaultsTest, ExpenseCategoryMigrationTest.
+Final distinct cases, counting overlapping reruns once:
+  SQLite: 37 passed, 0 failed, 1 MySQL-only concurrency case skipped.
+  MySQL 8.4.11: 38 passed, 0 failed; actual concurrency case passed.
+Run evidence:
+  SQLite full run: 34 passed, 1 skipped, 224 assertions.
+  SQLite final category/migration rerun: 22 passed, 1 skipped, 88 assertions.
+  MySQL full run: 35 passed, 243 assertions.
+  MySQL final category/migration rerun: 23 passed, 107 assertions.
+The final reruns include three additional malformed-name cases and the final code.
+Pint --dirty --test, syntax checks on all five changed/new PHP files and
+ git diff --check passed. Original HTML/class/localization comparison passed.
+Four initial test-harness failures were fixed: missing company Setting fixture,
+foreign-record tests expecting a response instead of ModelNotFoundException (two
+cases), and a guest HTTP redirect checked after a rejected Volt mount had replaced
+the test redirector. Guests are now tested in their own fresh test context. All
+failed cases passed on rerun; no unresolved automated-test failures remain.
+
+Rollout after review — repeat for EVERY independent company database/container
+1. Inventory actual web and worker container names, image versions and database
+   targets. Confirm the company_id migration is already applied. Take and verify
+   a restorable database backup. Validate this image on a disposable staging copy
+   of each distinct schema before approving production work.
+2. Read-only preflight in each database:
+     SHOW INDEX FROM expense_categories;
+     SHOW FULL COLUMNS FROM expense_categories;
+     SELECT company_id, name, COUNT(*) AS occurrences
+       FROM expense_categories WHERE company_id IS NOT NULL
+       GROUP BY company_id, name HAVING COUNT(*) > 1;
+     SELECT COUNT(*) FROM expense_categories WHERE company_id IS NULL;
+   Record category/expense counts and snapshots/checksums for comparison. Review
+   duplicate or unowned historical rows manually; never delete or auto-reassign.
+   Confirm name collation is case-insensitive as in the validated MySQL schema.
+3. Coordinate a maintenance window for this database's web and worker processes.
+   Install the reviewed application image consistently; preserve environment and
+   persistent storage. Disable automatic startup migrations (RUN_MIGRATIONS=false).
+   Run this reviewed forward migration ONCE per database from an app container:
+     docker exec -w /var/www/html APP_CONTAINER php artisan migrate --path=database/migrations/2026_10_29_000001_scope_expense_category_names_to_company.php --force
+   Do not run migrate:fresh, rollback, seeders or unrelated pending migrations.
+   The index DDL can acquire metadata locks; choose the maintenance window accordingly.
+4. Rebuild the application's usual config/route/view caches and restart workers
+   using the deployment's established procedure. Compare category and expense
+   snapshots, IDs, references and counts; verify composite uniqueness and absence
+   of global name-only uniqueness. Smoke-test create/edit/search and blocked foreign
+   actions. Company A and Company B must both accept Transport independently.
+5. Restore traffic only after verification. Record success separately for each
+   database; one successful container does not migrate other company databases.
+   If preflight fails, stop and review; no record cleanup is automatic. Rollback
+   needs a reviewed application/backup strategy: do not restore global uniqueness
+   after legitimate same-name categories have been added across companies.
+
+No commit, production migration, deployment or customer-container operation was run.

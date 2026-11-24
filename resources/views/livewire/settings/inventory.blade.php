@@ -29,17 +29,17 @@ state([
     'has_stock_movements' => false,
 ]);
 
-state(['setting' => null])->locked();
+state(['setting' => null, 'saved_warehouse' => null, 'saved_direct_stock_in' => null])->locked();
 
 mount(function () {
     abort_unless(auth()->user()?->company_id && auth()->user()->can('settings.manage'), 403);
     $this->setting = InventorySettings::current();
     $this->default_receipt_width = $this->setting->default_receipt_width;
     $this->show_receipt_after_sale = (bool) $this->setting->show_receipt_after_sale;
-    $this->enable_warehouse = (bool) $this->setting->enable_warehouse;
-    $this->allow_direct_stock_in = (bool) $this->setting->allow_direct_stock_in;
+    $this->enable_warehouse = $this->saved_warehouse = $this->setting->enable_warehouse;
+    $this->allow_direct_stock_in = $this->saved_direct_stock_in = $this->setting->allow_direct_stock_in;
     $this->allow_sales_from_store = (bool) $this->setting->allow_sales_from_store;
-    $this->inventory_mode = $this->setting->inventory_mode ?: ((bool) $this->setting->enable_warehouse ? 'multi_location' : 'single_location');
+    $this->inventory_mode = $this->enable_warehouse ? 'multi_location' : 'single_location';
     $this->allow_multiple_dispensing_locations = (bool) $this->setting->allow_multiple_dispensing_locations;
     $this->allow_credit_sale_without_customer = (bool) ($this->setting->allow_credit_sale_without_customer ?? true);
     $this->default_stock_location_id = (string) $this->setting->default_stock_location_id;
@@ -74,6 +74,16 @@ $save = function () {
         $branch = \App\Models\Branch::query()->whereKey(InventorySettings::branchId())->lockForUpdate()->firstOrFail();
         $setting = Setting::query()->where('company_id', $branch->company_id)->whereKey($this->setting->id)->lockForUpdate()->firstOrFail();
         $validated['enable_warehouse'] = $validated['inventory_mode'] === 'multi_location';
+        // A form that left a flag untouched should preserve updates from another session.
+        if ($validated['enable_warehouse'] === $this->saved_warehouse && $setting->enable_warehouse !== $this->saved_warehouse) {
+            $validated['enable_warehouse'] = $setting->enable_warehouse;
+            $validated['inventory_mode'] = $setting->enable_warehouse ? 'multi_location' : 'single_location';
+            $validated['default_stock_location_id'] = $setting->default_stock_location_id;
+            $validated['allow_sales_from_store'] = $setting->allow_sales_from_store;
+        }
+        if ((bool) $validated['allow_direct_stock_in'] === $this->saved_direct_stock_in) {
+            unset($validated['allow_direct_stock_in']);
+        }
         if (StockMovement::withoutGlobalScope(\App\Models\Scopes\BranchScope::class)->where('company_id', $branch->company_id)->exists()
             && (bool) $validated['enable_warehouse'] !== (bool) $setting->enable_warehouse) {
             throw ValidationException::withMessages(['enable_warehouse' => __('application.you_cannot_change_stock_mode_after_stock_movements_have_started_please_cont_bb2bae8a')]);
@@ -85,7 +95,6 @@ $save = function () {
             ? $inventory->getMainStoreLocation($branch->id, $selected)
             : $inventory->getDispensingLocation($branch->id, $selected);
         $validated['default_stock_location_id'] = $location->id;
-        $validated['allow_direct_stock_in'] = ! $validated['enable_warehouse'];
         if (! $validated['enable_warehouse']) {
             $validated['allow_sales_from_store'] = false;
         }
@@ -94,7 +103,8 @@ $save = function () {
     });
     $this->default_stock_location_id = (string) $this->setting->refresh()->default_stock_location_id;
     $this->allow_sales_from_store = (bool) $this->setting->allow_sales_from_store;
-    $this->allow_direct_stock_in = (bool) $this->setting->allow_direct_stock_in;
+    $this->enable_warehouse = $this->saved_warehouse = $this->setting->enable_warehouse;
+    $this->allow_direct_stock_in = $this->saved_direct_stock_in = $this->setting->allow_direct_stock_in;
     $this->inventory_mode = $this->setting->inventory_mode;
     $this->allow_multiple_dispensing_locations = (bool) $this->setting->allow_multiple_dispensing_locations;
     $this->allow_credit_sale_without_customer = (bool) ($this->setting->allow_credit_sale_without_customer ?? true);
@@ -215,9 +225,9 @@ $saveReceiptSettings = function () {
             <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
                 <span>
                     <span class="block text-sm font-black">{{ __('application.allow_direct_stock_in_d3327bea') }}</span>
-                    <span class="mt-1 block text-xs text-slate-500">{{ $enable_warehouse ? __('terminology.disabled_in_warehouse_mode_use_purchases_and_receiving_d3469a2a') : __('terminology.required_in_direct_mode_stock_goes_straight_to_dispensing_area_df8f919d') }}</span>
+                    <span class="mt-1 block text-xs text-slate-500">{{ __('terminology.allow_direct_stock_in_help') }}</span>
                 </span>
-                <input type="checkbox" wire:model="allow_direct_stock_in" class="h-5 w-5 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500" disabled>
+                <input type="checkbox" wire:model="allow_direct_stock_in" class="h-5 w-5 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500">
             </label>
 
             <label class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800 {{ ! $enable_warehouse ? 'opacity-60' : '' }}">

@@ -31,9 +31,7 @@ class InventorySettings
 
     public static function directStockInAllowed(): bool
     {
-        $setting = self::current();
-
-        return ! (bool) $setting->enable_warehouse && (bool) $setting->allow_direct_stock_in;
+        return (bool) self::current()->allow_direct_stock_in;
     }
 
     public static function salesFromStoreAllowed(): bool
@@ -156,6 +154,20 @@ class InventorySettings
 
     public static function branchId(): int
     {
-        return (int) (auth()->user()?->branch_id ?: Branch::where('code', 'MAIN')->value('id'));
+        $user = auth()->user();
+        if ($user?->branch_id) {
+            return (int) $user->branch_id;
+        }
+
+        if ($user?->company_id) {
+            $branches = BranchAccess::branches($user);
+            $default = Setting::query()->where('company_id', $user->company_id)->value('default_branch_id');
+
+            return (int) ((clone $branches)->whereKey($default)->value('id')
+                ?? (clone $branches)->where('code', 'MAIN')->value('id')
+                ?? $branches->orderBy('id')->value('id'));
+        }
+
+        return (int) Branch::where('code', 'MAIN')->value('id');
     }
 }

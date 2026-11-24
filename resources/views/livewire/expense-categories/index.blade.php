@@ -1,10 +1,14 @@
 <?php
 
 use App\Models\ExpenseCategory;
-use Illuminate\Validation\Rule;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\WithPagination;
 
+use function Livewire\Volt\hydrate;
 use function Livewire\Volt\layout;
+use function Livewire\Volt\mount;
 use function Livewire\Volt\rules;
 use function Livewire\Volt\state;
 use function Livewire\Volt\uses;
@@ -12,16 +16,39 @@ use function Livewire\Volt\uses;
 layout('layouts.app');
 uses([WithPagination::class]);
 
-state(['search' => '', 'editingId' => null, 'name' => '', 'description' => '', 'status' => 'active']);
+state(['editingId' => null])->locked();
+state(['search' => '', 'name' => '', 'description' => '', 'status' => 'active']);
+
+$companyId = function (): int {
+    $user = auth()->user();
+    abort_unless($user && $user->company_id && $user->hasAnyRole(['Super Admin', 'Admin', 'Manager', 'Accountant']), 403);
+
+    return (int) $user->company_id;
+};
+
+mount(fn () => $this->companyId());
+hydrate(function () {
+    $companyId = $this->companyId();
+    if ($this->editingId) {
+        ExpenseCategory::where('company_id', $companyId)->findOrFail($this->editingId);
+    }
+});
 
 rules(fn () => [
-    'name' => ['required', 'string', 'max:255', Rule::unique('expense_categories', 'name')->ignore($this->editingId)],
+    'name' => ['bail', 'required', 'string', 'max:255', function ($attribute, $value, $fail) {
+        $duplicate = ExpenseCategory::query()->where('company_id', $this->companyId())
+            ->when($this->editingId, fn ($query) => $query->whereKeyNot($this->editingId))
+            ->pluck('name')->contains(fn ($name) => mb_strtolower(Str::squish($name)) === mb_strtolower(Str::squish($value)));
+        if ($duplicate) {
+            $fail(__('validation.unique', ['attribute' => __('application.name_709a2322')]));
+        }
+    }],
     'description' => ['nullable', 'string', 'max:1000'],
     'status' => ['required', 'in:active,inactive'],
 ]);
 
 $edit = function (int $id) {
-    $category = ExpenseCategory::findOrFail($id);
+    $category = ExpenseCategory::where('company_id', $this->companyId())->findOrFail($id);
     $this->editingId = $category->id;
     $this->name = $category->name;
     $this->description = $category->description;
@@ -29,15 +56,30 @@ $edit = function (int $id) {
 };
 
 $save = function () {
-    ExpenseCategory::query()->updateOrCreate(['id' => $this->editingId], $this->validate());
+    $companyId = $this->companyId();
+    // Resolve the owned record before allowing its ID to be ignored during validation.
+    $category = $this->editingId
+        ? ExpenseCategory::where('company_id', $companyId)->findOrFail($this->editingId)
+        : new ExpenseCategory(['company_id' => $companyId]);
+    if (is_string($this->name)) {
+        $this->name = Str::squish($this->name);
+    }
+    $data = $this->validate();
+    try {
+        $category->fill($data)->save();
+    } catch (UniqueConstraintViolationException $exception) {
+        // A concurrent save may win after validation; return the usual field error.
+        throw ValidationException::withMessages(['name' => __('validation.unique', ['attribute' => __('application.name_709a2322')])]);
+    }
     $this->reset(['editingId', 'name', 'description']);
     $this->status = 'active';
     session()->flash('success', __('application.expense_category_saved_75745a2d'));
 };
 
 $delete = function (int $id) {
-    $category = ExpenseCategory::withCount('expenses')->findOrFail($id);
-    if ($category->expenses_count > 0) {
+    $category = ExpenseCategory::where('company_id', $this->companyId())->findOrFail($id);
+    // A company-wide category may also be referenced by expenses in another branch.
+    if ($category->expenses()->withoutGlobalScopes()->exists()) {
         session()->flash('error', __('application.cannot_delete_a_category_with_expenses_9244feca'));
         return;
     }
@@ -70,7 +112,7 @@ $delete = function (int $id) {
         <x-card title="{{ __('application.categories_6ccb6007') }}">
             <input wire:model.live.debounce.300ms="search" class="mb-4 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-white/5" placeholder="{{ __('application.search_categories_259c54d9') }}">
             @php
-                $categories = ExpenseCategory::query()
+                $categories = ExpenseCategory::query()->where('company_id', $this->companyId())
                     ->when($search, fn ($query) => $query->where('name', 'like', "%{$search}%"))
                     ->withCount('expenses')
                     ->latest()

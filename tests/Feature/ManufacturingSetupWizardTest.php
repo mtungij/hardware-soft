@@ -64,16 +64,20 @@ test('yes inserts production setup and changing back to no removes it safely', f
         ->assertDontSee(__('setup.production_setup'));
 });
 
-test('ordinary hardware setup saves disabled flag and creates no production records', function () {
+test('ordinary hardware setup saves inventory defaults and creates no production records', function (string $mode, bool $warehouse) {
     $beforeCompanies = Company::count();
     $beforeMachines = Machine::count();
     $beforeMovements = StockMovement::count();
 
-    setupWizard('NoMfg')->call('complete')->assertRedirect(route('login'));
+    setupWizard('NoMfg')->set('inventory_stock_mode', $mode)->call('complete')->assertRedirect(route('login'));
 
     $company = Company::query()->where('company_name', 'Setup Company NoMfg')->firstOrFail();
-    expect(Setting::where('company_id', $company->id)->firstOrFail()->show_receipt_after_sale)->toBeTrue()
-        ->and(Setting::where('company_id', $company->id)->firstOrFail()->default_receipt_width)->toBe('80');
+    $setting = Setting::where('company_id', $company->id)->firstOrFail();
+    expect($setting->show_receipt_after_sale)->toBeTrue()
+        ->and($setting->default_receipt_width)->toBe('80')
+        ->and($setting->enable_warehouse)->toBe($warehouse)
+        ->and($setting->inventory_mode)->toBe($warehouse ? 'multi_location' : 'single_location')
+        ->and($setting->allow_direct_stock_in)->toBe(! $warehouse);
     $roles = Role::where('company_id', $company->id)->with('permissions')->get();
     expect($roles)->toHaveCount(count(CompanyRoleService::STANDARD_ROLES));
     foreach ($roles as $role) {
@@ -92,7 +96,7 @@ test('ordinary hardware setup saves disabled flag and creates no production reco
 
     $user = User::query()->where('company_id', $company->id)->firstOrFail();
     $this->actingAs($user)->get(route('dashboard'))->assertOk()->assertDontSee(__('production.title'));
-});
+})->with(['warehouse mode' => ['warehouse', true], 'direct mode' => ['direct', false]]);
 
 test('manufacturing setup creates scoped locations and optional machine without stock', function () {
     $beforeMovements = StockMovement::count();
