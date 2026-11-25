@@ -3,14 +3,11 @@
 namespace App\Models\Concerns;
 
 use App\Models\Company;
-use App\Models\CustomerAccount;
 use App\Models\Scopes\BranchScope;
 use App\Models\Scopes\CompanyScope;
 use App\Models\User;
 use App\Support\BranchAccess;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Schema;
 
 trait HasCompany
 {
@@ -22,11 +19,13 @@ trait HasCompany
         static::deleting(fn ($model) => BranchAccess::validateWrite($model));
 
         static::creating(function ($model): void {
-            if (! Schema::hasColumn($model->getTable(), 'company_id')) {
+            $webUser = BranchAccess::staff();
+            $customerUser = $webUser?->company_id ? null : CompanyScope::resolvedCustomer();
+
+            if ((! $webUser?->company_id && ! $customerUser?->company_id)
+                || ! CompanyScope::hasCompanyColumn($model)) {
                 return;
             }
-
-            $webUser = BranchAccess::staff();
 
             if ($webUser instanceof User && $webUser->company_id) {
                 if (! $webUser->is_system_owner || blank($model->company_id)) {
@@ -36,9 +35,7 @@ trait HasCompany
                 return;
             }
 
-            $customerUser = Auth::guard('customer')->user();
-
-            if ($customerUser instanceof CustomerAccount && $customerUser->company_id) {
+            if ($customerUser?->company_id) {
                 $model->company_id = $customerUser->company_id;
             }
         });

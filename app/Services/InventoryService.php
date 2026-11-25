@@ -144,19 +144,14 @@ class InventoryService
             return [];
         }
 
-        $negativeTypePlaceholders = implode(',', array_fill(0, count(StockMovement::NEGATIVE_TYPES), '?'));
-
         return StockMovement::query()
             ->whereIn('product_id', $productIds)
             ->where('stock_location_id', $stockLocationId)
             ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
             ->select('product_id')
-            ->selectRaw(
-                "SUM(CASE WHEN quantity_in <> 0 OR quantity_out <> 0 THEN quantity_in - quantity_out WHEN movement_type IN ({$negativeTypePlaceholders}) THEN -quantity ELSE quantity END) as available_quantity",
-                StockMovement::NEGATIVE_TYPES,
-            )
+            ->selectSignedQuantity()
             ->groupBy('product_id')
-            ->pluck('available_quantity', 'product_id')
+            ->pluck('signed_quantity', 'product_id')
             ->map(fn ($quantity) => (float) $quantity)
             ->all();
     }
@@ -166,8 +161,8 @@ class InventoryService
         return (float) StockMovement::query()
             ->where('product_id', $productId)
             ->where('branch_id', $branchId)
-            ->get()
-            ->sum(fn (StockMovement $movement) => $movement->signedQuantity());
+            ->selectSignedQuantity()
+            ->toBase()->first()->signed_quantity;
     }
 
     public function getStoreStock(int $productId, int $branchId): float
@@ -202,35 +197,40 @@ class InventoryService
             ->when($branchId === null && $companyId !== null, fn ($query) => $query->where('company_id', $companyId))
             ->whereIn('movement_type', StockMovement::POSITIVE_TYPES)
             ->whereNotNull('unit_cost')
-            ->get();
+            ->selectRaw('SUM(quantity) AS incoming_quantity, SUM(quantity * unit_cost) AS incoming_value')
+            ->toBase()->first();
 
-        $quantity = (float) $incoming->sum('quantity');
+        $quantity = (float) $incoming->incoming_quantity;
 
         if ($quantity <= 0) {
             return 0;
         }
 
-        $value = $incoming->sum(fn (StockMovement $movement) => (float) $movement->quantity * (float) $movement->unit_cost);
-
-        return round($value / $quantity, 6);
+        return round((float) $incoming->incoming_value / $quantity, 6);
     }
 
     public function getLocationAcquisitionCost(int $productId, int $stockLocationId, ?int $branchId = null): float
     {
         $location = StockLocation::query()->findOrFail($stockLocationId);
+
         $incoming = StockMovement::query()
             ->where('company_id', $location->company_id)
             ->where('product_id', $productId)
             ->where('stock_location_id', $stockLocationId)
             ->when($branchId !== null, fn ($query) => $query->where('branch_id', $branchId))
             ->whereIn('movement_type', StockMovement::POSITIVE_TYPES)
-            ->get();
-        $quantity = (float) $incoming->sum('quantity');
+            ->selectRaw('SUM(quantity) AS incoming_quantity')
+            ->selectRaw('SUM(quantity * COALESCE(location_acquisition_unit_cost, unit_cost, 0)) AS incoming_value')
+            ->toBase()
+            ->first();
+
+        $quantity = (float) ($incoming->incoming_quantity ?? 0);
+
         if ($quantity <= 0) {
             return 0;
         }
 
-        return round($incoming->sum(fn (StockMovement $movement) => (float) $movement->quantity * (float) ($movement->location_acquisition_unit_cost ?? $movement->unit_cost ?? 0)) / $quantity, 6);
+        return round((float) ($incoming->incoming_value ?? 0) / $quantity, 6);
     }
 
     public function generatePurchaseReference(): string

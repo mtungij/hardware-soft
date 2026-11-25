@@ -9,13 +9,15 @@ class PwaBrandingController extends Controller
 {
     public function manifest(PwaBrandingService $branding): Response
     {
-        return response(json_encode($branding->manifest(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 200, [
+        $manifest = $branding->manifest();
+
+        return response(json_encode($manifest, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 200, [
             'Content-Type' => 'application/manifest+json; charset=utf-8',
             'Cache-Control' => 'private, no-cache, must-revalidate',
             'Pragma' => 'no-cache',
             'Vary' => 'Cookie, Host',
             'X-Content-Type-Options' => 'nosniff',
-            'X-PWA-Brand-Version' => $branding->brand()['version'],
+            'X-PWA-Brand-Version' => $manifest['version'],
         ]);
     }
 

@@ -181,11 +181,7 @@ class FinancialReportService
             ->with(['category', 'measurementType', 'size', 'unit'])->get();
 
         foreach ($locations as $location) {
-            // Shared locations are restricted to the selected branch's ledger when filtered.
-            $ledgerBranchId = $branchId ?? $location->branch_id;
-            if ($ledgerBranchId === null && AuthorizationScope::scopeFor(Auth::user(), 'stock_scope', AuthorizationScope::ASSIGNED_LOCATIONS) !== AuthorizationScope::COMPANY) {
-                $ledgerBranchId = Auth::user()->branch_id;
-            }
+            $ledgerBranchId = $this->valuationLedgerBranch($location, $branchId);
             $quantities = $inventory->getProductStocks($products->modelKeys(), $location->id, $ledgerBranchId);
             foreach ($products as $product) {
                 $quantity = $quantities[$product->id] ?? 0;
@@ -217,15 +213,79 @@ class FinancialReportService
 
     public function stockValueByLocation(?int $branchId = null): Collection
     {
-        return collect($this->stockValuation($branchId))->groupBy('stock_location_id')
-            ->map(fn (Collection $rows) => [
-                'stock_location_id' => $rows->first()['stock_location_id'],
-                'branch_id' => $rows->first()['branch_id'],
-                'branch' => $rows->first()['branch'],
-                'location' => $rows->first()['location'],
-                'quantity' => $rows->sum('quantity'),
-                'value' => $rows->sum('value'),
+        $locations = $this->valuationLocations($branchId);
+        if ($locations->isEmpty()) {
+            return collect();
+        }
+
+        $companyId = $locations->first()->company_id;
+        $locationsByLedger = $locations->groupBy(fn (StockLocation $location) => $this->valuationLedgerBranch($location, $branchId));
+        $incomingTypes = implode(', ', array_fill(0, count(StockMovement::POSITIVE_TYPES), '?'));
+        $products = Product::query()->where('company_id', $companyId)->select('id');
+        $balances = StockMovement::query()->forDashboardAggregation()
+            ->where('company_id', $companyId)
+            ->whereIn('stock_location_id', $locations->modelKeys())
+            ->where(function (Builder $ledger) use ($locationsByLedger): void {
+                foreach ($locationsByLedger as $branch => $ledgerLocations) {
+                    $ledger->orWhere(fn (Builder $query) => $query
+                        ->whereIn('stock_location_id', $ledgerLocations->modelKeys())
+                        ->when($branch !== '', fn (Builder $query) => $query->where('branch_id', $branch)));
+                }
+            })
+            ->select('stock_location_id', 'product_id')->selectSignedQuantity()
+            ->selectRaw("SUM(CASE WHEN movement_type IN ({$incomingTypes}) AND unit_cost IS NOT NULL
+                THEN quantity ELSE 0 END) AS incoming_quantity", StockMovement::POSITIVE_TYPES)
+            ->selectRaw("SUM(CASE WHEN movement_type IN ({$incomingTypes})
+                THEN quantity * unit_cost ELSE 0 END) AS incoming_value", StockMovement::POSITIVE_TYPES)
+            ->groupBy('stock_location_id', 'product_id');
+
+        $projection = app(DashboardStockProjection::class);
+
+        if ($projection->available()) {
+            $balanceQuery = $projection
+                ->scopedBalances($locations->modelKeys())
+                ->where(function ($ledger) use ($locationsByLedger): void {
+                    foreach ($locationsByLedger as $branch => $ledgerLocations) {
+                        $ledger->orWhere(fn ($query) => $query
+                            ->whereIn('stock_location_id', $ledgerLocations->modelKeys())
+                            ->when($branch !== '', fn ($query) => $query->where('branch_id', $branch)));
+                    }
+                })
+                ->select('stock_location_id', 'product_id')
+                ->selectRaw('SUM(signed_quantity) AS signed_quantity')
+                ->selectRaw('SUM(incoming_quantity) AS incoming_quantity')
+                ->selectRaw('SUM(incoming_value) AS incoming_value')
+                ->groupBy('stock_location_id', 'product_id');
+        } else {
+            $balanceQuery = $balances->toBase();
+        }
+
+        $totals = $balanceQuery->getConnection()->query()->fromSub($balanceQuery, 'stock_balances')
+            ->joinSub($products, 'valuation_products', 'valuation_products.id', '=', 'stock_balances.product_id')
+            ->where('signed_quantity', '>', 0)
+            ->selectRaw('stock_location_id, SUM(signed_quantity) AS quantity,
+                SUM(signed_quantity * CASE WHEN incoming_quantity > 0
+                    THEN ROUND(1.0 * incoming_value / incoming_quantity, 6) ELSE 0 END) AS value')
+            ->groupBy('stock_location_id')->get()->keyBy('stock_location_id');
+
+        return $locations->filter(fn (StockLocation $location) => $totals->has($location->id))
+            ->map(fn (StockLocation $location) => [
+                'stock_location_id' => $location->id,
+                'branch_id' => $location->branch_id,
+                'branch' => $location->branch?->name,
+                'location' => $location->name,
+                'quantity' => (float) $totals[$location->id]->quantity,
+                'value' => (float) $totals[$location->id]->value,
             ])->values();
+    }
+
+    private function valuationLedgerBranch(StockLocation $location, ?int $branchId): ?int
+    {
+        // Shared locations use the selected branch ledger or the actor's restricted ledger.
+        return $branchId ?? $location->branch_id
+            ?? (AuthorizationScope::scopeFor(Auth::user(), 'stock_scope', AuthorizationScope::ASSIGNED_LOCATIONS) === AuthorizationScope::COMPANY
+                ? null
+                : Auth::user()->branch_id);
     }
 
     public function stockMovementsForLocations(?int $branchId = null): Builder
@@ -242,10 +302,14 @@ class FinancialReportService
 
     public function stockReceivedToday(?int $branchId = null): float
     {
+        $today = today();
+
         return (float) $this->stockMovementsForLocations($branchId)
             ->whereIn('movement_type', ['purchase_in', 'purchase_receipt'])
-            ->whereDate('movement_date', today())
-            ->get()->sum(fn (StockMovement $movement) => $movement->signedQuantity());
+            ->where('movement_date', '>=', $today->toDateString())
+            ->where('movement_date', '<', $today->addDay()->toDateString())
+            ->selectSignedQuantity()
+            ->toBase()->first()->signed_quantity;
     }
 
     public function purchases(?int $branchId, string $from, string $to)

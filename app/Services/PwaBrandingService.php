@@ -11,6 +11,8 @@ use Illuminate\Support\Str;
 
 class PwaBrandingService
 {
+    private const BRAND_COLUMNS = ['company_name', 'theme_color', 'pwa_background_color', 'company_logo', 'updated_at'];
+
     public function company(): ?Company
     {
         $companyId = $this->customerContext()
@@ -22,13 +24,18 @@ class PwaBrandingService
 
     public function settings(): ?Setting
     {
-        $company = $this->company();
+        return $this->settingsFor($this->company());
+    }
+
+    private function settingsFor(?Company $company, array $columns = ['*']): ?Setting
+    {
         if (! $company) {
             return null;
         }
 
         try {
-            return Setting::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)->first();
+            return Setting::withoutGlobalScope(CompanyScope::class)->where('company_id', $company->id)
+                ->first($columns);
         } catch (\Throwable) {
             return null;
         }
@@ -38,7 +45,7 @@ class PwaBrandingService
     public function brand(): array
     {
         $company = $this->company();
-        $settings = $company ? $this->settings() : null;
+        $settings = $this->settingsFor($company, self::BRAND_COLUMNS);
         $name = trim((string) ($company?->company_name ?: $settings?->company_name ?: config('app.name', 'Hardex POS')));
         $name = $name ?: 'Hardex POS';
         $shortName = Str::of($name)->squish()->limit(24, '')->value() ?: 'Hardex';
@@ -105,7 +112,7 @@ class PwaBrandingService
     {
         $size = in_array($size, [192, 512], true) ? $size : 192;
         $company = $this->company();
-        $settings = $company ? $this->settings() : null;
+        $settings = $this->settingsFor($company, self::BRAND_COLUMNS);
         $logo = $company?->logo ?: $settings?->company_logo;
         $bytes = $company && $logo ? $this->logoBytes($logo) : null;
 
@@ -115,7 +122,7 @@ class PwaBrandingService
                 $source = @imagecreatefromstring($bytes);
                 if ($source !== false) {
                     $canvas = imagecreatetruecolor($size, $size);
-                    $background = $this->brand()['background_color'];
+                    $background = $this->validColor($settings?->pwa_background_color, '#ffffff');
                     $color = imagecolorallocate($canvas, hexdec(substr($background, 1, 2)),
                         hexdec(substr($background, 3, 2)), hexdec(substr($background, 5, 2)));
                     imagefilledrectangle($canvas, 0, 0, $size, $size, $color);

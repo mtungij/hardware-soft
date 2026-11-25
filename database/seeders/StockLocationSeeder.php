@@ -26,6 +26,11 @@ class StockLocationSeeder extends Seeder
                         'company_id' => $branch->company_id,
                         'name' => 'Main Store',
                         'status' => 'active',
+                        'is_active' => true,
+                        'can_receive_stock' => true,
+                        'can_issue_stock' => true,
+                        'can_sell' => true,
+                        'is_sellable' => true,
                     ]
                 );
             } else {
@@ -47,6 +52,12 @@ class StockLocationSeeder extends Seeder
                     'company_id' => $branch->company_id,
                     'name' => 'Dispensing Area',
                     'status' => 'active',
+                    'is_active' => true,
+                    'is_dispensing_location' => true,
+                    'can_receive_stock' => true,
+                    'can_issue_stock' => true,
+                    'can_sell' => true,
+                    'is_sellable' => true,
                 ]
             );
         });

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Models\Concerns\HasCompany;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -137,6 +138,39 @@ class StockMovement extends Model
         return in_array($this->movement_type, self::NEGATIVE_TYPES, true)
             ? -1 * (float) $this->quantity
             : (float) $this->quantity;
+    }
+
+    public function scopeForDashboardAggregation(Builder $query): Builder
+    {
+        if ($query->getConnection()->getDriverName() === 'mysql') {
+            // MySQL favors narrower company indexes even when the aggregate then reads the wide ledger rows.
+            $query->forceIndex('stock_movements_dashboard_cover');
+        }
+
+        return $query;
+    }
+
+    public function scopeSelectSignedQuantity(Builder $query): Builder
+    {
+        [$expression, $bindings] = self::signedQuantityExpression();
+
+        return $query->selectRaw("SUM({$expression}) AS signed_quantity", $bindings);
+    }
+
+    /** @return array{string, list<string>} */
+    public static function signedQuantityExpression(): array
+    {
+        $negativeTypes = implode(', ', array_fill(0, count(self::NEGATIVE_TYPES), '?'));
+
+        return [
+            "CASE
+                WHEN COALESCE(quantity_in, 0) <> 0 OR COALESCE(quantity_out, 0) <> 0
+                    THEN COALESCE(quantity_in, 0) - COALESCE(quantity_out, 0)
+                WHEN movement_type IN ({$negativeTypes}) THEN -quantity
+                ELSE quantity
+            END",
+            self::NEGATIVE_TYPES,
+        ];
     }
 
     protected function casts(): array
